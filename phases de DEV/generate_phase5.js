@@ -16,7 +16,7 @@ function code(text) { return new Paragraph({ children: [new TextRun({ text, font
 function pageBreak() { return new Paragraph({ children: [new PageBreak()] }); }
 
 const children = [
-  new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 2000, after: 200 }, children: [new TextRun({ text: 'BRAT EAT', font: ARIAL, bold: true, size: 56 })] }),
+  new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 2000, after: 200 }, children: [new TextRun({ text: 'BREAK EAT', font: ARIAL, bold: true, size: 56 })] }),
   new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: 'PHASE 5 — CART, CHECKOUT, STRIPE CONNECT, ORDERS', font: ARIAL, bold: true, size: 32 })] }),
   new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 300 }, children: [new TextRun({ text: 'Technical Brief for Claude Code & Codex', font: ARIAL, italics: true, size: 24 })] }),
   new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: '27/05/2026 (audit fixes 01/06/2026)', font: ARIAL, size: 22 })] }),
@@ -24,7 +24,7 @@ const children = [
 
   h1('1. OBJECTIF DE LA PHASE 5'),
   p('Phase 5 implémente le pipeline complet d\'achat customer : Cart → Stripe Checkout → Webhook → Order. C\'est le cœur financier de l\'application : aucun ordre métier n\'existe sans Phase 5.'),
-  p('Sans cette phase, BRAT EAT ne peut pas encaisser de paiements, et donc aucune commande ne peut être confirmée et envoyée à un opérateur.'),
+  p('Sans cette phase, BREAK EAT ne peut pas encaisser de paiements, et donc aucune commande ne peut être confirmée et envoyée à un opérateur.'),
   h2('Périmètre V1'),
   bullet('1 cart = 1 supplier (single-vendor — multi-vendor flag OFF)'),
   bullet('Onboarding Stripe Connect Standard pour chaque supplier (KYC géré par Stripe)'),

@@ -1,4 +1,4 @@
-# BRAT EAT Testing Strategy
+# BREAK EAT Testing Strategy
 
 Version: V1 source of truth
 

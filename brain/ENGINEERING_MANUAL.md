@@ -1,10 +1,10 @@
-# BRAT EAT Engineering Manual
+# BREAK EAT Engineering Manual
 
 Version: living developer handbook
 
 ## Purpose
 
-This document is the technical notice for BRAT EAT.
+This document is the technical notice for BREAK EAT.
 
 It must explain the application as if the team had built a complex machine and a future developer needed to understand every assembled block.
 
@@ -228,7 +228,7 @@ Vérification manuelle :
 
 **Attention :**
 - `apps/mobile/android/` et `ios/` sont vides — ne pas tenter de lancer l'app mobile sans avoir exécuté `npx react-native init` ou configuré les SDK natifs localement
-- pnpm workspaces : toujours installer les dépendances depuis la racine (`pnpm add <pkg> --filter @brat-eat/backend`)
+- pnpm workspaces : toujours installer les dépendances depuis la racine (`pnpm add <pkg> --filter @break-eat/backend`)
 
 ### Debugging Notes
 
@@ -390,7 +390,7 @@ curl http://localhost:3000/api/v1/auth/me \
 
 ### Why It Was Built
 
-Les Events sont le contexte d'activation de toute la logique métier de BRAT EAT. Sans Venue + Event + Supplier + PickupPoint, Phase 4 (produits) et Phase 5 (checkout) n'ont pas de contexte pour fonctionner. Le statut machine de l'event protège les transitions et interdit les modifications sur ENDED/CANCELLED.
+Les Events sont le contexte d'activation de toute la logique métier de BREAK EAT. Sans Venue + Event + Supplier + PickupPoint, Phase 4 (produits) et Phase 5 (checkout) n'ont pas de contexte pour fonctionner. Le statut machine de l'event protège les transitions et interdit les modifications sur ENDED/CANCELLED.
 
 ### How It Works
 
@@ -1059,7 +1059,7 @@ Pipeline complet d'achat customer V1 : Cart (server-side) → Checkout (Stripe P
 
 ### Why It Was Built
 
-Sans paiement, l'application n'a pas de revenu. Sans Order, pas d'audit, pas de dashboard, pas d'historique. Sans Stripe Connect, le marketplace n'est pas légal (les fonds ne peuvent pas être encaissés par BRAT EAT puis redistribués sans agrément financier). Connect transfère directement aux suppliers, BRAT EAT prélève une commission via `application_fee_amount`.
+Sans paiement, l'application n'a pas de revenu. Sans Order, pas d'audit, pas de dashboard, pas d'historique. Sans Stripe Connect, le marketplace n'est pas légal (les fonds ne peuvent pas être encaissés par BREAK EAT puis redistribués sans agrément financier). Connect transfère directement aux suppliers, BREAK EAT prélève une commission via `application_fee_amount`.
 
 ### How It Works
 
@@ -1133,7 +1133,7 @@ Customer paye 16.00 € (1600 cents) avec sa CB
 → application_fee_amount = 1600 × 500bps / 10000 = 80 cents (5%)
 → Transfer destination = supplier.stripeAccountId
 → Supplier reçoit 15.20 € sur son compte Stripe Connect
-→ BRAT EAT (plateforme) reçoit 0.80 € comme application fee
+→ BREAK EAT (plateforme) reçoit 0.80 € comme application fee
 ```
 
 **Order audit (trail append-only) :**

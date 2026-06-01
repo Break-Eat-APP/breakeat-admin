@@ -1,10 +1,10 @@
-# BRAT EAT — Product Validation Contract
+# BREAK EAT — Product Validation Contract
 
 > Version: V1 source of truth
 > Date d'entrée en vigueur : 28/05/2026
 > Statut : **MANDATORY**
 
-Ce document définit le **contrat de validation produit** que tout développement BRAT EAT doit respecter, à partir de Phase 6 incluse. Les phases précédentes (1-5) sont validées sur leur livraison technique ; les phases suivantes doivent en plus livrer une expérience visuelle, testable et démontrable.
+Ce document définit le **contrat de validation produit** que tout développement BREAK EAT doit respecter, à partir de Phase 6 incluse. Les phases précédentes (1-5) sont validées sur leur livraison technique ; les phases suivantes doivent en plus livrer une expérience visuelle, testable et démontrable.
 
 ---
 
@@ -108,7 +108,7 @@ Aucune fonctionnalité majeure n'est considérée comme **terminée** sans :
 - Synchronisation Flaix
 
 ### Accès staging
-- URL publique stable (staging.brateat.com ou équivalent)
+- URL publique stable (staging.breakeat.com ou équivalent)
 - Auth basique HTTP ou login dédié pour limiter l'accès
 - Dashboards live accessibles par URL directe
 
@@ -202,9 +202,9 @@ L'assistant doit fournir au product owner :
 
 📱 iOS preview     → [QR code image]  → https://testflight.apple.com/...
 📱 Android preview → [QR code image]  → https://expo.dev/...
-🌐 Operator dash   → https://operator.staging.brateat.com
-🌐 Public screen   → https://screen.staging.brateat.com
-📚 Storybook       → https://storybook.brateat.com
+🌐 Operator dash   → https://operator.staging.breakeat.com
+🌐 Public screen   → https://screen.staging.breakeat.com
+📚 Storybook       → https://storybook.breakeat.com
 ```
 
 ---
@@ -246,7 +246,7 @@ Le product owner doit, en permanence, se sentir :
 - 🎮 **En contrôle** du produit (peut tester quand il veut)
 - ⚡ **Instantané** (preview accessible en < 30s)
 - 👀 **Validé visuellement** (rien n'avance à l'aveugle)
-- 🚀 **Comme en production** (BRAT EAT doit ressembler à une vraie app dès le développement)
+- 🚀 **Comme en production** (BREAK EAT doit ressembler à une vraie app dès le développement)
 
 ---
 

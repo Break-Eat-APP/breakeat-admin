@@ -1,10 +1,10 @@
-# BRAT EAT Architecture
+# BREAK EAT Architecture
 
 Version: V1 source of truth
 
 ## Architectural Strategy
 
-BRAT EAT V1 uses a modular monolith.
+BREAK EAT V1 uses a modular monolith.
 
 No microservices in V1.
 

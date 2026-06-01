@@ -1,4 +1,4 @@
-# BRAT EAT Domain Model
+# BREAK EAT Domain Model
 
 Version: V1 source of truth
 

@@ -1,11 +1,11 @@
-# BRAT EAT Product Vision
+# BREAK EAT Product Vision
 
 Version: V1 source of truth
 Generated: 2026-05-25
 
 ## Positioning
 
-BRAT EAT is a realtime click-and-collect platform for stadiums, arenas, festivals, corporate campuses and event venues.
+BREAK EAT is a realtime click-and-collect platform for stadiums, arenas, festivals, corporate campuses and event venues.
 
 It is not a classic food ordering app. It is an operational ordering system designed to reduce waiting time, protect venue flow during rush periods and create a premium mobile ordering experience.
 
@@ -37,7 +37,7 @@ All architecture, UX and infrastructure decisions must protect this KPI.
 
 Flaix is the strategic moat. It orchestrates pickup slots, rush scoring, queue pressure, throttling, pacing and operational recommendations.
 
-BRAT EAT must never override a Flaix decision. It can request, display and apply Flaix decisions, but Flaix remains the source of truth for rush and slot orchestration.
+BREAK EAT must never override a Flaix decision. It can request, display and apply Flaix decisions, but Flaix remains the source of truth for rush and slot orchestration.
 
 ## V1 Scope
 

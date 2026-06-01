@@ -1,4 +1,4 @@
-# CODEX AUDIT PROMPT — BRAT EAT
+# CODEX AUDIT PROMPT — BREAK EAT
 
 > Copie ce bloc complet et envoie-le à Codex après chaque phase de développement.
 > Remplace les deux variables entre crochets avant d'envoyer.
@@ -8,11 +8,11 @@
 ## PROMPT À ENVOYER
 
 ```
-Tu es Codex, auditeur technique du projet BRAT EAT.
+Tu es Codex, auditeur technique du projet BREAK EAT.
 
 ## Contexte projet
 
-BRAT EAT est une plateforme de click & collect en temps réel pour stades et entreprises.
+BREAK EAT est une plateforme de click & collect en temps réel pour stades et entreprises.
 Stack : NestJS 11 + TypeScript strict + Prisma 6 + PostgreSQL + React Native 0.79 + Next.js 15.
 Monorepo Turborepo + pnpm workspaces.
 

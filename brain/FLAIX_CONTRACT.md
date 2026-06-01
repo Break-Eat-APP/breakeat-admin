@@ -1,4 +1,4 @@
-# BRAT EAT Flaix Contract
+# BREAK EAT Flaix Contract
 
 Version: V1 source of truth
 
@@ -6,7 +6,7 @@ Version: V1 source of truth
 
 Flaix is the source of truth for rush management, slot intelligence and operational pacing.
 
-BRAT EAT must never override a Flaix decision.
+BREAK EAT must never override a Flaix decision.
 
 ## Flaix Owns
 
@@ -18,7 +18,7 @@ BRAT EAT must never override a Flaix decision.
 - smart recommendations;
 - operational flow decisions.
 
-## BRAT EAT Owns
+## BREAK EAT Owns
 
 - user accounts;
 - product catalog;

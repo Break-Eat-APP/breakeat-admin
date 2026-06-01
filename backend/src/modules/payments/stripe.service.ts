@@ -43,7 +43,7 @@ export class StripeService implements OnModuleInit {
     this.stripe = new Stripe(secretKey, {
       apiVersion: apiVersion as Stripe.LatestApiVersion,
       typescript: true,
-      appInfo: { name: 'brat-eat-backend', version: '0.1.0' },
+      appInfo: { name: 'break-eat-backend', version: '0.1.0' },
     });
   }
 

@@ -1,4 +1,4 @@
-# BRAT EAT — Reminders (Assistant Self-Notes)
+# BREAK EAT — Reminders (Assistant Self-Notes)
 
 > Fichier interne — l'assistant doit consulter ce fichier au début de chaque session
 > et déclencher les rappels pertinents au moment opportun.
@@ -21,7 +21,7 @@
 ## 🎨 Design system — Quand demander les inputs
 
 **Avant Phase 8 (Dashboards) :**
-- Demander : logo BRAT EAT (fichier SVG / PNG haute résolution)
+- Demander : logo BREAK EAT (fichier SVG / PNG haute résolution)
 - Demander : palette couleurs principales (primary, secondary, accent, neutrals)
 - Demander : 3-5 screenshots de l'app Burger King (parties UX/navigation qui plaisent au user)
 - Documenter dans `brain/DESIGN_SYSTEM.md`
@@ -64,7 +64,7 @@
 **Setup Phase 6 (Bloc 6.0 — Infrastructure) :**
 1. Vercel : créer 2 projets (admin + operator), connecter au repo
 2. Railway : créer projet backend + provisionner PostgreSQL + Redis
-3. Firebase : créer projet brateat-staging
+3. Firebase : créer projet breakeat-staging
 4. Fastlane : initialiser dans `apps/mobile/ios/` et `apps/mobile/android/`
 5. GitHub Actions : workflow `mobile-preview.yml` (build + upload Firebase)
 6. Storybook : init dans `apps/admin/`, `apps/operator/` et `apps/mobile/`

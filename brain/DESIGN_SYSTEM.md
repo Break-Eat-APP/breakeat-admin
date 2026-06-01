@@ -1,4 +1,4 @@
-# BRAT EAT Design System
+# BREAK EAT Design System
 
 Version: V1 source of truth
 

@@ -1,4 +1,4 @@
-# BRAT EAT Task Summary
+# BREAK EAT Task Summary
 
 This file must be updated after every implementation task.
 

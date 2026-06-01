@@ -1,4 +1,4 @@
-# BRAT EAT Order State Machine
+# BREAK EAT Order State Machine
 
 Version: V1 source of truth
 

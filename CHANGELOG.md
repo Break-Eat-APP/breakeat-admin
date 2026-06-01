@@ -1,4 +1,4 @@
-# CHANGELOG — BRAT EAT
+# CHANGELOG — BREAK EAT
 
 Chaque entrée correspond à une session de travail ou une phase.
 Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).

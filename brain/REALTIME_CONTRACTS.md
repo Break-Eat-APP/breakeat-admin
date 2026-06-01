@@ -1,4 +1,4 @@
-# BRAT EAT Realtime Contracts
+# BREAK EAT Realtime Contracts
 
 Version: V1 source of truth
 

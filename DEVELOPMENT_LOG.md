@@ -1,4 +1,4 @@
-# BRAT EAT — Development Log
+# BREAK EAT — Development Log
 
 > Fichier de référence chronologique.
 > Chaque phase, chaque bloc, chaque fichier important — dans l'ordre exact de création.

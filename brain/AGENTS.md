@@ -1,4 +1,4 @@
-# BRAT EAT AI Agent Rules
+# BREAK EAT AI Agent Rules
 
 Version: V1 source of truth
 
@@ -74,7 +74,7 @@ Codex must not:
 ## Mandatory Task Prompt for Claude Code
 
 ```text
-You are the lead software architect for BRAT EAT.
+You are the lead software architect for BREAK EAT.
 
 Before coding, read every file in /brain.
 

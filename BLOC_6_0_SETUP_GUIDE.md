@@ -16,7 +16,7 @@ Suis les étapes **dans l'ordre**. Si tu bloques sur une étape, **stoppe et éc
 ÉTAPE 2 : Railway (20 min)       — backend + PostgreSQL + Redis
 ÉTAPE 3 : Firebase (15 min)      — mobile preview distribution
 ÉTAPE 4 : GitHub Secrets (10 min) — connexion des comptes au repo
-ÉTAPE 5 : Domaines (optionnel, 30 min) — staging.brateat.com etc.
+ÉTAPE 5 : Domaines (optionnel, 30 min) — staging.breakeat.com etc.
 ```
 
 ---
@@ -30,11 +30,11 @@ Suis les étapes **dans l'ordre**. Si tu bloques sur une étape, **stoppe et éc
 2. Clique **"Continue with GitHub"** (lie ton compte GitHub directement)
 3. Plan **Hobby (gratuit)** — suffisant pour staging
 
-## 1.2 — Créer le projet `brateat-admin`
+## 1.2 — Créer le projet `breakeat-admin`
 1. Dashboard Vercel → **Add New… → Project**
 2. **Import Git Repository** → sélectionne ton repo `Break-Eat-APP`
 3. **Configure Project :**
-   - **Project Name :** `brateat-admin`
+   - **Project Name :** `breakeat-admin`
    - **Framework Preset :** Next.js (auto-détecté)
    - **Root Directory :** `apps/admin` ⚠️ important
    - **Build Command :** **laisse vide** — il est défini dans `apps/admin/vercel.json` (Vercel lit ce fichier automatiquement ; ne mets rien dans le dashboard, sinon les deux entrent en conflit)
@@ -45,12 +45,12 @@ Suis les étapes **dans l'ordre**. Si tu bloques sur une étape, **stoppe et éc
 4. **Environment Variables** (à ajouter, on remplit en ÉTAPE 4) :
    - `NEXT_PUBLIC_API_URL` = (vide pour l'instant)
 5. Clique **Deploy**
-6. Quand le déploiement passe → tu obtiens une URL `https://brateat-admin-xxxx.vercel.app`
+6. Quand le déploiement passe → tu obtiens une URL `https://breakeat-admin-xxxx.vercel.app`
 7. ✏️ **Note cette URL pour me l'envoyer**
 
-## 1.3 — Créer le projet `brateat-operator`
+## 1.3 — Créer le projet `breakeat-operator`
 **Répète 1.2** avec :
-- **Project Name :** `brateat-operator`
+- **Project Name :** `breakeat-operator`
 - **Root Directory :** `apps/operator`
 - Tout le reste identique
 
@@ -70,7 +70,7 @@ Tu dois avoir 2 URLs Vercel actives. Si oui : **étape 1 terminée ✅**
 2. Clique **"Login with GitHub"**
 3. Plan **Hobby (5 $ de crédit gratuit par mois)** — largement suffisant pour staging
 
-## 2.2 — Créer le projet `brateat-staging`
+## 2.2 — Créer le projet `breakeat-staging`
 1. Dashboard Railway → **New Project**
 2. **Deploy from GitHub repo** → sélectionne `Break-Eat-APP`
 3. Quand la pop-up s'ouvre :
@@ -114,7 +114,7 @@ Tu dois avoir 2 URLs Vercel actives. Si oui : **étape 1 terminée ✅**
    - **Start Command :** `cd backend && pnpm db:migrate:prod && node dist/main`
 4. **Redéploie** (clic sur le menu ⋮ → Redeploy)
 5. Quand ça passe → onglet **Settings → Networking → Generate Domain**
-6. ✏️ **Note l'URL backend** : `https://brateat-backend-xxxx.up.railway.app`
+6. ✏️ **Note l'URL backend** : `https://breakeat-backend-xxxx.up.railway.app`
 
 ## 2.6 — Confirmation
 Tu dois avoir :
@@ -133,9 +133,9 @@ Tu dois avoir :
 2. Login avec ton compte Google
 3. Plan **Spark (gratuit)** — suffisant pour App Distribution
 
-## 3.2 — Créer le projet `brateat-staging`
+## 3.2 — Créer le projet `breakeat-staging`
 1. **Add project**
-2. **Project name :** `brateat-staging`
+2. **Project name :** `breakeat-staging`
 3. ⚠️ **Désactive Google Analytics** (pas utile pour App Distribution, ajoute de la complexité)
 4. **Create project**
 
@@ -145,8 +145,8 @@ Tu dois avoir :
 
 ## 3.4 — Ajouter une app iOS
 1. Sur la page d'overview Firebase → clique l'icône iOS (la pomme)
-2. **Apple bundle ID :** `com.brateat.app` (note-le, on l'utilisera dans Xcode)
-3. **App nickname :** `BRAT EAT iOS`
+2. **Apple bundle ID :** `com.breakeat.app` (note-le, on l'utilisera dans Xcode)
+3. **App nickname :** `BREAK EAT iOS`
 4. **App Store ID :** laisse vide
 5. **Register app**
 6. **Télécharge `GoogleService-Info.plist`** → place-le dans `apps/mobile/ios/` (sera utilisé plus tard)
@@ -155,8 +155,8 @@ Tu dois avoir :
 
 ## 3.5 — Ajouter une app Android
 1. Sur la page overview → icône Android
-2. **Android package name :** `com.brateat.app`
-3. **App nickname :** `BRAT EAT Android`
+2. **Android package name :** `com.breakeat.app`
+3. **App nickname :** `BREAK EAT Android`
 4. **Debug signing certificate SHA-1 :** laisse vide pour l'instant
 5. **Register app**
 6. **Télécharge `google-services.json`** → place-le dans `apps/mobile/android/app/` (sera utilisé plus tard)
@@ -195,8 +195,8 @@ Tu dois avoir :
 # Vercel
 VERCEL_TOKEN              = (depuis https://vercel.com/account/tokens — "Create" avec scope full)
 VERCEL_ORG_ID             = (depuis Settings de tes projets Vercel)
-VERCEL_PROJECT_ID_ADMIN   = (depuis projet brateat-admin → Settings → General)
-VERCEL_PROJECT_ID_OPERATOR = (depuis projet brateat-operator → Settings → General)
+VERCEL_PROJECT_ID_ADMIN   = (depuis projet breakeat-admin → Settings → General)
+VERCEL_PROJECT_ID_OPERATOR = (depuis projet breakeat-operator → Settings → General)
 
 # Railway (déploiement automatique déjà géré par Railway, pas de secret nécessaire ici)
 
@@ -218,7 +218,7 @@ STRIPE_WEBHOOK_SECRET  = whsec_... (créé en étape 4.4 ci-dessous)
 
 ## 4.3 — Configurer le webhook Stripe staging
 1. Dashboard Stripe → **Developers → Webhooks → Add endpoint**
-2. **Endpoint URL :** `https://brateat-backend-xxxx.up.railway.app/webhooks/stripe` (ton URL Railway de l'étape 2.5)
+2. **Endpoint URL :** `https://breakeat-backend-xxxx.up.railway.app/webhooks/stripe` (ton URL Railway de l'étape 2.5)
 3. **Events to listen :** sélectionne :
    - `payment_intent.succeeded`
    - `payment_intent.payment_failed`
@@ -230,15 +230,15 @@ STRIPE_WEBHOOK_SECRET  = whsec_... (créé en étape 4.4 ci-dessous)
 ## 4.4 — Mettre à jour les variables croisées
 
 ### Dans Railway (variables backend)
-- `CORS_ORIGINS` = `https://brateat-admin-xxxx.vercel.app,https://brateat-operator-xxxx.vercel.app`
-- `STRIPE_CONNECT_RETURN_URL` = `https://brateat-admin-xxxx.vercel.app/suppliers/onboarding/complete`
-- `STRIPE_CONNECT_REFRESH_URL` = `https://brateat-admin-xxxx.vercel.app/suppliers/onboarding/refresh`
+- `CORS_ORIGINS` = `https://breakeat-admin-xxxx.vercel.app,https://breakeat-operator-xxxx.vercel.app`
+- `STRIPE_CONNECT_RETURN_URL` = `https://breakeat-admin-xxxx.vercel.app/suppliers/onboarding/complete`
+- `STRIPE_CONNECT_REFRESH_URL` = `https://breakeat-admin-xxxx.vercel.app/suppliers/onboarding/refresh`
 
 ### Dans Vercel admin
-- `NEXT_PUBLIC_API_URL` = `https://brateat-backend-xxxx.up.railway.app/api/v1`
+- `NEXT_PUBLIC_API_URL` = `https://breakeat-backend-xxxx.up.railway.app/api/v1`
 
 ### Dans Vercel operator
-- `NEXT_PUBLIC_API_URL` = `https://brateat-backend-xxxx.up.railway.app/api/v1`
+- `NEXT_PUBLIC_API_URL` = `https://breakeat-backend-xxxx.up.railway.app/api/v1`
 
 ## 4.5 — Redéploie partout
 - Vercel admin → Deployments → Redeploy
@@ -252,9 +252,9 @@ STRIPE_WEBHOOK_SECRET  = whsec_... (créé en étape 4.4 ci-dessous)
 **Reporté à plus tard si pas urgent.** On peut commencer avec les URLs Vercel/Railway automatiques.
 
 Si tu veux maintenant :
-- `staging.brateat.com` → Vercel admin
-- `operator.staging.brateat.com` → Vercel operator
-- `api.staging.brateat.com` → Railway backend
+- `staging.breakeat.com` → Vercel admin
+- `operator.staging.breakeat.com` → Vercel operator
+- `api.staging.breakeat.com` → Railway backend
 
 Requiert un domaine acheté (Cloudflare, Namecheap, OVH). On peut le faire plus tard.
 
@@ -268,7 +268,7 @@ Quand tu as tout fini, envoie-moi :
 ✓ URL Vercel admin     : https://...
 ✓ URL Vercel operator  : https://...
 ✓ URL Railway backend  : https://...
-✓ Firebase project     : brateat-staging (confirme)
+✓ Firebase project     : breakeat-staging (confirme)
 ✓ GitHub Secrets       : configurés (confirme oui/non)
 ✓ Stripe webhook       : configuré sur Railway URL (confirme)
 ```

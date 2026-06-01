@@ -51,7 +51,7 @@ const children = [
   new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { before: 2000, after: 200 },
-    children: [new TextRun({ text: 'BRAT EAT', font: ARIAL, bold: true, size: 56 })],
+    children: [new TextRun({ text: 'BREAK EAT', font: ARIAL, bold: true, size: 56 })],
   }),
   new Paragraph({
     alignment: AlignmentType.CENTER,

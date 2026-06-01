@@ -38,7 +38,7 @@ async function bootstrap(): Promise<void> {
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
-  logger.log(`BRAT EAT backend running on port ${port}`);
+  logger.log(`BREAK EAT backend running on port ${port}`);
   logger.log(`Environment: ${process.env.NODE_ENV ?? 'development'}`);
   logger.log(`Health check: GET http://localhost:${port}/health`);
   logger.log(`Stripe hook:  POST http://localhost:${port}/webhooks/stripe`);
