@@ -904,7 +904,64 @@ pnpm-lock.yaml               — mis à jour
 **GitHub Secrets configurés :**
 VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID_ADMIN, VERCEL_PROJECT_ID_OPERATOR, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
 
-**Prochaine étape :** Bloc 6.1 — OrderStatus state machine + UI temps réel
+**Prochaine étape :** Bloc 6.1 — OrderStatus state machine + UI temps réel ✅ FAIT
+
+---
+
+## BLOC 6.1 — Order State Machine + Audit Trail
+
+**Date :** 2026-06-01
+**Statut :** ✅ Terminé
+**Commit :** 4cf5426
+
+**Fichiers créés :**
+```
+backend/src/modules/orders/order-state-machine.service.ts
+backend/src/modules/orders/order-state-machine.service.spec.ts
+backend/src/modules/orders/dto/transition-order.dto.ts
+```
+
+**Fichiers modifiés :**
+```
+backend/src/modules/orders/orders.service.ts       — +transition(), +findActiveByEvent(), +findAuditTrail()
+backend/src/modules/orders/orders.service.spec.ts  — +35 tests (transition, find*)
+backend/src/modules/orders/orders.controller.ts    — réécriture complète (6 PATCH + 3 GET)
+backend/src/modules/orders/orders.module.ts        — OrderStateMachineService providers/exports
+```
+
+**Architecture Order State Machine :**
+```
+PAID ──────────────────────── → ACCEPTED (opérateur accepte)
+PAID / ACCEPTED / PREPARING── → CANCELLED (opérateur annule)
+PAID / ACCEPTED / PREPARING / READY → RECOVERED (récupération manuelle)
+ACCEPTED → PREPARING → READY → PICKED_UP → COMPLETED
+RECOVERED → ACCEPTED | PREPARING | READY (re-entrée à n'importe quel point)
+```
+- **15 transitions** autorisées au total (READY ne peut pas être annulé)
+- assertTransition() tire **avant** tout écrit DB → BadRequestException si illégale
+- transition() : un seul `$transaction([order.update, audit.create])` → atomique
+- TODO Phase 6.2 : emit realtime event après commit (outbox pattern)
+
+**Endpoints opérateur :**
+```
+PATCH /orders/:id/accept           PAID → ACCEPTED
+PATCH /orders/:id/start-preparing  ACCEPTED → PREPARING
+PATCH /orders/:id/mark-ready       PREPARING → READY
+PATCH /orders/:id/mark-picked-up   READY → PICKED_UP
+PATCH /orders/:id/recover          any → RECOVERED
+PATCH /orders/:id/cancel           PAID/ACCEPTED/PREPARING → CANCELLED
+GET   /orders/event/:eventId/active  snapshot dashboard (exclut COMPLETED + CANCELLED)
+GET   /orders/:id                  vue client (ownership check)
+GET   /orders/:id/audit            audit trail client (ownership check)
+```
+
+**Fixes apportés :**
+- orderBy `occurredAt` → `createdAt` (le champ Prisma réel dans OrderAuditTrail)
+- Commentaire "17 transitions" corrigé → 15
+
+**Tests :** 151 passing, 0 failures (13 suites, +65 nouveaux tests)
+
+**Prochaine étape :** Bloc 6.2 — Socket.IO + Outbox realtime
 
 ---
 

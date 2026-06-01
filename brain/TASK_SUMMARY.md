@@ -4,6 +4,34 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-06-01] Bloc 6.1 — Order State Machine + Audit Trail
+
+Task: Implement the full operator order lifecycle — transition guard, PATCH endpoints, audit trail recording, and operator dashboard snapshot.
+Date: 2026-06-01
+Commit: 4cf5426
+
+Created:
+- backend/src/modules/orders/order-state-machine.service.ts — pure guard, 15 allowed transitions (PAID/ACCEPTED/PREPARING/READY/PICKED_UP/COMPLETED + cancel + recovery)
+- backend/src/modules/orders/order-state-machine.service.spec.ts — 30 tests (transition map, all 15 valid paths, 12 invalid paths, isAllowed, allowedFrom)
+- backend/src/modules/orders/dto/transition-order.dto.ts — optional reason field (max 500 chars)
+
+Modified:
+- backend/src/modules/orders/orders.service.ts — added transition(), findActiveByEvent(), findAuditTrail(); fix orderBy createdAt (not occurredAt)
+- backend/src/modules/orders/orders.service.spec.ts — 35 tests total (existing + new transition/findActive/findAuditTrail suites)
+- backend/src/modules/orders/orders.controller.ts — full rewrite: 6 operator PATCH + dashboard GET + 2 customer GET, all behind JwtAuthGuard + assertOrgMember
+- backend/src/modules/orders/orders.module.ts — OrderStateMachineService added to providers/exports
+
+Key technical decisions:
+- assertTransition() fires BEFORE any DB write → BadRequestException if illegal
+- transition() uses $transaction([order.update, orderAuditTrail.create]) array form → atomic
+- Terminal states COMPLETED/CANCELLED have no outgoing transitions (verified 15 total, not 17 as misdocumented)
+- READY cannot be cancelled (deadline passed) — forces recovery path
+- TODO Phase 6.2 comment left in transition() for outbox realtime emit
+
+Test results: 151 tests passing, 0 failures (13 suites)
+
+---
+
 ## [2026-06-01] Bloc 6.0 — Infrastructure Staging (Vercel + Railway + GitHub Secrets)
 
 Task: Deploy full staging infrastructure — Vercel (admin + operator), Railway (backend + PostgreSQL + Redis), GitHub Secrets, cross-env wiring.

@@ -5,6 +5,33 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.12.0] — 2026-06-01 — Bloc 6.1 : Order State Machine + Audit Trail
+
+### Contexte
+Implémentation de la machine d'états des commandes côté opérateur : guard de transitions, 6 endpoints PATCH, snapshot pour le dashboard, enregistrement de l'audit trail atomique.
+
+### Ajouté
++ backend/src/modules/orders/order-state-machine.service.ts — garde pur, 15 transitions autorisées
++ backend/src/modules/orders/order-state-machine.service.spec.ts — 30 tests (map, 15 paths valides, 12 invalides, isAllowed, allowedFrom)
++ backend/src/modules/orders/dto/transition-order.dto.ts — champ `reason` optionnel (max 500 chars)
+
+### Modifié
+~ backend/src/modules/orders/orders.service.ts — transition(), findActiveByEvent(), findAuditTrail() ; fix orderBy → createdAt
+~ backend/src/modules/orders/orders.service.spec.ts — 35 tests (existants + nouveaux blocs transition/find)
+~ backend/src/modules/orders/orders.controller.ts — réécriture complète : 6 PATCH opérateur + GET dashboard + 2 GET client
+~ backend/src/modules/orders/orders.module.ts — OrderStateMachineService ajouté providers/exports
+
+### Garanties techniques
+- assertTransition() tire avant tout écrit DB → la transaction n'est jamais ouverte si la transition est invalide
+- transition() utilise $transaction([order.update, audit.create]) → atomique
+- 15 transitions réelles (correction du commentaire "17" erroné dans le service)
+- État READY non annulable — oblige le chemin recovery
+
+### Tests
+151 tests passing, 0 failures (13 suites)
+
+---
+
 ## [0.11.0] — 2026-06-01 — Bloc 6.0 : Infrastructure Staging complète
 
 ### Contexte

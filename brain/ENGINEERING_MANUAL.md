@@ -1520,5 +1520,66 @@ pnpm strict mode ne crée de symlink que pour les dépendances **directes** du p
 
 `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_ADMIN`, `VERCEL_PROJECT_ID_OPERATOR`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
 
+---
+
+## Bloc 6.1 — Order State Machine
+
+### Transitions autorisées (15 au total)
+
+| From | To (allowed) |
+|---|---|
+| `PAID` | `ACCEPTED`, `CANCELLED`, `RECOVERED` |
+| `ACCEPTED` | `PREPARING`, `CANCELLED`, `RECOVERED` |
+| `PREPARING` | `READY`, `CANCELLED`, `RECOVERED` |
+| `READY` | `PICKED_UP`, `RECOVERED` |
+| `PICKED_UP` | `COMPLETED` |
+| `RECOVERED` | `ACCEPTED`, `PREPARING`, `READY` |
+| `COMPLETED` | *(terminal — aucune sortie)* |
+| `CANCELLED` | *(terminal — aucune sortie)* |
+
+**Règle READY :** une commande en état `READY` ne peut plus être annulée directement. Elle doit passer par `RECOVERED` d'abord (le délai d'annulation est dépassé).
+
+### Garantie d'atomicité
+
+```typescript
+// Guard AVANT toute transaction — pas d'écriture si transition illégale
+this.stateMachine.assertTransition(order.status, to);   // throw BadRequestException si invalide
+
+// Un seul $transaction pour les 2 opérations
+const [updated] = await this.prisma.$transaction([
+  this.prisma.order.update({ where: { id: orderId }, data: { status: to } }),
+  this.prisma.orderAuditTrail.create({ data: { orderId, actorType, actorId, previousState, nextState, reason } }),
+]);
+```
+
+### Outbox pattern (Phase 6.2 — non encore implémenté)
+
+Après le commit de la transaction, émettre l'événement realtime via le gateway Socket.IO :
+```typescript
+// TODO Phase 6.2
+// await this.realtimeGateway.emit('order_updated', { orderId, previousStatus, nextStatus, actorType });
+```
+Ne jamais émettre AVANT le commit (risque d'état incohérent si la DB rollback).
+
+### Endpoints opérateur
+
+Tous protégés par `JwtAuthGuard` + vérification `assertOrgMember` (membre de l'organisation propriétaire de la commande) :
+
+```
+PATCH /api/v1/orders/:id/accept
+PATCH /api/v1/orders/:id/start-preparing
+PATCH /api/v1/orders/:id/mark-ready
+PATCH /api/v1/orders/:id/mark-picked-up
+PATCH /api/v1/orders/:id/recover
+PATCH /api/v1/orders/:id/cancel
+GET   /api/v1/orders/event/:eventId/active
+```
+
+Body (tous les PATCH) : `{ "reason": "string optionnel, max 500 chars" }`
+
+### Champ orderBy dans OrderAuditTrail
+
+Le modèle Prisma `OrderAuditTrail` expose `createdAt` (mapped `created_at`), **pas** `occurredAt`. Toujours utiliser `orderBy: { createdAt: 'asc' }` pour les requêtes d'audit trail.
+
 
 
