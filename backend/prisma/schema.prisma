@@ -1,0 +1,591 @@
+// ─────────────────────────────────────────────────────────────
+// BRAT EAT — Prisma Schema
+// Source of truth for the database structure.
+// Every entity matches DOMAIN_MODEL.md.
+// Run: pnpm db:generate  after any schema change
+// Run: pnpm db:migrate   to apply migrations (dev)
+// ─────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── ENUMS ────────────────────────────────────────────────────
+
+/// Global role: controls platform-level access.
+/// Organisation-level access is controlled by OrgRole on OrganizationMember.
+enum GlobalRole {
+  SUPER_ADMIN
+  CUSTOMER
+
+  @@map("global_role")
+}
+
+/// Role of a user within a specific organisation.
+enum OrgRole {
+  ORG_ADMIN
+  MANAGER
+  OPERATOR
+  MARKETING
+
+  @@map("org_role")
+}
+
+/// Lifecycle status of an organisation.
+enum OrgStatus {
+  ACTIVE
+  SUSPENDED
+  ARCHIVED
+
+  @@map("org_status")
+}
+
+/// Physical venue availability status.
+enum VenueStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("venue_status")
+}
+
+/// Lifecycle status of an event.
+enum EventStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+  CANCELLED
+
+  @@map("event_status")
+}
+
+/// Operational status of a supplier during an event.
+enum SupplierStatus {
+  OPEN
+  CLOSED
+  PAUSED
+  OFFLINE
+
+  @@map("supplier_status")
+}
+
+/// Stripe Connect onboarding state for a supplier.
+/// Drives whether the supplier can receive payments.
+enum StripeAccountStatus {
+  NOT_ONBOARDED   // No Stripe account created yet
+  PENDING         // Account created, awaiting onboarding completion or Stripe review
+  ACTIVE          // charges_enabled && payouts_enabled
+  RESTRICTED      // Account exists but charges or payouts disabled (action required)
+
+  @@map("stripe_account_status")
+}
+
+/// Lifecycle of a Cart.
+/// A cart cannot accept items after CHECKOUT — items are frozen at that point.
+enum CartStatus {
+  OPEN              // Customer is editing
+  CHECKOUT_PENDING  // PaymentIntent created, awaiting payment confirmation
+  CONVERTED         // Payment succeeded, Order created
+  EXPIRED           // expiresAt passed
+  ABANDONED         // Cleared by customer or sweeper
+
+  @@map("cart_status")
+}
+
+/// Lifecycle of an Order (post-payment).
+/// Mirrors brain/ORDER_STATE_MACHINE.md.
+enum OrderStatus {
+  PAID
+  ACCEPTED
+  PREPARING
+  READY
+  PICKED_UP
+  COMPLETED
+  CANCELLED
+  RECOVERED
+
+  @@map("order_status")
+}
+
+/// Payment progression.
+enum PaymentStatus {
+  NOT_STARTED
+  REQUIRES_ACTION
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+
+  @@map("payment_status")
+}
+
+/// Who triggered an order transition. Used in the audit trail.
+enum OrderActorType {
+  SYSTEM
+  CUSTOMER
+  OPERATOR
+  ADMIN
+  FLAIX
+
+  @@map("order_actor_type")
+}
+
+/// Availability status of a pickup point.
+enum PickupPointStatus {
+  ACTIVE
+  INACTIVE
+
+  @@map("pickup_point_status")
+}
+
+// ─── MODELS ───────────────────────────────────────────────────
+
+/// A platform user: customer, operator, admin, or super admin.
+model User {
+  id           String     @id @default(uuid())
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  displayName  String     @map("display_name")
+  phone        String?
+  globalRole   GlobalRole @default(CUSTOMER) @map("global_role")
+  isActive     Boolean    @default(true) @map("is_active")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
+
+  memberships   OrganizationMember[]
+  refreshTokens RefreshToken[]
+  carts         Cart[]
+  orders        Order[]
+
+  @@map("users")
+}
+
+/// A company, venue operator or event owner.
+/// One organisation can own many venues, events and suppliers.
+model Organization {
+  id        String    @id @default(uuid())
+  name      String
+  slug      String    @unique
+  status    OrgStatus @default(ACTIVE)
+  settings  Json      @default("{}")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  members      OrganizationMember[]
+  venues       Venue[]
+  events       Event[]
+  suppliers    Supplier[]
+  pickupPoints PickupPoint[]
+
+  @@map("organizations")
+}
+
+/// Junction table: a user's role inside a specific organisation.
+/// A user can be a member of multiple organisations with different roles.
+model OrganizationMember {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+  orgRole        OrgRole  @default(OPERATOR) @map("org_role")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@map("organization_members")
+}
+
+// ─── PHASE 3 MODELS ───────────────────────────────────────────
+
+/// A physical location owned by an organisation.
+/// One venue can host many events and pickup points.
+model Venue {
+  id             String      @id @default(uuid())
+  organizationId String      @map("organization_id")
+  name           String
+  address        String
+  timezone       String      @default("Europe/Paris")
+  status         VenueStatus @default(ACTIVE)
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events       Event[]
+  pickupPoints PickupPoint[]
+
+  @@map("venues")
+}
+
+/// A time-bound ordering context. Belongs to one org and one venue.
+/// An event activates suppliers, pickup points, and slots.
+model Event {
+  id                 String      @id @default(uuid())
+  organizationId     String      @map("organization_id")
+  venueId            String      @map("venue_id")
+  name               String
+  startAt            DateTime    @map("start_at")
+  endAt              DateTime    @map("end_at")
+  status             EventStatus @default(DRAFT)
+  activeFeatureFlags Json        @default("{}") @map("active_feature_flags")
+  createdAt          DateTime    @default(now()) @map("created_at")
+  updatedAt          DateTime    @updatedAt @map("updated_at")
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  venue          Venue           @relation(fields: [venueId], references: [id])
+  eventSuppliers EventSupplier[]
+  pickupPoints   PickupPoint[]
+  carts          Cart[]
+
+  @@map("events")
+}
+
+/// A food, drink or merchandise operator attached to an event.
+/// Belongs to an organisation; connected to events via EventSupplier junction.
+model Supplier {
+  id              String         @id @default(uuid())
+  organizationId  String         @map("organization_id")
+  name            String
+  status          SupplierStatus @default(CLOSED)
+  preparationZone String?        @map("preparation_zone")
+  /// Stripe Connect account ID — populated during Phase 5 onboarding.
+  stripeAccountId       String?              @map("stripe_account_id")
+  stripeAccountStatus   StripeAccountStatus  @default(NOT_ONBOARDED) @map("stripe_account_status")
+  /// Mirror of Stripe Account.charges_enabled — refreshed on each status check.
+  stripeChargesEnabled  Boolean              @default(false) @map("stripe_charges_enabled")
+  /// Mirror of Stripe Account.payouts_enabled — refreshed on each status check.
+  stripePayoutsEnabled  Boolean              @default(false) @map("stripe_payouts_enabled")
+  /// Timestamp when the account first reached ACTIVE state.
+  stripeOnboardedAt     DateTime?            @map("stripe_onboarded_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  eventSuppliers EventSupplier[]
+  pickupPoints   PickupPoint[]
+  categories     Category[]
+  products       Product[]
+  stocks         Stock[]
+  carts          Cart[]
+
+  @@map("suppliers")
+}
+
+/// Junction: a supplier assigned to a specific event.
+/// @@unique prevents the same supplier from being attached twice.
+model EventSupplier {
+  id         String   @id @default(uuid())
+  eventId    String   @map("event_id")
+  supplierId String   @map("supplier_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  event    Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, supplierId])
+  @@map("event_suppliers")
+}
+
+/// A named pickup location inside a venue.
+/// Optionally scoped to an event and/or a specific supplier.
+model PickupPoint {
+  id             String            @id @default(uuid())
+  organizationId String            @map("organization_id")
+  venueId        String            @map("venue_id")
+  eventId        String?           @map("event_id")
+  supplierId     String?           @map("supplier_id")
+  name           String
+  status         PickupPointStatus @default(ACTIVE)
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  venue        Venue        @relation(fields: [venueId], references: [id])
+  event        Event?       @relation(fields: [eventId], references: [id])
+  supplier     Supplier?    @relation(fields: [supplierId], references: [id])
+  stocks       Stock[]
+  carts        Cart[]
+
+  @@map("pickup_points")
+}
+
+// ─── END PHASE 3 ──────────────────────────────────────────────
+
+// ─── PHASE 4 ENUMS ────────────────────────────────────────────
+
+/// Visibility status of a product category.
+enum CategoryStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+
+  @@map("category_status")
+}
+
+/// Product lifecycle status.
+/// OUT_OF_STOCK = temporarily unavailable but not archived.
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  OUT_OF_STOCK
+  ARCHIVED
+
+  @@map("product_status")
+}
+
+// ─── PHASE 4 MODELS ───────────────────────────────────────────
+
+/// A menu category belonging to one supplier.
+/// Products are grouped by category for display and ordering.
+/// Deleting a category is blocked if it has products (Restrict FK).
+model Category {
+  id         String         @id @default(uuid())
+  supplierId String         @map("supplier_id")
+  name       String
+  sortOrder  Int            @default(0) @map("sort_order")
+  status     CategoryStatus @default(ACTIVE)
+  createdAt  DateTime       @default(now()) @map("created_at")
+  updatedAt  DateTime       @updatedAt @map("updated_at")
+
+  supplier Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@map("categories")
+}
+
+/// A product offered by a supplier within a category.
+/// price is stored in CENTS (Int) — never Float for money.
+/// availableFrom/availableUntil support time-window menus (e.g. breakfast until 11h).
+model Product {
+  id             String        @id @default(uuid())
+  supplierId     String        @map("supplier_id")
+  categoryId     String        @map("category_id")
+  name           String
+  description    String?
+  /// Price in cents. 250 = €2.50. Must be >= 0.
+  price          Int
+  imageUrl       String?       @map("image_url")
+  status         ProductStatus @default(ACTIVE)
+  availableFrom  DateTime?     @map("available_from")
+  availableUntil DateTime?     @map("available_until")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  supplier  Supplier   @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  category  Category   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  stocks    Stock[]
+  cartItems CartItem[]
+
+  @@map("products")
+}
+
+/// Stock entry: available quantity of a product.
+/// Scoped to a supplier, optionally to a specific pickup point.
+/// When quantity = 0, the service automatically sets isAvailable = false.
+/// OPERATOR can manually toggle isAvailable (e.g. 86 an item mid-service).
+/// Uniqueness: one global entry per product (pickupPointId = null) enforced at service level.
+///             one entry per (product, pickupPoint) enforced by DB partial index.
+model Stock {
+  id            String   @id @default(uuid())
+  productId     String   @map("product_id")
+  supplierId    String   @map("supplier_id")
+  pickupPointId String?  @map("pickup_point_id")
+  quantity      Int      @default(0)
+  isAvailable   Boolean  @default(true) @map("is_available")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier    Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  pickupPoint PickupPoint? @relation(fields: [pickupPointId], references: [id], onDelete: SetNull)
+
+  @@map("stock")
+}
+
+// ─── END PHASE 4 ──────────────────────────────────────────────
+
+// ─── PHASE 5 MODELS ───────────────────────────────────────────
+
+/// A shopping cart belonging to a user.
+/// V1 = single-vendor: one cart targets exactly one supplier.
+/// Items, totals and pickup point are persisted on the cart;
+/// snapshots are taken later, on Order creation.
+model Cart {
+  id             String     @id @default(uuid())
+  userId         String     @map("user_id")
+  eventId        String     @map("event_id")
+  supplierId     String     @map("supplier_id")
+  pickupPointId  String?    @map("pickup_point_id")
+  status         CartStatus @default(OPEN)
+  /// Idempotency safeguard for /checkout — same key returns the same PaymentIntent.
+  paymentIntentId String?   @map("payment_intent_id")
+  expiresAt      DateTime   @map("expires_at")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  supplier    Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  pickupPoint PickupPoint? @relation(fields: [pickupPointId], references: [id], onDelete: SetNull)
+  items       CartItem[]
+
+  @@index([userId, status])
+  @@index([eventId])
+  @@map("carts")
+}
+
+/// A line item in a cart. Live product price is used while the cart is OPEN.
+/// At checkout, the live price is frozen into `priceSnapshotCents` so that the
+/// PaymentIntent amount and the future Order.totalCents stay consistent even
+/// if Product.price changes between checkout and webhook delivery.
+model CartItem {
+  id                 String   @id @default(uuid())
+  cartId             String   @map("cart_id")
+  productId          String   @map("product_id")
+  quantity           Int
+  /// Frozen unit price (cents) captured at checkout. NULL while cart is OPEN.
+  priceSnapshotCents Int?     @map("price_snapshot_cents")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  cart    Cart    @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([cartId, productId])
+  @@map("cart_items")
+}
+
+/// A confirmed customer order — created ONLY after payment_intent.succeeded.
+/// Stores price + product snapshots so historical orders never depend on
+/// mutable Product / Stock rows.
+///
+/// V1: one Order = one Supplier (multi-vendor flag stays OFF in V1).
+model Order {
+  id                String        @id @default(uuid())
+  /// Human-readable, unique identifier shown to customer + operator (e.g. BE-00000123).
+  publicOrderNumber String        @unique @map("public_order_number")
+  userId            String        @map("user_id")
+  organizationId    String        @map("organization_id")
+  eventId           String        @map("event_id")
+  venueId           String        @map("venue_id")
+  supplierId        String        @map("supplier_id")
+  pickupPointId     String        @map("pickup_point_id")
+  /// Phase 7 — slot assignment.
+  slotId            String?       @map("slot_id")
+  status            OrderStatus   @default(PAID)
+  paymentStatus     PaymentStatus @default(SUCCEEDED)
+  /// Frozen totals at order creation. Never recomputed.
+  subtotalCents     Int           @map("subtotal_cents")
+  totalCents        Int           @map("total_cents")
+  currency          String        @default("eur")
+  /// Phase 9 — analytics tags.
+  metadata          Json          @default("{}")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  user        User             @relation(fields: [userId], references: [id])
+  items       OrderItem[]
+  payments    Payment[]
+  auditTrail  OrderAuditTrail[]
+
+  @@index([userId])
+  @@index([eventId, status])
+  @@index([supplierId, status])
+  @@index([organizationId])
+  @@map("orders")
+}
+
+/// Frozen snapshot of one line at order creation.
+/// productId is kept for traceability; productNameSnapshot is the displayed name.
+model OrderItem {
+  id                    String   @id @default(uuid())
+  orderId               String   @map("order_id")
+  productId             String   @map("product_id")
+  productNameSnapshot   String   @map("product_name_snapshot")
+  unitPriceCentsSnapshot Int     @map("unit_price_cents_snapshot")
+  quantity              Int
+  lineTotalCents        Int      @map("line_total_cents")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+/// A Stripe PaymentIntent attached to an Order.
+/// Multiple Payments per Order are possible (e.g. partial refunds in Phase 9).
+model Payment {
+  id                    String        @id @default(uuid())
+  orderId               String?       @map("order_id")
+  stripePaymentIntentId String        @unique @map("stripe_payment_intent_id")
+  status                PaymentStatus @default(NOT_STARTED)
+  amountCents           Int           @map("amount_cents")
+  currency              String        @default("eur")
+  failureReason         String?       @map("failure_reason")
+  /// Raw last-known Stripe object — useful for debugging without re-querying Stripe.
+  rawStripeEvent        Json?         @map("raw_stripe_event")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  order Order? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+/// Append-only audit log for every Order transition.
+/// Never updated — only inserted.
+model OrderAuditTrail {
+  id            String         @id @default(uuid())
+  orderId       String         @map("order_id")
+  actorType     OrderActorType @map("actor_type")
+  actorId       String?        @map("actor_id")
+  previousState String?        @map("previous_state")
+  nextState     String         @map("next_state")
+  reason        String?
+  metadata      Json           @default("{}")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("order_audit_trail")
+}
+
+/// Stripe webhook event log — store every received event for idempotency.
+/// One row per Stripe event id. Duplicates are rejected on insert.
+model WebhookEvent {
+  id              String   @id @default(uuid())
+  stripeEventId   String   @unique @map("stripe_event_id")
+  eventType       String   @map("event_type")
+  processedAt     DateTime? @map("processed_at")
+  receivedAt      DateTime @default(now()) @map("received_at")
+  rawPayload      Json     @map("raw_payload")
+
+  @@index([eventType, receivedAt])
+  @@map("webhook_events")
+}
+
+// ─── END PHASE 5 ──────────────────────────────────────────────
+
+/// Hashed refresh tokens for secure JWT rotation.
+/// One row per active session. Deleted on logout or rotation.
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  tokenHash String   @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}

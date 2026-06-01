@@ -1,0 +1,89 @@
+name: Mobile Preview Build (Firebase App Distribution)
+
+# Placeholder — sera complété quand apps/mobile/ios et apps/mobile/android
+# auront été initialisés via `npx react-native init` ou équivalent.
+# Pour l'instant ce workflow ne fait rien (skip).
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'iOS / Android / Both'
+        required: true
+        default: 'Both'
+        type: choice
+        options:
+          - iOS
+          - Android
+          - Both
+      release_notes:
+        description: 'Release notes for testers'
+        required: false
+        default: 'Preview build from CI'
+
+jobs:
+  skip-until-native-setup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip — native projects not initialized yet
+        run: |
+          echo "⚠️  apps/mobile/ios and apps/mobile/android are not initialized yet."
+          echo "Run 'npx react-native init' locally, then activate this workflow."
+          exit 0
+
+  # ─── Decommented when native setup is done ────────────────────────────────
+  # build-ios:
+  #   if: ${{ inputs.platform == 'iOS' || inputs.platform == 'Both' }}
+  #   runs-on: macos-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: pnpm/action-setup@v4
+  #       with:
+  #         version: 11.3.0
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #         cache: 'pnpm'
+  #     - uses: ruby/setup-ruby@v1
+  #       with:
+  #         ruby-version: '3.2'
+  #         bundler-cache: true
+  #         working-directory: apps/mobile/ios
+  #     - run: pnpm install --frozen-lockfile
+  #     - run: cd apps/mobile/ios && pod install
+  #     - name: Fastlane build & upload to Firebase
+  #       run: cd apps/mobile/ios && bundle exec fastlane preview
+  #       env:
+  #         FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID_IOS }}
+  #         FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+  #         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+  #         RELEASE_NOTES: ${{ inputs.release_notes }}
+
+  # build-android:
+  #   if: ${{ inputs.platform == 'Android' || inputs.platform == 'Both' }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: pnpm/action-setup@v4
+  #       with:
+  #         version: 11.3.0
+  #     - uses: actions/setup-node@v4
+  #       with:
+  #         node-version: '20'
+  #         cache: 'pnpm'
+  #     - uses: actions/setup-java@v4
+  #       with:
+  #         distribution: 'temurin'
+  #         java-version: '17'
+  #     - uses: ruby/setup-ruby@v1
+  #       with:
+  #         ruby-version: '3.2'
+  #         bundler-cache: true
+  #         working-directory: apps/mobile/android
+  #     - run: pnpm install --frozen-lockfile
+  #     - name: Fastlane build & upload to Firebase
+  #       run: cd apps/mobile/android && bundle exec fastlane preview
+  #       env:
+  #         FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID_ANDROID }}
+  #         FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+  #         RELEASE_NOTES: ${{ inputs.release_notes }}
