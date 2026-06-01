@@ -1,89 +1,114 @@
-name: Mobile Preview Build (Firebase App Distribution)
+name: Mobile Preview Build (EAS)
 
-# Placeholder — sera complété quand apps/mobile/ios et apps/mobile/android
-# auront été initialisés via `npx react-native init` ou équivalent.
-# Pour l'instant ce workflow ne fait rien (skip).
+# Triggers:
+#   - Auto on push to main when mobile code changes
+#   - Manual dispatch to build any platform on demand
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-preview.yml'
   workflow_dispatch:
     inputs:
       platform:
-        description: 'iOS / Android / Both'
+        description: 'Platform to build'
         required: true
-        default: 'Both'
+        default: 'all'
         type: choice
-        options:
-          - iOS
-          - Android
-          - Both
+        options: [all, ios, android]
       release_notes:
         description: 'Release notes for testers'
         required: false
-        default: 'Preview build from CI'
+        default: 'Preview build from main'
+
+# Cancel in-flight builds when a new push arrives
+concurrency:
+  group: mobile-preview-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  skip-until-native-setup:
+  build:
+    name: EAS Preview (${{ matrix.platform }})
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - ${{ (github.event.inputs.platform == 'ios' || github.event.inputs.platform == 'all' || github.event.inputs.platform == '') && 'ios' || '' }}
+          - ${{ (github.event.inputs.platform == 'android' || github.event.inputs.platform == 'all' || github.event.inputs.platform == '') && 'android' || '' }}
+        exclude:
+          - platform: ''
+
+    defaults:
+      run:
+        working-directory: apps/mobile
+
     steps:
-      - name: Skip — native projects not initialized yet
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: '11.3.0'
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      # expo-github-action installs eas-cli and configures auth
+      - name: Setup Expo + EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # Build preview APK (Android) or IPA (iOS) via EAS Build cloud
+      - name: EAS Build — ${{ matrix.platform }}
         run: |
-          echo "⚠️  apps/mobile/ios and apps/mobile/android are not initialized yet."
-          echo "Run 'npx react-native init' locally, then activate this workflow."
-          exit 0
+          eas build \
+            --platform ${{ matrix.platform }} \
+            --profile preview \
+            --non-interactive \
+            --message "${{ github.event.inputs.release_notes || format('Auto preview — {0}', github.sha) }}"
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-  # ─── Decommented when native setup is done ────────────────────────────────
-  # build-ios:
-  #   if: ${{ inputs.platform == 'iOS' || inputs.platform == 'Both' }}
-  #   runs-on: macos-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: pnpm/action-setup@v4
-  #       with:
-  #         version: 11.3.0
-  #     - uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '20'
-  #         cache: 'pnpm'
-  #     - uses: ruby/setup-ruby@v1
-  #       with:
-  #         ruby-version: '3.2'
-  #         bundler-cache: true
-  #         working-directory: apps/mobile/ios
-  #     - run: pnpm install --frozen-lockfile
-  #     - run: cd apps/mobile/ios && pod install
-  #     - name: Fastlane build & upload to Firebase
-  #       run: cd apps/mobile/ios && bundle exec fastlane preview
-  #       env:
-  #         FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID_IOS }}
-  #         FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-  #         APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-  #         RELEASE_NOTES: ${{ inputs.release_notes }}
+      # Retrieve the QR/download URL and post it as a commit comment
+      - name: Post build link as commit comment
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const platform = '${{ matrix.platform }}';
+            const sha = context.sha;
+            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const expoUrl = `https://expo.dev/accounts/breakeat/projects/break-eat/builds`;
+            const body = [
+              `## 📱 Mobile Preview — ${platform.toUpperCase()}`,
+              '',
+              `- **Commit:** \`${sha.slice(0, 7)}\``,
+              `- **Build log:** ${runUrl}`,
+              `- **Expo dashboard (QR + download):** ${expoUrl}`,
+              '',
+              `> Scan the QR code in the Expo dashboard to install on a physical device.`,
+              `> First build takes ~10 min; subsequent builds use cache.`,
+            ].join('\n');
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: sha,
+              body,
+            });
 
-  # build-android:
-  #   if: ${{ inputs.platform == 'Android' || inputs.platform == 'Both' }}
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: pnpm/action-setup@v4
-  #       with:
-  #         version: 11.3.0
-  #     - uses: actions/setup-node@v4
-  #       with:
-  #         node-version: '20'
-  #         cache: 'pnpm'
-  #     - uses: actions/setup-java@v4
-  #       with:
-  #         distribution: 'temurin'
-  #         java-version: '17'
-  #     - uses: ruby/setup-ruby@v1
-  #       with:
-  #         ruby-version: '3.2'
-  #         bundler-cache: true
-  #         working-directory: apps/mobile/android
-  #     - run: pnpm install --frozen-lockfile
-  #     - name: Fastlane build & upload to Firebase
-  #       run: cd apps/mobile/android && bundle exec fastlane preview
-  #       env:
-  #         FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID_ANDROID }}
-  #         FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-  #         RELEASE_NOTES: ${{ inputs.release_notes }}
+  # ─── Required secret ─────────────────────────────────────────────────────
+  # EXPO_TOKEN — generate at https://expo.dev/accounts/[account]/settings/access-tokens
+  # Add to GitHub Secrets: Settings → Secrets → Actions → New repository secret

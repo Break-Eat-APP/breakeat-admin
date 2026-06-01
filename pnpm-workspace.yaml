@@ -7,6 +7,8 @@ allowBuilds:
   '@prisma/engines': true
   '@sentry/cli': true
   argon2: true
+  core-js-pure: true
+  esbuild: true
   prisma: true
   sharp: true
   unrs-resolver: true

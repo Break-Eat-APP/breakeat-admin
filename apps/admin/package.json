@@ -8,7 +8,9 @@
     "start": "next start --port 3001",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "clean": "rimraf .next out"
+    "clean": "rimraf .next out",
+    "storybook": "storybook dev -p 6006",
+    "build-storybook": "storybook build -o storybook-static"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.75.0",
@@ -18,12 +20,16 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@storybook/addon-essentials": "^8.6.14",
+    "@storybook/nextjs": "^8.6.18",
+    "@storybook/react": "^8.6.18",
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "eslint": "^9.27.0",
     "eslint-config-next": "^15.3.2",
     "rimraf": "^6.0.1",
+    "storybook": "^8.6.18",
     "typescript": "^5.8.3"
   }
 }

@@ -36,10 +36,19 @@ async function bootstrap(): Promise<void> {
   // /webhooks/stripe must stay stable for Stripe; /health for Docker/monitoring.
   app.setGlobalPrefix('api/v1', { exclude: ['health', 'webhooks/(.*)'] });
 
+  // Safety: DEMO_MODE must NEVER be enabled in production
+  if (process.env.DEMO_MODE === 'true' && process.env.NODE_ENV === 'production') {
+    logger.error('CRITICAL: DEMO_MODE=true is not allowed in NODE_ENV=production. Aborting.');
+    process.exit(1);
+  }
+
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   logger.log(`BREAK EAT backend running on port ${port}`);
   logger.log(`Environment: ${process.env.NODE_ENV ?? 'development'}`);
+  if (process.env.DEMO_MODE === 'true') {
+    logger.warn('⚠️  DEMO_MODE is ENABLED — simulator endpoints are active at /internal/simulator');
+  }
   logger.log(`Health check: GET http://localhost:${port}/health`);
   logger.log(`Stripe hook:  POST http://localhost:${port}/webhooks/stripe`);
   logger.log(`API base:     http://localhost:${port}/api/v1`);

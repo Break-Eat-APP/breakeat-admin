@@ -16,6 +16,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { CartModule } from './modules/cart/cart.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
+import { SimulatorModule } from './modules/simulator/simulator.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import appConfig from './config/app.config';
 
@@ -50,6 +51,7 @@ import appConfig from './config/app.config';
     WebhooksModule,
     // Phase 6
     RealtimeModule,
+    SimulatorModule,
   ],
 })
 export class AppModule {}
