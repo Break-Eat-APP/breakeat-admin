@@ -1436,8 +1436,89 @@ Garde défensive dans `computeView()` : tant que `status === OPEN`, on lit **tou
 
 ### Git & fins de ligne
 
-- Repo initialisé en local (branche `main`), commit initial `fbf6147`. **Aucun remote, aucun push** — le product owner crée le repo GitHub puis on push (prérequis import Vercel/Railway).
+- Repo initialisé en local (branche `main`), commit initial `fbf6147`. Remote GitHub : `Break-Eat-APP/breakeat-admin`.
 - `.gitattributes` force `eol=lf` pour le texte (les builds tournent sur Linux Railway/Vercel) et marque `binary` les `.docx/.pdf/.png/.p8/.p12/.keystore`. Les copies de travail Windows peuvent rester en CRLF.
+
+---
+
+## [2026-06-01] Bloc 6.0 — Infrastructure Staging SOURCE DE VÉRITÉ
+
+### URLs staging
+
+| Service | URL |
+|---|---|
+| Admin (Vercel) | https://breakeat-admin-admin.vercel.app |
+| Operator (Vercel) | https://breakeat-operator-git-main-breakeatapp-1555s-projects.vercel.app |
+| Backend (Railway) | https://breakeat-admin-production.up.railway.app |
+| Health | https://breakeat-admin-production.up.railway.app/health |
+| API base | https://breakeat-admin-production.up.railway.app/api/v1 |
+
+### Vercel — configuration correcte (monorepo)
+
+Chaque app a son propre projet Vercel avec **Root Directory** pointant sur son dossier :
+- `breakeat-admin-admin` → Root Directory = `apps/admin`
+- `breakeat-operator` → Root Directory = `apps/operator`
+
+Le `vercel.json` dans chaque app définit :
+```json
+{
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm build",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "regions": ["cdg1"]
+}
+```
+**Règle :** les champs Build/Install/Output dans le dashboard Vercel restent **vides** — `vercel.json` est la source de vérité.
+
+### Railway — configuration correcte (monorepo pnpm)
+
+**Root Directory = vide** (obligatoire) — `pnpm-lock.yaml` et `pnpm-workspace.yaml` sont à la racine ; si Root Directory = `backend`, pnpm ne les trouve pas et échoue.
+
+Build Command (Railway Settings) :
+```
+COREPACK_INTEGRITY_KEYS='' corepack enable && COREPACK_INTEGRITY_KEYS='' corepack prepare pnpm@11.3.0 --activate && pnpm install --frozen-lockfile && pnpm --filter @break-eat/backend build
+```
+
+Start Command (Railway Settings) :
+```
+COREPACK_INTEGRITY_KEYS='' corepack enable && pnpm --filter @break-eat/backend db:migrate:prod && node backend/dist/main
+```
+
+`railway.json` à la racine force le builder NIXPACKS et définit healthcheckPath `/health`.
+
+### Pourquoi COREPACK_INTEGRITY_KEYS=''
+
+Node.js 22.11.0 livre une version de corepack avec des clés de signature obsolètes incompatibles avec pnpm@11.3.0 (clés rotées). `COREPACK_INTEGRITY_KEYS=''` désactive la vérification des signatures — workaround documenté et sans impact sécurité en CI.
+
+### Pourquoi express est une dépendance directe de backend
+
+`main.ts` importe `json` et `raw` directement depuis `express` :
+```typescript
+import { json, raw } from 'express';
+```
+pnpm strict mode ne crée de symlink que pour les dépendances **directes** du package. `express` étant seulement une dep transitive de `@nestjs/platform-express`, il n'était pas accessible au runtime → `Cannot find module 'express'`. Fix : `express@^5.0.0` ajouté en dep directe dans `backend/package.json`.
+
+### Variables d'environnement Railway (backend)
+
+| Variable | Source |
+|---|---|
+| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` (référence Railway) |
+| `REDIS_URL` | `${{Redis.REDIS_URL}}` (référence Railway) |
+| `NODE_ENV` | `staging` |
+| `JWT_SECRET` | secret 128 chars généré |
+| `JWT_EXPIRES_IN` | `7d` |
+| `STRIPE_SECRET_KEY` | `sk_test_...` depuis Stripe dashboard |
+| `STRIPE_WEBHOOK_SECRET` | `whsec_...` depuis Stripe webhook |
+| `STRIPE_API_VERSION` | `2024-12-18.acacia` |
+| `STRIPE_PLATFORM_FEE_BPS` | `500` |
+| `CORS_ORIGINS` | URLs Vercel admin + operator séparées par virgule |
+| `STRIPE_CONNECT_RETURN_URL` | `https://[admin-url]/suppliers/onboarding/complete` |
+| `STRIPE_CONNECT_REFRESH_URL` | `https://[admin-url]/suppliers/onboarding/refresh` |
+
+### GitHub Secrets configurés
+
+`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_ADMIN`, `VERCEL_PROJECT_ID_OPERATOR`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
 
 
 

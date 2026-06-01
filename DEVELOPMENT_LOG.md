@@ -859,7 +859,52 @@ prisma validate           → schéma OK
 
 **Vérifications :** 95 tests backend ✅ (12 suites, séquentiel ~16s, 0 flaky) | `corepack pnpm typecheck` + `corepack pnpm lint` verts via les scripts | `git check-ignore` : 10 chemins sensibles ignorés, 0 config ignorée par erreur ; seul `.env.example` (placeholders) suivi
 
-**Reste (product owner) :** créer le repo GitHub distant + push (AUCUN remote configuré localement, AUCUN push fait) ; puis Bloc 6.0 infra.
+**Reste (product owner) :** ✅ FAIT — repo GitHub `Break-Eat-APP/breakeat-admin` créé + pushé. Bloc 6.0 infra terminé.
+
+---
+
+## BLOC 6.0 — Infrastructure Staging
+
+**Date :** 2026-06-01
+**Statut :** ✅ Terminé
+
+**Services déployés :**
+```
+Vercel admin    → https://breakeat-admin-admin.vercel.app
+Vercel operator → https://breakeat-operator-git-main-breakeatapp-1555s-projects.vercel.app
+Railway backend → https://breakeat-admin-production.up.railway.app
+Railway Postgres → connecté via ${{Postgres.DATABASE_URL}}
+Railway Redis   → connecté via ${{Redis.REDIS_URL}}
+GET /health     → {"status":"ok","environment":"staging"} ✅
+```
+
+**Fichiers créés :**
+```
+nixpacks.toml   — build Railway (corepack fix + pnpm --filter @break-eat/backend)
+railway.json    — builder NIXPACKS + healthcheck /health
+```
+
+**Fichiers modifiés :**
+```
+apps/admin/vercel.json       — installCommand/buildCommand propres
+apps/operator/vercel.json    — idem
+apps/*/src/app/layout.tsx    — titre BREAK EAT (corrigé depuis BRAT EAT)
+apps/*/src/app/page.tsx      — idem
+backend/package.json         — express ajouté en dep directe
+pnpm-lock.yaml               — mis à jour
+```
+
+**Problèmes résolus (dans l'ordre) :**
+1. 44 erreurs TypeScript CI → `prisma generate` ajouté dans build script
+2. `pnpm: command not found` Railway → corepack + COREPACK_INTEGRITY_KEYS=''
+3. `pnpm-lock.yaml` introuvable → Root Directory Railway = vide
+4. Railway Settings Build Command écrasait nixpacks.toml → champs vidés
+5. `Cannot find module 'express'` → express manquait comme dep directe (pnpm strict)
+
+**GitHub Secrets configurés :**
+VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID_ADMIN, VERCEL_PROJECT_ID_OPERATOR, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+
+**Prochaine étape :** Bloc 6.1 — OrderStatus state machine + UI temps réel
 
 ---
 

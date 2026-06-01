@@ -4,6 +4,44 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-06-01] Bloc 6.0 — Infrastructure Staging (Vercel + Railway + GitHub Secrets)
+
+Task: Deploy full staging infrastructure — Vercel (admin + operator), Railway (backend + PostgreSQL + Redis), GitHub Secrets, cross-env wiring.
+Date: 2026-06-01
+
+URLs staging actives:
+- Admin:    https://breakeat-admin-admin.vercel.app
+- Operator: https://breakeat-operator-git-main-breakeatapp-1555s-projects.vercel.app
+- Backend:  https://breakeat-admin-production.up.railway.app  → GET /health ✅
+
+Modified:
+- apps/admin/vercel.json — installCommand: cd ../.. && pnpm install; buildCommand: pnpm build; Root Directory = apps/admin
+- apps/operator/vercel.json — idem
+- apps/admin/src/app/layout.tsx + page.tsx — titre BREAK EAT (was BRAT EAT)
+- apps/operator/src/app/layout.tsx + page.tsx — idem
+- backend/package.json — express ajouté en dépendance directe (pnpm strict mode ne remonte pas les deps transitives)
+- pnpm-lock.yaml — mis à jour après ajout express
+
+Created:
+- nixpacks.toml (racine) — COREPACK_INTEGRITY_KEYS='' + corepack prepare pnpm@11.3.0 + pnpm --filter @break-eat/backend build
+- railway.json (racine) — builder NIXPACKS + startCommand + healthcheckPath
+
+Also (mass rename, same session):
+- 30+ fichiers : BRAT EAT → BREAK EAT, @brat-eat/ → @break-eat/, brateat → breakeat
+
+Key technical issues solved:
+- corepack key mismatch Node 22 → COREPACK_INTEGRITY_KEYS='' en variable Railway
+- Root Directory = backend cachait pnpm-lock.yaml → vider Root Directory, build depuis racine
+- Railway Settings Build Command écrasait nixpacks.toml → champs Settings vidés
+- express manquant en dep directe → Cannot find module 'express' au runtime → ajout explicite
+- Prisma generate manquant dans CI → ajouté dans backend build script
+
+GitHub Secrets configurés:
+VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID_ADMIN, VERCEL_PROJECT_ID_OPERATOR,
+STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+
+---
+
 ## [2026-06-01] Codex Audit Phase 5 (2nd pass) — 3 P1 + 2 P2 Fixes
 
 Task: Address the 3 P1 + 2 P2 issues from the second Codex audit that blocked moving to the infra/design step.

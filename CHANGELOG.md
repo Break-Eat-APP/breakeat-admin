@@ -5,6 +5,39 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.11.0] — 2026-06-01 — Bloc 6.0 : Infrastructure Staging complète
+
+### Contexte
+Déploiement complet de l'infrastructure staging : Vercel (admin + operator), Railway (NestJS backend + PostgreSQL + Redis), GitHub Secrets, wiring cross-env.
+
+### URLs actives
+- Admin :    https://breakeat-admin-admin.vercel.app ✅
+- Operator : https://breakeat-operator-git-main-breakeatapp-1555s-projects.vercel.app ✅
+- Backend :  https://breakeat-admin-production.up.railway.app — GET /health → {"status":"ok"} ✅
+
+### Ajouté
++ nixpacks.toml (racine) — build Railway : COREPACK_INTEGRITY_KEYS='', corepack, pnpm --filter backend
++ railway.json (racine) — builder NIXPACKS, healthcheckPath /health, restart ON_FAILURE
+
+### Modifié
+~ apps/admin/vercel.json — pattern propre : installCommand cd ../.. && pnpm install, buildCommand pnpm build
+~ apps/operator/vercel.json — idem
+~ apps/admin/src/app/layout.tsx + page.tsx — titre BREAK EAT corrigé
+~ apps/operator/src/app/layout.tsx + page.tsx — idem
+~ backend/package.json — express ajouté en dépendance directe (fix Cannot find module 'express')
+~ pnpm-lock.yaml — mis à jour
+
+### Fixes techniques notables
+- COREPACK_INTEGRITY_KEYS='' : contourne le bug Node.js 22 / corepack signing key mismatch
+- Root Directory Railway vidé : pnpm-lock.yaml doit être accessible depuis la racine
+- express déclaré explicitement : pnpm strict mode ne remonte pas les deps transitives
+- Prisma generate dans le build script : évite les 44 erreurs TypeScript en CI
+
+### GitHub Secrets configurés
+VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID_ADMIN, VERCEL_PROJECT_ID_OPERATOR, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET
+
+---
+
 ## [0.10.3] — 2026-06-01 — Codex Audit Phase 5 (2e passe) : 3 P1 + 2 P2 fixes
 
 ### Contexte
