@@ -1379,5 +1379,65 @@ pnpm build       # 4 packages ✅
 - Probablement un bug de devise (cents vs entiers vs floats)
 - En attendant le fix, l'Order n'est PAS créé → customer reçoit notification d'erreur
 
+---
+
+## [2026-06-01] Codex Audit Phase 5 (2e passe) — SOURCE DE VÉRITÉ pipeline + checkout
+
+> ⚠️ **Cette section SUPERSÈDE toutes les décisions pipeline antérieures** (notamment le `pnpm -r run` de v0.8.0 / [0.10.2]). En cas de contradiction avec une section plus ancienne, c'est CELLE-CI qui fait foi.
+
+### Pipeline racine — décision FINALE : `turbo run`
+
+```json
+"build":     "turbo run build",
+"dev":       "turbo run dev",
+"lint":      "turbo run lint",
+"typecheck": "turbo run typecheck",
+"test":      "turbo run test",
+"clean":     "turbo run clean && rimraf node_modules"
+```
+
+**Pourquoi `turbo run` et pas `pnpm -r run` :**
+- Historique : v0.8.0 était passé de `turbo` à `pnpm -r run` pour contourner un souci de résolution du binaire pnpm par Turbo sur Windows.
+- Problème découvert par l'audit (2e passe) : `corepack pnpm typecheck` exécute le script `typecheck`, dont le corps `pnpm -r run typecheck` appelle un **`pnpm` imbriqué qui n'est PAS dans le PATH** (pnpm vit dans le cache corepack, pas dans `node_modules/.bin`) → échec.
+- **Fix racine :** `turbo` EST dans `node_modules/.bin` (donc ajouté au PATH par pnpm quand il lance un script). `turbo run typecheck` se résout donc toujours. Les tâches par-package (`tsc --noEmit`, `eslint`) sont des binaires locaux que Turbo lance directement — elles n'ont jamais besoin de `pnpm`.
+- **Vérifié :** `corepack pnpm typecheck` ET `corepack pnpm lint` → 4/4 packages verts, via les scripts (la commande exacte que l'audit disait cassée).
+
+**Invocation correcte (dev, CI, et audit Codex) :**
+```bash
+corepack pnpm install          # une fois
+corepack pnpm typecheck        # → turbo run typecheck → 4 packages
+corepack pnpm lint             # → turbo run lint
+corepack pnpm build            # → turbo run build (respecte ^build)
+corepack pnpm test             # → turbo run test
+```
+Bénéfice bonus : le cache Turbo est de retour (un package non modifié = `FULL TURBO`, instantané).
+
+### Tests déterministes (fin du flaky parallèle)
+
+`backend/package.json` → `jest.maxWorkers: 1`. Les suites s'exécutent en série (~16s pour 95 tests), ce qui élimine la race de workers ts-jest observée en parallèle. **Plus besoin de `--runInBand`** — c'est le défaut maintenant.
+
+### Checkout — invariant de timing du snapshot prix (P1 #1)
+
+Règle absolue dans `cart.service.ts::checkout` :
+1. Calculer la vue (prix live), capturer `frozenPrices` en mémoire.
+2. **Appeler Stripe AVANT toute écriture DB.** Si Stripe jette → on s'arrête, le cart reste `OPEN`, aucun snapshot écrit.
+3. **UNE seule transaction** écrit les `priceSnapshotCents` ET bascule `status → CHECKOUT_PENDING` + `paymentIntentId`. Atomique → un cart n'est JAMAIS `OPEN`-avec-snapshot.
+
+Garde défensive dans `computeView()` : tant que `status === OPEN`, on lit **toujours** `product.price` (jamais le snapshot). Un snapshot résiduel (ancienne donnée, migration) ne peut donc pas produire un total obsolète sur un retry. Le snapshot ne devient autoritatif qu'à partir de `CHECKOUT_PENDING`/`CONVERTED`.
+
+> Ceci corrige/remplace la note antérieure "computeView lit `priceSnapshotCents ?? product.price`" : désormais c'est `status === OPEN ? product.price : (priceSnapshotCents ?? product.price)`.
+
+### Sécurité `.gitignore` (P1 #3) — politique
+
+- On ignore **nominativement** les secrets, JAMAIS `*.json` en bloc (sinon package.json/tsconfig.json/vercel.json disparaîtraient) :
+  `firebase-app-distribution-key.json`, `firebase-adminsdk-*.json`, `**/google-services.json`, `**/GoogleService-Info.plist`, `service-account*.json`, `gcp-*.json`, `*.p8`, `*.p12`, `*.mobileprovision`, `*.cer`, `*.certSigningRequest`, `*.keystore`, `*.jks`, `.claude/settings.local.json`.
+- **Vérification obligatoire avant tout commit/push :** `git status` ne doit montrer AUCUN de ces fichiers. Contrôle ciblé : `git check-ignore <chemin-clé>` doit renvoyer le chemin.
+- Seul `.env.example` (placeholders uniquement) est suivi ; tous les vrais `.env*` sont ignorés.
+
+### Git & fins de ligne
+
+- Repo initialisé en local (branche `main`), commit initial `fbf6147`. **Aucun remote, aucun push** — le product owner crée le repo GitHub puis on push (prérequis import Vercel/Railway).
+- `.gitattributes` force `eol=lf` pour le texte (les builds tournent sur Linux Railway/Vercel) et marque `binary` les `.docx/.pdf/.png/.p8/.p12/.keystore`. Les copies de travail Windows peuvent rester en CRLF.
+
 
 

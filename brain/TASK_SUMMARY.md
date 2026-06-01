@@ -4,6 +4,45 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-06-01] Codex Audit Phase 5 (2nd pass) — 3 P1 + 2 P2 Fixes
+
+Task: Address the 3 P1 + 2 P2 issues from the second Codex audit that blocked moving to the infra/design step.
+Date: 2026-06-01
+
+Modified:
+- backend/src/modules/cart/cart.service.ts — **P1 #1**: freeze prices ONLY after Stripe succeeds, in one transaction with the CHECKOUT_PENDING flip; computeView() uses live price while status===OPEN (defensive)
+- backend/src/modules/cart/cart.service.spec.ts — renamed freeze test + new "Stripe-fails → no freeze/transition" regression test
+- package.json — **P1 #2**: build/lint/typecheck/test → `turbo run X`; removed build:turbo; clean → turbo run clean
+- backend/package.json — **P1 #2**: jest maxWorkers:1 (deterministic, no --runInBand)
+- .gitignore — **P1 #3**: explicit secret/key ignores (firebase key, google-services, GoogleService-Info.plist, .p8/.p12, keystores, service-account*.json…) WITHOUT blanket *.json; + .claude/settings.local.json
+- BLOC_6_0_SETUP_GUIDE.md — fixed false "*.json protects firebase key" claim (L168); **P2**: vercel.json is the single source of truth for build/install/output (dashboard left empty)
+
+Created:
+- .gitattributes (LF normalization for Linux CI/Docker builds)
+- Local git repo (branch main) + initial commit fbf6147 — NO remote, NO push
+
+Why (root causes):
+- **P1 #1** — checkout froze priceSnapshotCents BEFORE the Stripe call and before the status flip. A Stripe failure left the cart OPEN with frozen prices, and computeView reused that stale snapshot on retry. Now: Stripe first (no DB write on failure), then snapshot+status in one atomic transaction; computeView ignores snapshots while OPEN.
+- **P1 #2** — `corepack pnpm typecheck/lint/build` ran scripts whose body was `pnpm -r run X`; the nested `pnpm` isn't on PATH (it lives in the corepack cache, not node_modules/.bin), so it failed. `turbo` IS in node_modules/.bin → `turbo run X` resolves and works. This SUPERSEDES the v0.8.0 `pnpm -r run` decision. The earlier "turbo can't find pnpm" issue no longer reproduces (turbo 2.9.14 + .npmrc package-manager-strict=false), and turbo runs per-package binaries (tsc/eslint) directly anyway.
+- **P1 #3** — security: keys could be committed. Specific ignores added; `*.json` deliberately NOT blanket-ignored (would hide package.json/tsconfig.json/vercel.json).
+- **P2** — guide vs vercel.json contradiction: vercel.json wins on Vercel, so the guide now defers to it as the single source of truth.
+- **P2** — no git repo blocked Vercel/Railway import: initialized locally; push deferred to the product owner (needs the remote GitHub repo).
+
+Verification:
+- 95 backend tests passing (12 suites, sequential ~16s, 0 flaky)
+- `corepack pnpm typecheck` + `corepack pnpm lint` → GREEN via scripts (exact command the audit said was broken)
+- turbo run typecheck/lint → 4/4 packages OK
+- git check-ignore: 10 sensitive paths ignored, 0 config files wrongly ignored; only .env.example (placeholders) would be tracked
+
+Remaining (product owner / next):
+- Create the GitHub remote + push (no remote configured locally, nothing pushed)
+- Then Bloc 6.0 infra (Vercel/Railway/Firebase per BLOC_6_0_SETUP_GUIDE.md)
+- Phase 6 business logic (OrderStatus state machine, realtime) not started — comes after Bloc 6.0
+
+Docs updated: CHANGELOG.md [0.10.3], DEVELOPMENT_LOG.md (audit cluster), ENGINEERING_MANUAL.md (superseding pipeline+checkout section), TASK_SUMMARY.md (this entry)
+
+---
+
 ## [2026-06-01] Codex Audit Phase 5 — P1/P2/P3 Fixes
 
 Task: Address 4 P1 issues + 1 P3 + missing DOCX (P2) from Codex audit of Phase 5.

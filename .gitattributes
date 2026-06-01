@@ -1,0 +1,29 @@
+# Normalize all text files to LF in the repo (Linux CI/Docker on Railway &
+# Vercel build from these). Working copies on Windows can still be CRLF.
+* text=auto eol=lf
+
+# Explicit text types
+*.ts    text eol=lf
+*.tsx   text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.prisma text eol=lf
+*.sql   text eol=lf
+*.css   text eol=lf
+
+# Binary assets — never normalized or diffed as text
+*.docx  binary
+*.pdf   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.keystore binary
+*.jks   binary
+*.p12   binary
+*.p8    binary

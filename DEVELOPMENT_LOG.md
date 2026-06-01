@@ -844,6 +844,23 @@ prisma validate           → schéma OK
 
 ---
 
+## Codex Audit Phase 5 (2e passe) — Snapshot timing + Pipeline turbo + Sécurité .gitignore + Git init
+
+**Date :** 01/06/2026
+**Statut :** ✅ Terminée
+
+| Fix | Fichier(s) modifié(s) | Impact |
+|-----|----------------------|--------|
+| **P1 #1** — Freeze prix déplacé APRÈS succès Stripe, dans la transaction unique CHECKOUT_PENDING ; `computeView()` lit le prix live tant que `status===OPEN` | `cart.service.ts`, `cart.service.spec.ts` | Un échec Stripe ne laisse plus de prix figé sur un cart OPEN → plus de prix obsolète au retry |
+| **P1 #2** — Scripts racine → `turbo run` (turbo est dans node_modules/.bin, `pnpm` non) ; jest `maxWorkers:1` | `package.json`, `backend/package.json` | `corepack pnpm typecheck/lint/build` VERTS via les scripts ; tests déterministes (plus de `--runInBand`) |
+| **P1 #3** — `.gitignore` ignore nominativement clés/secrets (firebase key, google-services, GoogleService-Info.plist, `.p8`/`.p12`, keystores…) **sans** bloquer `*.json` | `.gitignore`, `BLOC_6_0_SETUP_GUIDE.md` | Aucune clé ne peut être committée ; fausse affirmation L168 corrigée |
+| **P2** — Source de vérité unique build Vercel = `apps/*/vercel.json` | `BLOC_6_0_SETUP_GUIDE.md` | Plus de contradiction guide ↔ config |
+| **P2** — Repo git initialisé (local, branche `main`) + commit initial `fbf6147` | `.gitattributes` (créé), `.git/` | Base prête pour push GitHub → import Vercel/Railway |
+
+**Vérifications :** 95 tests backend ✅ (12 suites, séquentiel ~16s, 0 flaky) | `corepack pnpm typecheck` + `corepack pnpm lint` verts via les scripts | `git check-ignore` : 10 chemins sensibles ignorés, 0 config ignorée par erreur ; seul `.env.example` (placeholders) suivi
+
+**Reste (product owner) :** créer le repo GitHub distant + push (AUCUN remote configuré localement, AUCUN push fait) ; puis Bloc 6.0 infra.
+
 ---
 
 ## PHASE 5 (legacy section) — voir bloc principal plus haut

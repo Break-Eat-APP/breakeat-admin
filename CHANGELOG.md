@@ -5,6 +5,47 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.10.3] — 2026-06-01 — Codex Audit Phase 5 (2e passe) : 3 P1 + 2 P2 fixes
+
+### Contexte
+Deuxième audit Codex après les corrections [0.10.2]. Les gros correctifs Phase 5 sont validés ; 3 P1 + 2 P2 bloquaient le passage à l'étape infra/design. Tout est corrigé ci-dessous.
+
+### Modifié (P1 fixes)
+~ backend/src/modules/cart/cart.service.ts :
+    - **P1 #1 (snapshot prix écrit trop tôt)** — le freeze des prix se fait MAINTENANT après le succès Stripe, dans UNE transaction unique avec la bascule CHECKOUT_PENDING. Un échec Stripe laisse donc le cart OPEN, sans snapshot.
+    - computeView() : garde défensive — tant que status === OPEN, on lit TOUJOURS le prix live (un snapshot résiduel ne peut plus fausser le total au retry).
+~ backend/src/modules/cart/cart.service.spec.ts :
+    - test renommé "freezes prices + transitions ONLY after Stripe succeeds"
+    - + nouveau test "does NOT freeze/transition when Stripe fails" (régression P1 #1)
+~ package.json :
+    - **P1 #2 (pipeline cassé via corepack)** — build/lint/typecheck/test → `turbo run X`. turbo est dans node_modules/.bin (donc résolvable par corepack/pnpm), alors que `pnpm -r` appelé depuis un script ne l'était pas → c'était LA cause racine.
+    - build:turbo supprimé (redondant), clean → `turbo run clean`
+~ backend/package.json :
+    - **P1 #2** — jest `maxWorkers: 1` → tests déterministes, plus de flakiness en parallèle, plus besoin de `--runInBand`
+~ .gitignore :
+    - **P1 #3 (sécurité)** — ignore explicite : firebase-app-distribution-key.json, firebase-adminsdk-*.json, **/google-services.json, **/GoogleService-Info.plist, service-account*.json, gcp-*.json, *.p8, *.p12, *.mobileprovision, *.cer, *.certSigningRequest, *.keystore, *.jks
+    - PAS de `*.json` en bloc (package.json / tsconfig.json / vercel.json préservés)
+    - + .claude/settings.local.json (config locale machine, ne doit pas être partagée)
+~ BLOC_6_0_SETUP_GUIDE.md :
+    - ligne 168 : fausse affirmation "`*.json` protège la clé Firebase" corrigée (la vérité : ignore nominatif + patterns ciblés, vérifier via `git status`)
+    - **P2 (contradiction Vercel)** — build/install/output : source de vérité unique = `apps/*/vercel.json` ; le dashboard Vercel reste vide
+
+### Ajouté
++ .gitattributes (normalisation LF pour les builds Linux Railway/Vercel ; binaires .docx/.pdf/.p8/etc. marqués binary)
++ **Repo git initialisé en local** (branche `main`) + commit initial `fbf6147` (P2 "pas de repo") — AUCUN remote, AUCUN push (attend que le product owner crée le repo GitHub)
+
+### Vérifications
+- **95 tests backend ✅** (12 suites, séquentiel ~16s, 0 flaky)
+- `corepack pnpm typecheck` + `corepack pnpm lint` → **VERTS via les scripts** (la commande exacte que Codex disait cassée passe maintenant)
+- turbo run typecheck/lint : 4/4 packages OK
+- .gitignore vérifié via `git check-ignore` : 10 chemins sensibles ignorés, 0 fichier de config ignoré par erreur ; seul `.env.example` (placeholders) serait suivi
+
+### Reste (hors P1, acté avec le product owner)
+- P2 : push GitHub à faire (créer le repo distant, puis `git remote add` + push) avant import Vercel/Railway
+- P2 : Phase 6 métier (OrderStatus state machine, realtime) pas commencée — vient après Bloc 6.0
+
+---
+
 ## [0.10.2] — 2026-06-01 — Codex Audit Phase 5 : P1/P2/P3 fixes
 
 ### Ajouté
