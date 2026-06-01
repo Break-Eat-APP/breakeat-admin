@@ -1581,5 +1581,58 @@ Body (tous les PATCH) : `{ "reason": "string optionnel, max 500 chars" }`
 
 Le modèle Prisma `OrderAuditTrail` expose `createdAt` (mapped `created_at`), **pas** `occurredAt`. Toujours utiliser `orderBy: { createdAt: 'asc' }` pour les requêtes d'audit trail.
 
+---
+
+## Bloc 6.2 — Realtime Gateway (Socket.IO)
+
+### Architecture
+
+```
+RealtimeModule
+  ├── RealtimeGateway  — WebSocket entry point, JWT auth, room management
+  └── RealtimeService  — business-level emit helper (inject dans OrdersService)
+```
+
+### Auth sur connect
+
+Le JWT est lu dans l'ordre de priorité :
+1. `socket.handshake.auth.token`
+2. `socket.handshake.headers.authorization` → strip `Bearer `
+
+Si absent ou invalide → `client.disconnect(true)` immédiat. Aucun message n'est traité pour un socket non authentifié.
+
+### Rooms
+
+Format : `<type>:<uuid>` — types autorisés : `organization`, `event`, `supplier`, `pickup-point`, `order`, `dashboard`.
+
+Les clients envoient `join_room` / `leave_room` avec `{ room: "organization:uuid" }`. Validation via `JoinRoomDto` (regex UUID v4).
+
+### Outbox rule — ne jamais inverser
+
+```typescript
+// ✅ CORRECT — guard avant TX, emit après commit
+this.stateMachine.assertTransition(from, to);     // 1. guard (throw si illégal)
+const [updated] = await $transaction([...]);       // 2. DB commit
+this.realtimeService.emitOrderUpdated({...});      // 3. emit APRÈS commit
+
+// ❌ INCORRECT
+await $transaction([...]);
+this.stateMachine.assertTransition(from, to);      // trop tard
+```
+
+### Conflit de nommage `eventId`
+
+Le champ `eventId` dans le payload realtime (REALTIME_CONTRACTS.md) est l'**UUID de déduplication du message realtime**, pas l'identifiant du concert.
+
+L'identifiant du concert (champ `eventId` de l'ordre Prisma) n'est **jamais** inclus dans le payload — les clients savent déjà via la room `event:{id}` à laquelle ils sont abonnés.
+
+### Événements émis
+
+| Événement | Quand | Rooms ciblées |
+|---|---|---|
+| `new_order` | après `createFromPaymentIntent` | `organization:`, `event:`, `supplier:` |
+| `order_updated` | après chaque `transition()` | `order:`, `organization:`, `event:` |
+| `order_ready` | quand `transition()` → READY | `order:`, `pickup-point:`, `organization:`, `event:` |
+
 
 

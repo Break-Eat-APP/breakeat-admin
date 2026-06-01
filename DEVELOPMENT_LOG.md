@@ -961,7 +961,62 @@ GET   /orders/:id/audit            audit trail client (ownership check)
 
 **Tests :** 151 passing, 0 failures (13 suites, +65 nouveaux tests)
 
-**Prochaine étape :** Bloc 6.2 — Socket.IO + Outbox realtime
+**Prochaine étape :** Bloc 6.2 — Socket.IO + Outbox realtime ✅ FAIT
+
+---
+
+## BLOC 6.2 — Socket.IO Gateway + Outbox Realtime
+
+**Date :** 2026-06-01
+**Statut :** ✅ Terminé
+**Commit :** 49d0f2e
+
+**Fichiers créés :**
+```
+backend/src/modules/realtime/realtime.gateway.ts
+backend/src/modules/realtime/realtime.service.ts
+backend/src/modules/realtime/realtime.module.ts
+backend/src/modules/realtime/dto/join-room.dto.ts
+backend/src/modules/realtime/realtime.gateway.spec.ts
+backend/src/modules/realtime/realtime.service.spec.ts
+```
+
+**Fichiers modifiés :**
+```
+backend/src/modules/orders/orders.service.ts   — inject RealtimeService + emit outbox
+backend/src/modules/orders/orders.service.spec.ts — mock + assertions outbox
+backend/src/modules/orders/orders.module.ts    — import RealtimeModule
+backend/src/app.module.ts                      — import RealtimeModule Phase 6
+backend/package.json + pnpm-lock.yaml          — socket.io packages
+```
+
+**Architecture réalisée :**
+```
+Client ──WS connect + JWT──→ RealtimeGateway
+  handleConnection: vérifie JWT, stocke payload dans client.data.user
+  join_room:  client.join(room) — rooms: organization/event/supplier/pickup-point/order/{uuid}
+  leave_room: client.leave(room)
+
+OrdersService
+  createFromPaymentIntent → realtimeService.emitNewOrder()  ← APRÈS $transaction commit
+  transition              → realtimeService.emitOrderUpdated() ← APRÈS $transaction commit
+                          → realtimeService.emitOrderReady()   ← seulement si to===READY
+```
+
+**Outbox rule :**
+```
+guard assertTransition() → AVANT $transaction (annule si illégal)
+$transaction([update, audit]) → commit
+realtimeService.emit*() → APRÈS commit (jamais avant)
+```
+
+**Fix nommage :**
+- `eventId` dans le payload realtime = UUID de déduplication côté client
+- L'identifiant du concert (Prisma `eventId`) ne figure pas dans le payload (les clients savent déjà via la room `event:{id}` à laquelle ils sont abonnés)
+
+**Tests :** 170 passing, 0 failures (15 suites, +19 nouveaux tests)
+
+**Prochaine étape :** Bloc 6.3 — Storybook scaffolding + pipeline mobile
 
 ---
 

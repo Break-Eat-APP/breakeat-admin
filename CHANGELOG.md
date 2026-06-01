@@ -5,6 +5,37 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.13.0] — 2026-06-01 — Bloc 6.2 : Socket.IO Gateway + Outbox Realtime
+
+### Contexte
+Couche temps réel complète : gateway Socket.IO avec auth JWT, gestion des rooms, et émission outbox-compliant après chaque commit DB.
+
+### Ajouté
++ backend/src/modules/realtime/realtime.gateway.ts — gateway Socket.IO, JWT auth au connect, join_room / leave_room
++ backend/src/modules/realtime/realtime.service.ts — emitNewOrder, emitOrderUpdated, emitOrderReady
++ backend/src/modules/realtime/realtime.module.ts — JwtModule.registerAsync + export RealtimeService
++ backend/src/modules/realtime/dto/join-room.dto.ts — validation nom de room (type:uuid)
++ backend/src/modules/realtime/realtime.gateway.spec.ts — 11 tests
++ backend/src/modules/realtime/realtime.service.spec.ts — 8 tests
+
+### Modifié
+~ backend/src/modules/orders/orders.service.ts — inject RealtimeService + emit outbox
+~ backend/src/modules/orders/orders.service.spec.ts — mock RealtimeService + assertions outbox
+~ backend/src/modules/orders/orders.module.ts — import RealtimeModule
+~ backend/src/app.module.ts — import RealtimeModule (Phase 6)
+~ backend/package.json + pnpm-lock.yaml — socket.io packages ajoutés
+
+### Règles respectées
+- Outbox rule : guard avant $transaction, emit après commit (jamais inversé)
+- eventId payload = UUID de dédup realtime (≠ concert eventId — conflit nommage résolu)
+- Token handshake.auth prioritaire sur Authorization header
+- Disconnect immédiat si JWT invalide ou absent
+
+### Tests
+170 tests passing, 0 failures (15 suites)
+
+---
+
 ## [0.12.0] — 2026-06-01 — Bloc 6.1 : Order State Machine + Audit Trail
 
 ### Contexte

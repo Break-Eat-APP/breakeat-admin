@@ -4,6 +4,38 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-06-01] Bloc 6.2 — Socket.IO Gateway + Outbox Realtime
+
+Task: Implement the realtime layer — WebSocket gateway (Socket.IO), JWT auth on connect, room management, and outbox-compliant emit after DB commits.
+Date: 2026-06-01
+Commit: 49d0f2e
+
+Created:
+- backend/src/modules/realtime/realtime.gateway.ts — Socket.IO gateway, JWT auth on connect (handshake.auth.token / Bearer header), join_room / leave_room
+- backend/src/modules/realtime/realtime.service.ts — emitNewOrder, emitOrderUpdated, emitOrderReady with correct room targeting
+- backend/src/modules/realtime/realtime.module.ts — JwtModule.registerAsync + exports RealtimeService
+- backend/src/modules/realtime/dto/join-room.dto.ts — room name validation (type:uuid pattern)
+- backend/src/modules/realtime/realtime.gateway.spec.ts — 11 tests (auth, join/leave, edge cases)
+- backend/src/modules/realtime/realtime.service.spec.ts — 8 tests (room targeting, envelope shape, UUID uniqueness)
+
+Modified:
+- backend/src/modules/orders/orders.service.ts — inject RealtimeService; emitNewOrder after createFromPaymentIntent; emitOrderUpdated + conditional emitOrderReady after transition
+- backend/src/modules/orders/orders.service.spec.ts — RealtimeService mock + outbox assertions
+- backend/src/modules/orders/orders.module.ts — import RealtimeModule
+- backend/src/app.module.ts — import RealtimeModule (Phase 6)
+- backend/package.json + pnpm-lock.yaml — @nestjs/websockets, @nestjs/platform-socket.io, socket.io
+
+Key technical decisions:
+- JWT verified on connect; invalid/missing token → immediate disconnect(true)
+- auth.token takes priority over Authorization header
+- eventId in payload = realtime dedup UUID (not the concert eventId — naming conflict resolved)
+- Outbox rule: guard throws BEFORE $transaction; emit fires AFTER commit — never inverted
+- emitOrderReady triggered only when to===READY (drives customer pickup notification)
+
+Test results: 170 tests passing, 0 failures (15 suites)
+
+---
+
 ## [2026-06-01] Bloc 6.1 — Order State Machine + Audit Trail
 
 Task: Implement the full operator order lifecycle — transition guard, PATCH endpoints, audit trail recording, and operator dashboard snapshot.
