@@ -7,7 +7,7 @@ cmds = [
 ]
 
 [phases.build]
-cmds = ["pnpm build"]
+cmds = ["pnpm --filter @break-eat/backend build"]
 
 [start]
-cmd = "pnpm db:migrate:prod && node dist/main"
+cmd = "cd backend && pnpm db:migrate:prod && node dist/main"
