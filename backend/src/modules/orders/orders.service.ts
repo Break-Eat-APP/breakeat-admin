@@ -13,6 +13,7 @@ import {
   type Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { OrderStateMachineService } from './order-state-machine.service';
 
 /**
  * OrdersService — owns the Order lifecycle from PaymentIntent.succeeded onward.
@@ -30,7 +31,10 @@ import { PrismaService } from '../../database/prisma.service';
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly stateMachine: OrderStateMachineService,
+  ) {}
 
   /**
    * Creates an Order from a successful Stripe PaymentIntent.
@@ -277,6 +281,86 @@ export class OrdersService {
     });
 
     this.logger.warn(`Payment failed: ${paymentIntentId} — ${failureReason}`);
+  }
+
+  // ─── Operator transitions ─────────────────────────────────────
+
+  /**
+   * Applies a validated state transition to an Order.
+   *
+   * Guarantees (from /brain/ORDER_STATE_MACHINE.md):
+   * - Transition is validated BEFORE any DB write.
+   * - DB update + audit trail are written in ONE transaction.
+   * - Realtime event emission happens after commit (Phase 6.2).
+   */
+  async transition(
+    orderId: string,
+    to: OrderStatus,
+    actorType: OrderActorType,
+    actorId: string | null,
+    reason?: string,
+  ): Promise<Order> {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+
+    // Guard: throws BadRequestException if transition is not in the allowed map
+    this.stateMachine.assertTransition(order.status, to);
+
+    const [updated] = await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id: orderId },
+        data: { status: to },
+      }),
+      this.prisma.orderAuditTrail.create({
+        data: {
+          orderId,
+          actorType,
+          actorId: actorId ?? null,
+          previousState: order.status,
+          nextState: to,
+          reason: reason ?? null,
+          metadata: {},
+        },
+      }),
+    ]);
+
+    this.logger.log(
+      `Order ${orderId} transitioned ${order.status} → ${to} by ${actorType}${actorId ? ` (${actorId})` : ''}`,
+    );
+
+    // TODO Phase 6.2: emit realtime event after commit
+    // await this.realtimeGateway.emit('order_updated', { orderId, previousStatus: order.status, nextStatus: to, actorType });
+
+    return updated;
+  }
+
+  /**
+   * Returns all active orders for an event (excludes COMPLETED and CANCELLED).
+   * Used by the operator dashboard snapshot endpoint.
+   */
+  async findActiveByEvent(eventId: string): Promise<Order[]> {
+    return this.prisma.order.findMany({
+      where: {
+        eventId,
+        status: {
+          notIn: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+        },
+      },
+      include: { items: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /**
+   * Returns the full audit trail for an order.
+   */
+  async findAuditTrail(orderId: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+    return this.prisma.orderAuditTrail.findMany({
+      where: { orderId },
+      orderBy: { createdAt: 'asc' },
+    });
   }
 
   // ─── Internals ───────────────────────────────────────────────

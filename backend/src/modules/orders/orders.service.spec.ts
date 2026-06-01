@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException } from '@nestjs/common';
-import { CartStatus, OrderStatus, PaymentStatus } from '@prisma/client';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { CartStatus, OrderActorType, OrderStatus, PaymentStatus } from '@prisma/client';
 import { OrdersService } from './orders.service';
+import { OrderStateMachineService } from './order-state-machine.service';
 import { PrismaService } from '../../database/prisma.service';
 
 const USER_ID = 'user-1';
@@ -13,6 +14,7 @@ const PICKUP_POINT_ID = 'pp-1';
 const CART_ID = 'cart-1';
 const PRODUCT_ID = 'product-1';
 const PAYMENT_INTENT_ID = 'pi_test_123';
+const ORDER_ID = 'order-1';
 
 function mockCart() {
   return {
@@ -45,6 +47,26 @@ function mockIntent() {
   };
 }
 
+function mockOrder(status: OrderStatus = OrderStatus.PAID) {
+  return {
+    id: ORDER_ID,
+    publicOrderNumber: 'BE-00000001',
+    userId: USER_ID,
+    organizationId: ORG_ID,
+    eventId: EVENT_ID,
+    venueId: VENUE_ID,
+    supplierId: SUPPLIER_ID,
+    pickupPointId: PICKUP_POINT_ID,
+    status,
+    paymentStatus: PaymentStatus.SUCCEEDED,
+    subtotalCents: 1600,
+    totalCents: 1600,
+    currency: 'eur',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+}
+
 describe('OrdersService', () => {
   let service: OrdersService;
   let prisma: jest.Mocked<PrismaService>;
@@ -56,6 +78,7 @@ describe('OrdersService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrdersService,
+        OrderStateMachineService,
         {
           provide: PrismaService,
           useValue: {
@@ -64,7 +87,16 @@ describe('OrdersService', () => {
               upsert: jest.fn(),
             },
             cart: { findUnique: jest.fn() },
-            order: { findFirst: jest.fn() },
+            order: {
+              findFirst: jest.fn(),
+              findUnique: jest.fn(),
+              findMany: jest.fn(),
+              update: jest.fn(),
+            },
+            orderAuditTrail: {
+              create: jest.fn(),
+              findMany: jest.fn(),
+            },
             $queryRaw: jest.fn().mockResolvedValue([{ nextval: BigInt(1) }]),
             $transaction: transactionMock,
           },
@@ -75,6 +107,8 @@ describe('OrdersService', () => {
     service = module.get(OrdersService);
     prisma = module.get(PrismaService);
   });
+
+  // ─── createFromPaymentIntent ──────────────────────────────────
 
   describe('createFromPaymentIntent', () => {
     it('creates an Order, Items, Payment and AuditTrail in a single transaction', async () => {
@@ -246,6 +280,8 @@ describe('OrdersService', () => {
     });
   });
 
+  // ─── recordFailedPayment ──────────────────────────────────────
+
   describe('recordFailedPayment', () => {
     it('upserts a FAILED Payment with the failure reason', async () => {
       (prisma.payment.upsert as jest.Mock).mockResolvedValue({});
@@ -261,6 +297,191 @@ describe('OrdersService', () => {
       expect(call.where.stripePaymentIntentId).toBe(PAYMENT_INTENT_ID);
       expect(call.create.status).toBe(PaymentStatus.FAILED);
       expect(call.create.failureReason).toBe('card_declined');
+    });
+  });
+
+  // ─── transition ───────────────────────────────────────────────
+
+  describe('transition', () => {
+    it('returns updated order on a valid transition (PAID → ACCEPTED)', async () => {
+      const paidOrder = mockOrder(OrderStatus.PAID);
+      const acceptedOrder = { ...paidOrder, status: OrderStatus.ACCEPTED };
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(paidOrder);
+      // $transaction array form — resolves to [updatedOrder, auditEntry]
+      transactionMock.mockResolvedValue([acceptedOrder, {}]);
+
+      const result = await service.transition(
+        ORDER_ID,
+        OrderStatus.ACCEPTED,
+        OrderActorType.OPERATOR,
+        USER_ID,
+        'Accepted by operator',
+      );
+
+      expect(result.status).toBe(OrderStatus.ACCEPTED);
+      expect(transactionMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws NotFoundException when order does not exist', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.transition(ORDER_ID, OrderStatus.ACCEPTED, OrderActorType.OPERATOR, USER_ID),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException on illegal transition (COMPLETED → PAID) without touching DB', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.COMPLETED));
+
+      await expect(
+        service.transition(ORDER_ID, OrderStatus.PAID, OrderActorType.OPERATOR, USER_ID),
+      ).rejects.toThrow(BadRequestException);
+
+      // Guard fires BEFORE any DB write — transaction must NOT run
+      expect(transactionMock).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException on illegal transition (CANCELLED → ACCEPTED) without touching DB', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.CANCELLED));
+
+      await expect(
+        service.transition(ORDER_ID, OrderStatus.ACCEPTED, OrderActorType.OPERATOR, USER_ID),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(transactionMock).not.toHaveBeenCalled();
+    });
+
+    it('runs order update + audit trail in ONE $transaction (array form)', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.PAID));
+      transactionMock.mockResolvedValue([mockOrder(OrderStatus.ACCEPTED), {}]);
+
+      await service.transition(ORDER_ID, OrderStatus.ACCEPTED, OrderActorType.OPERATOR, USER_ID);
+
+      // $transaction called once with an array of exactly 2 operations
+      expect(transactionMock).toHaveBeenCalledTimes(1);
+      const [ops] = transactionMock.mock.calls[0];
+      expect(Array.isArray(ops)).toBe(true);
+      expect(ops).toHaveLength(2);
+    });
+
+    it('traces full PAID → ACCEPTED → PREPARING → READY → PICKED_UP → COMPLETED chain', async () => {
+      const chain: OrderStatus[] = [
+        OrderStatus.PAID,
+        OrderStatus.ACCEPTED,
+        OrderStatus.PREPARING,
+        OrderStatus.READY,
+        OrderStatus.PICKED_UP,
+        OrderStatus.COMPLETED,
+      ];
+
+      for (let i = 0; i < chain.length - 1; i++) {
+        const from = chain[i];
+        const to = chain[i + 1];
+        (prisma.order.findUnique as jest.Mock).mockResolvedValueOnce(mockOrder(from));
+        transactionMock.mockResolvedValueOnce([mockOrder(to), {}]);
+
+        const result = await service.transition(ORDER_ID, to, OrderActorType.OPERATOR, USER_ID);
+        expect(result.status).toBe(to);
+      }
+
+      expect(transactionMock).toHaveBeenCalledTimes(5);
+    });
+
+    it('follows PREPARING → RECOVERED → READY recovery path', async () => {
+      // Step 1: PREPARING → RECOVERED
+      (prisma.order.findUnique as jest.Mock).mockResolvedValueOnce(mockOrder(OrderStatus.PREPARING));
+      transactionMock.mockResolvedValueOnce([mockOrder(OrderStatus.RECOVERED), {}]);
+
+      const step1 = await service.transition(
+        ORDER_ID,
+        OrderStatus.RECOVERED,
+        OrderActorType.OPERATOR,
+        USER_ID,
+        'Manual recovery',
+      );
+      expect(step1.status).toBe(OrderStatus.RECOVERED);
+
+      // Step 2: RECOVERED → READY (re-enter flow at any non-terminal point)
+      (prisma.order.findUnique as jest.Mock).mockResolvedValueOnce(mockOrder(OrderStatus.RECOVERED));
+      transactionMock.mockResolvedValueOnce([mockOrder(OrderStatus.READY), {}]);
+
+      const step2 = await service.transition(
+        ORDER_ID,
+        OrderStatus.READY,
+        OrderActorType.OPERATOR,
+        USER_ID,
+      );
+      expect(step2.status).toBe(OrderStatus.READY);
+    });
+  });
+
+  // ─── findActiveByEvent ────────────────────────────────────────
+
+  describe('findActiveByEvent', () => {
+    it('returns active orders and excludes COMPLETED + CANCELLED', async () => {
+      const activeOrders = [
+        mockOrder(OrderStatus.PAID),
+        mockOrder(OrderStatus.PREPARING),
+      ];
+      (prisma.order.findMany as jest.Mock).mockResolvedValue(activeOrders);
+
+      const result = await service.findActiveByEvent(EVENT_ID);
+
+      expect(result).toEqual(activeOrders);
+
+      const callArg = (prisma.order.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArg.where.eventId).toBe(EVENT_ID);
+      expect(callArg.where.status.notIn).toEqual(
+        expect.arrayContaining([OrderStatus.COMPLETED, OrderStatus.CANCELLED]),
+      );
+    });
+
+    it('includes order items for dashboard display', async () => {
+      (prisma.order.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findActiveByEvent(EVENT_ID);
+
+      const callArg = (prisma.order.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArg.include).toEqual({ items: true });
+    });
+
+    it('orders results by createdAt asc (oldest first in queue)', async () => {
+      (prisma.order.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findActiveByEvent(EVENT_ID);
+
+      const callArg = (prisma.order.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArg.orderBy).toEqual({ createdAt: 'asc' });
+    });
+  });
+
+  // ─── findAuditTrail ───────────────────────────────────────────
+
+  describe('findAuditTrail', () => {
+    it('returns full audit trail ordered by createdAt asc', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder());
+      const auditEntries = [
+        { orderId: ORDER_ID, previousState: null, nextState: OrderStatus.PAID, createdAt: new Date('2026-01-01') },
+        { orderId: ORDER_ID, previousState: OrderStatus.PAID, nextState: OrderStatus.ACCEPTED, createdAt: new Date('2026-01-02') },
+      ];
+      (prisma.orderAuditTrail.findMany as jest.Mock).mockResolvedValue(auditEntries);
+
+      const result = await service.findAuditTrail(ORDER_ID);
+
+      expect(result).toEqual(auditEntries);
+
+      const callArg = (prisma.orderAuditTrail.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArg.where.orderId).toBe(ORDER_ID);
+      expect(callArg.orderBy).toEqual({ createdAt: 'asc' });
+    });
+
+    it('throws NotFoundException when order does not exist', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.findAuditTrail(ORDER_ID)).rejects.toThrow(NotFoundException);
+
+      // Must not hit the audit trail table
+      expect(prisma.orderAuditTrail.findMany as jest.Mock).not.toHaveBeenCalled();
     });
   });
 });
