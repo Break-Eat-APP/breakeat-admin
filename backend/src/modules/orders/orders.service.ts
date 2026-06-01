@@ -14,6 +14,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { OrderStateMachineService } from './order-state-machine.service';
+import { RealtimeService } from '../realtime/realtime.service';
 
 /**
  * OrdersService — owns the Order lifecycle from PaymentIntent.succeeded onward.
@@ -34,6 +35,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly stateMachine: OrderStateMachineService,
+    private readonly realtimeService: RealtimeService,
   ) {}
 
   /**
@@ -250,6 +252,18 @@ export class OrdersService {
     this.logger.log(
       `Order created: ${order.id} (${publicOrderNumber}) from PaymentIntent ${paymentIntentId}`,
     );
+
+    // Phase 6.2 — emit new_order AFTER transaction commit (outbox rule)
+    this.realtimeService.emitNewOrder({
+      orderId: order.id,
+      publicOrderNumber: order.publicOrderNumber,
+      organizationId: order.organizationId,
+      venueId: order.venueId,
+      eventId: order.eventId,
+      supplierId: order.supplierId,
+      pickupPointId: order.pickupPointId,
+    });
+
     return order;
   }
 
@@ -328,8 +342,26 @@ export class OrdersService {
       `Order ${orderId} transitioned ${order.status} → ${to} by ${actorType}${actorId ? ` (${actorId})` : ''}`,
     );
 
-    // TODO Phase 6.2: emit realtime event after commit
-    // await this.realtimeGateway.emit('order_updated', { orderId, previousStatus: order.status, nextStatus: to, actorType });
+    // Phase 6.2 — emit realtime AFTER transaction commit (outbox rule)
+    this.realtimeService.emitOrderUpdated({
+      orderId: updated.id,
+      organizationId: updated.organizationId,
+      eventId: updated.eventId,
+      previousStatus: order.status,
+      nextStatus: to,
+      actorType,
+      reason: reason ?? null,
+    });
+
+    if (to === OrderStatus.READY) {
+      this.realtimeService.emitOrderReady({
+        orderId: updated.id,
+        publicOrderNumber: updated.publicOrderNumber,
+        organizationId: updated.organizationId,
+        eventId: updated.eventId,
+        pickupPointId: updated.pickupPointId,
+      });
+    }
 
     return updated;
   }

@@ -3,6 +3,7 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { CartStatus, OrderActorType, OrderStatus, PaymentStatus } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import { OrderStateMachineService } from './order-state-machine.service';
+import { RealtimeService } from '../realtime/realtime.service';
 import { PrismaService } from '../../database/prisma.service';
 
 const USER_ID = 'user-1';
@@ -70,6 +71,7 @@ function mockOrder(status: OrderStatus = OrderStatus.PAID) {
 describe('OrdersService', () => {
   let service: OrdersService;
   let prisma: jest.Mocked<PrismaService>;
+  let realtime: jest.Mocked<RealtimeService>;
   const transactionMock = jest.fn();
 
   beforeEach(async () => {
@@ -79,6 +81,14 @@ describe('OrdersService', () => {
       providers: [
         OrdersService,
         OrderStateMachineService,
+        {
+          provide: RealtimeService,
+          useValue: {
+            emitNewOrder: jest.fn(),
+            emitOrderUpdated: jest.fn(),
+            emitOrderReady: jest.fn(),
+          },
+        },
         {
           provide: PrismaService,
           useValue: {
@@ -106,6 +116,7 @@ describe('OrdersService', () => {
 
     service = module.get(OrdersService);
     prisma = module.get(PrismaService);
+    realtime = module.get(RealtimeService);
   });
 
   // ─── createFromPaymentIntent ──────────────────────────────────
@@ -141,6 +152,10 @@ describe('OrdersService', () => {
 
       expect(order.publicOrderNumber).toBe('BE-00000001');
       expect(transactionMock).toHaveBeenCalledTimes(1);
+      // Outbox rule: new_order emitted AFTER transaction
+      expect(realtime.emitNewOrder).toHaveBeenCalledWith(
+        expect.objectContaining({ orderId: 'order-1', publicOrderNumber: 'BE-00000001' }),
+      );
     });
 
     it('is idempotent — returns existing Order when Payment already exists', async () => {
@@ -320,6 +335,48 @@ describe('OrdersService', () => {
 
       expect(result.status).toBe(OrderStatus.ACCEPTED);
       expect(transactionMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('emits order_updated realtime event AFTER transaction commit (outbox rule)', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.PAID));
+      transactionMock.mockResolvedValue([mockOrder(OrderStatus.ACCEPTED), {}]);
+
+      await service.transition(ORDER_ID, OrderStatus.ACCEPTED, OrderActorType.OPERATOR, USER_ID, 'ok');
+
+      // Must emit AFTER $transaction — verify called with correct payload
+      expect(realtime.emitOrderUpdated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderId: ORDER_ID,
+          previousStatus: OrderStatus.PAID,
+          nextStatus: OrderStatus.ACCEPTED,
+          actorType: OrderActorType.OPERATOR,
+          reason: 'ok',
+        }),
+      );
+      // order_ready NOT emitted for ACCEPTED
+      expect(realtime.emitOrderReady).not.toHaveBeenCalled();
+    });
+
+    it('emits order_ready in addition to order_updated when transitioning to READY', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.PREPARING));
+      transactionMock.mockResolvedValue([mockOrder(OrderStatus.READY), {}]);
+
+      await service.transition(ORDER_ID, OrderStatus.READY, OrderActorType.OPERATOR, USER_ID);
+
+      expect(realtime.emitOrderUpdated).toHaveBeenCalledTimes(1);
+      expect(realtime.emitOrderReady).toHaveBeenCalledWith(
+        expect.objectContaining({ orderId: ORDER_ID }),
+      );
+    });
+
+    it('does NOT emit realtime when transition is invalid (guard fires first)', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.COMPLETED));
+
+      await expect(
+        service.transition(ORDER_ID, OrderStatus.PAID, OrderActorType.OPERATOR, USER_ID),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(realtime.emitOrderUpdated).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when order does not exist', async () => {
