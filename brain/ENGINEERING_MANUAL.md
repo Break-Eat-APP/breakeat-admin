@@ -1577,6 +1577,52 @@ GET   /api/v1/orders/event/:eventId/active
 
 Body (tous les PATCH) : `{ "reason": "string optionnel, max 500 chars" }`
 
+---
+
+## Bloc 6.3 — Storybook + Mobile Pipeline + DEMO_MODE
+
+### Storybook
+
+| App | Port | Script |
+|---|---|---|
+| admin | 6006 | `pnpm --filter @break-eat/admin storybook` |
+| operator | 6007 | `pnpm --filter @break-eat/operator storybook` |
+
+Config files: `apps/<app>/.storybook/main.ts` + `preview.ts`.
+Framework: `@storybook/nextjs` + `addon-essentials`.
+
+**Phase 8 stories à créer :** DashboardCard, NotificationPopup, OrderTimeline, PublicScreenCard, StatusBadge (full), OrderCard (full with swipe actions).
+
+### EAS Build (mobile preview)
+
+Fichiers clés : `apps/mobile/eas.json` + `apps/mobile/app.config.js`.
+
+Activation :
+```bash
+cd apps/mobile
+eas init                     # génère projectId → remplacer FILL_IN_EAS_PROJECT_ID
+# puis ajouter EXPO_TOKEN dans GitHub Secrets
+```
+
+Le workflow `.github/workflows/mobile-preview.yml` se déclenche automatiquement sur push vers `main` quand `apps/mobile/**` change.
+
+### DEMO_MODE
+
+```
+DEMO_MODE=true   → endpoints /internal/simulator/* accessibles
+DEMO_MODE=false  → 403 Forbidden (DemoGuard)
+DEMO_MODE=true + NODE_ENV=production → backend exits(1) au démarrage
+```
+
+**Endpoints simulateur :**
+```
+POST   /internal/simulator/events/:eventId/seed?count=20   — seed réaliste
+POST   /internal/simulator/events/:eventId/rush?count=10   — rush N commandes PAID
+DELETE /internal/simulator/events/:eventId                  — purge DEMO-* orders
+```
+
+Les commandes synthétiques ont le préfixe `DEMO-` dans `publicOrderNumber`.
+
 ### Champ orderBy dans OrderAuditTrail
 
 Le modèle Prisma `OrderAuditTrail` expose `createdAt` (mapped `created_at`), **pas** `occurredAt`. Toujours utiliser `orderBy: { createdAt: 'asc' }` pour les requêtes d'audit trail.

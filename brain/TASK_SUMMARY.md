@@ -4,6 +4,42 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-06-01] Bloc 6.3 — Storybook + Mobile Pipeline + Simulator
+
+Task: Validation infrastructure for Phase 6 — Storybook scaffolding, EAS mobile build pipeline, DEMO_MODE toggle, and fake event simulator skeleton.
+Date: 2026-06-01
+Commit: bce65e6
+
+Created:
+- apps/admin/.storybook/main.ts + preview.ts — @storybook/nextjs config
+- apps/admin/src/stories/StatusBadge.stories.tsx — all 8 OrderStatus variants
+- apps/operator/.storybook/main.ts + preview.ts — @storybook/nextjs config
+- apps/operator/src/stories/OrderCard.stories.tsx — PAID/ACCEPTED/PREPARING/READY
+- apps/mobile/eas.json — EAS Build profiles: development, preview, production
+- apps/mobile/app.config.js — Expo bare workflow config (iOS + Android)
+- .github/workflows/mobile-preview.yml — EAS build triggered on mobile/** push; posts QR/download as commit comment
+- backend/src/common/guards/demo.guard.ts — 403 unless DEMO_MODE=true
+- backend/src/modules/simulator/simulator.service.ts — seedEvent, simulateRush, clearEvent
+- backend/src/modules/simulator/simulator.controller.ts — POST seed/rush, DELETE clear
+- backend/src/modules/simulator/simulator.module.ts
+
+Modified:
+- apps/admin/package.json + apps/operator/package.json — storybook + build-storybook scripts (ports 6006/6007)
+- backend/src/main.ts — DEMO_MODE safety check (exit 1 if DEMO_MODE=true AND NODE_ENV=production)
+- backend/src/app.module.ts — SimulatorModule registered
+- pnpm-workspace.yaml — esbuild + core-js-pure build scripts allowed
+
+Key technical decisions:
+- SimulatorModule always loaded but DemoGuard returns 403 in non-demo environments (no conditional module loading)
+- Demo orders use DEMO- prefix for easy identification and cleanup
+- Storybook ports: admin=6006, operator=6007 (no conflict)
+- EAS projectId=FILL_IN_EAS_PROJECT_ID — requires `eas init` to activate pipeline
+- EXPO_TOKEN GitHub Secret required to trigger EAS builds
+
+Test results: 170 tests passing, 0 failures (15 suites — unchanged)
+
+---
+
 ## [2026-06-01] Bloc 6.2 — Socket.IO Gateway + Outbox Realtime
 
 Task: Implement the realtime layer — WebSocket gateway (Socket.IO), JWT auth on connect, room management, and outbox-compliant emit after DB commits.

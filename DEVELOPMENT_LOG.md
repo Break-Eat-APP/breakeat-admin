@@ -1016,7 +1016,60 @@ realtimeService.emit*() → APRÈS commit (jamais avant)
 
 **Tests :** 170 passing, 0 failures (15 suites, +19 nouveaux tests)
 
-**Prochaine étape :** Bloc 6.3 — Storybook scaffolding + pipeline mobile
+**Prochaine étape :** Bloc 6.3 — Storybook scaffolding + pipeline mobile ✅ FAIT
+
+---
+
+## BLOC 6.3 — Storybook + Mobile Pipeline + Simulator
+
+**Date :** 2026-06-01
+**Statut :** ✅ Terminé
+**Commit :** bce65e6
+
+**Fichiers créés :**
+```
+apps/admin/.storybook/main.ts + preview.ts
+apps/admin/src/stories/StatusBadge.stories.tsx     — 8 variants + AllStatuses
+apps/operator/.storybook/main.ts + preview.ts
+apps/operator/src/stories/OrderCard.stories.tsx    — 4 états de commande
+apps/mobile/eas.json                               — development/preview/production profiles
+apps/mobile/app.config.js                          — Expo bare workflow (iOS + Android)
+.github/workflows/mobile-preview.yml               — EAS Build trigger
+backend/src/common/guards/demo.guard.ts
+backend/src/modules/simulator/simulator.service.ts
+backend/src/modules/simulator/simulator.controller.ts
+backend/src/modules/simulator/simulator.module.ts
+```
+
+**Architecture Simulator :**
+```
+POST /internal/simulator/events/:eventId/seed?count=20
+  → seedEvent() — mix réaliste: 35% PAID / 25% ACCEPTED / 25% PREPARING / 15% READY
+
+POST /internal/simulator/events/:eventId/rush?count=10
+  → simulateRush() — N commandes PAID en rafale (test rush)
+
+DELETE /internal/simulator/events/:eventId
+  → clearEvent() — purge toutes les commandes DEMO-* de l'event
+```
+
+**Activation mobile pipeline :**
+1. `cd apps/mobile && eas init` → remplace FILL_IN_EAS_PROJECT_ID dans app.config.js
+2. Ajouter secret GitHub: `EXPO_TOKEN` (généré sur expo.dev)
+3. Push vers main avec modif mobile → build automatique + commentaire commit avec QR
+
+**Sécurité DEMO_MODE :**
+- DemoGuard bloque tous les endpoints /internal/simulator → 403 si DEMO_MODE=false
+- main.ts : exit(1) si DEMO_MODE=true && NODE_ENV=production (double protection)
+
+**Storybook :**
+- Admin : `pnpm --filter @break-eat/admin storybook` → http://localhost:6006
+- Operator : `pnpm --filter @break-eat/operator storybook` → http://localhost:6007
+- Stories phase 8 : DashboardCard, NotificationPopup, Timeline, PublicScreenCard...
+
+**Tests :** 170 passing, 0 failures (inchangé)
+
+**Prochaine étape :** Phase 6 ✅ COMPLÈTE → Phase 7 (Slots + Flaix foundation)
 
 ---
 

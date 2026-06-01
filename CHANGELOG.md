@@ -5,6 +5,38 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.14.0] — 2026-06-01 — Bloc 6.3 : Storybook + Mobile Pipeline + Simulator
+
+### Contexte
+Infrastructure de validation Phase 6 : Storybook (admin + operator), pipeline EAS Build mobile, toggle DEMO_MODE, et skeleton simulateur d'événements.
+
+### Ajouté
++ apps/admin/.storybook/ — config @storybook/nextjs (main.ts + preview.ts)
++ apps/admin/src/stories/StatusBadge.stories.tsx — 8 variants + AllStatuses story
++ apps/operator/.storybook/ — idem
++ apps/operator/src/stories/OrderCard.stories.tsx — 4 états PAID/ACCEPTED/PREPARING/READY
++ apps/mobile/eas.json — profils EAS : development / preview / production
++ apps/mobile/app.config.js — config Expo bare workflow (iOS + Android)
++ .github/workflows/mobile-preview.yml — build EAS sur push mobile/**, post QR en commentaire commit
++ backend/src/common/guards/demo.guard.ts — 403 sauf DEMO_MODE=true
++ backend/src/modules/simulator/ — seedEvent(), simulateRush(), clearEvent()
+
+### Modifié
+~ apps/admin/package.json + apps/operator/package.json — scripts storybook:6006 / storybook:6007
+~ backend/src/main.ts — garde sécurité : exit(1) si DEMO_MODE=true ET NODE_ENV=production
+~ backend/src/app.module.ts — SimulatorModule enregistré
+~ pnpm-workspace.yaml — esbuild + core-js-pure autorisés
+
+### Notes techniques
+- SimulatorModule toujours chargé, DemoGuard retourne 403 en prod (pas de chargement conditionnel)
+- Commandes demo préfixées DEMO- pour purge facile
+- EAS projectId=FILL_IN à remplir via `eas init`, EXPO_TOKEN secret GitHub requis
+
+### Tests
+170 passing, 0 failures (inchangé — pas de nouveaux tests backend pour ce bloc)
+
+---
+
 ## [0.13.0] — 2026-06-01 — Bloc 6.2 : Socket.IO Gateway + Outbox Realtime
 
 ### Contexte
