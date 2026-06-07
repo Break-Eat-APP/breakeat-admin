@@ -25,6 +25,7 @@ import { AppSettingsModule } from './modules/app-settings/app-settings.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { BackofficeModule } from './modules/backoffice/backoffice.module';
 import { OperatorScreensModule } from './modules/operator-screens/operator-screens.module';
+import { StatsModule } from './modules/stats/stats.module';
 import appConfig from './config/app.config';
 
 @Module({
@@ -70,6 +71,8 @@ import appConfig from './config/app.config';
     BackofficeModule,
     // Phase 11 — Operator dashboard (configurable screens)
     OperatorScreensModule,
+    // Phase 15 — Manager dashboard (org/event analytics)
+    StatsModule,
   ],
 })
 export class AppModule {}

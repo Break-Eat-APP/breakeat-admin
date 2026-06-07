@@ -5,6 +5,33 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.30.0] — 2026-06-07 — Phase 15 : Dashboard Manager (analytics org/événement, lecture seule)
+
+### Contexte
+Le board opérateur était riche (réception temps réel), mais le **manager** n'avait **aucune visibilité opérationnelle** : le `/dashboard` admin n'était qu'un lanceur de navigation. Cette phase livre la première brique d'analytics **lecture seule** au service du client payant (le gérant de club) : un module backend `stats` (aucune migration), la **transformation du dashboard admin** en tableau de bord opérationnel, et un bloc **stats par événement** sur la fiche événement. Les chiffres se **réconcilient avec le back office** SUPER_ADMIN (mêmes règles CA).
+
+### Règle de revenu (source unique, calquée sur BackofficeService)
+Une commande compte au CA **seulement** si `paymentStatus = SUCCEEDED`. `Order.totalCents` est **TTC** ; `CA HT = round(CA TTC / (1 + vatRate))`, `vatRate` lu depuis `app.reporting.vatRate` (fallback **0.1** = 10 %). `Order` porte `organizationId` **et** `eventId` directement → agrégations sans jointure. Top produits via `orderItem.groupBy` scoppé par `order: { eventId, paymentStatus: SUCCEEDED }` (`productNameSnapshot` + `lineTotalCents`).
+
+### Backend — module stats (lecture seule, aucune migration)
++ `backend/src/modules/stats/stats.service.ts` — `getOrgOverview(orgId, userId)` (KPIs org : CA HT/TTC, nb commandes, panier moyen HT/TTC, nb événements + **événements en cours** `startAt ≤ now ≤ endAt`, rollup revenu par événement) et `getEventStats(eventId, userId)` (revenu, panier moyen, **répartition complète par statut** zéro-seedée sur les 8 `OrderStatus`, **top 10 produits**). Privés : `toHtCents(ttc)=round(ttc/(1+vat))`, `averageBasket()` avec garde division-par-zéro. Accès gaté **MANAGE_ROLES** (ORG_ADMIN, MANAGER) — le CA est sensible, OPERATOR/MARKETING exclus ; SUPER_ADMIN bypass.
++ `backend/src/modules/stats/stats.controller.ts` — `@UseGuards(JwtAuthGuard)`, base path vide ; `GET organizations/:orgId/stats` et `GET events/:eventId/stats` (`ParseUUIDPipe` + `@CurrentUser().sub`).
++ `backend/src/modules/stats/stats.module.ts` — provider `StatsService` + controller.
++ `backend/src/modules/stats/stats.service.spec.ts` — **7 tests** : math CA à 10 %, merge rollup + comptage « en cours », org vide (zéros + pas de division par zéro), refus OPERATOR (403 + **aucune** requête revenu), breakdown statut complet + top produits, 404 événement inconnu **avant** tout check d'accès, non-membre 403.
+~ `backend/src/app.module.ts` — `StatsModule` enregistré (Phase 15).
+
+### Admin — dashboard opérationnel + stats par événement
+~ `apps/admin/src/lib/api/admin-client.ts` — section stats : interfaces `RevenueBlock`/`BasketBlock`/`OrgEventStat`/`OrgStatsOverview`/`TopProduct`/`EventStats` (statut typé via l'union `OperatorOrderStatus`) + `apiGetOrgStats(orgId)` / `apiGetEventStats(eventId)`.
+~ `apps/admin/src/app/(admin)/dashboard/page.tsx` — **réécrit** : de lanceur de navigation → tableau de bord org. KPIs (CA HT avec « TVA 10 % », CA TTC, Commandes, Panier moyen TTC, Événements + « N en cours »), liste **Performance par événement** (badge « ● En cours » calculé client), accès rapide board opérateur. Dégradation propre : OPERATOR/MARKETING (403) voient une carte « Statistiques réservées aux managers » au lieu d'une erreur.
+~ `apps/admin/src/app/(admin)/events/[id]/page.tsx` — carte **📊 Statistiques de l'événement** (KPIs + répartition par statut + top produits). Fetch **isolé** du `Promise.all` principal → un 403 manager-only n'altère jamais le reste de la fiche.
+
+### Qualité
+- Backend : **26 suites / 313 tests** (306 → +7) · `typecheck` exit 0 · `lint` 0
+- Admin : `typecheck` exit 0 · `lint` 0 · `build` ✓ (15 routes · `/dashboard` 4.97 kB · `/events/[id]` 8.71 kB)
+- Opérateur (régression) : `typecheck` exit 0 · `lint` 0 — **aucune** migration, **aucune** dépendance npm ajoutée
+
+---
+
 ## [0.29.0] — 2026-06-07 — Corrections post-audit Codex (sécurité écran public + hygiène Git + batch résilient)
 
 ### Contexte

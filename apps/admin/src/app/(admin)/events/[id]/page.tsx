@@ -23,6 +23,7 @@ import {
   apiApplyEventScreen,
   apiUpdateEventScreen,
   apiRemoveEventScreen,
+  apiGetEventStats,
   type AdminEvent,
   type Supplier,
   type PickupPoint,
@@ -32,6 +33,8 @@ import {
   type EventVisibility,
   type EventOperatorScreen,
   type OperatorScreenTemplate,
+  type EventStats,
+  type OperatorOrderStatus,
   getOrgId,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
@@ -132,6 +135,13 @@ export default function EventDetailPage() {
   const [applyingScreen, setApplyingScreen] = useState(false);
   const [screenError, setScreenError] = useState('');
 
+  // Stats (Phase 15) — fetched independently so a manager-only 403 (revenue is
+  // gated to MANAGE_ROLES) degrades gracefully without breaking the rest of the page.
+  const [stats, setStats] = useState<EventStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsDenied, setStatsDenied] = useState(false);
+  const [statsError, setStatsError] = useState('');
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -180,6 +190,23 @@ export default function EventDetailPage() {
   }, [orgId, eventId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setStatsLoading(true);
+    setStatsDenied(false);
+    setStatsError('');
+    apiGetEventStats(eventId)
+      .then((s) => { if (!cancelled) setStats(s); })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        const msg = err instanceof Error ? err.message : 'Erreur';
+        if (/access denied/i.test(msg)) setStatsDenied(true);
+        else setStatsError(msg);
+      })
+      .finally(() => { if (!cancelled) setStatsLoading(false); });
+    return () => { cancelled = true; };
+  }, [eventId]);
 
   async function handleStatusChange() {
     if (!event || newStatus === event.status) return;
@@ -435,6 +462,106 @@ export default function EventDetailPage() {
           <code style={{ background: BRAND.bgSubtle, padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>{event.id}</code>
         </div>
       </div>
+
+      {/* Stats (Phase 15) */}
+      <Card title="📊 Statistiques de l'événement">
+        {statsLoading ? (
+          <p style={{ color: BRAND.grey, fontSize: 14, margin: 0 }}>Chargement des statistiques…</p>
+        ) : statsDenied ? (
+          <p style={{ color: BRAND.grey, fontSize: 14, margin: 0 }}>
+            🔒 Le chiffre d&apos;affaires est réservé aux rôles Administrateur d&apos;organisation et Manager.
+          </p>
+        ) : statsError ? (
+          <div style={{ color: '#dc2626', fontSize: 14 }}>{statsError}</div>
+        ) : stats ? (
+          <>
+            {/* KPI tiles */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20 }}>
+              <StatTile
+                label="CA HT"
+                value={euros(stats.revenue.caHtCents)}
+                sub={`TVA ${Math.round(stats.revenue.vatRate * 100)}% · TTC ${euros(stats.revenue.caTtcCents)}`}
+                accent
+              />
+              <StatTile label="CA TTC" value={euros(stats.revenue.caTtcCents)} sub="Encaissé" />
+              <StatTile label="Commandes" value={intFmt(stats.ordersCount)} sub="Payées" />
+              <StatTile
+                label="Panier moyen TTC"
+                value={euros(stats.averageBasket.ttcCents)}
+                sub={`HT ${euros(stats.averageBasket.htCents)}`}
+              />
+            </div>
+
+            {/* Orders by status */}
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.inkSoft, marginBottom: 8 }}>
+                Répartition par statut
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {STATUS_ORDER.map((s) => {
+                  const count = stats.ordersByStatus[s] ?? 0;
+                  const sty = ORDER_STATUS_STYLE[s];
+                  const on = count > 0;
+                  return (
+                    <div
+                      key={s}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '6px 12px',
+                        borderRadius: 999,
+                        background: on ? sty.bg : BRAND.bgSubtle,
+                        border: `1px solid ${on ? sty.bg : BRAND.border}`,
+                        opacity: on ? 1 : 0.55,
+                      }}
+                    >
+                      <span style={{ fontSize: 12, fontWeight: 600, color: on ? sty.color : BRAND.grey }}>
+                        {ORDER_STATUS_LABEL[s]}
+                      </span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: on ? sty.color : BRAND.grey }}>
+                        {count}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Top products */}
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.inkSoft, marginBottom: 8 }}>
+                Top produits
+              </div>
+              {stats.topProducts.length === 0 ? (
+                <p style={{ color: BRAND.grey, fontSize: 13, margin: 0 }}>Aucune vente pour le moment.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {stats.topProducts.map((p, i) => (
+                    <div
+                      key={p.productId}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: BRAND.bgSubtle, borderRadius: 8 }}
+                    >
+                      <span style={{ fontSize: 12, fontWeight: 700, color: BRAND.grey, width: 22, textAlign: 'center' }}>
+                        {i + 1}
+                      </span>
+                      <span style={{ flex: 1, fontWeight: 600, fontSize: 14, color: BRAND.ink, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p.name}
+                      </span>
+                      <span style={{ fontSize: 13, color: BRAND.grey, whiteSpace: 'nowrap' }}>
+                        ×{intFmt(p.quantity)}
+                      </span>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: BRAND.ink, minWidth: 90, textAlign: 'right' }}>
+                        {euros(p.revenueCents)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        ) : null}
+      </Card>
 
       {/* Status change */}
       <Card title="Statut de l'événement">
@@ -1215,6 +1342,81 @@ function ErrBanner({ msg }: { msg: string }) {
   return (
     <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '12px 16px', color: '#dc2626', fontSize: 14 }}>
       {msg}
+    </div>
+  );
+}
+
+// ─── Stats helpers (Phase 15) ───────────────────────────────────────────────────
+
+const EUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 });
+const INT = new Intl.NumberFormat('fr-FR');
+
+/** Integer cents → "1 234,56 €". */
+function euros(cents: number): string {
+  return EUR.format((cents ?? 0) / 100);
+}
+
+function intFmt(n: number): string {
+  return INT.format(n ?? 0);
+}
+
+/** Lifecycle order for the per-status breakdown (matches OrderStatus enum). */
+const STATUS_ORDER: OperatorOrderStatus[] = [
+  'PAID',
+  'ACCEPTED',
+  'PREPARING',
+  'READY',
+  'PICKED_UP',
+  'COMPLETED',
+  'CANCELLED',
+  'RECOVERED',
+];
+
+const ORDER_STATUS_LABEL: Record<OperatorOrderStatus, string> = {
+  PAID: 'Payée',
+  ACCEPTED: 'Acceptée',
+  PREPARING: 'En préparation',
+  READY: 'Prête',
+  PICKED_UP: 'Retirée',
+  COMPLETED: 'Terminée',
+  CANCELLED: 'Annulée',
+  RECOVERED: 'Récupérée',
+};
+
+const ORDER_STATUS_STYLE: Record<OperatorOrderStatus, { bg: string; color: string }> = {
+  PAID: { bg: '#dbeafe', color: '#1e40af' },
+  ACCEPTED: { bg: '#e0e7ff', color: '#3730a3' },
+  PREPARING: { bg: '#fef3c7', color: '#92400e' },
+  READY: { bg: '#d1fae5', color: '#065f46' },
+  PICKED_UP: { bg: '#cffafe', color: '#155e75' },
+  COMPLETED: { bg: '#dcfce7', color: '#166534' },
+  CANCELLED: { bg: '#fee2e2', color: '#991b1b' },
+  RECOVERED: { bg: '#f3e8ff', color: '#6b21a8' },
+};
+
+function StatTile({ label, value, sub, accent = false }: {
+  label: string;
+  value: string;
+  sub?: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        background: accent ? BRAND.orangeTint : BRAND.bgSubtle,
+        border: `1px solid ${accent ? BRAND.orangeSoft : BRAND.border}`,
+        borderRadius: 10,
+        padding: '14px 16px',
+        minWidth: 0,
+      }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3, color: accent ? BRAND.orange : BRAND.grey, marginBottom: 6 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 22, fontWeight: 800, color: accent ? BRAND.orange : BRAND.ink, lineHeight: 1.1 }}>
+        {value}
+      </div>
+      {sub && <div style={{ fontSize: 11, color: BRAND.grey, marginTop: 5 }}>{sub}</div>}
     </div>
   );
 }

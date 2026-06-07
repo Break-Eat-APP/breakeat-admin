@@ -3463,4 +3463,89 @@ L'audit signalait `turbo run build/typecheck/lint` cassé (« Unable to find pac
 - `OrdersModule` ne démarre pas (DI) : vérifier que `GroupsModule` exporte bien `GroupsService` (il le fait) — pas de cycle car `GroupsModule` n'importe rien.
 - Bannière batch qui persiste : cliquable pour masquer (`setBatchError(null)`) ; elle se réinitialise à chaque nouveau batch.
 
+---
+
+## [2026-06-07] Phase 15 — Dashboard Manager (analytics org/événement, lecture seule)
+
+### What Was Built
+
+Première brique d'**analytics manager**, entièrement **lecture seule** (aucune migration, aucune écriture) :
+1. **Module backend `stats`** — deux endpoints JWT : `GET /api/v1/organizations/:orgId/stats` (vue org + rollup par événement) et `GET /api/v1/events/:eventId/stats` (analytics d'un événement).
+2. **Dashboard admin réécrit** — de simple lanceur de navigation à **tableau de bord opérationnel** de l'organisation (KPIs CA + performance par événement).
+3. **Bloc stats par événement** — carte 📊 sur la fiche `events/[id]` (KPIs, répartition par statut, top produits).
+
+### Why
+
+- **Le manager était aveugle.** Le board opérateur (Phase 11.4) est riche en temps réel, le back office (Phase 14.5) sert le SUPER_ADMIN — mais le **gérant de club** (le client payant) n'avait **aucune** vue chiffrée. C'est le plus gros trou fonctionnel visible.
+- **Réconciliation des chiffres.** En réutilisant **exactement** la règle de CA de `BackofficeService`, le CA vu par le manager et le CA vu par le SUPER_ADMIN sont **les mêmes** — pas deux vérités divergentes.
+- **Zéro risque sur l'existant.** Pure agrégation : pas de schéma, pas de write, pas de dépendance. Le risque est confiné à la lecture.
+
+### How It Works
+
+**Règle de revenu (source unique).** Une commande compte au CA **uniquement** si `paymentStatus = SUCCEEDED`. `Order.totalCents` est **TTC**. `CA HT = round(CA TTC / (1 + vatRate))`, où `vatRate` vient de la config `app.reporting.vatRate` (garde NaN/négatif → fallback **0.1**). Le constructeur du service fige `this.vatRate` une fois.
+
+**Org overview (`getOrgOverview`).** `requireOrgAccess(MANAGE_ROLES)` d'abord, puis **un seul** `Promise.all` de trois requêtes :
+- `order.aggregate` (`organizationId` + `SUCCEEDED`) → `_sum.totalCents` (CA TTC) + `_count._all` (nb commandes) ;
+- `event.findMany` (events de l'org, `orderBy startAt desc`) ;
+- `order.groupBy by eventId` (mêmes filtres) → revenu par événement, rangé dans une `Map`.
+
+`activeEventsCount` = events avec `startAt ≤ now ≤ endAt` (calculé en mémoire, pas une requête de plus). Le panier moyen est dérivé du CA et du nb commandes (garde division-par-zéro → 0).
+
+**Event stats (`getEventStats`).** `event.findUnique` d'abord → **404 si inconnu** (avant tout check d'accès, pour ne pas révéler l'appartenance org), puis `requireOrgAccess(MANAGE_ROLES)` sur `event.organizationId`. Ensuite `Promise.all` de :
+- `order.aggregate` (CA + count) ;
+- `order.groupBy by status` → fusionné dans un objet **zéro-seedé** sur `Object.values(OrderStatus)` (les 8 statuts présents même à 0) ;
+- `orderItem.groupBy by [productId, productNameSnapshot]`, filtré via la relation `order: { eventId, paymentStatus: SUCCEEDED }`, `orderBy _sum.quantity desc`, `take 10` → top produits (`name` = `productNameSnapshot`, `revenueCents` = `_sum.lineTotalCents`).
+
+**Gating.** Les deux méthodes passent par `requireOrgAccess(prisma, userId, orgId, MANAGE_ROLES)` (= `[ORG_ADMIN, MANAGER]`). Le CA est sensible → OPERATOR/MARKETING reçoivent **403** (message « Access denied… »). SUPER_ADMIN bypass (globalRole vérifié en DB).
+
+**Front admin — dégradation propre.** Le `/dashboard` est la landing de **tous** les admins, y compris OPERATOR/MARKETING. Les deux surfaces testent `/access denied/i` sur le message d'erreur : si refusé → carte « Statistiques réservées aux managers » (jamais une page cassée). Sur `events/[id]`, le fetch stats est **isolé** du `Promise.all` principal (`load()`) avec ses propres états (`statsLoading`/`statsDenied`/`statsError`) → un 403 manager-only n'altère pas le reste de la fiche (déjà fonctionnelle).
+
+### Code References
+
+- `backend/src/modules/stats/stats.service.ts` — `getOrgOverview`, `getEventStats`, `toHtCents`, `averageBasket` ; interfaces `RevenueBlock`/`BasketBlock`/`OrgEventStat`/`OrgStatsOverview`/`TopProduct`/`EventStats`.
+- `backend/src/modules/stats/stats.controller.ts` — base path vide, `GET organizations/:orgId/stats` + `GET events/:eventId/stats` (`ParseUUIDPipe`, `@CurrentUser().sub`).
+- `backend/src/modules/stats/stats.module.ts` — wiring provider/controller.
+- `backend/src/modules/stats/stats.service.spec.ts` — 7 cas (math CA, merge rollup + « en cours », org vide, refus OPERATOR sans requête revenu, breakdown + top produits, 404 avant accès, non-membre 403).
+- `backend/src/app.module.ts` — `StatsModule` enregistré.
+- `apps/admin/src/lib/api/admin-client.ts` — types stats + `apiGetOrgStats` / `apiGetEventStats` (statut typé via l'union `OperatorOrderStatus`).
+- `apps/admin/src/app/(admin)/dashboard/page.tsx` — réécriture (KPIs org, `EventRow`/`Metric`, `isActive`, `InfoCard` denied).
+- `apps/admin/src/app/(admin)/events/[id]/page.tsx` — carte stats (`StatTile`, `STATUS_ORDER`, `ORDER_STATUS_LABEL`/`STYLE`), effet isolé.
+
+### Data Flow
+
+1. Dashboard admin monte → `apiGetOrgStats(getOrgId())` → `GET /organizations/:orgId/stats` → `requireOrgAccess(MANAGE_ROLES)` → 3 requêtes Prisma agrégées → `OrgStatsOverview` → KPIs + liste événements (badge « ● En cours » recalculé client via `isActive(ev, now)`).
+2. Fiche événement monte → effet **séparé** `apiGetEventStats(eventId)` → `GET /events/:eventId/stats` → `findUnique` (404) → `requireOrgAccess` (403) → 3 requêtes agrégées → `EventStats` → carte 📊 (KPIs + chips statut zéro-seedés + top produits).
+3. Erreur 403 sur l'une ou l'autre → `/access denied/i` → état `denied` → carte « réservé aux managers » (pas de crash).
+
+### Dependencies
+
+- `requireOrgAccess` + `MANAGE_ROLES` (`common/helpers/require-org-access`), `PrismaService`, `ConfigService` (clé `app.reporting.vatRate`), `JwtAuthGuard`, `CurrentUser`/`JwtPayload`, enums `OrderStatus`/`PaymentStatus` — **tous préexistants**.
+- Front : `OperatorOrderStatus` (union déjà dans `admin-client.ts`) réutilisée pour `ordersByStatus` → pas de nouvel import d'enum. Styles `BRAND` inline (pas de KpiCard partagé). `Intl.NumberFormat('fr-FR', { style:'currency', currency:'EUR' })` pour l'argent.
+- **Aucune** dépendance npm ajoutée, **aucune** migration.
+
+### Tests and Verification
+
+- Backend : **26 suites / 313 tests** (306 → +7) · `typecheck` exit 0 · `lint` 0. Le spec mocke Prisma (`user`/`organizationMember`/`order.{aggregate,groupBy}`/`orderItem.groupBy`/`event.{findMany,findUnique}`) + `ConfigService.get → 0.1`.
+- Admin : `typecheck` exit 0 · `lint` 0 · `build` ✓ (15 routes · `/dashboard` **4.97 kB** · `/events/[id]` **8.71 kB**).
+- Opérateur (régression, non touché) : `typecheck` exit 0 · `lint` 0.
+
+### Risks and Safe Change Rules
+
+- **Ne jamais compter une commande non `SUCCEEDED` dans le CA.** Tout nouveau calcul de revenu doit filtrer `paymentStatus = SUCCEEDED` — sinon les chiffres manager divergent du back office. C'est **la** règle invariante.
+- **HT toujours dérivé de TTC** : `round(TTC / (1 + vatRate))`. Ne pas stocker un HT séparé ni changer l'arrondi sans aligner `BackofficeService` **en même temps** (les deux doivent réconcilier au centime).
+- **Garder le gating MANAGE_ROLES.** Le CA est sensible ; n'élargis pas à OPERATOR/MARKETING. Si une vue non-sensible (ex. nb commandes seul) doit s'ouvrir, créer un endpoint **distinct** plutôt que d'affaiblir celui-ci.
+- **404 avant 403** sur `getEventStats` : conserver cet ordre (ne pas révéler l'existence/appartenance d'un événement à un non-membre).
+- **Zéro-seed des statuts** : si la state machine gagne un statut, `Object.values(OrderStatus)` le couvre automatiquement côté backend — mais penser à ajouter son **label/style** dans `events/[id]` (`ORDER_STATUS_LABEL`/`STYLE`) et l'ordre `STATUS_ORDER`, sinon il s'affiche brut/sans style.
+- **Fetch stats isolé** sur la fiche événement : garder l'effet **séparé** du `Promise.all` de `load()`. Le fusionner ferait qu'un 403 manager-only casserait toute la fiche.
+- **Lecture seule** : ne jamais introduire d'écriture dans ce module. Toute mutation appartient aux modules métier (orders, events…).
+
+### Debugging Notes
+
+- Dashboard manager affiche « réservé aux managers » alors qu'on est ORG_ADMIN/MANAGER : vérifier que `admin_org_id` (localStorage) pointe bien sur une org où l'utilisateur est membre avec ce rôle — le 403 vient de `requireOrgAccess`, pas de l'UI.
+- Tous les chiffres à 0 : org sans commande **`SUCCEEDED`** (les commandes `PENDING`/`FAILED` ne comptent pas, par design). Vérifier `paymentStatus` en base, pas seulement l'existence de commandes.
+- CA HT qui ne « tombe pas rond » : normal, `round(TTC/1.10)` ; comparer au back office, pas à un calcul TVA manuel.
+- Top produits vide alors qu'il y a des ventes : `orderItem.groupBy` filtre par `order: { eventId, paymentStatus: SUCCEEDED }` — si les commandes ne sont pas `SUCCEEDED`, aucune ligne ne remonte.
+- `activeEventsCount` à 0 avec un événement « en cours » : la fenêtre est `startAt ≤ now ≤ endAt` en UTC ; vérifier les fuseaux/`startAt`/`endAt` de l'événement.
+- 404 sur `/events/:id/stats` : l'UUID est validé par `ParseUUIDPipe` (400 si malformé) puis `findUnique` (404 si absent) — distinguer les deux selon le code HTTP.
+
 

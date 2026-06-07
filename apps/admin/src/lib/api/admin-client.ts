@@ -793,3 +793,79 @@ export async function apiSimulatorClear(
 export async function apiSimulatorStats(eventId: string): Promise<SimulatorStats> {
   return req<SimulatorStats>('GET', `/internal/simulator/events/${eventId}/stats`);
 }
+
+// ─── Stats (Phase 15 — Manager dashboard) ───────────────────────────────────────
+// Read-only analytics, gated server-side to MANAGE_ROLES (ORG_ADMIN, MANAGER);
+// SUPER_ADMIN bypasses. All money is integer cents; TTC is tax-inclusive and
+// caHtCents = round(caTtcCents / (1 + vatRate)) — reconciles with the back office.
+
+/** Revenue rollup for a scope (org or event). */
+export interface RevenueBlock {
+  caTtcCents: number;
+  caHtCents: number;
+  /** VAT rate used to derive HT from TTC (e.g. 0.1 for 10%). */
+  vatRate: number;
+}
+
+export interface BasketBlock {
+  htCents: number;
+  ttcCents: number;
+}
+
+/** One event row inside an org overview, with its own revenue rollup. */
+export interface OrgEventStat {
+  id: string;
+  name: string;
+  status: string;
+  startAt: string;
+  endAt: string;
+  caTtcCents: number;
+  caHtCents: number;
+  ordersCount: number;
+}
+
+export interface OrgStatsOverview {
+  organizationId: string;
+  revenue: RevenueBlock;
+  ordersCount: number;
+  averageBasket: BasketBlock;
+  eventsCount: number;
+  /** Events currently in progress (startAt <= now <= endAt). */
+  activeEventsCount: number;
+  events: OrgEventStat[];
+}
+
+export interface TopProduct {
+  productId: string;
+  name: string;
+  quantity: number;
+  revenueCents: number;
+}
+
+export interface EventStats {
+  event: {
+    id: string;
+    name: string;
+    status: string;
+    startAt: string;
+    endAt: string;
+    organizationId: string;
+  };
+  revenue: RevenueBlock;
+  ordersCount: number;
+  averageBasket: BasketBlock;
+  /** Revenue-qualifying orders per lifecycle status (every status seeded to 0). */
+  ordersByStatus: Record<OperatorOrderStatus, number>;
+  /** Best sellers by quantity (max 10). */
+  topProducts: TopProduct[];
+}
+
+/** GET /organizations/:orgId/stats — org KPIs + per-event revenue rollup. */
+export async function apiGetOrgStats(orgId: string): Promise<OrgStatsOverview> {
+  return req<OrgStatsOverview>('GET', `/organizations/${orgId}/stats`);
+}
+
+/** GET /events/:eventId/stats — single-event analytics (status breakdown + top products). */
+export async function apiGetEventStats(eventId: string): Promise<EventStats> {
+  return req<EventStats>('GET', `/events/${eventId}/stats`);
+}

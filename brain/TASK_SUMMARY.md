@@ -4,6 +4,33 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-06-07] Phase 15 — Dashboard Manager (analytics org/événement, lecture seule)
+
+### Objectif
+Donner au **manager** (client payant) une **visibilité opérationnelle** qui manquait totalement : le `/dashboard` admin n'était qu'un lanceur de navigation. Première brique d'analytics **lecture seule**, dont les chiffres se **réconcilient** avec le back office SUPER_ADMIN (mêmes règles CA).
+
+### Livré
+- **Backend `stats` (aucune migration)** — `StatsService.getOrgOverview(orgId, userId)` (CA HT/TTC, nb commandes, panier moyen, nb événements + **en cours**, rollup revenu par événement) et `getEventStats(eventId, userId)` (revenu, panier moyen, **répartition par statut** zéro-seedée sur les 8 `OrderStatus`, **top 10 produits**). `StatsController` : `GET organizations/:orgId/stats` · `GET events/:eventId/stats` (JWT + UUID). +1 spec (**7 cas**). `StatsModule` enregistré dans `app.module.ts`.
+- **Admin client** — interfaces stats + `apiGetOrgStats` / `apiGetEventStats` (statut typé via l'union `OperatorOrderStatus`).
+- **Dashboard admin réécrit** — de lanceur → tableau de bord org (KPIs CA HT/TTC, commandes, panier moyen, événements + « N en cours », **Performance par événement** avec badge « ● En cours », accès rapide board opérateur).
+- **Stats par événement** — carte 📊 sur `events/[id]` (KPIs + répartition statut + top produits), fetch **isolé** du `Promise.all` principal.
+
+### Décisions
+- **Règle CA = source unique** calquée sur `BackofficeService` : CA seulement si `paymentStatus = SUCCEEDED` ; `totalCents` = TTC ; `CA HT = round(TTC / 1.10)` (`vatRate` config, fallback 0.1). `Order` porte `organizationId` **et** `eventId` → agrégations **sans jointure**.
+- **Gating MANAGE_ROLES** (ORG_ADMIN, MANAGER) : le CA est sensible → OPERATOR/MARKETING **403** ; SUPER_ADMIN bypass. Les deux frontends **dégradent proprement** (carte « réservé aux managers », jamais une page cassée).
+- **404 avant 403** sur événement inconnu (ne révèle pas l'appartenance org).
+- **Lecture seule** : zéro écriture, zéro schéma — pure agrégation sur les tables existantes.
+
+### Reste
+- Commit/push du changeset (déclenche les déploiements).
+- Backlog non démarré : doc des 2 P1 (#15), audit docs + dossier handoff (#20), Phase 11.5 Flaix (**bloquée** sur le code Flaix), approfondir back office, test live board opérateur.
+
+### Vérifications
+- Backend **26 suites / 313 tests** (306 → +7) · typecheck 0 · lint 0.
+- Admin typecheck 0 · lint 0 · build ✓ (`/dashboard` 4.97 kB · `/events/[id]` 8.71 kB). Opérateur (régression) typecheck 0 · lint 0. Aucune migration, aucune dépendance ajoutée.
+
+---
+
 ## [2026-06-07] Audit Codex — corrections sécurité & robustesse
 
 ### Objectif

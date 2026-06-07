@@ -2387,5 +2387,94 @@ pnpm --filter @break-eat/operator build      → ✓ (/dashboard/[eventId] 10.5 
 
 ---
 
+## PHASE 15 — Dashboard Manager (analytics org/événement, lecture seule)
+
+**Date :** 07/06/2026
+**Statut :** ✅ Terminée
+
+Le board opérateur était riche (réception temps réel) mais le **manager** n'avait **aucune** visibilité opérationnelle : le `/dashboard` admin n'était qu'un lanceur de navigation. Première brique d'analytics **lecture seule** au service du client payant (gérant de club). Les chiffres se **réconcilient avec le back office** SUPER_ADMIN car ils réutilisent la **même règle de CA**.
+
+### Règle de revenu (source unique, calquée sur BackofficeService)
+Une commande compte au CA **uniquement** si `paymentStatus = SUCCEEDED`. `Order.totalCents` est **TTC** ; `CA HT = round(CA TTC / (1 + vatRate))` avec `vatRate` lu de `app.reporting.vatRate` (fallback **0.1**). `Order` porte `organizationId` **et** `eventId` directement → toutes les agrégations se font **sans jointure**.
+
+### BLOC 15.1 — Module stats backend (service + controller + module)
+**Fichiers créés :**
+```
+backend/src/modules/stats/stats.service.ts
+  — getOrgOverview(orgId, userId) : CA HT/TTC, nb commandes, panier moyen HT/TTC, nb événements + activeEventsCount (startAt ≤ now ≤ endAt), rollup revenu par événement (order.groupBy par eventId)
+  — getEventStats(eventId, userId) : revenu, panier moyen, ordersByStatus zéro-seedé sur les 8 OrderStatus, topProducts (orderItem.groupBy, take 10)
+  — privés : toHtCents(ttc)=round(ttc/(1+vat)) ; averageBasket() avec garde division-par-zéro
+  — accès gaté MANAGE_ROLES (ORG_ADMIN, MANAGER) via requireOrgAccess ; SUPER_ADMIN bypass
+backend/src/modules/stats/stats.controller.ts
+  — @UseGuards(JwtAuthGuard), base path vide ; GET organizations/:orgId/stats + GET events/:eventId/stats (ParseUUIDPipe + @CurrentUser().sub)
+backend/src/modules/stats/stats.module.ts
+  — provider StatsService + StatsController
+```
+**Fichiers modifiés :**
+```
+backend/src/app.module.ts
+  — StatsModule enregistré (Phase 15)
+```
+**Principe** : module **100 % lecture seule** — aucune migration, aucune écriture, pure agrégation sur les tables existantes. La répartition par statut est **zéro-seedée** (les 8 statuts présents même à 0) pour que l'UI rende toujours le cycle de vie complet. Top produits scoppés via `order: { eventId, paymentStatus: SUCCEEDED }` (`OrderItem` n'a pas de relation directe — on filtre par la relation `order`).
+
+### BLOC 15.2 — Tests + pipeline vert
+**Fichiers créés :**
+```
+backend/src/modules/stats/stats.service.spec.ts (7 tests)
+  — math CA à 10 % + merge rollup + comptage « en cours »
+  — org vide : zéros partout, pas de division par zéro
+  — refus OPERATOR : 403 + aucune requête revenu lancée
+  — getEventStats : revenu + breakdown statut complet + top produits
+  — 404 événement inconnu AVANT tout check d'accès
+  — non-membre de l'org propriétaire : 403
+```
+**Note** : le draft de spec utilisait `GlobalRole.CLUB_OWNER` (inexistant — l'enum n'a que `SUPER_ADMIN` et `CUSTOMER`). Corrigé en `GlobalRole.CUSTOMER` (un utilisateur non-super-admin qui peut être membre d'org).
+
+### BLOC 15.3 — Client API admin + types
+**Fichiers modifiés :**
+```
+apps/admin/src/lib/api/admin-client.ts
+  — interfaces RevenueBlock/BasketBlock/OrgEventStat/OrgStatsOverview/TopProduct/EventStats (ordersByStatus typé via l'union OperatorOrderStatus existante — pas de nouvel import d'enum)
+  — apiGetOrgStats(orgId) → GET /organizations/:orgId/stats
+  — apiGetEventStats(eventId) → GET /events/:eventId/stats
+```
+
+### BLOC 15.4 — Dashboard admin opérationnel (vue org)
+**Fichiers modifiés :**
+```
+apps/admin/src/app/(admin)/dashboard/page.tsx (réécrit)
+  — de lanceur de navigation → tableau de bord org
+  — KPIs : CA HT (accent, « TVA 10 % »), CA TTC, Commandes, Panier moyen TTC, Événements (+ « N en cours »)
+  — liste « Performance par événement » (badge « ● En cours » calculé client via isActive(ev, now))
+  — accès rapide board opérateur (localhost:3002)
+  — dégradation propre : OPERATOR/MARKETING (403) → carte « Statistiques réservées aux managers » au lieu d'une erreur (le dashboard est la landing de TOUS les admins)
+```
+
+### BLOC 15.5 — Stats par événement (UI)
+**Fichiers modifiés :**
+```
+apps/admin/src/app/(admin)/events/[id]/page.tsx
+  — carte « 📊 Statistiques de l'événement » insérée avant la carte « changement de statut »
+  — KPIs (CA HT/TTC, commandes, panier moyen TTC) + « Répartition par statut » (chips sur les 8 statuts) + « Top produits » (rang, nom, ×qty, CA)
+  — fetch stats ISOLÉ du Promise.all principal (load()) : un 403 manager-only ne casse jamais le reste de la fiche (états statsLoading/statsDenied/statsError séparés)
+```
+
+### Vérification (Phase 15)
+```
+pnpm --filter @break-eat/backend test       → 26 suites / 313 tests (306 → +7)
+pnpm --filter @break-eat/backend typecheck   → exit 0
+pnpm --filter @break-eat/backend lint        → 0 erreur
+pnpm --filter @break-eat/admin typecheck     → exit 0
+pnpm --filter @break-eat/admin lint          → 0 erreur
+pnpm --filter @break-eat/admin build         → ✓ (15 routes · /dashboard 4.97 kB · /events/[id] 8.71 kB)
+pnpm --filter @break-eat/operator typecheck  → exit 0   (régression)
+pnpm --filter @break-eat/operator lint       → 0 erreur (régression)
+```
+
+### Prochaine étape
+Approfondir le back office (vues SUPER_ADMIN), tester le board opérateur en conditions réelles, documenter les 2 P1 (migration UUID + paymentStatus @map) dans les 4 docs. **Phase 11.5** (plan de préparation Flaix) reste **en attente du code Flaix**.
+
+---
+
 *Ce fichier est mis à jour après chaque bloc complété.*
 *Format : [PHASE].[BLOC] — Nom du bloc*
