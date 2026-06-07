@@ -33,7 +33,7 @@ module.exports = {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: '#ffffff',
     },
-    permissions: [],
+    permissions: ['android.permission.CAMERA'],
   },
   plugins: [
     [
@@ -41,6 +41,14 @@ module.exports = {
       {
         organization: 'breakeat',
         project: 'break-eat-mobile',
+      },
+    ],
+    [
+      'react-native-vision-camera',
+      {
+        cameraPermissionText:
+          'BREAK EAT a besoin de la caméra pour scanner les QR codes des événements.',
+        enableCodeScanner: true,
       },
     ],
   ],

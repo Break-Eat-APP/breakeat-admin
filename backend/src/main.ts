@@ -1,18 +1,25 @@
 import './instrument'; // Sentry must be imported first
 import { NestFactory } from '@nestjs/core';
-import { Logger, ValidationPipe } from '@nestjs/common';
+import { ValidationPipe } from '@nestjs/common';
 import { json, raw } from 'express';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { JsonLogger } from './logger/json-logger';
 
 async function bootstrap(): Promise<void> {
-  const logger = new Logger('Bootstrap');
+  // Use structured JSON logger in production; NestJS default in other envs.
+  // JsonLogger falls back to colour output automatically when NODE_ENV !== production.
+  const appLogger = new JsonLogger('Bootstrap');
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    logger: ['error', 'warn', 'log', 'debug'],
+    logger: appLogger,
     // Disable Nest's default body parser — we wire express middleware below
     // so the Stripe webhook gets a raw Buffer and the rest of the API gets JSON.
     bodyParser: false,
   });
+
+  // Re-use the same logger instance for post-bootstrap messages.
+  const logger = appLogger;
 
   // Stripe webhook MUST receive raw bytes for signature verification.
   // Must be registered BEFORE the generic JSON parser.

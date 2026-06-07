@@ -1,12 +1,39 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { getToken, getOrgId } from '@/lib/api/admin-client';
+
 /**
- * Admin shell — Phase 1 placeholder.
- * Real pages are implemented from Phase 2 onward.
+ * Root redirect — sends authenticated users to /dashboard,
+ * unauthenticated users to /login.
  */
-export default function AdminHomePage() {
+export default function AdminRootPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const token = getToken();
+    const orgId = getOrgId();
+    if (token && orgId) {
+      router.replace('/dashboard');
+    } else {
+      router.replace('/login');
+    }
+  }, [router]);
+
   return (
-    <main style={{ padding: '2rem' }}>
-      <h1>BREAK EAT — Admin</h1>
-      <p style={{ color: '#888' }}>Phase 1 shell — authentication coming in Phase 2.</p>
-    </main>
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#f9fafb',
+        fontFamily: 'system-ui, sans-serif',
+        color: '#6b7280',
+      }}
+    >
+      Chargement…
+    </div>
   );
 }

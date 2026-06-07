@@ -1,0 +1,112 @@
+# ─── Break Eat — Production Docker Compose (Phase 10) ───────────────────────
+#
+# Self-hosted production stack: PostgreSQL + Redis + NestJS backend.
+# The operator Next.js app is deployed separately on Vercel.
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Required: create a .env.prod file (never commit it) with real secrets.
+#   DATABASE_URL, JWT_SECRET, STRIPE_SECRET_KEY, etc. — see .env.example
+#
+# WARNING: Never use this file with DEMO_MODE=true.
+#          The backend entrypoint will refuse to start in that configuration.
+
+version: '3.8'
+
+# ─── Shared defaults ──────────────────────────────────────────────────────────
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+# ─── Services ─────────────────────────────────────────────────────────────────
+services:
+
+  # ── PostgreSQL 16 ───────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: break-eat-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-breakeat}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-breakeat_prod}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-breakeat} -d ${POSTGRES_DB:-breakeat_prod}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging: *default-logging
+
+  # ── Redis 7 ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: break-eat-redis-prod
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+
+  # ── NestJS backend ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: break-eat-backend-prod
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env.prod           # Real secrets — NEVER commit this file
+    environment:
+      # Override env vars that must match the compose network topology
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-breakeat}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-breakeat_prod}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      PORT: 3000
+      # Safety: fail loudly if DEMO_MODE is accidentally set
+      DEMO_MODE: "false"
+    ports:
+      - "${BACKEND_PORT:-3000}:3000"
+    networks:
+      - backend
+      - public
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging: *default-logging
+
+# ─── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+# ─── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  backend:
+    internal: true          # Postgres + Redis not reachable from outside the stack
+  public:
+    driver: bridge          # Backend port exposed to host

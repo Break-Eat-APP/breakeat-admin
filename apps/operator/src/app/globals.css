@@ -1,2 +1,17 @@
+/* Phase 11 refonte v2 — Break Eat operator.
+   Brand: neutral white background (no shapes), vivid orange accents (#FC4002).
+   Font: Fredoka partout. Design tokens live in @break-eat/brand (BRAND). */
 *, *::before, *::after { box-sizing: border-box; }
-body { margin: 0; font-family: system-ui, sans-serif; background: #0a0a0a; color: #f5f5f5; }
+
+body {
+  margin: 0;
+  font-family: var(--font-fredoka), system-ui, -apple-system, sans-serif;
+  background: #ffffff;
+  color: #1c1917;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Inputs inherit the brand font and show a warm-grey placeholder. */
+input, button, textarea, select { font-family: inherit; }
+input::placeholder { color: #b8ada6; }

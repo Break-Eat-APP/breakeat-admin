@@ -36,9 +36,11 @@ export class SimulatorService {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       include: {
-        suppliers: {
+        eventSuppliers: {
           include: {
-            products: { where: { status: 'ACTIVE' } },
+            supplier: {
+              include: { products: { where: { status: 'ACTIVE' } } },
+            },
           },
         },
         pickupPoints: true,
@@ -46,7 +48,7 @@ export class SimulatorService {
     });
     if (!event) throw new NotFoundException(`Event ${eventId} not found`);
 
-    const suppliers = event.suppliers;
+    const suppliers = event.eventSuppliers.map((es) => es.supplier);
     const pickupPoints = event.pickupPoints;
     if (suppliers.length === 0 || pickupPoints.length === 0) {
       throw new NotFoundException('Event has no suppliers or pickup points — cannot seed orders');
@@ -114,13 +116,19 @@ export class SimulatorService {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       include: {
-        suppliers: { include: { products: true } },
+        eventSuppliers: {
+          include: {
+            supplier: { include: { products: true } },
+          },
+        },
         pickupPoints: true,
       },
     });
     if (!event) throw new NotFoundException(`Event ${eventId} not found`);
 
-    const suppliers = event.suppliers.filter((s) => s.products.length > 0);
+    const suppliers = event.eventSuppliers
+      .map((es) => es.supplier)
+      .filter((s) => s.products.length > 0);
     if (suppliers.length === 0 || event.pickupPoints.length === 0) {
       throw new NotFoundException('Event has no suppliers/products or pickup points');
     }
@@ -180,6 +188,150 @@ export class SimulatorService {
     return { deleted: result.count, eventId };
   }
 
+  /**
+   * Steps all active demo orders forward one state.
+   * PAID→ACCEPTED, ACCEPTED→PREPARING, PREPARING→READY, READY→PICKED_UP, PICKED_UP→COMPLETED.
+   * RECOVERED→ACCEPTED (re-enters workflow).
+   * COMPLETED and CANCELLED are left unchanged.
+   *
+   * Each transition is recorded in the audit trail (actor = SYSTEM).
+   * Realtime events are NOT emitted here — this is a bulk operation designed for demo speed.
+   */
+  async progressOrders(
+    eventId: string,
+  ): Promise<{ progressed: number; eventId: string }> {
+    const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
+      [OrderStatus.PAID]:      OrderStatus.ACCEPTED,
+      [OrderStatus.ACCEPTED]:  OrderStatus.PREPARING,
+      [OrderStatus.PREPARING]: OrderStatus.READY,
+      [OrderStatus.READY]:     OrderStatus.PICKED_UP,
+      [OrderStatus.PICKED_UP]: OrderStatus.COMPLETED,
+      [OrderStatus.RECOVERED]: OrderStatus.ACCEPTED,
+    };
+
+    const demoOrders = await this.prisma.order.findMany({
+      where: {
+        eventId,
+        publicOrderNumber: { startsWith: SimulatorService.DEMO_PREFIX },
+        status: { notIn: [OrderStatus.COMPLETED, OrderStatus.CANCELLED] },
+      },
+    });
+
+    let progressed = 0;
+    for (const order of demoOrders) {
+      const next = NEXT_STATUS[order.status];
+      if (!next) continue;
+
+      await this.prisma.$transaction([
+        this.prisma.order.update({
+          where: { id: order.id },
+          data: { status: next },
+        }),
+        this.prisma.orderAuditTrail.create({
+          data: {
+            orderId: order.id,
+            actorType: OrderActorType.SYSTEM,
+            previousState: order.status,
+            nextState: next,
+            reason: 'Demo simulator progress step',
+            metadata: { demo: true } as object,
+          },
+        }),
+      ]);
+      progressed++;
+    }
+
+    this.logger.log(
+      `SimulatorService: progressed ${progressed} demo orders for event ${eventId}`,
+    );
+    return { progressed, eventId };
+  }
+
+  /**
+   * Randomly cancels or recovers a subset of active demo orders.
+   * Designed to stress-test the operator dashboard's recovery flow.
+   *
+   * @param eventId  Target event
+   * @param failRate Fraction of active orders to affect (default 0.2 = 20%)
+   *                 60% of affected orders → CANCELLED, 40% → RECOVERED
+   */
+  async randomFailures(
+    eventId: string,
+    failRate = 0.2,
+  ): Promise<{ cancelled: number; recovered: number; eventId: string }> {
+    // Clamp failRate to [0, 1] — a value > 1 would affect 100 % of orders which
+    // is rarely intended and could wipe all demo orders accidentally.
+    const rate = Math.max(0, Math.min(1, failRate));
+
+    const demoOrders = await this.prisma.order.findMany({
+      where: {
+        eventId,
+        publicOrderNumber: { startsWith: SimulatorService.DEMO_PREFIX },
+        status: {
+          in: [OrderStatus.PAID, OrderStatus.ACCEPTED, OrderStatus.PREPARING],
+        },
+      },
+    });
+
+    let cancelled = 0;
+    let recovered = 0;
+
+    for (const order of demoOrders) {
+      const roll = Math.random();
+      if (roll >= rate) continue;
+
+      // 60% cancel, 40% recover
+      const next = roll < rate * 0.6 ? OrderStatus.CANCELLED : OrderStatus.RECOVERED;
+
+      await this.prisma.$transaction([
+        this.prisma.order.update({
+          where: { id: order.id },
+          data: { status: next },
+        }),
+        this.prisma.orderAuditTrail.create({
+          data: {
+            orderId: order.id,
+            actorType: OrderActorType.SYSTEM,
+            previousState: order.status,
+            nextState: next,
+            reason: `Demo random failure (${next.toLowerCase()})`,
+            metadata: { demo: true } as object,
+          },
+        }),
+      ]);
+
+      if (next === OrderStatus.CANCELLED) cancelled++;
+      else recovered++;
+    }
+
+    this.logger.log(
+      `SimulatorService: random failures — cancelled ${cancelled}, recovered ${recovered} for event ${eventId}`,
+    );
+    return { cancelled, recovered, eventId };
+  }
+
+  /**
+   * Returns a count of demo orders by status for an event.
+   * Useful for the operator to understand the current demo state.
+   */
+  async getStats(
+    eventId: string,
+  ): Promise<{ stats: Record<string, number>; total: number; eventId: string }> {
+    const orders = await this.prisma.order.findMany({
+      where: {
+        eventId,
+        publicOrderNumber: { startsWith: SimulatorService.DEMO_PREFIX },
+      },
+      select: { status: true },
+    });
+
+    const stats: Record<string, number> = {};
+    for (const { status } of orders) {
+      stats[status] = (stats[status] ?? 0) + 1;
+    }
+    return { stats, total: orders.length, eventId };
+  }
+
   // ─── Internals ───────────────────────────────────────────────
 
   /**
@@ -195,8 +347,7 @@ export class SimulatorService {
       data: {
         email: DEMO_EMAIL,
         passwordHash: 'DEMO_NO_LOGIN',
-        firstName: 'Demo',
-        lastName: 'Simulator',
+        displayName: 'Demo Simulator',
         isActive: false, // cannot login
       },
     });

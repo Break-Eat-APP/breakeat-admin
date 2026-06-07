@@ -18,6 +18,13 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { SimulatorModule } from './modules/simulator/simulator.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
+import { SlotsModule } from './modules/slots/slots.module';
+import { FlaixModule } from './modules/flaix/flaix.module';
+import { FeatureFlagsModule } from './modules/feature-flags/feature-flags.module';
+import { AppSettingsModule } from './modules/app-settings/app-settings.module';
+import { GroupsModule } from './modules/groups/groups.module';
+import { BackofficeModule } from './modules/backoffice/backoffice.module';
+import { OperatorScreensModule } from './modules/operator-screens/operator-screens.module';
 import appConfig from './config/app.config';
 
 @Module({
@@ -52,6 +59,17 @@ import appConfig from './config/app.config';
     // Phase 6
     RealtimeModule,
     SimulatorModule,
+    // Phase 7
+    SlotsModule,
+    FlaixModule,
+    // Phase 9
+    FeatureFlagsModule,
+    AppSettingsModule,
+    // Phase 14
+    GroupsModule,
+    BackofficeModule,
+    // Phase 11 — Operator dashboard (configurable screens)
+    OperatorScreensModule,
   ],
 })
 export class AppModule {}

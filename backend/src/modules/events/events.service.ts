@@ -19,6 +19,9 @@ import type { Event, EventSupplier, Supplier } from '@prisma/client';
 
 export type EventWithSuppliers = Event & {
   eventSuppliers: (EventSupplier & { supplier: Supplier })[];
+  // Present on single-event reads (findOne) so the admin UI can prefill the
+  // "Accès & visibilité" group selector. Omitted on list reads.
+  groups?: { groupId: string }[];
 };
 
 /**
@@ -90,7 +93,10 @@ export class EventsService {
 
     const event = await this.prisma.event.findFirst({
       where: { id: eventId, organizationId },
-      include: { eventSuppliers: { include: { supplier: true } } },
+      include: {
+        eventSuppliers: { include: { supplier: true } },
+        groups: { select: { groupId: true } },
+      },
     });
 
     if (!event) throw new NotFoundException('Event not found');
@@ -118,17 +124,54 @@ export class EventsService {
       throw new BadRequestException('endAt must be after startAt');
     }
 
-    const updated = await this.prisma.event.update({
-      where: { id: eventId },
-      data: {
-        ...(dto.name !== undefined && { name: dto.name }),
-        ...(dto.startAt !== undefined && { startAt: new Date(dto.startAt) }),
-        ...(dto.endAt !== undefined && { endAt: new Date(dto.endAt) }),
-        ...(dto.activeFeatureFlags !== undefined && {
-          activeFeatureFlags: dto.activeFeatureFlags as object,
-        }),
-      },
-    });
+    // Phase 14.7 — when groupIds are provided, every group must belong to this
+    // org. Validated up-front so we never partially apply a cross-tenant set.
+    const uniqueGroupIds =
+      dto.groupIds !== undefined ? [...new Set(dto.groupIds)] : undefined;
+    if (uniqueGroupIds !== undefined && uniqueGroupIds.length > 0) {
+      const owned = await this.prisma.group.count({
+        where: { id: { in: uniqueGroupIds }, organizationId },
+      });
+      if (owned !== uniqueGroupIds.length) {
+        throw new BadRequestException(
+          'One or more groups do not belong to this organization',
+        );
+      }
+    }
+
+    const data = {
+      ...(dto.name !== undefined && { name: dto.name }),
+      ...(dto.startAt !== undefined && { startAt: new Date(dto.startAt) }),
+      ...(dto.endAt !== undefined && { endAt: new Date(dto.endAt) }),
+      ...(dto.activeFeatureFlags !== undefined && {
+        activeFeatureFlags: dto.activeFeatureFlags as object,
+      }),
+      // Phase 14.7 — access & visibility
+      ...(dto.visibility !== undefined && { visibility: dto.visibility }),
+      // Phase 12.8 — branding fields
+      ...(dto.description !== undefined && { description: dto.description }),
+      ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
+      ...(dto.primaryColor !== undefined && { primaryColor: dto.primaryColor }),
+    };
+
+    // When groupIds are supplied we REPLACE the event's group links atomically:
+    // update the scalar fields, wipe existing EventGroup rows, recreate the set.
+    let updated: Event;
+    if (uniqueGroupIds !== undefined) {
+      updated = await this.prisma.$transaction(async (tx) => {
+        const ev = await tx.event.update({ where: { id: eventId }, data });
+        await tx.eventGroup.deleteMany({ where: { eventId } });
+        if (uniqueGroupIds.length > 0) {
+          await tx.eventGroup.createMany({
+            data: uniqueGroupIds.map((groupId) => ({ eventId, groupId })),
+            skipDuplicates: true,
+          });
+        }
+        return ev;
+      });
+    } else {
+      updated = await this.prisma.event.update({ where: { id: eventId }, data });
+    }
 
     this.logger.log(`Event updated: ${eventId} in org ${organizationId}`);
     return updated;

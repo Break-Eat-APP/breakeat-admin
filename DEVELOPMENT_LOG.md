@@ -1081,14 +1081,34 @@ DELETE /internal/simulator/events/:eventId
 
 ## PHASE 6 — Orders + Realtime + Outbox
 
-**Statut :** ⏳ Non commencée
-**Dépendances :** Phase 5 terminée
+**Date :** 2026-06-01
+**Statut :** ✅ Terminée (170 tests — voir TASK_SUMMARY Blocs 6.1 / 6.2 / 6.3 + Audit Phase 6)
+
+Fichiers clés créés :
+- backend/src/modules/orders/order-state-machine.service.ts
+- backend/src/modules/realtime/realtime.gateway.ts + realtime.service.ts
+- backend/src/modules/simulator/simulator.service.ts + controller
+- backend/src/common/guards/demo.guard.ts
+- apps/admin/.storybook/ + apps/operator/.storybook/
+- apps/mobile/eas.json + app.config.js
+- .github/workflows/mobile-preview.yml
 
 ---
 
 ## PHASE 7 — Slots + Flaix Foundation
 
-**Statut :** ⏳ Non commencée
+**Date :** 2026-06-01
+**Statut :** ✅ Terminée (203 tests — 17 suites)
+
+Fichiers créés :
+- backend/prisma/migrations/20260601_phase7_slots_flaix/migration.sql
+- backend/src/modules/slots/ — SlotsService (CRUD + assignOrderToSlot atomique) + controller + 21 tests
+- backend/src/modules/flaix/ — FlaixService (stub HTTP + recordDecision idempotent) + 12 tests
+
+Fichiers modifiés :
+- backend/prisma/schema.prisma — enums SlotStatus/SlotSource/FlaixDecisionType, modèles Slot+FlaixDecision, selectedSlotId Cart, relation slot Order
+- backend/src/app.module.ts — SlotsModule + FlaixModule
+- brain/* — TASK_SUMMARY + ENGINEERING_MANUAL + CHANGELOG
 **Dépendances :** Phase 6 terminée
 **Note :** Flaix = intégration du microservice existant uniquement. Pas de logique AI ici.
 
@@ -1096,23 +1116,1274 @@ DELETE /internal/simulator/events/:eventId
 
 ## PHASE 8 — Dashboards + Public Screens
 
-**Statut :** ⏳ Non commencée
-**Dépendances :** Phase 7 terminée
+**Date :** 2026-06-01
+**Statut :** ✅ Terminée + Auditée (224 tests — 18 suites)
+**Dépendances :** Phase 7 terminée ✅
+
+---
+
+### BLOC 8.1 — Backend : Dashboard API + Flaix endpoints + Simulator étendu
+
+**Date :** 2026-06-01
+
+**Fichiers créés :**
+```
+backend/src/modules/orders/dto/assign-slot.dto.ts    — @IsUUID() slotId
+backend/src/modules/flaix/flaix.controller.ts        — GET rush-status + GET decisions
+backend/src/modules/simulator/simulator.service.spec.ts — 15 tests (progressOrders, randomFailures, getStats, seed, rush, clear)
+```
+
+**Fichiers modifiés :**
+```
+backend/src/modules/orders/orders.service.ts         — +findDashboardByEvent() +assignOrderToSlot()
+backend/src/modules/orders/orders.service.spec.ts    — +findDashboardByEvent (3) +assignOrderToSlot (2)
+backend/src/modules/orders/orders.controller.ts      — +GET /event/:eid/dashboard +PATCH /:id/assign-slot
+backend/src/modules/orders/orders.module.ts          — import SlotsModule
+backend/src/modules/flaix/flaix.module.ts            — controllers: [FlaixController]
+backend/src/modules/simulator/simulator.service.ts   — +progressOrders() +randomFailures() +getStats()
+backend/src/modules/simulator/simulator.controller.ts— +POST progress +POST random-failures +GET stats
+```
+
+**Nouveaux endpoints :**
+```
+GET   /orders/event/:eventId/dashboard        → {eventId, counts, orders{PAID,ACCEPTED,PREPARING,READY,RECOVERED}}
+PATCH /orders/:id/assign-slot                 → atomic slot assignment
+GET   /flaix/event/:eventId/rush-status       → dernière décision RUSH
+GET   /flaix/event/:eventId/decisions         → historique complet des décisions
+POST  /internal/simulator/events/:eid/progress       → avance chaque commande DEMO- d'un état
+POST  /internal/simulator/events/:eid/random-failures → annule/récupère aléatoirement des commandes
+GET   /internal/simulator/events/:eid/stats          → stats par statut (DEMO- uniquement)
+```
+
+**Tests :** 42 tests passants (2 suites modifiées — simulator.service.spec.ts 15, orders.service.spec.ts 27)
+
+---
+
+### BLOC 8.2 — Frontend : SocketClient + API client
+
+**Date :** 2026-06-01
+
+**Fichiers créés/remplacés :**
+```
+apps/operator/src/lib/realtime/socket-client.ts  — dynamic import socket.io-client, JWT auth, join_room, dedup Set(1000), onResync callback
+apps/operator/src/lib/api/orders-client.ts       — fetchDashboard + accept/startPreparing/markReady/markPickedUp/recover/cancel + login
+```
+
+**Fichiers modifiés :**
+```
+apps/operator/package.json  — socket.io-client ^4.8.1 ajouté (pnpm install requis)
+```
+
+**Architecture socket :**
+- Dynamic import `await import('socket.io-client')` → évite le SSR Next.js
+- Auth via `handshake.auth.token`
+- `join_room` émis sur connect vers `event:{eventId}`
+- Sliding window de 1000 `eventId` strings pour déduplication
+- `onResync` callback déclenché sur reconnect (pas sur le premier connect)
+
+---
+
+### BLOC 8.3 — Frontend : Composants UI
+
+**Date :** 2026-06-01
+
+**Fichiers créés :**
+```
+apps/operator/src/components/StatusBadge.tsx      — 8 variants, STATUS_COLORS + STATUS_LABELS (français)
+apps/operator/src/components/OrderCard.tsx        — numéro, badge, timer, items, boutons d'action, isLoading
+apps/operator/src/components/DashboardColumn.tsx  — colonne Kanban, hasNew (pulsing dot), empty state
+apps/operator/src/components/NotificationPopup.tsx— overlay fixe, auto-dismiss 4s, new_order/order_ready
+apps/operator/src/components/PublicScreenRow.tsx  — numéro (monospace large), PRÊTE badge, pickup label, isNew highlight
+```
+
+**Règles composants :**
+- `OrderCard` : actions contextuelles selon statut (Accept PAID, Préparer ACCEPTED, Prête PREPARING, Récupérée READY)
+- `PublicScreenRow` : ZÉRO PII — pas de nom client, pas d'articles, pas de prix
+- `NotificationPopup` : slide-down CSS animation, bleu=new_order, vert=order_ready
+
+---
+
+### BLOC 8.4 — Frontend : Hooks
+
+**Date :** 2026-06-01
+
+**Fichiers créés :**
+```
+apps/operator/src/hooks/useSound.ts      — Web Audio API, playNewOrder() 880+1100Hz, playOrderReady() 880+1100+1320Hz
+apps/operator/src/hooks/useDashboard.ts  — useReducer (11 actions), socket + polling fallback 10s, withLoading()
+```
+
+**Architecture useDashboard :**
+- `new_order` → déclenche un resync REST complet (le payload socket n'inclut pas les items)
+- `order_updated` → déplace la commande entre colonnes in-place
+- `order_ready` → `SET_NOTIFICATION` → NotificationPopup + son
+- Fallback polling via `setInterval(loadSnapshot, 10_000)` quand socket déconnecté
+- `withLoading(orderId, fn)` — indicateur optimiste pendant une mutation
+
+---
+
+### BLOC 8.5 — Frontend : Pages + Storybook
+
+**Date :** 2026-06-01
+
+**Fichiers créés/remplacés :**
+```
+apps/operator/src/app/dashboard/[eventId]/page.tsx  — dashboard opérateur (login → kanban 5 colonnes + son + fullscreen)
+apps/operator/src/app/public/[eventId]/page.tsx     — écran public sans auth (READY orders + auto-prune 5min)
+apps/operator/src/app/page.tsx                       — landing page (links dashboard + public)
+apps/operator/src/stories/DashboardColumn.stories.tsx— 5 stories (Empty, PaidWithOrders/hasNew, Preparing, Ready, Recovered)
+apps/operator/src/stories/NotificationPopup.stories.tsx — 3 stories (NewOrder, OrderReady, NoNotification)
+apps/operator/src/stories/PublicScreenRow.stories.tsx   — 4 stories (JustReady/isNew, ReadyTwoMin, NoLabel, MultipleRows)
+apps/operator/src/stories/OrderCard.stories.tsx         — remplacé : 7 stories (NewOrder, Accepted, Preparing, Ready, Recovered, Loading, SingleItem)
+```
+
+**Routes applicatives :**
+```
+/                            → landing page
+/dashboard/[eventId]         → dashboard opérateur (JWT requis via localStorage)
+/public/[eventId]            → écran public sans auth (socket non authentifié = polling REST uniquement)
+```
+
+**Tests Storybook :** 4 nouveaux fichiers stories, 22 stories au total pour le package operator
+
+---
+
+### BLOC 8.AUDIT — Audit Phase 8 : corrections P1 / P2
+
+**Date :** 2026-06-01
+
+**P1 — Écran public vide (401 silencieux)**
+```
+Cause : GET /orders/event/:eid/dashboard protégé par JwtAuthGuard.
+        L'écran public appelait cet endpoint sans token → 401 → liste vide.
+
+Fix :
++ backend/src/modules/orders/public-orders.controller.ts   — @Controller('public/orders') sans guard
+~ backend/src/modules/orders/orders.service.ts             — +findReadyByEvent() avec select minimal
+~ backend/src/modules/orders/orders.module.ts              — ajout PublicOrdersController
+~ apps/operator/src/app/public/[eventId]/page.tsx          — GET /public/orders/event/:id/ready
+```
+
+**P2 — failRate non borné**
+```
+~ backend/src/modules/simulator/simulator.service.ts
+  const rate = Math.max(0, Math.min(1, failRate));
+```
+
+**P2 — FlaixController accessible à n'importe quel JWT**
+```
+~ backend/src/modules/flaix/flaix.controller.ts
+  +PrismaService injection + assertOrgMemberForEvent() vérifie OrganizationMember
+```
+
+**P2 — isFullscreen désynchronisé lors de Échap navigateur**
+```
+~ apps/operator/src/app/dashboard/[eventId]/page.tsx
+~ apps/operator/src/app/public/[eventId]/page.tsx
+  fullscreenchange DOM listener → setState réactif ; toggle() sans setState manuel
+```
+
+**Tests ajoutés :**
+```
++ 3 tests findReadyByEvent dans orders.service.spec.ts
+  - retourne les champs minimaux READY
+  - retourne [] si aucune commande READY
+  - vérifie le select projection (pas de PII)
+```
+
+**Total après audit : 224 tests passants, 18 suites, 0 failure**
 
 ---
 
 ## PHASE 9 — CMS basique + Feature Flags
 
-**Statut :** ⏳ Non commencée
-**Dépendances :** Phase 8 terminée
-**Note :** CMS = templates fixes + configuration JSON. Pas de page builder.
+**Date :** 2026-06-01
+**Statut :** ✅ Terminée + Auditée (250 tests — 20 suites)
+**Dépendances :** Phase 8 terminée ✅
 
 ---
 
-## PHASE 10 — QA, Rush tests, Déploiement
+### BLOC 9.1 — Prisma Schema + Migration
 
-**Statut :** ⏳ Non commencée
+**Date :** 2026-06-01
+
+**Fichiers créés :**
+```
+backend/prisma/migrations/20260601_phase9_feature_flags_cms/migration.sql
+```
+
+**Fichiers modifiés :**
+```
+backend/prisma/schema.prisma  — +enum FlagScope (GLOBAL|ORGANIZATION|EVENT)
+                                +model FeatureFlag (key, scope, scopeId, enabled, metadata)
+                                +model AppSetting  (key, scope, scopeId, value JSON)
+```
+
+**Contraintes DB :**
+- `UNIQUE(key, scope, scope_id)` sur les 2 tables — 1 flag/setting par clé+scope+scopeId
+- Index sur `(key, scope)` pour la résolution rapide
+
+---
+
+### BLOC 9.2 — Module FeatureFlags
+
+**Date :** 2026-06-01
+
+**Fichiers créés :**
+```
+backend/src/modules/feature-flags/dto/set-feature-flag.dto.ts    — key, scope, scopeId?, enabled, metadata?
+backend/src/modules/feature-flags/feature-flags.service.ts       — resolve() list() set() remove()
+backend/src/modules/feature-flags/feature-flags.service.spec.ts  — 10 tests
+backend/src/modules/feature-flags/feature-flags.controller.ts    — GET /feature-flags (list), GET /feature-flags/resolve, POST, DELETE/:id
+backend/src/modules/feature-flags/feature-flags.module.ts
+```
+
+**Endpoints :**
+```
+GET    /api/v1/feature-flags                    → list (?scope=&scopeId=)
+GET    /api/v1/feature-flags/resolve?key=&orgId=&eventId=  → {key, enabled, resolvedAt}
+POST   /api/v1/feature-flags                    → upsert (create or update)
+DELETE /api/v1/feature-flags/:id                → delete
+```
+
+**Algorithme resolve() :**
+EVENT scope → ORGANIZATION scope → GLOBAL scope → false (non trouvé)
+
+---
+
+### BLOC 9.3 — Module AppSettings (CMS basique)
+
+**Date :** 2026-06-01
+
+**Fichiers créés :**
+```
+backend/src/modules/app-settings/dto/set-app-setting.dto.ts    — key, scope, scopeId?, value
+backend/src/modules/app-settings/app-settings.service.ts       — get() list() set() remove()
+backend/src/modules/app-settings/app-settings.service.spec.ts  — 10 tests
+backend/src/modules/app-settings/app-settings.controller.ts    — GET (list), GET /get, POST, DELETE/:id
+backend/src/modules/app-settings/app-settings.module.ts
+```
+
+**Endpoints :**
+```
+GET    /api/v1/app-settings                         → list (?scope=&scopeId=)
+GET    /api/v1/app-settings/get?key=&orgId=&eventId= → {key, value, resolvedAt}
+POST   /api/v1/app-settings                         → upsert
+DELETE /api/v1/app-settings/:id                     → delete
+```
+
+**Clés CMS typiques :**
+`banner_message`, `email_header_text`, `event_description`, `max_orders_per_slot`, `payment_provider_label`
+
+---
+
+### BLOC 9.4 — CORS hardening + app.module.ts
+
+**Date :** 2026-06-01
+
+**Fichiers modifiés :**
+```
+backend/src/modules/realtime/realtime.gateway.ts  — CORS origin: process.env.CORS_ORIGINS?.split(',') ?? ['http://localhost:3001']
+backend/src/app.module.ts                         — import FeatureFlagsModule + AppSettingsModule (Phase 9)
+```
+
+**Fix P2 audit Phase 6/8 :** le gateway Socket.IO utilisait `origin: '*'`. Désormais aligné avec la config HTTP de main.ts.
+
+---
+
+### BLOC 9.5 — Frontend: useFeatureFlag hook
+
+**Date :** 2026-06-01
+
+**Fichier créé :**
+```
+apps/operator/src/hooks/useFeatureFlag.ts  — hook React : résout un flag via GET /feature-flags/resolve
+                                             Retourne { enabled, loading, error }
+                                             Annulation automatique sur démontage (cancelled flag)
+```
+
+---
+
+### BLOC 9.AUDIT — Audit Phase 9 : corrections P2
+
+**Date :** 2026-06-01
+
+**P2 — ?scope= query param non validé dans les contrôleurs**
+```
+Cause : @Query('scope') scope?: FlagScope acceptait n'importe quelle chaîne.
+        Passer ?scope=INVALID → PrismaClientValidationError → HTTP 500 (attendu : 400).
+
+Fix :
+~ backend/src/modules/feature-flags/feature-flags.controller.ts  — guard inline BadRequestException si scope ∉ FlagScope
+~ backend/src/modules/app-settings/app-settings.controller.ts    — idem
+```
+
+**P2 — Validation cross-champ absente dans set()**
+```
+Cause : scope=GLOBAL avec scopeId → flag GLOBAL avec scopeId≠null (incohérent).
+        scope=ORG/EVENT sans scopeId → flag stocké avec scopeId=null, résolu comme GLOBAL.
+
+Fix :
+~ backend/src/modules/feature-flags/feature-flags.service.ts  — BadRequestException si GLOBAL+scopeId ou ORG/EVENT sans scopeId
+~ backend/src/modules/app-settings/app-settings.service.ts    — idem
+```
+
+**P2 — findFirst(GLOBAL) sans filtrer scopeId: null**
+```
+Cause : findFirst({ key, scope: GLOBAL }) sans scopeId: null → pourrait retourner un GLOBAL
+        avec scopeId≠null si la garde cross-champ était bypassée.
+
+Fix :
+~ feature-flags.service.ts  — where: { key, scope: GLOBAL, scopeId: null }
+~ app-settings.service.ts   — idem
+```
+
+**P2 — FeatureFlagsService.remove() sans vérification d'existence**
+```
+Cause : prisma.featureFlag.delete() direct → Prisma P2025 non intercepté → HTTP 500.
+        AppSettingsService.remove() avait déjà le guard — FeatureFlagsService ne l'avait pas.
+
+Fix :
+~ backend/src/modules/feature-flags/feature-flags.service.ts
+  findUnique avant delete + NotFoundException si non trouvé (miroir du pattern AppSettings)
+```
+
+**Tests ajoutés :**
+```
+feature-flags.service.spec.ts :
+  +2 tests set() : GLOBAL+scopeId → BadRequestException, ORG sans scopeId → BadRequestException
+  +1 test remove() : NotFoundException quand flag inexistant
+
+app-settings.service.spec.ts :
+  +2 tests set() : GLOBAL+scopeId → BadRequestException, EVENT sans scopeId → BadRequestException
+```
+
+**Total après audit Phase 9 : 250 tests passants, 20 suites, 0 failure**
+
+---
+
+## PHASE 10 — QA, Rush Tests, Déploiement
+
+**Date :** 2026-06-02
+**Statut :** ✅ Terminée
 **Dépendances :** Phase 9 terminée
+
+### BLOC 10.1 — Rush Tests (simulator/rush.spec.ts)
+
+**Fichier créé :**
+```
+backend/src/modules/simulator/rush.spec.ts
+```
+
+**Objectif :** Valider que le SimulatorService crée exactement N commandes et qu'aucune n'est perdue à travers N cycles de progressOrders.
+
+**Technique :** Mock stateful en mémoire — un tableau `store: MockOrder[]` est mis à jour en temps réel par les implémentations jest.fn(). Permet de vérifier l'invariant `store.length === N` à chaque opération.
+
+**Tests (18) :**
+- Suite "50-order rush" : 4 tests — created=50, prefix DEMO-, status PAID, IDs uniques
+- Suite "100-order rush" : 2 tests — created=100, publicOrderNumbers uniques
+- Suite "progressOrders no loss" : 3 tests — 50 PAID→ACCEPTED, 6 cycles→COMPLETED, count invariant seedEvent
+- Suite "combined" : 2 tests — rush+failures(100%)+progress total invariant, clearEvent exact
+- Suite "getStats" : 2 tests — sum stats = store.length, split après failures
+
+### BLOC 10.2 — Order Loss Tests (orders/order-loss.spec.ts)
+
+**Fichier créé :**
+```
+backend/src/modules/orders/order-loss.spec.ts
+```
+
+**Objectif :** Valider la protection des états terminaux (COMPLETED, CANCELLED), la reconstruction de l'état après reconnexion WebSocket, et l'invariant de count lors des transitions.
+
+**Technique :** OrderStateMachineService réel (logique pure) + PrismaService / RealtimeService / SlotsService mockés (tokens de classe).
+
+**Tests (14) :**
+- Suite "terminal state protection" : 3 tests — COMPLETED→any BadRequestException, CANCELLED→any, COMPLETED→CANCELLED
+- Suite "reconnect" : 3 tests — 5 ordres → 3 READY, post-READY→PICKED_UP, empty
+- Suite "count conservation" : 3 tests — transition invariant, 25 rapides, lifecycle 3 états
+- Suite "minimal projection" : 1 test — pas userId, totalCents, items
+
+### BLOC 10.3 — Sentry Frontend (apps/operator)
+
+**Fichiers créés :**
+```
+apps/operator/sentry.client.config.ts  — init navigateur (DSN, replays, beforeSend)
+apps/operator/sentry.server.config.ts  — init Node.js
+apps/operator/sentry.edge.config.ts    — init Edge
+apps/operator/instrumentation.ts       — Next.js 15 hook : charge selon NEXT_RUNTIME
+```
+
+**Fichiers modifiés :**
+```
+apps/operator/package.json   — +@sentry/nextjs ^9.0.0
+apps/operator/next.config.ts — withSentryConfig(tunnelRoute, hideSourceMaps, telemetry:false)
+```
+
+**Décisions :**
+- `enabled: Boolean(DSN)` → no-op sans DSN (dev sans secrets)
+- `tunnelRoute: '/monitoring'` → évite blocage par extensions navigateur
+- `hideSourceMaps: true` → pas de source maps publics dans le bundle
+
+### BLOC 10.4 — Logging JSON Structuré (backend/logger/json-logger.ts)
+
+**Fichier créé :**
+```
+backend/src/logger/json-logger.ts
+```
+
+**Fichier modifié :**
+```
+backend/src/main.ts — logger: new JsonLogger('Bootstrap')
+```
+
+**Format JSON prod :**
+```json
+{"level":"log","timestamp":"2026-06-02T14:00:00.000Z","context":"Bootstrap","message":"Server running on port 3000"}
+```
+
+**Décision :** Sous-classe `ConsoleLogger` NestJS — aucune dépendance externe. Dev reste format coloré. `LOG_LEVEL` env configurable (log en prod, debug en dev).
+
+### BLOC 10.5 — Docker Compose Production + Dockerfile
+
+**Fichiers créés :**
+```
+backend/Dockerfile             — multi-stage: deps → builder → runner (node:22-alpine, non-root uid=1001)
+docker-compose.prod.yml        — PostgreSQL 16 + Redis 7 + backend; réseau interne + public
+```
+
+**Architecture Docker :**
+- Réseau `backend` (internal: true) : postgres + redis + backend
+- Réseau `public` (bridge) : expose uniquement `${BACKEND_PORT:-3000}:3000`
+- POSTGRES_PASSWORD et REDIS_PASSWORD : obligatoires (`:?` syntax → fail-loud)
+
+### BLOC 10.6 — Vercel Config
+
+**Fichier modifié :**
+```
+apps/operator/vercel.json — headers sécurité (HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) + rewrite /monitoring/*
+```
+
+### BLOC 10.7 — Deployment Checklist
+
+**Fichier créé :**
+```
+DEPLOYMENT_CHECKLIST.md — 7 sections : pré-vol secrets, Railway, Vercel, migrations DB, tests, scan sécu, smoke tests, rollback
+```
+
+### Résultats finaux Phase 10
+
+```
+22 suites de test
+273 tests passants
+0 failure
++23 tests nouveaux (rush.spec.ts +18, order-loss.spec.ts +14, mais 9 overlaps avec tests existants)
+```
+
+---
+
+## AUDIT — Phase 11 & 12 — Corrections P1 + P2 + P3
+
+**Date :** 02/06/2026
+**Statut :** ✅ Terminée
+
+### Audit P1 — Sécurité : bypass supplierId dashboard (CRITIQUE)
+
+**Problème** : `GET /orders/event/:id/dashboard?supplierId=X` ne vérifiait pas si le `supplierId` de la requête correspondait au fournisseur réellement assigné à l'opérateur en DB. Un opérateur pouvait supprimer ou changer le paramètre URL pour voir les commandes d'un autre fournisseur.
+
+**Fix** (`backend/src/modules/orders/orders.controller.ts`) :
+- `findDashboard()` remplace `assertOperatorAccess()` par une requête directe qui retourne le membership complet
+- `membership.supplierId` est appliqué en priorité absolue sur le query param
+- Si `membership.supplierId` est null (pas d'assignation), le query param est utilisé tel quel
+
+**Fichiers modifiés :**
+- `backend/src/modules/orders/orders.controller.ts`
+
+### Audit P2 — Branding : impossible d'effacer un logo
+
+**Problème** : `@IsUrl()` rejetait les chaînes vides. Envoyer `logoUrl: ''` pour effacer un logo retournait 400.
+
+**Fix** : `@Transform(({ value }) => (value === '' ? null : value))` ajouté sur tous les champs branding des DTOs. `@IsOptional()` de class-validator saute la validation pour les valeurs null.
+
+**Fichiers modifiés :**
+- `backend/src/modules/organizations/dto/update-org-branding.dto.ts`
+- `backend/src/modules/events/dto/update-event.dto.ts`
+
+### Audit P3 — Dashboard admin : cartes manquantes
+
+**Fix** : cartes Équipe et Lieux ajoutées sur la page d'accueil admin (elles étaient dans la sidebar mais pas dans la grille de navigation).
+
+**Fichier modifié :**
+- `apps/admin/src/app/(admin)/dashboard/page.tsx`
+
+**Tests** : 273/273 passent. TypeScript : 0 erreurs.
+
+---
+
+## PHASE 12 — Blocs 12.7 · 12.8 · 12.9 — Admin Panel complet
+
+**Date :** 02/06/2026
+**Statut :** ✅ Terminée
+
+### BLOC 12.7 — Invitation opérateur & gestion d'équipe
+
+**Objectif** : permettre au Super Admin d'inviter un utilisateur par email et de l'assigner à un fournisseur précis depuis l'interface admin, sans toucher une ligne de code.
+
+**Fichiers créés :**
+- `backend/prisma/migrations/20260602_phase12_7_operator_supplier_assignment/migration.sql`
+- `backend/src/modules/organizations/dto/invite-member.dto.ts`
+- `apps/admin/src/app/(admin)/team/page.tsx`
+
+**Fichiers modifiés :**
+- `backend/prisma/schema.prisma` — `OrganizationMember.supplierId` + `Supplier.assignedOperators`
+- `backend/src/modules/organizations/organizations.service.ts` — +inviteByEmail, +getMembers, +removeMember
+- `backend/src/modules/organizations/organizations.controller.ts` — +GET /members, +POST /invite, +DELETE /members/:id, +PATCH /branding
+- `backend/src/modules/users/users.service.ts` — findByIdWithMemberships inclut supplier
+- `apps/admin/src/lib/api/admin-client.ts` — OrgMemberWithUser, apiGetOrgMembers, apiInviteMember, apiRemoveMember
+- `apps/admin/src/app/(admin)/layout.tsx` — +entrée nav "Équipe"
+
+**Décisions :**
+- Invitation par email (pas UUID) pour le Super Admin : plus ergonomique
+- `supplierId` nullable : seulement les OPERATOR en ont besoin
+- `onDelete: SetNull` : si un fournisseur est supprimé, l'assignment est nullifié (pas d'erreur FK)
+
+### BLOC 12.8 — Branding
+
+**Objectif** : permettre de configurer logo, couleur primaire et description sur les organisations et événements depuis le panel admin.
+
+**Fichiers créés :**
+- `backend/prisma/migrations/20260602_phase12_8_branding/migration.sql`
+- `backend/src/modules/organizations/dto/update-org-branding.dto.ts`
+
+**Fichiers modifiés :**
+- `backend/prisma/schema.prisma` — Organization +logoUrl/primaryColor/description ; Event idem
+- `backend/src/modules/events/dto/update-event.dto.ts` — +description, logoUrl, primaryColor
+- `backend/src/modules/events/events.service.ts` — update() persiste branding
+- `apps/admin/src/lib/api/admin-client.ts` — +apiUpdateOrgBranding, +apiUpdateEvent, types étendus
+- `apps/admin/src/app/(admin)/organizations/[id]/page.tsx` — section branding
+- `apps/admin/src/app/(admin)/events/[id]/page.tsx` — section branding
+
+**Décisions :**
+- URL-based en V1 : pas d'upload de fichiers (complexité S3/CDN reportée)
+- `primaryColor` validé en regex `#[0-9A-Fa-f]{6}` côté backend
+- Color picker natif `<input type="color">` + input hex text pour la précision
+
+### BLOC 12.9 — Dashboard opérateur filtré
+
+**Objectif** : l'opérateur assigné à "Buvette Nord" voit uniquement les commandes de ce stand.
+
+**Fichiers modifiés :**
+- `backend/src/modules/orders/orders.controller.ts` — `?supplierId` query param
+- `backend/src/modules/orders/orders.service.ts` — findDashboardByEvent(eventId, supplierId?)
+- `apps/operator/src/lib/api/orders-client.ts` — +fetchMeWithMemberships(), fetchDashboard(supplierId?)
+- `apps/operator/src/app/page.tsx` — lit supplierId depuis memberships, badge fournisseur
+- `apps/operator/src/app/dashboard/[eventId]/page.tsx` — badge supplier header + pass supplierId
+- `apps/operator/src/hooks/useDashboard.ts` — option supplierId?
+
+**Décisions :**
+- Filtre côté backend (pas client-side) : moins de data sur le wire, plus propre
+- Stockage localStorage (operator_supplier_id) : persisté entre les rechargements de page
+- Un seul supplier par operator en V1 (memberships[0].supplierId)
+
+**Vérification finale :**
+- Tests : 273/273 ✅
+- TypeScript backend : 0 erreurs ✅
+- TypeScript admin : 0 erreurs ✅
+- TypeScript operator : 0 erreurs ✅
+- ESLint : 0 warnings ✅
+
+---
+
+## PHASE 13 — Mobile V1 — Parcours Client Complet
+
+**Date :** 02/06/2026
+**Statut :** ✅ Terminée
+
+### Objectif
+Construire le parcours client mobile complet : scanner un QR code → ouvrir Break Eat → choisir un stand → ajouter des articles au panier → sélectionner un créneau → passer une fausse commande → voir la commande apparaître sur le dashboard opérateur.
+
+### BLOC 13.1 — Endpoints Publics Backend
+Fichiers :
+- `backend/src/modules/events/public-events.controller.ts` (NOUVEAU) — 3 routes unauthentifiées
+- `backend/src/modules/events/events.module.ts` (modifié) — +PublicEventsController
+
+3 routes :
+- `GET /api/v1/public/events/:eventId` → event + venue + suppliers
+- `GET /api/v1/public/events/:eventId/suppliers/:supplierId/products` → produits ACTIVE groupés par catégorie
+- `GET /api/v1/public/events/:eventId/slots` → créneaux OPEN
+
+### BLOC 13.2 — Demo Checkout
+Fichiers :
+- `backend/src/modules/cart/cart.service.ts` (modifié) — +demoCheckout()
+- `backend/src/modules/cart/cart.controller.ts` (modifié) — +POST /carts/:id/demo-checkout
+
+La méthode `demoCheckout()` :
+1. Vérifie ownership et status OPEN du panier
+2. Charge l'événement (organizationId, venueId)
+3. Résout le premier pickup point de l'event (obligatoire)
+4. Gèle les prix sur les CartItems
+5. Crée Order (PAID) + Payment (fake) + AuditTrail dans une transaction
+6. Retourne orderId + publicOrderNumber + totalCents
+
+### BLOC 13.3 — Stores Zustand
+- `apps/mobile/src/store/auth.store.ts` — token, user, rehydrate (AsyncStorage), setAuth, clearAuth
+- `apps/mobile/src/store/cart.store.ts` — items (CRUD), eventId, supplierId, selectedSlotId, totalCents(), totalItems()
+
+### BLOC 13.4 — Mobile API Client
+`apps/mobile/src/lib/api/mobile-api.ts` — injection auto du token depuis `useAuthStore.getState().token`. Pas de useEffect, appelable hors composants React.
+
+### BLOC 13.5 — 9 Screens
+1. `login.screen.tsx` — Login + Register, tabs, dark theme, redirect vers QRScanner ou EventHome (si pendingEventId)
+2. `qr-scanner.screen.tsx` — Camera arrière + useCodeScanner QR only, parse `breakeat://event/<uuid>`, viewfinder corners, fallback saisie manuelle
+3. `event-home.screen.tsx` — Affiche event + venue + stands, login hint si non connecté, initCart() avant navigation
+4. `supplier-catalog.screen.tsx` — SectionList groupée par catégorie, add/decrement/increment, floating cart bar
+5. `cart.screen.tsx` — Révision panier, slot sélectionné, CTA "Choisir créneau" ou "Commander"
+6. `slot-selector.screen.tsx` — Créneaux OPEN, barre de capacité, badge places, fullSlot disabled
+7. `checkout.screen.tsx` — Récap (customer, slot, items, total), fake Visa card, 3 étapes : createCart → addItems → demoCheckout
+8. `order-confirmation.screen.tsx` — Animation spring (scale 0→1), numéro de commande, lien suivi
+9. `order-tracking.screen.tsx` — Poll GET /orders/:id toutes 5s, steps PAID→ACCEPTED→PREPARING→READY, badge LIVE, arrêt polling si final
+
+### BLOC 13.6 — Navigation + Deep Links
+`root-navigator.tsx` :
+```typescript
+const linking = {
+  prefixes: ['breakeat://'],
+  config: { screens: { EventHome: 'event/:eventId' } },
+};
+```
+Rehydrate auth au démarrage. Stack conditionnel : Login first si !token.
+
+`app.config.js` : plugin VisionCamera + permissions camera iOS/Android.
+
+### Dépendances ajoutées
+- `react-native-vision-camera@^4.7.3`
+- `@react-native-async-storage/async-storage@^3.1.1`
+
+### Résultats qualité
+```
+pnpm typecheck (mobile)    exit 0  0 erreur
+pnpm lint (mobile)         exit 0  0 erreur
+pnpm typecheck (backend)   exit 0  0 erreur
+pnpm lint (backend)        exit 0  0 warning
+pnpm test (backend)        273/273  22 suites  0 failure
+```
+
+### Prochaine étape
+Phase 14 — Operator Dashboard V1 : vue filtrée par fournisseur + transitions commandes depuis le dashboard.
+
+---
+
+## PHASE 14 — Groupes, accès privé aux événements & Back Office (SUPER_ADMIN)
+
+**Date :** 03/06/2026
+**Statut :** ✅ Terminée
+**Durée :** 1 session
+
+### Objectif
+
+Trois livrables liés :
+1. **Groupes/segments** rattachés à l'organisation (`organizationId`), avec adhésion **manuelle** (par email) **et** **auto-rattachement par domaine email** (`source = DOMAIN`).
+2. **Accès privé au niveau de l'événement** : `EventVisibility PUBLIC | PRIVATE` + table de liaison `EventGroup`. L'enforcement est **côté serveur** → un non-membre reçoit un **404** (l'événement n'existe pas pour lui).
+3. **Back Office** plateforme (`apps/backoffice`, port 3003, garde `SUPER_ADMIN`) : KPIs globaux (CA HT/TTC, nb commandes, panier moyen, comptes, organisations), gestion des organisations, supervision cross-tenant des groupes.
+
+Usage #2 (codes promo ciblés par groupe) : **conçu mais non construit** — les groupes sont prévus pour le réutiliser plus tard.
+
+### BLOC 14.1 — Schéma Prisma + migration
+
+```
+backend/prisma/schema.prisma                  ~ +enum EventVisibility {PUBLIC|PRIVATE} (@@map event_visibility)
+                                                ~ Event.visibility (@default PUBLIC) + Event.groups EventGroup[]
+                                                + model Group (organizationId, name, description?, emailDomain?) @@unique([organizationId,name])
+                                                + model GroupMember (groupId, userId, source GroupMemberSource @default MANUAL) @@unique([groupId,userId])
+                                                + model EventGroup (eventId, groupId) @@id([eventId,groupId]) @@index([groupId])
+                                                + enum GroupMemberSource {MANUAL|DOMAIN}
+backend/prisma/migrations/20260603_phase14_groups_event_visibility/migration.sql   +
+```
+
+### BLOC 14.2 — GroupsModule backend (CRUD org-scoped + membres)
+
+```
+backend/src/modules/groups/groups.module.ts        +
+backend/src/modules/groups/groups.controller.ts    + base organizations/:orgId/groups (JwtAuthGuard)
+backend/src/modules/groups/groups.service.ts        + CRUD + membres + canAccessEvent()
+backend/src/modules/groups/dto/create-group.dto.ts  + (name 1..80, description? ..280, emailDomain? regex)
+backend/src/modules/groups/dto/update-group.dto.ts  +
+backend/src/modules/groups/dto/add-group-member.dto.ts  + (email @IsEmail)
+```
+
+Routes : `POST /` · `GET /` · `GET /:groupId` · `PATCH /:groupId` · `DELETE /:groupId` · `GET /:groupId/members` · `POST /:groupId/members` · `DELETE /:groupId/members/:userId`. Écriture réservée `ORG_ADMIN`/`MANAGER` (SUPER_ADMIN bypass).
+
+### BLOC 14.3 — Auto-rattachement par domaine
+
+`GroupsService.applyDomainMembershipsForUser()` : à la création/activation d'un utilisateur, on rattache automatiquement (`source = DOMAIN`) tous les groupes de son org dont `emailDomain` correspond au domaine de son email. La création d'un groupe avec `emailDomain` backfill les utilisateurs existants.
+
+### BLOC 14.4 — Enforcement accès privé
+
+`GroupsService.canAccessEvent(eventId, userId)` : `PUBLIC → true` ; `PRIVATE → true` seulement si l'utilisateur est membre d'un groupe lié à l'événement ; événement inconnu → `false`. Branché dans `public-events.controller.ts` (`OptionalJwtAuthGuard`) → **404** identique pour non-membre (aucune fuite d'existence).
+
+### BLOC 14.5 — BackofficeModule backend (SUPER_ADMIN)
+
+```
+backend/src/modules/backoffice/backoffice.module.ts      +
+backend/src/modules/backoffice/backoffice.controller.ts  + base /backoffice (@Roles SUPER_ADMIN)
+backend/src/modules/backoffice/backoffice.service.ts      + KPIs globaux + orgs CRUD/activation
+backend/src/modules/backoffice/backoffice.service.spec.ts +
+backend/src/modules/backoffice/dto/create-backoffice-org.dto.ts  +
+backend/src/modules/backoffice/dto/update-backoffice-org.dto.ts  +
+```
+
+**KPIs** (`getGlobalKpis`) : `revenue{caTtcCents, caHtCents, vatRate}`, `ordersCount`, `averageBasket{htCents, ttcCents}`, `accountsCount`, `organizationsCount`. **CA HT = round(CA TTC / (1 + vatRate))**, `vatRate = 0.10` (resto sur place, configurable via `app.reporting.vatRate`).
+
+### BLOC 14.6 — apps/backoffice (port 3003)
+
+```
+apps/backoffice/...                          + app Next.js 15 dédiée (TanStack Query, @break-eat/brand)
+  (backoffice)/overview/page.tsx             + KPIs globaux
+  (backoffice)/organizations/page.tsx        + liste + création + activer/désactiver
+  (backoffice)/organizations/[id]/page.tsx   + détail (profil/marque, membres, activation)
+  (backoffice)/groups/page.tsx               + supervision cross-tenant (lecture seule, groupée par org)
+  components/status-badge.tsx                + badge statut org partagé (hors route)
+  login/page.tsx · layout.tsx · page.tsx     + auth SUPER_ADMIN (clés backoffice_token/backoffice_user)
+  public/logo-full.png · logo-mark.png       + (copiés depuis admin)
+  .gitignore                                 + (.vercel, *.tsbuildinfo)
+```
+
+**Note App Router** : un fichier de route ne peut exporter que `default` + noms reconnus — `StatusBadge` extrait dans `components/` (jamais exporté depuis un `page.tsx`).
+
+### BLOC 14.7 — Dashboard CLUB : groupes + visibilité
+
+**Backend**
+```
+backend/src/modules/events/dto/update-event.dto.ts   ~ +visibility? (EventVisibility) +groupIds? (UUID[])
+backend/src/modules/events/events.service.ts          ~ update(): set visibility + remplacement transactionnel
+                                                          du set EventGroup (validation appartenance org) ;
+                                                          findOne() inclut groups{groupId} ;
+                                                          EventWithSuppliers.groups? optionnel
+backend/src/modules/events/events.service.spec.ts      ~ +4 tests (visibility, remplacement groupes,
+                                                          vidage [], rejet groupe cross-org)
+```
+`groupIds` **remplace** le set de liaison quand fourni (`[]` = vide ; omis = inchangé). Tous les groups fournis doivent appartenir à l'org → sinon `400` avant toute écriture partielle. Écriture en `$transaction` (update + deleteMany + createMany).
+
+**Frontend (apps/admin)**
+```
+apps/admin/src/lib/api/admin-client.ts        ~ +type EventVisibility, AdminEvent.visibility?/groups?
+                                                 ~ apiUpdateEvent +visibility?/groupIds?
+                                                 + types Group/GroupMember + 8 fonctions groupes
+apps/admin/src/app/(admin)/layout.tsx          ~ +entrée nav { /groups, 🏷️, "Groupes" }
+apps/admin/src/app/(admin)/groups/page.tsx     + liste + création (nom, description, domaine)
+apps/admin/src/app/(admin)/groups/[id]/page.tsx + détail : édition méta, membres (ajout email/retrait,
+                                                   badge Manuel/Domaine), zone de suppression
+apps/admin/src/app/(admin)/events/[id]/page.tsx ~ +carte « 🔒 Accès & visibilité » (sélecteur public/privé
+                                                   + multi-select groupes si privé)
+apps/admin/src/app/(admin)/events/page.tsx      ~ +badge « 🔒 Privé » sur les événements privés
+```
+
+### Vérifications finales
+
+```
+pnpm typecheck (backend)   → exit 0 — 0 erreur
+pnpm test (backend)        → 291/291 — 23 suites — 0 failure
+pnpm typecheck (admin)     → exit 0 — 0 erreur
+pnpm build (admin)         → ✓ compiled — 14 routes (+/groups +/groups/[id])
+pnpm build (backoffice)    → ✓ 7 routes (bloc 14.6)
+```
+
+### Prochaine étape
+Audit Codex externe de la Phase 14 (P1/P2/P3) ; puis reconstruction propre du **dashboard opérateur**.
+
+---
+
+## PHASE 12 — Admin Panel V1 Complet + Operator Home V2
+
+**Date :** 02/06/2026
+**Statut :** ✅ Terminée
+**Durée :** 1 session
+
+### Objectif
+
+Compléter le panel admin pour permettre la configuration complète d'un événement de A à Z, et refaire l'accueil opérateur avec un sélecteur d'événements dynamique.
+
+### Fichiers créés / modifiés
+
+```
+apps/admin/src/lib/api/admin-client.ts          ~ +12 fonctions API (Venue, Category, Product, PickupPoint, Slot)
+apps/admin/src/app/(admin)/venues/page.tsx       + CRUD lieux
+apps/admin/src/app/(admin)/suppliers/[id]/page.tsx  + Catégories + produits par fournisseur
+apps/admin/src/app/(admin)/events/[id]/page.tsx  ~ +Pickup Points +Slots +QR Code +liens
+apps/admin/src/app/(admin)/layout.tsx            ~ +Lieux +Démo Spartiates dans nav
+apps/admin/src/app/(admin)/demo-setup/page.tsx   + Wizard one-click Spartiates Hockey
+apps/operator/src/app/page.tsx                   ~ Home refaite : login dark + event selector
+```
+
+### Vérifications finales
+
+```
+pnpm typecheck (admin)     → exit 0 — 0 erreur TypeScript
+pnpm lint (admin)          → exit 0 — 0 erreur ESLint
+pnpm typecheck (operator)  → exit 0 — 0 erreur TypeScript
+pnpm lint (operator)       → exit 0 — 0 erreur ESLint
+pnpm test (backend)        → 273/273 — 22 suites — 0 failure
+```
+
+---
+
+## PHASE 11 — Admin Panel
+
+**Date :** 02/06/2026
+**Statut :** ✅ Terminée
+**Durée :** 1 session
+
+### Objectif
+
+Construire un panel d'administration Next.js 15 complet, avec authentification JWT, gestion des organisations, événements, fournisseurs, feature flags, paramètres et simulateur.
+
+### BLOC 11.1 — Backend : endpoint memberships
+
+**Fichiers modifiés :**
+```
+backend/src/modules/users/users.service.ts   — +findByIdWithMemberships()
+backend/src/modules/auth/auth.service.ts     — +meWithMemberships()
+backend/src/modules/auth/auth.controller.ts  — +GET /auth/me/memberships
+```
+
+**Décision :** Plutôt que de créer un endpoint `/organizations?userId=...`, on étend `GET /auth/me` avec un variant `/memberships` qui inclut les organisations de l'utilisateur connecté. Plus simple, plus sécurisé (l'utilisateur ne peut voir que ses propres orgs).
+
+### BLOC 11.2 — Infrastructure admin app
+
+**Fichiers créés / modifiés :**
+```
+apps/admin/next.config.ts                    ~ +NEXT_PUBLIC_API_URL env block
+apps/admin/src/lib/api/admin-client.ts       + client API centralisé (300 lignes)
+```
+
+**Décision clé :** Toute la logique de session (localStorage, 401 auto-redirect) est centralisée dans `admin-client.ts`. Les pages ne font que `import { apiXxx, getOrgId } from '@/lib/api/admin-client'`.
+
+### BLOC 11.3 — Pages admin (10 pages)
+
+**Fichiers créés / modifiés :**
+```
+apps/admin/src/app/page.tsx                                   ~ redirect root
+apps/admin/src/app/login/page.tsx                             + login form
+apps/admin/src/app/(admin)/layout.tsx                         + sidebar protégée
+apps/admin/src/app/(admin)/dashboard/page.tsx                 + dashboard
+apps/admin/src/app/(admin)/organizations/[id]/page.tsx        + org detail
+apps/admin/src/app/(admin)/events/page.tsx                    + events list + create
+apps/admin/src/app/(admin)/events/[id]/page.tsx               + event detail
+apps/admin/src/app/(admin)/feature-flags/page.tsx             + feature flags CRUD
+apps/admin/src/app/(admin)/settings/page.tsx                  + app settings CRUD
+apps/admin/src/app/(admin)/simulator/page.tsx                 + simulateur
+```
+
+### Vérifications finales
+
+```
+pnpm typecheck (backend)   → exit 0 — 0 erreur
+pnpm lint (backend)        → exit 0 — 0 erreur
+pnpm typecheck (admin)     → exit 0 — 0 erreur
+pnpm lint (admin)          → exit 0 — 0 erreur
+pnpm test (backend)        → 273/273 — 22 suites — 0 failure
+```
+
+---
+
+## AUDIT GLOBAL — 2026-06-02
+
+**Date :** 02/06/2026
+**Statut :** ✅ Terminé
+**Durée :** 1 session
+
+### Objectif
+
+Passer en revue l'ensemble du code produit en phases 1→10 et garantir :
+- TypeScript : 0 erreur (`pnpm typecheck`)
+- ESLint : 0 erreur (`pnpm lint`)
+- Tests : 273/273 verts (`pnpm test`)
+- Structure : modules, guards, migrations, config cohérents
+
+### Bugs TypeScript corrigés (4)
+
+| Fichier | Erreur | Correction |
+|---------|--------|-----------|
+| `backend/src/logger/json-logger.ts` | `formatMessage` conflit avec ConsoleLogger public | Renommé `serializeMessage` |
+| `backend/src/modules/flaix/flaix.controller.ts:73` | `organizationId_userId` clé Prisma incorrecte | → `userId_organizationId` |
+| `backend/src/modules/orders/orders.controller.ts:227` | même erreur clé composée | → `userId_organizationId` |
+| `apps/operator/next.config.ts` | `hideSourceMaps` inexistant dans @sentry/nextjs v9 | → `sourcemaps: { deleteSourcemapsAfterUpload: true }` |
+
+### Bugs ESLint corrigés (8)
+
+| Fichier | Erreur |
+|---------|--------|
+| `flaix.service.ts` | Params `context`, `userId` inutilisés → `_context`, `_userId` |
+| `flaix.service.spec.ts` | Import `TestingModule` inutilisé |
+| `realtime.gateway.spec.ts` | Variable `configService` inutilisée |
+| `simulator.controller.ts` | Import `Body` inutilisé |
+| `simulator.service.spec.ts` | Import `OrderActorType` inutilisé |
+| `rush.spec.ts` | Imports `NotFoundException` + `OrderActorType` inutilisés |
+| `order-loss.spec.ts` | Assertion non-null `!` remplacée par `if (o1)` |
+| `useDashboard.ts` | `eslint-disable react-hooks/exhaustive-deps` sans plugin → supprimé |
+
+### Améliorations structure
+
+```
+backend/src/config/app.config.ts — +appEnv (APP_ENV) +logLevel (LOG_LEVEL)
+.env.example                     — +APP_ENV, LOG_LEVEL, NEXT_PUBLIC_SENTRY_DSN_OPERATOR, SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT
+```
+
+### Vérification structurelle
+
+- `app.module.ts` : 20 modules ✅
+- `prisma.module.ts` : `@Global()` ✅
+- 7 migrations (phases 2, 3, 4, 5, 5-audit, 7, 9) ✅
+- Guards : `JwtAuthGuard`, `DemoGuard`, `requireOrgAccess` ✅
+- `.gitignore` : pas de `*.json` global ✅
+
+### Score final
+
+```
+pnpm typecheck (backend)   → exit 0 — 0 erreur
+pnpm typecheck (operator)  → exit 0 — 0 erreur
+pnpm lint (backend)        → exit 0 — 0 erreur
+pnpm lint (operator)       → exit 0 — 0 erreur
+pnpm test (backend)        → 273/273 — 22 suites — 0 failure — 21.5s
+```
+
+---
+
+## REFONTE DESIGN — Package @break-eat/brand (white-label white/orange)
+
+**Date :** 03/06/2026
+**Statut :** ✅ Terminée (surfaces web admin + operator)
+
+### Contexte
+Refonte visuelle de toutes les surfaces web vers l'identité Break Eat : fond **blanc** neutre (aucune forme décorative), **orange vif `#FC4002`**, police **Fredoka** partout, wordmark officiel **« BREAKEAT »** (artwork PNG, Raleway retiré), logo **« B éclair »** (lockup complet sur login, mark seul sur dashboard). Décision : factoriser les tokens dans un **package partagé** = source de vérité unique white-label.
+
+### BLOC — Package partagé `@break-eat/brand`
+
+**Fichiers créés :**
+```
+packages/brand/package.json          — nom @break-eat/brand, consommé en workspace:*
+packages/brand/src/brand.ts          — objet BRAND + type Brand
+packages/brand/src/BreakEatLogo.tsx  — composant logo (lockup + mark)
+packages/brand/src/index.ts          — barrel export
+```
+
+**Tokens `BRAND` (palette canonique) :**
+```
+orange #FC4002 · orangeDark #DA3702 · orangeSoft #FDB9A3 · orangeTint rgba(252,64,2,0.08)
+ink #1c1917 · inkSoft #44403c · grey #a8a29e · border #ece3dd
+bg #ffffff · bgSubtle #faf7f5
+shadowSoft 0 12px 44px rgba(252,64,2,0.10) · shadowButton 0 8px 20px rgba(252,64,2,0.28)
+font var(--font-fredoka), system-ui, -apple-system, sans-serif
+```
+
+**Câblage :**
+- `apps/admin/next.config.ts` + `apps/operator/next.config.ts` → `transpilePackages: ['@break-eat/brand']`
+- `apps/admin/package.json` → dépendance `@break-eat/brand: workspace:*`
+- Shims de compatibilité (imports existants `@/lib/brand` et `@/components/brand/BreakEatLogo`) : re-export du package.
+
+### BLOC — Rebrand admin (chrome + 10 pages internes)
+
+**Chrome :** `app/layout.tsx` (Fredoka + wordmark), `(admin)/layout.tsx` (sidebar blanche, nav active orange), `dashboard/page.tsx`, `login/page.tsx` (lockup), `globals.css`, `page.tsx`.
+
+**Pages internes (10) converties aux tokens BRAND :**
+```
+(admin)/team/page.tsx
+(admin)/venues/page.tsx
+(admin)/events/page.tsx
+(admin)/events/[id]/page.tsx
+(admin)/feature-flags/page.tsx
+(admin)/settings/page.tsx
+(admin)/demo-setup/page.tsx
+(admin)/suppliers/[id]/page.tsx
+(admin)/organizations/[id]/page.tsx
+(admin)/simulator/page.tsx
+```
+
+**Convention de mapping appliquée à l'identique :**
+
+| Ancien (palette bleu/gris) | Nouveau (token BRAND) |
+|----------------------------|-----------------------|
+| `#2563eb` / `#3b82f6` (primaire) | `orange` (hover `orangeDark`) |
+| CTA sombre « + Nouveau… » | `orange` + hover |
+| nav sombre `#111827` / `#1f2937` | `ink` |
+| titres `#111827` | `ink` |
+| labels `#374151` / `#1f2937` | `inkSoft` |
+| muted `#6b7280` / `#9ca3af` | `grey` |
+| bordures `#d1d5db` / `#e5e7eb` | `border` |
+| fonds clairs `#f9fafb` / `#f3f4f6` | `bgSubtle` |
+| cartes `#fff` | `bg` **+ border** |
+| color-picker white-label default `#2563eb` | `orange` |
+
+**Couleurs sémantiques NON touchées :** erreur rouge, succès vert, warning ambre, money `#059669`, badges rôle/scope catégoriels, légende lifecycle `STATUS_COLOR` (PAID/ACCEPTED/PREPARING/READY/PICKED_UP/COMPLETED/RECOVERED/CANCELLED — partagée avec l'opérateur), `#7c3aed` rush simulateur.
+
+### BLOC — Rebrand operator
+`apps/operator/src/app/page.tsx` (login), `layout.tsx` (shell), `globals.css` — même identité white/orange + Fredoka.
+
+### Vérification
+```
+pnpm --filter @break-eat/admin typecheck   → exit 0 — 0 erreur
+grep (admin) chrome bleu/gris/bordure       → 0 résiduel
+  (seules subsistent les couleurs lifecycle sémantiques #3b82f6 PAID / #6b7280 COMPLETED — intentionnel)
+```
+
+### Prochaine étape
+Reconstruire le **dashboard opérateur** à partir des captures du product owner (écrans par créneau, boutons de statut, table produits), puis bâtir le **back office** (`apps/backoffice`, port 3003, SUPER_ADMIN, KPIs/CA/comptes/groupes).
+
+---
+
+## REFONTE DESIGN — Board opérateur + centralisation STATUS_COLORS + LoginForm partagé
+
+**Date :** 06/06/2026
+**Statut :** ✅ Terminée (alignement de marque du board ; rebuild par créneau toujours en attente du workflow product owner)
+
+### Contexte
+La refonte white-label (`@break-eat/brand`, 03/06) avait rebrandé le **login** et le **shell** de l'app operator, mais le **board opérateur lui-même** était resté sombre (header `#1f2937`, « 🍔 BREAK EAT », chips bleues `#1e3a5f`/`#3b82f6`, boutons gris `#374151`) et la table des couleurs de statut était **dupliquée 3×** (OrderCard, DashboardColumn, NotificationPopup). Cet incrément termine l'alignement et établit `StatusBadge.tsx` comme **source de vérité unique** des couleurs + libellés de statut.
+
+### BLOC — Source de vérité unique des statuts
+**Fichier modifié :**
+```
+apps/operator/src/components/StatusBadge.tsx
+  — export const STATUS_COLORS  (couleur par StatusVariant, 8 statuts)
+  — export const STATUS_LABELS  (libellé FR par statut)
+```
+Palette : `PAID` orange `#FC4002` (à traiter) · `ACCEPTED` `#2563EB` · `PREPARING` `#7C3AED` · `READY` `#059669` · `PICKED_UP` `#0891B2` · `COMPLETED` `#78716C` · `CANCELLED` `#DC2626` · `RECOVERED` `#D97706`.
+
+### BLOC — Déduplication + tokens BRAND (composants kanban)
+**Fichiers modifiés :**
+```
+apps/operator/src/components/OrderCard.tsx        — import BRAND + STATUS_COLORS ; suppression STATUS_COLORS local ; borderLeft 4px solid color ; boutons d'action mappés sur STATUS_COLORS
+apps/operator/src/components/DashboardColumn.tsx  — import BRAND + STATUS_COLORS ; suppression maps COLUMN_BG/HEADER_COLOR ; headerColor = STATUS_COLORS[status] ; conteneur bgSubtle + borderTop 3px headerColor
+apps/operator/src/components/NotificationPopup.tsx — bg = isReady ? STATUS_COLORS.READY : BRAND.orange
+```
+
+### BLOC — LoginForm opérateur partagé
+**Fichier créé :**
+```
+apps/operator/src/components/LoginForm.tsx — login unique (BreakEatLogo size=54 showWordmark, « Portail opérateur », CTA orange), stocke operator_token
+```
+**Fichiers modifiés :**
+```
+apps/operator/src/app/page.tsx                       — utilise <LoginForm> (suppression du LoginForm inline)
+apps/operator/src/app/dashboard/[eventId]/page.tsx   — utilise <LoginForm> (suppression de l'ANCIEN LoginForm sombre inline)
+```
+
+### BLOC — Header dashboard white-label
+**Fichier modifié :** `apps/operator/src/app/dashboard/[eventId]/page.tsx`
+- header blanc + `borderBottom border` : `BreakEatLogo size=26` + wordmark « BREAKEAT » + sous-titre `grey` « Dashboard opérateur »
+- chip fournisseur orange (`orangeTint`/`orangeSoft`/`orangeDark`, 🏪 conservé) ; compteur « commandes actives » en `grey`
+- helper `HeaderButton` (blanc, bordure `border`, hover orange) pour ↺ / plein écran ⊞⊠ / Déconnexion
+- `ConnectionBadge` (sémantique vert/ambre/rouge) **conservé** ; wrapper `<main>` `bgSubtle` + Fredoka
+
+### Vérification
+```
+pnpm --filter @break-eat/operator typecheck   → exit 0
+pnpm --filter @break-eat/operator lint        → exit 0
+pnpm --filter @break-eat/operator build       → ✓ 4 routes (/dashboard/[eventId] 7.56 kB)
+STATUS_COLORS / STATUS_LABELS : définis à UN SEUL endroit (était : 3 copies)
+```
+
+### Périmètre (important)
+Alignement de **marque** du board uniquement. La **restructuration par créneau** (board groupé par créneau au lieu de par statut) reste en attente de la démonstration du workflow par le product owner (« celui où je reçois toutes commandes de chaque créneau je te montrerais comment je fonctionne »). Le board groupe encore par **STATUT** (kanban PAID → RECOVERED).
+
+---
+
+## PHASE 11 — Écrans opérateur configurables (fondation backend : 11.1 + 11.2)
+
+**Date :** 07/06/2026
+**Statut :** ✅ Fondation backend terminée (schéma + migration + module CRUD/résolution). UI admin (11.3), rendu opérateur (11.4), contrat FlaixPrepPlan (11.5) → en attente.
+
+### Contexte
+Le board opérateur doit devenir **paramétrable** : ajouter des écrans, les afficher seulement pour certains créneaux, avec conditions d'affichage (statuts, fournisseurs, catégories/produits). Décision de co-conception : on commence par les **écrans configurables** modélisés comme **templates réutilisables au niveau organisation** (définis une fois — ex. « Spartiates buvette » — puis appliqués à plusieurs événements via une table de jonction).
+
+### BLOC 11.1 — Schéma Prisma + migration
+**Fichier modifié :**
+```
+backend/prisma/schema.prisma
+  — enum SlotKind { IMMEDIATE PAUSE_1 PAUSE_2 GENERAL CUSTOM }
+  — Slot.kind  SlotKind @default(IMMEDIATE)   (moment de récupération PORTABLE entre événements ; null-slot ⇒ IMMEDIATE)
+  — enum OperatorScreenKind { ORDERS_QUEUE READY RECOVERED GENERAL }
+  — model OperatorScreenTemplate  (org-scoped : name, kind, icon?, sortOrder, enabled, slotKinds[], statuses[] (OrderStatus), supplierIds[], filters Json, timestamps)
+  — model EventOperatorScreen     (jonction : eventId+templateId, sortOrder?/enabled override par événement, @@unique([eventId,templateId]))
+  — Organization.operatorScreenTemplates[] · Event.operatorScreens[]
+```
+**Fichier créé :**
+```
+backend/prisma/migrations/20260606_phase11_operator_screens/migration.sql
+  — CREATE TYPE "slot_kind" + "operator_screen_kind"
+  — ALTER TABLE "slots" ADD COLUMN "kind" "slot_kind" NOT NULL DEFAULT 'IMMEDIATE'
+  — CREATE TABLE "operator_screen_templates" (slot_kinds "slot_kind"[] DEFAULT ARRAY[]::, statuses "order_status"[], supplier_ids TEXT[], filters JSONB DEFAULT '{}', TIMESTAMP(3))
+  — CREATE TABLE "event_operator_screens"
+  — FK ON DELETE CASCADE + unique (event_id, template_id) + index (event_id), (organization_id)
+```
+Appliquée via `prisma migrate deploy` (non destructif — conforme au garde-fou Prisma, pas de `migrate dev`/`reset`), puis `prisma generate`.
+
+### BLOC 11.2 — OperatorScreensModule (backend)
+**Fichiers créés :**
+```
+backend/src/modules/operator-screens/operator-screens.service.ts
+  — CRUD templates (org-scoped ; écriture ORG_ADMIN/MANAGER, lecture tout membre, SUPER_ADMIN bypass)
+  — applyToEvent/listEventScreens/updateEventScreen/removeEventScreen (jonction ; résout event→org)
+  — resolveForEvent(eventId, userId, supplierIdParam?) : statuts par défaut depuis kind (DEFAULT_STATUSES), sortOrder effectif = lien ?? template, pin fournisseur (membership.supplierId ?? param), masque écrans d'un autre fournisseur, tri sortOrder→name
+  — static sanitizeFilters (whitelist clés + dédup) · static mapKnownError (P2002→Conflict)
+  — exports ScreenFilters, ResolvedOperatorScreen
+backend/src/modules/operator-screens/operator-screen-templates.controller.ts  — organizations/:orgId/operator-screens (POST/GET/GET :screenId/PATCH/DELETE)
+backend/src/modules/operator-screens/event-operator-screens.controller.ts     — events/:eventId/operator-screens (GET /resolved ?supplierId, GET, POST, PATCH/DELETE :linkId)
+backend/src/modules/operator-screens/operator-screens.module.ts
+backend/src/modules/operator-screens/dto/create-operator-screen.dto.ts
+backend/src/modules/operator-screens/dto/update-operator-screen.dto.ts
+backend/src/modules/operator-screens/dto/apply-event-screen.dto.ts
+backend/src/modules/operator-screens/dto/update-event-screen.dto.ts
+backend/src/modules/operator-screens/operator-screens.service.spec.ts          — 10 tests
+```
+**Fichier modifié :**
+```
+backend/src/app.module.ts — OperatorScreensModule enregistré (section « Phase 11 »)
+```
+**Note `filters`** : gardé opaque (`@IsObject`) au DTO — `whitelist`+`forbidNonWhitelisted` ne récurse pas dans un objet opaque, donc les clés internes survivent — puis **sanitizé serveur** (`categoryIds`/`excludeCategoryIds`/`productIds`/`excludeProductIds`/`showRecap`).
+
+### Vérification
+```
+pnpm --filter @break-eat/backend typecheck   → exit 0
+pnpm --filter @break-eat/backend lint         → 0 erreur
+operator-screens.service.spec.ts              → 10/10 (sanitizeFilters ×3, createTemplate ×2, resolveForEvent ×3, applyToEvent ×2)
+migration                                     → appliquée via prisma migrate deploy ; client régénéré
+```
+
+### BLOC 11.3 — UI admin (config templates + application par événement)
+**Fichiers créés :**
+```
+apps/admin/src/components/operator-screens/screen-form.tsx
+  — builder partagé : ScreenConditionsForm + ScreenDraft/EMPTY_DRAFT + templateToDraft/draftToInput
+  — libellés source unique : KIND_LABELS / SLOT_KIND_LABELS / STATUS_LABELS (+ ordres)
+  — UI différée : productIds/excludeProductIds/excludeCategoryIds câblés serveur mais non exposés (couvre categoryIds + showRecap)
+apps/admin/src/app/(admin)/operator-screens/page.tsx        — liste (cartes summarize() + badge kind + compteur événements) + création inline
+apps/admin/src/app/(admin)/operator-screens/[id]/page.tsx   — édition (ScreenConditionsForm) + suppression (zone de danger, bannière de comptage)
+```
+**Fichiers modifiés :**
+```
+apps/admin/src/lib/api/admin-client.ts
+  — section Operator Screens : types (OperatorScreenTemplate, EventOperatorScreen, ScreenFilters, inputs) + 9 fonctions
+  — kind?: SlotKind ajouté à l'interface Slot
+apps/admin/src/app/(admin)/layout.tsx                       — nav « 🖥️ Écrans opérateur » (entre Groupes et Feature Flags)
+apps/admin/src/app/(admin)/events/[id]/page.tsx             — carte « 🖥️ Écrans opérateur » (appliquer / réordonner ▲▼ / activer / retirer)
+```
+**Architecture** : deux surfaces calquées sur le backend — CRUD templates = page top-level `/operator-screens` (comme Groupes) ; application par événement = carte sur la page détail (comme l'accès par groupe). Ordre effectif d'un écran appliqué = `lien.sortOrder ?? template.sortOrder` ; le réordonnancement persiste un ordre explicite `0..n-1` en ne PATCHant que les lignes dont le `sortOrder` a dérivé.
+
+### Vérification (11.3)
+```
+pnpm --filter @break-eat/admin typecheck   → exit 0
+pnpm --filter @break-eat/admin lint         → 0 erreur
+pnpm --filter @break-eat/admin build        → ✓ 15 routes (/operator-screens 2.41 kB, /operator-screens/[id] 2.17 kB, /events/[id] 7.45 kB)
+```
+
+### BLOC 11.4 — Board opérateur : rendu des écrans configurables (onglets + filtrage + Récap)
+**Fichiers créés :**
+```
+apps/operator/src/lib/screens/filter.ts
+  — helpers purs : itemMatchesFilters / hasActiveFilters / orderMatchesScreen / buildScreenColumns / countScreenOrders
+apps/operator/src/components/RecapPanel.tsx
+  — Accès rapide (recherche n° commande / nom client → 8 résultats) + Récap produits (agrégation catégorie→produits, N cmd · N u)
+```
+**Fichiers modifiés :**
+```
+backend/src/modules/orders/orders.service.ts
+  — findDashboardByEvent enrichi : slotKind + customerName par commande, categoryId + categoryName par ligne
+  — catégories résolues via UN product.findMany batché (OrderItem n'a pas de relation product)
+  — PICKED_UP ajouté à DASHBOARD_STATUSES (écran « récupérées » = [PICKED_UP, RECOVERED])
+backend/src/modules/orders/orders.service.spec.ts
+  — mock prisma.product.findMany + 2 tests (enrichissement + skip lookup sans lignes) + maj test statuts
+apps/operator/src/lib/api/orders-client.ts
+  — Order (+slotKind/customerName), OrderItem (+categoryId/categoryName) ; types écrans résolus + fetchResolvedScreens
+apps/operator/src/app/dashboard/[eventId]/page.tsx
+  — ScreenTabBar (onglet par écran, compteur live) ; board = colonnes de l'écran actif (buildScreenColumns) ; fallback Kanban fixe si aucun écran ; toggle header « 📊 Récap »
+```
+**Le verrou** : le payload exposait `slotId` (pas `slot.kind`) et `productId` (pas la catégorie) → deux écrans ne différant que par le créneau auraient rendu un contenu identique. D'où l'aplatissement serveur de `slotKind`/`categoryId`/`categoryName` (+ `customerName` pour l'appel au retrait et la recherche). **Fallback** : sans écran configuré, le board garde le Kanban fixe historique (rétrocompat). **Différé** : regroupement « commandes similaires » (11.4c) + plan Flaix (11.5).
+
+### Vérification (11.4)
+```
+pnpm --filter @break-eat/backend typecheck   → exit 0
+pnpm --filter @break-eat/backend lint         → 0 erreur
+pnpm --filter @break-eat/backend jest orders  → 88/88 (3 suites)
+pnpm --filter @break-eat/operator typecheck   → exit 0
+pnpm --filter @break-eat/operator lint         → 0 erreur
+pnpm --filter @break-eat/operator build        → ✓ (/dashboard/[eventId] 9.37 kB)
+```
+
+### BLOC 11.4c — Regroupement visuel « X commandes similaires »
+**Fichiers créés :**
+```
+apps/operator/src/lib/screens/grouping.ts
+  — groupSimilarOrders : cluster des commandes par composition de panier identique (productId:quantity trié), FIFO-préservé, singletons = groupe de 1
+apps/operator/src/components/OrderGroupCard.tsx
+  — carte « empilée » : chip 🧩 N commandes, total articles + âge de la plus ancienne, badges de n°, composition partagée (× total), bouton batch (Accepter/Préparer/… les N) + dépliage « Voir les N » → OrderCard individuelles
+```
+**Fichiers modifiés :**
+```
+apps/operator/src/components/OrderCard.tsx
+  — `elapsed` exporté (réutilisé par la carte de groupe)
+apps/operator/src/components/DashboardColumn.tsx
+  — API : orders: Order[] + toCardProps + grouped + onBatchAdvance ; rend des OrderGroupCard quand grouped, cartes plates sinon
+apps/operator/src/app/dashboard/[eventId]/page.tsx
+  — toggle header « 🧩 Grouper » (off par défaut, réversible) ; batchAdvance(orders) fait avancer tout le groupe au statut suivant (Promise.all) puis loadSnapshot()
+apps/operator/src/stories/DashboardColumn.stories.tsx
+  — stories migrées vers Order[] + toCardProps ; nouvelle story « 6 commandes identiques (groupées) »
+```
+**Principe** : le regroupement est un **affichage pur owned by Break** — aucune commande n'est fusionnée ou réordonnée, chacune garde son cycle de vie. Board groupé = **sur-ensemble** strict du board plat (singletons inchangés). Toggle **off par défaut** → comportement identique tant que l'opérateur n'active pas. Distinct de la difficulté Flaix (11.5), axe **séparé** posé par-dessus plus tard. Le compteur d'en-tête de colonne reste le nombre de **commandes** (pas de groupes).
+
+### Vérification (11.4c)
+```
+pnpm --filter @break-eat/operator typecheck → exit 0
+pnpm --filter @break-eat/operator lint       → 0 erreur
+pnpm --filter @break-eat/operator build      → ✓ (/dashboard/[eventId] 10.3 kB)
+```
+
+### Prochaine étape
+**Phase 11.5** — contrat `FlaixPrepPlan` (groupes facile/moyen/difficile + items agrégés + séquence) : affichage des groupes de préparation Flaix sur le board + **fallback local** quand Flaix est indisponible. **En attente du code Flaix** (l'utilisateur l'enverra pour caler le contrat des scores et catégories de commande). Dispo en parallèle : dashboards **manager** et **back office** (dev propre + docs), et documentation des 2 P1 (migration UUID + paymentStatus @map).
+
+---
+
+## [2026-06-07] Audit Codex — corrections sécurité & robustesse
+
+L'utilisateur a fait auditer le dépôt par Codex (frontière d'audit précédente : 2026-06-02). Trois findings actionnables traités, un quatrième vérifié sain.
+
+### P1 — Fuite d'événements privés via l'écran public READY (sécurité)
+`GET /public/orders/event/:eventId/ready` n'avait **aucun garde** d'accès — connaître l'UUID d'un événement privé suffisait à lire les n° publics de ses commandes prêtes. Corrigé en miroir de `PublicEventsController` (Phase 14.4).
+**Fichiers :**
+```
+backend/src/modules/orders/public-orders.controller.ts
+  — @UseGuards(OptionalJwtAuthGuard) + canAccessEvent(eventId, user?.sub ?? null) ; 404 identique si refusé
+backend/src/modules/orders/orders.module.ts
+  — imports: [..., GroupsModule]
+backend/src/modules/orders/public-orders.controller.spec.ts (créé)
+  — 3 cas : anonyme autorisé · propagation sub · 404 + findReadyByEvent jamais appelé
+```
+PUBLIC → écran anonyme OK ; PRIVATE → membre authentifié seulement ; inconnu/refusé → 404 (jamais de fuite d'existence). Le client public (`/public/[eventId]`) fait déjà `if (!res.ok) return` → board vide, pas de crash.
+
+### P2 — Batch opérateur non atomique (robustesse)
+`batchAdvance` (11.4c) utilisait `Promise.all` : un échec en milieu de lot laissait un état mixte **et** sautait le refresh. Passé à `Promise.allSettled` + `loadSnapshot()` toujours exécuté + bannière `batchError` (« N/total… »).
+```
+apps/operator/src/app/dashboard/[eventId]/page.tsx
+```
+
+### P2 — Fichiers de build suivis par Git (hygiène)
+```
+git rm --cached apps/admin/tsconfig.tsbuildinfo apps/operator/tsconfig.tsbuildinfo
+.gitignore  — + *.tsbuildinfo (section Build outputs)
+```
+
+### P1 (audit) — Pipeline racine Turbo : vérifié sain, pas un bug
+`turbo run typecheck/build/lint` → **3× exit 0** ici (pnpm 11.3.0 = `packageManager`). CI (`pnpm/action-setup@v4`), Vercel (`pnpm install` + `pnpm build`), Railway (`corepack prepare pnpm@11.3.0`) provisionnent tous pnpm. L'échec Codex « Unable to find package manager binary » venait de son sandbox (pnpm absent du PATH), pas du dépôt. Fallback fiable documenté : builds package par package.
+
+### Vérification
+```
+pnpm --filter @break-eat/backend test       → 25 suites / 306 tests (303 → +3)
+pnpm --filter @break-eat/backend typecheck   → exit 0
+pnpm --filter @break-eat/operator typecheck  → exit 0
+pnpm --filter @break-eat/operator lint       → 0 erreur
+pnpm --filter @break-eat/operator build      → ✓ (/dashboard/[eventId] 10.5 kB)
+```
+
+### Prochaine étape
+**Commit/push** du changeset non commité (~132 fichiers, phases 6→14 + 11.x) après revue (aucun secret) — déclenche Railway/Vercel. Puis **Phase 11.5** (contrat FlaixPrepPlan, en attente du code Flaix) ou dashboards **manager** / **back office**.
 
 ---
 

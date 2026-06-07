@@ -29,7 +29,9 @@ import { JoinRoomDto } from './dto/join-room.dto';
  */
 @WebSocketGateway({
   cors: {
-    origin: '*', // tightened in production via CORS_ORIGINS env — handled at HTTP level
+    // Mirror the HTTP-level CORS_ORIGINS env: same origins allowed for WS and HTTP.
+    // Falls back to localhost:3001 (local dev operator app) if env is unset.
+    origin: process.env['CORS_ORIGINS']?.split(',') ?? ['http://localhost:3001'],
     credentials: true,
   },
   transports: ['websocket', 'polling'],

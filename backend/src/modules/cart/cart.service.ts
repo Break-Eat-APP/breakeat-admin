@@ -6,9 +6,18 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { CartStatus, EventStatus, ProductStatus, StripeAccountStatus } from '@prisma/client';
+import {
+  CartStatus,
+  EventStatus,
+  OrderActorType,
+  OrderStatus,
+  PaymentStatus,
+  ProductStatus,
+  StripeAccountStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
+import { GroupsService } from '../groups/groups.service';
 import type { CreateCartDto } from './dto/create-cart.dto';
 import type { UpdateCartDto } from './dto/update-cart.dto';
 import type { AddCartItemDto } from './dto/add-cart-item.dto';
@@ -68,6 +77,7 @@ export class CartService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly stripe: StripeService,
+    private readonly groups: GroupsService,
   ) {}
 
   // ─── Create / Read ───────────────────────────────────────────
@@ -86,6 +96,14 @@ export class CartService {
       where: { id: dto.eventId },
     });
     if (!event) throw new NotFoundException('Event not found');
+
+    // Phase 14.4 — PRIVATE events require group membership. A non-member gets
+    // the same 404 as a missing event (checked BEFORE the status check below so
+    // the existence/state of a private event is never leaked to a non-member).
+    if (!(await this.groups.canAccessEvent(dto.eventId, userId))) {
+      throw new NotFoundException('Event not found');
+    }
+
     if (event.status !== EventStatus.ACTIVE) {
       throw new BadRequestException('Event is not active — cannot create cart');
     }
@@ -280,6 +298,10 @@ export class CartService {
   async checkout(cartId: string, userId: string): Promise<CheckoutResponse> {
     const cart = await this.requireOwnership(cartId, userId);
 
+    // Phase 14.4 — re-verify PRIVATE-event access (membership may have been
+    // revoked between cart creation and checkout).
+    await this.assertEventStillAccessible(cart.eventId, userId);
+
     // Allow re-entry: if cart is already CHECKOUT_PENDING and has a PaymentIntent,
     // return it. Otherwise, only OPEN carts can checkout.
     if (cart.status === CartStatus.CHECKOUT_PENDING && cart.paymentIntentId) {
@@ -392,6 +414,143 @@ export class CartService {
     };
   }
 
+  // ─── Demo checkout (DEMO_MODE only — bypasses Stripe) ────────
+
+  /**
+   * POST /api/v1/carts/:id/demo-checkout
+   *
+   * Creates a PAID order directly from the cart without going through Stripe.
+   * Only callable when DEMO_MODE=true (enforced by DemoGuard in the controller).
+   *
+   * Simplified vs real checkout:
+   * - No pickupPointId required (uses first pickup point of the event, or null)
+   * - No stock validation (demo products may not have stock entries)
+   * - No Stripe payment intent
+   * - Cart + items must still be valid
+   */
+  async demoCheckout(
+    cartId: string,
+    userId: string,
+  ): Promise<{ orderId: string; publicOrderNumber: string; totalCents: number; status: OrderStatus }> {
+    const cart = await this.requireOwnership(cartId, userId);
+
+    // Phase 14.4 — re-verify PRIVATE-event access before converting to an order.
+    await this.assertEventStillAccessible(cart.eventId, userId);
+
+    if (cart.status !== CartStatus.OPEN) {
+      throw new BadRequestException(`Cart is ${cart.status} — only OPEN carts can demo-checkout`);
+    }
+
+    const view = await this.computeView(cartId);
+    if (view.items.length === 0) {
+      throw new BadRequestException('Cart is empty');
+    }
+
+    // Load event to get organizationId and venueId
+    const event = await this.prisma.event.findUnique({
+      where: { id: cart.eventId },
+      select: { organizationId: true, venueId: true },
+    });
+    if (!event) throw new NotFoundException('Event not found');
+
+    // Resolve a pickup point — Order.pickupPointId is non-nullable in the schema.
+    // Use the cart's pickupPointId first, then fall back to the first pickup point of the event.
+    let pickupPointId = cart.pickupPointId;
+    if (!pickupPointId) {
+      const pp = await this.prisma.pickupPoint.findFirst({
+        where: { eventId: cart.eventId },
+        select: { id: true },
+      });
+      if (!pp) {
+        throw new NotFoundException(
+          'No pickup point found for this event. Create one in the admin panel first.',
+        );
+      }
+      pickupPointId = pp.id;
+    }
+
+    // Snapshot prices and compute total
+    const subtotalCents = view.items.reduce((sum, it) => sum + it.lineTotalCents, 0);
+    const itemSnapshots = view.items.map((it) => ({
+      productId: it.productId,
+      productNameSnapshot: it.productName,
+      unitPriceCentsSnapshot: it.unitPriceCents,
+      quantity: it.quantity,
+      lineTotalCents: it.lineTotalCents,
+    }));
+
+    const publicOrderNumber = `DEMO-${Date.now().toString(36).toUpperCase()}`;
+
+    const order = await this.prisma.$transaction(async (tx) => {
+      // 1. Freeze prices on cart items
+      for (const it of view.items) {
+        await tx.cartItem.update({
+          where: { cartId_productId: { cartId, productId: it.productId } },
+          data: { priceSnapshotCents: it.unitPriceCents },
+        });
+      }
+
+      // 2. Mark cart converted
+      await tx.cart.update({
+        where: { id: cartId },
+        data: { status: CartStatus.CONVERTED },
+      });
+
+      // 3. Create Order in PAID status
+      const createdOrder = await tx.order.create({
+        data: {
+          publicOrderNumber,
+          userId: cart.userId,
+          organizationId: event.organizationId,
+          eventId: cart.eventId,
+          venueId: event.venueId,
+          supplierId: cart.supplierId,
+          pickupPointId,
+          status: OrderStatus.PAID,
+          paymentStatus: PaymentStatus.SUCCEEDED,
+          subtotalCents,
+          totalCents: subtotalCents,
+          currency: 'eur',
+          items: { create: itemSnapshots },
+        },
+      });
+
+      // 4. Fake payment row (no Stripe, demo only)
+      await tx.payment.create({
+        data: {
+          orderId: createdOrder.id,
+          stripePaymentIntentId: `demo_${createdOrder.id}`,
+          status: PaymentStatus.SUCCEEDED,
+          amountCents: subtotalCents,
+          currency: 'eur',
+          rawStripeEvent: { demo: true },
+        },
+      });
+
+      // 5. Audit trail
+      await tx.orderAuditTrail.create({
+        data: {
+          orderId: createdOrder.id,
+          actorType: OrderActorType.SYSTEM,
+          previousState: null,
+          nextState: OrderStatus.PAID,
+          reason: 'Demo checkout — payment bypassed',
+          metadata: { demo: true },
+        },
+      });
+
+      return createdOrder;
+    });
+
+    this.logger.log(`Demo checkout: cart=${cartId} → order=${order.id} (${publicOrderNumber})`);
+    return {
+      orderId: order.id,
+      publicOrderNumber: order.publicOrderNumber,
+      totalCents: subtotalCents,
+      status: OrderStatus.PAID,
+    };
+  }
+
   // ─── Internals ───────────────────────────────────────────────
 
   /**
@@ -462,6 +621,16 @@ export class CartService {
   private requireEditable(status: CartStatus): void {
     if (status !== CartStatus.OPEN) {
       throw new BadRequestException(`Cart is ${status} and cannot be modified`);
+    }
+  }
+
+  /**
+   * Phase 14.4 — throws 403 if the cart owner no longer has access to a PRIVATE
+   * event (e.g. removed from the gating group). PUBLIC events always pass.
+   */
+  private async assertEventStillAccessible(eventId: string, userId: string): Promise<void> {
+    if (!(await this.groups.canAccessEvent(eventId, userId))) {
+      throw new ForbiddenException('You no longer have access to this private event');
     }
   }
 

@@ -17,6 +17,7 @@ import { UpdateCartDto } from './dto/update-cart.dto';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { DemoGuard } from '../../common/guards/demo.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 
@@ -91,5 +92,18 @@ export class CartController {
   @HttpCode(HttpStatus.OK)
   checkout(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
     return this.cartService.checkout(id, user.sub);
+  }
+
+  /**
+   * POST /api/v1/carts/:id/demo-checkout
+   *
+   * Creates a real Order with PAID status without going through Stripe.
+   * Only available when DEMO_MODE=true. Used by the mobile demo flow.
+   */
+  @Post(':id/demo-checkout')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(DemoGuard)
+  demoCheckout(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.cartService.demoCheckout(id, user.sub);
   }
 }

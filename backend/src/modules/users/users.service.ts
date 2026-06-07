@@ -72,6 +72,35 @@ export class UsersService {
   }
 
   /**
+   * Finds a user by id and includes their organisation memberships.
+   * Used by GET /auth/me/memberships — returns the same SafeUser shape
+   * extended with an `memberships` array (org id, role, org name/slug).
+   * Used exclusively by the admin panel to identify which orgs the user belongs to.
+   */
+  async findByIdWithMemberships(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      include: {
+        memberships: {
+          include: {
+            organization: {
+              select: { id: true, name: true, slug: true, status: true },
+            },
+            // Phase 12.7 — include assigned supplier so operator app can read supplierId
+            supplier: {
+              select: { id: true, name: true, status: true },
+            },
+          },
+        },
+      },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { passwordHash: _hash, ...safeUser } = user;
+    return safeUser;
+  }
+
+  /**
    * Validates a plain password against the stored hash.
    * Returns true if valid, false otherwise.
    * Used exclusively by AuthService.

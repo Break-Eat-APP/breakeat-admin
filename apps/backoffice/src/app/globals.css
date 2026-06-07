@@ -1,0 +1,17 @@
+/* Phase 14 — Break Eat back office (refonte v2 design).
+   Brand: neutral white background (no shapes), vivid orange accents (#FC4002), NO gradients.
+   Font: Fredoka partout. Design tokens live in @break-eat/brand (BRAND). */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-fredoka), system-ui, -apple-system, sans-serif;
+  background: #ffffff;
+  color: #1c1917;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Inputs inherit the brand font and show a warm-grey placeholder. */
+input, button, textarea, select { font-family: inherit; }
+input::placeholder { color: #b8ada6; }

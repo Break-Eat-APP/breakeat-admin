@@ -13,6 +13,7 @@
     "build-storybook": "storybook build -o storybook-static"
   },
   "dependencies": {
+    "@break-eat/brand": "workspace:*",
     "@tanstack/react-query": "^5.75.0",
     "@tanstack/react-query-devtools": "^5.75.0",
     "next": "^15.3.2",

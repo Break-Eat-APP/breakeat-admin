@@ -144,6 +144,35 @@ enum PickupPointStatus {
   @@map("pickup_point_status")
 }
 
+// ─── PHASE 7 ENUMS ────────────────────────────────────────────
+
+/// Availability status of a pickup slot.
+enum SlotStatus {
+  OPEN    // accepting orders (currentLoad < capacity)
+  FULL    // capacity reached — no new orders
+  CLOSED  // manually closed or expired
+
+  @@map("slot_status")
+}
+
+/// Who created or last modified the slot.
+enum SlotSource {
+  MANUAL   // created by an operator via API
+  DEFAULT  // generated from event default rules
+  FLAIX    // assigned or modified by the Flaix AI engine
+
+  @@map("slot_source")
+}
+
+/// Type of decision recorded from Flaix.
+enum FlaixDecisionType {
+  SLOT_DECISION
+  RUSH_DECISION
+  RECOMMENDATION_DECISION
+
+  @@map("flaix_decision_type")
+}
+
 // ─── MODELS ───────────────────────────────────────────────────
 
 /// A platform user: customer, operator, admin, or super admin.
@@ -158,10 +187,11 @@ model User {
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
-  memberships   OrganizationMember[]
-  refreshTokens RefreshToken[]
-  carts         Cart[]
-  orders        Order[]
+  memberships      OrganizationMember[]
+  refreshTokens    RefreshToken[]
+  carts            Cart[]
+  orders           Order[]
+  groupMemberships GroupMember[]
 
   @@map("users")
 }
@@ -169,34 +199,45 @@ model User {
 /// A company, venue operator or event owner.
 /// One organisation can own many venues, events and suppliers.
 model Organization {
-  id        String    @id @default(uuid())
-  name      String
-  slug      String    @unique
-  status    OrgStatus @default(ACTIVE)
-  settings  Json      @default("{}")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  id           String    @id @default(uuid())
+  name         String
+  slug         String    @unique
+  status       OrgStatus @default(ACTIVE)
+  settings     Json      @default("{}")
+  /// PHASE 12.8 — Branding fields (URL-based, no file upload in V1)
+  logoUrl      String?   @map("logo_url")
+  primaryColor String?   @map("primary_color")
+  description  String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
 
   members      OrganizationMember[]
   venues       Venue[]
   events       Event[]
   suppliers    Supplier[]
   pickupPoints PickupPoint[]
+  groups       Group[]
+  /// PHASE 11 — reusable operator-dashboard screen definitions
+  operatorScreenTemplates OperatorScreenTemplate[]
 
   @@map("organizations")
 }
 
 /// Junction table: a user's role inside a specific organisation.
 /// A user can be a member of multiple organisations with different roles.
+/// For OPERATOR role, supplierId pins this member to a specific supplier.
 model OrganizationMember {
   id             String   @id @default(uuid())
   userId         String   @map("user_id")
   organizationId String   @map("organization_id")
   orgRole        OrgRole  @default(OPERATOR) @map("org_role")
+  /// PHASE 12.7 — Operator assignment. Non-null only when orgRole = OPERATOR.
+  supplierId     String?  @map("supplier_id")
   createdAt      DateTime @default(now()) @map("created_at")
 
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier     Supplier?    @relation("OperatorAssignments", fields: [supplierId], references: [id], onDelete: SetNull)
 
   @@unique([userId, organizationId])
   @@map("organization_members")
@@ -234,6 +275,12 @@ model Event {
   endAt              DateTime    @map("end_at")
   status             EventStatus @default(DRAFT)
   activeFeatureFlags Json        @default("{}") @map("active_feature_flags")
+  /// PHASE 14 — public (everyone) or private (restricted to linked groups).
+  visibility         EventVisibility @default(PUBLIC)
+  /// PHASE 12.8 — Branding & content shown in mobile app
+  description        String?
+  logoUrl            String?     @map("logo_url")
+  primaryColor       String?     @map("primary_color")
   createdAt          DateTime    @default(now()) @map("created_at")
   updatedAt          DateTime    @updatedAt @map("updated_at")
 
@@ -242,6 +289,11 @@ model Event {
   eventSuppliers EventSupplier[]
   pickupPoints   PickupPoint[]
   carts          Cart[]
+  slots          Slot[]
+  flaixDecisions FlaixDecision[]
+  groups         EventGroup[]
+  /// PHASE 11 — screen templates applied to this event (with per-event order/toggle)
+  operatorScreens EventOperatorScreen[]
 
   @@map("events")
 }
@@ -266,13 +318,16 @@ model Supplier {
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  eventSuppliers EventSupplier[]
-  pickupPoints   PickupPoint[]
-  categories     Category[]
-  products       Product[]
-  stocks         Stock[]
-  carts          Cart[]
+  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  eventSuppliers    EventSupplier[]
+  pickupPoints      PickupPoint[]
+  categories        Category[]
+  products          Product[]
+  stocks            Stock[]
+  carts             Cart[]
+  slots             Slot[]
+  /// PHASE 12.7 — operators assigned to this supplier
+  assignedOperators OrganizationMember[] @relation("OperatorAssignments")
 
   @@map("suppliers")
 }
@@ -311,6 +366,7 @@ model PickupPoint {
   supplier     Supplier?    @relation(fields: [supplierId], references: [id])
   stocks       Stock[]
   carts        Cart[]
+  slots        Slot[]
 
   @@map("pickup_points")
 }
@@ -422,6 +478,8 @@ model Cart {
   eventId        String     @map("event_id")
   supplierId     String     @map("supplier_id")
   pickupPointId  String?    @map("pickup_point_id")
+  /// Phase 7 — customer-selected slot before checkout.
+  selectedSlotId String?    @map("selected_slot_id")
   status         CartStatus @default(OPEN)
   /// Idempotency safeguard for /checkout — same key returns the same PaymentIntent.
   paymentIntentId String?   @map("payment_intent_id")
@@ -433,6 +491,7 @@ model Cart {
   event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
   supplier    Supplier     @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   pickupPoint PickupPoint? @relation(fields: [pickupPointId], references: [id], onDelete: SetNull)
+  slot        Slot?        @relation(fields: [selectedSlotId], references: [id], onDelete: SetNull)
   items       CartItem[]
 
   @@index([userId, status])
@@ -479,7 +538,7 @@ model Order {
   /// Phase 7 — slot assignment.
   slotId            String?       @map("slot_id")
   status            OrderStatus   @default(PAID)
-  paymentStatus     PaymentStatus @default(SUCCEEDED)
+  paymentStatus     PaymentStatus @default(SUCCEEDED) @map("payment_status")
   /// Frozen totals at order creation. Never recomputed.
   subtotalCents     Int           @map("subtotal_cents")
   totalCents        Int           @map("total_cents")
@@ -490,6 +549,7 @@ model Order {
   updatedAt         DateTime      @updatedAt @map("updated_at")
 
   user        User             @relation(fields: [userId], references: [id])
+  slot        Slot?            @relation(fields: [slotId], references: [id], onDelete: SetNull)
   items       OrderItem[]
   payments    Payment[]
   auditTrail  OrderAuditTrail[]
@@ -497,6 +557,7 @@ model Order {
   @@index([userId])
   @@index([eventId, status])
   @@index([supplierId, status])
+  @@index([slotId])
   @@index([organizationId])
   @@map("orders")
 }
@@ -575,6 +636,308 @@ model WebhookEvent {
 }
 
 // ─── END PHASE 5 ──────────────────────────────────────────────
+
+// ─── PHASE 7 MODELS ───────────────────────────────────────────
+
+/// A time-bounded pickup slot for an event.
+/// Capacity management: currentLoad is incremented atomically on order assignment.
+/// Status transitions: OPEN → FULL (auto when currentLoad = capacity) | CLOSED (manual).
+/// source tracks whether a human or Flaix created/modified the slot.
+model Slot {
+  id            String     @id @default(uuid())
+  eventId       String     @map("event_id")
+  /// null = slot applies to all suppliers in the event
+  supplierId    String?    @map("supplier_id")
+  /// null = slot applies to all pickup points in the event
+  pickupPointId String?    @map("pickup_point_id")
+  startAt       DateTime   @map("start_at")
+  endAt         DateTime   @map("end_at")
+  capacity      Int
+  currentLoad   Int        @default(0) @map("current_load")
+  status        SlotStatus @default(OPEN)
+  source        SlotSource @default(MANUAL)
+  /// PHASE 11 — Stable "moment de récupération" role. Portable across events so
+  /// reusable operator-screen templates can target a moment (IMMEDIATE / PAUSE_1…)
+  /// without hard-coding per-event slot UUIDs. An order with slotId = null is
+  /// treated as IMMEDIATE by the screen-matching logic.
+  kind          SlotKind   @default(IMMEDIATE)
+  /// Human-readable label shown to customers (e.g. "12:00–12:15")
+  label         String?
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  event          Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  supplier       Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  pickupPoint    PickupPoint?    @relation(fields: [pickupPointId], references: [id], onDelete: SetNull)
+  orders         Order[]
+  carts          Cart[]
+  flaixDecisions FlaixDecision[]
+
+  @@index([eventId, status])
+  @@index([eventId, startAt])
+  @@map("slots")
+}
+
+/// Append-only log of every Flaix decision that was received and applied.
+/// Stored regardless of whether the backend accepted or overrode the decision.
+/// decisionId is the Flaix-generated UUID — used as idempotency key (UNIQUE).
+model FlaixDecision {
+  id            String            @id @default(uuid())
+  /// Flaix-generated UUID. Unique — prevents double-application of the same decision.
+  decisionId    String            @unique @map("decision_id")
+  type          FlaixDecisionType
+  eventId       String            @map("event_id")
+  /// Slot affected by this decision (if applicable)
+  slotId        String?           @map("slot_id")
+  /// Raw Flaix response payload — never mutated after storage
+  sourcePayload Json              @map("source_payload")
+  /// What the backend did with the decision (e.g. "slot_assigned", "ignored", "fallback_applied")
+  appliedAction String            @map("applied_action")
+  /// UUIDs of orders, slots, products affected
+  affectedIds   String[]          @map("affected_ids")
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  slot  Slot? @relation(fields: [slotId], references: [id], onDelete: SetNull)
+
+  @@index([eventId, createdAt])
+  @@index([type, eventId])
+  @@map("flaix_decisions")
+}
+
+// ─── END PHASE 7 ──────────────────────────────────────────────
+
+// ─── PHASE 9 ENUMS ────────────────────────────────────────────
+
+/// Scope of a feature flag or app setting.
+/// Resolution precedence: EVENT > ORGANIZATION > GLOBAL.
+enum FlagScope {
+  GLOBAL
+  ORGANIZATION
+  EVENT
+
+  @@map("flag_scope")
+}
+
+// ─── PHASE 9 MODELS ───────────────────────────────────────────
+
+/// Feature flags — control feature availability per scope without redeploy.
+/// A flag not found at EVENT scope falls back to ORGANIZATION, then GLOBAL.
+/// scopeId is the organization or event UUID when scope ≠ GLOBAL.
+model FeatureFlag {
+  id        String    @id @default(uuid())
+  key       String
+  scope     FlagScope
+  scopeId   String?   @map("scope_id")
+  enabled   Boolean   @default(false)
+  metadata  Json?
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@unique([key, scope, scopeId])
+  @@index([key, scope])
+  @@map("feature_flags")
+}
+
+/// App settings / basic CMS — JSON key-value store per scope.
+/// Typical keys: email_header_text, banner_message, event_description,
+///               max_orders_per_slot, payment_provider_label.
+model AppSetting {
+  id        String    @id @default(uuid())
+  key       String
+  scope     FlagScope
+  scopeId   String?   @map("scope_id")
+  value     Json
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  @@unique([key, scope, scopeId])
+  @@index([key, scope])
+  @@map("app_settings")
+}
+
+// ─── END PHASE 9 ──────────────────────────────────────────────
+
+// ─── PHASE 14 ENUMS ───────────────────────────────────────────
+
+/// How a user became a member of a group.
+/// MANUAL = added by hand (by email) ; DOMAIN = auto-joined via emailDomain rule.
+enum GroupMemberSource {
+  MANUAL
+  DOMAIN
+
+  @@map("group_member_source")
+}
+
+/// Whether an event is open to everyone or restricted to linked groups.
+/// Resolution is enforced server-side — never trusted from the client.
+enum EventVisibility {
+  PUBLIC
+  PRIVATE
+
+  @@map("event_visibility")
+}
+
+// ─── PHASE 14 MODELS ──────────────────────────────────────────
+
+/// A segment of users inside ONE organisation.
+/// V1 use: gate access to PRIVATE events. Later: targeted promo codes.
+/// emailDomain (optional) auto-enrols users whose email matches on signup.
+model Group {
+  id             String   @id @default(uuid())
+  organizationId String   @map("organization_id")
+  name           String
+  description    String?
+  /// Auto-join rule, e.g. "boursorama.com". Stored lowercased, without "@".
+  emailDomain    String?  @map("email_domain")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  members      GroupMember[]
+  events       EventGroup[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@index([emailDomain])
+  @@map("groups")
+}
+
+/// Junction: a user's membership in a group.
+/// source records whether it was a manual add or a domain auto-join.
+model GroupMember {
+  id        String            @id @default(uuid())
+  groupId   String            @map("group_id")
+  userId    String            @map("user_id")
+  source    GroupMemberSource @default(MANUAL)
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+/// Junction: which groups may access a PRIVATE event.
+/// An event with no rows here and visibility=PRIVATE is accessible to nobody.
+model EventGroup {
+  eventId   String   @map("event_id")
+  groupId   String   @map("group_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, groupId])
+  @@index([groupId])
+  @@map("event_groups")
+}
+
+// ─── END PHASE 14 ─────────────────────────────────────────────
+
+// ─── PHASE 11 ENUMS ───────────────────────────────────────────
+// (Added after Phase 14 chronologically — Phase 11 = the operator dashboard.)
+
+/// Stable "moment de récupération" role for a slot. Lets reusable operator-screen
+/// templates target a pickup moment across events without per-event slot UUIDs.
+/// IMMEDIATE  = prepare/collect as soon as possible ("Commandes Immédiates")
+/// PAUSE_1    = first break / half-time ("1ère mi-temps")
+/// PAUSE_2    = second break / half-time ("2ème mi-temps")
+/// GENERAL    = no specific moment (catch-all)
+/// CUSTOM     = operator-defined moment not covered above
+enum SlotKind {
+  IMMEDIATE
+  PAUSE_1
+  PAUSE_2
+  GENERAL
+  CUSTOM
+
+  @@map("slot_kind")
+}
+
+/// What a configurable operator screen displays. Drives the default status set
+/// when a template leaves `statuses` empty.
+/// ORDERS_QUEUE = live preparation pipeline (PAID → ACCEPTED → PREPARING)
+/// READY        = orders marked READY, awaiting hand-over
+/// RECOVERED    = handed over (PICKED_UP / RECOVERED)
+/// GENERAL      = every active order regardless of moment
+enum OperatorScreenKind {
+  ORDERS_QUEUE
+  READY
+  RECOVERED
+  GENERAL
+
+  @@map("operator_screen_kind")
+}
+
+// ─── PHASE 11 MODELS ──────────────────────────────────────────
+
+/// A reusable operator-dashboard screen definition, owned by ONE organisation.
+/// Defined once (e.g. "Commandes Immédiates — Spartiates buvette") and applied to
+/// many events via EventOperatorScreen — so the same board configuration is reused
+/// every match without rebuilding it.
+///
+/// Display conditions decide which orders appear on the screen:
+///   slotKinds   — which pickup moments (empty = all moments; null-slot ⇒ IMMEDIATE)
+///   statuses    — which order statuses (empty = sensible default derived from `kind`)
+///   supplierIds — which suppliers (empty = all suppliers active on the event)
+///   filters     — finer JSON rules: category include/exclude, product on/off,
+///                 récap panel toggle, batching preferences. Shape (all optional):
+///                 { categoryIds?: string[], excludeCategoryIds?: string[],
+///                   productIds?: string[], excludeProductIds?: string[],
+///                   showRecap?: boolean }
+model OperatorScreenTemplate {
+  id             String             @id @default(uuid())
+  organizationId String             @map("organization_id")
+  name           String
+  kind           OperatorScreenKind @default(ORDERS_QUEUE)
+  /// Optional emoji / icon shown on the screen tab (e.g. "🏪", "⚡").
+  icon           String?
+  /// Default tab order; can be overridden per-event on EventOperatorScreen.
+  sortOrder      Int                @default(0) @map("sort_order")
+  /// Soft on/off at the template level (independent of per-event toggle).
+  enabled        Boolean            @default(true)
+  /// Pickup moments shown (empty = all). Stable across events.
+  slotKinds      SlotKind[]         @map("slot_kinds")
+  /// Order statuses shown (empty = default derived from `kind`).
+  statuses       OrderStatus[]
+  /// Suppliers shown (empty = all suppliers active on the event).
+  supplierIds    String[]           @map("supplier_ids")
+  /// Finer display rules — see model doc for shape.
+  filters        Json               @default("{}")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  eventScreens EventOperatorScreen[]
+
+  @@index([organizationId])
+  @@map("operator_screen_templates")
+}
+
+/// Junction: applies a screen template to a specific event. Lets a manager pick
+/// which templates run on an event and reorder / disable them there, without
+/// editing the shared template (which other events may also use).
+model EventOperatorScreen {
+  id         String   @id @default(uuid())
+  eventId    String   @map("event_id")
+  templateId String   @map("template_id")
+  /// Per-event tab-order override; null ⇒ fall back to template.sortOrder.
+  sortOrder  Int?     @map("sort_order")
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  event    Event                  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  template OperatorScreenTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, templateId])
+  @@index([eventId])
+  @@map("event_operator_screens")
+}
+
+// ─── END PHASE 11 ─────────────────────────────────────────────
 
 /// Hashed refresh tokens for secure JWT rotation.
 /// One row per active session. Deleted on logout or rotation.

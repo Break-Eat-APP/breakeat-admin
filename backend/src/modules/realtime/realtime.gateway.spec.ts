@@ -24,7 +24,6 @@ const VALID_PAYLOAD = { sub: 'user-1', email: 'test@break.eat' };
 describe('RealtimeGateway', () => {
   let gateway: RealtimeGateway;
   let jwtService: jest.Mocked<JwtService>;
-  let configService: jest.Mocked<ConfigService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -43,7 +42,6 @@ describe('RealtimeGateway', () => {
 
     gateway = module.get(RealtimeGateway);
     jwtService = module.get(JwtService);
-    configService = module.get(ConfigService);
   });
 
   // ─── handleConnection ─────────────────────────────────────────

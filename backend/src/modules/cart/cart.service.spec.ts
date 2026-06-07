@@ -14,6 +14,7 @@ import {
 import { CartService } from './cart.service';
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
+import { GroupsService } from '../groups/groups.service';
 
 const USER_ID = 'user-1';
 const EVENT_ID = 'event-1';
@@ -71,6 +72,7 @@ function mockStock(quantity = 50) {
 describe('CartService', () => {
   let service: CartService;
   let prisma: jest.Mocked<PrismaService>;
+  let groups: { canAccessEvent: jest.Mock };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -108,11 +110,20 @@ describe('CartService', () => {
             retrievePaymentIntent: jest.fn(),
           },
         },
+        {
+          provide: GroupsService,
+          // Phase 14.4 — default: every event is accessible. Individual tests
+          // can override canAccessEvent to exercise the PRIVATE-event gate.
+          useValue: {
+            canAccessEvent: jest.fn().mockResolvedValue(true),
+          },
+        },
       ],
     }).compile();
 
     service = module.get(CartService);
     prisma = module.get(PrismaService);
+    groups = module.get(GroupsService);
   });
 
   // ─── create ─────────────────────────────────────────────────
@@ -165,6 +176,18 @@ describe('CartService', () => {
       await expect(
         service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID }),
       ).rejects.toThrow(ConflictException);
+    });
+
+    it('rejects with 404 when the event is PRIVATE and the caller is not a member (Phase 14.4)', async () => {
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
+      // Non-member: gate denies access → identical 404 to a missing event.
+      groups.canAccessEvent.mockResolvedValue(false);
+
+      await expect(
+        service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID }),
+      ).rejects.toThrow(NotFoundException);
+      // The access gate runs before the supplier lookup — nothing leaks.
+      expect(prisma.eventSupplier.findFirst).not.toHaveBeenCalled();
     });
   });
 
@@ -315,6 +338,14 @@ describe('CartService', () => {
       expect(txSpy).not.toHaveBeenCalled();
       expect(prisma.cartItem.update).not.toHaveBeenCalled();
       expect(prisma.cart.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects with 403 when the owner lost PRIVATE-event access since cart creation (Phase 14.4)', async () => {
+      setupValidCheckout();
+      // Membership revoked after the cart was created.
+      groups.canAccessEvent.mockResolvedValue(false);
+
+      await expect(service.checkout(CART_ID, USER_ID)).rejects.toThrow(ForbiddenException);
     });
 
     it('returns existing PaymentIntent when cart is already CHECKOUT_PENDING (idempotency)', async () => {

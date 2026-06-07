@@ -7,6 +7,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { OrderActorType, OrderStatus } from '@prisma/client';
@@ -16,6 +17,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { OrdersService } from './orders.service';
 import { TransitionOrderDto } from './dto/transition-order.dto';
+import { AssignSlotDto } from './dto/assign-slot.dto';
 
 /**
  * OrdersController
@@ -86,6 +88,45 @@ export class OrdersController {
     return this.ordersService.findActiveByEvent(eventId);
   }
 
+  /**
+   * GET /api/v1/orders/event/:eventId/dashboard
+   * Returns active orders grouped by status for the operator real-time dashboard.
+   * Response: { eventId, counts: { PAID: n, … }, orders: { PAID: [], … } }
+   *
+   * Phase 12.9 security: if the caller's membership has a supplierId pinned, that
+   * value is ALWAYS enforced regardless of the ?supplierId query param.
+   * This prevents an operator from removing/changing the param to see other
+   * suppliers' orders. Only members without a pin can use the query param.
+   */
+  @Get('event/:eventId/dashboard')
+  async findDashboard(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Query('supplierId') supplierId: string | undefined,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    // Fetch event to get organizationId (also validates event exists)
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { organizationId: true },
+    });
+    if (!event) throw new NotFoundException('Event not found');
+
+    // Check membership and get the operator's pinned supplierId in one query
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: { userId_organizationId: { userId: user.sub, organizationId: event.organizationId } },
+    });
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this organization');
+    }
+
+    // Security enforcement: membership.supplierId takes precedence over query param.
+    // If operator is pinned to a supplier, they can ONLY see that supplier's orders.
+    const effectiveSupplierId: string | undefined =
+      membership.supplierId ?? supplierId ?? undefined;
+
+    return this.ordersService.findDashboardByEvent(eventId, effectiveSupplierId);
+  }
+
   // ─── Operator transitions ─────────────────────────────────────
 
   /** PATCH /api/v1/orders/:id/accept — PAID → ACCEPTED */
@@ -149,6 +190,21 @@ export class OrdersController {
     );
   }
 
+  /**
+   * PATCH /api/v1/orders/:id/assign-slot
+   * Atomically assigns the order to a pickup slot (increments slot.currentLoad).
+   * Caller must be an operator of the order's organization.
+   */
+  @Patch(':id/assign-slot')
+  async assignSlot(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AssignSlotDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    await this.assertOperatorAccessByOrder(id, user.sub);
+    return this.ordersService.assignOrderToSlot(id, dto.slotId);
+  }
+
   /** PATCH /api/v1/orders/:id/cancel — PAID/ACCEPTED/PREPARING → CANCELLED */
   @Patch(':id/cancel')
   async cancel(
@@ -194,7 +250,7 @@ export class OrdersController {
 
   private async assertOrgMember(organizationId: string, userId: string): Promise<void> {
     const membership = await this.prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId, userId } },
+      where: { userId_organizationId: { userId, organizationId } },
     });
     if (!membership) {
       throw new ForbiddenException('You are not a member of this organization');

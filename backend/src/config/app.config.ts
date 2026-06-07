@@ -7,6 +7,18 @@ import { registerAs } from '@nestjs/config';
  */
 export default registerAs('app', () => ({
   nodeEnv: process.env.NODE_ENV ?? 'development',
+  /**
+   * APP_ENV is used for Sentry environment tagging and other context-sensitive
+   * features where NODE_ENV is too coarse (e.g. staging vs. production).
+   * Values: production | staging | development
+   */
+  appEnv: process.env.APP_ENV ?? process.env.NODE_ENV ?? 'development',
+  /**
+   * LOG_LEVEL controls the minimum log level emitted by JsonLogger.
+   * Values: verbose | debug | log | warn | error | fatal
+   * Defaults to 'log' in production, 'debug' elsewhere.
+   */
+  logLevel: process.env.LOG_LEVEL ?? (process.env.NODE_ENV === 'production' ? 'log' : 'debug'),
   port: parseInt(process.env.PORT ?? '3000', 10),
   corsOrigins: process.env.CORS_ORIGINS?.split(',') ?? ['http://localhost:3001'],
 
@@ -53,6 +65,16 @@ export default registerAs('app', () => ({
         process.env.STRIPE_CONNECT_REFRESH_URL ??
         'http://localhost:3001/suppliers/onboarding/refresh',
     },
+  },
+
+  /**
+   * Back-office reporting parameters.
+   * vatRate: the VAT rate used to derive CA HT from the TTC totals stored on
+   * orders (Order.totalCents is tax-inclusive — there is no tax field in the
+   * schema). Default 0.10 = 10% (resto sur place). HT = TTC / (1 + vatRate).
+   */
+  reporting: {
+    vatRate: parseFloat(process.env.REPORTING_VAT_RATE ?? '0.10'),
   },
 
   sentry: {

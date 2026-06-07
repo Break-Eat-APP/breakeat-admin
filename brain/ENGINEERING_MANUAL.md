@@ -1552,14 +1552,23 @@ const [updated] = await this.prisma.$transaction([
 ]);
 ```
 
-### Outbox pattern (Phase 6.2 — non encore implémenté)
+### Outbox pattern — implémenté (Bloc 6.2)
 
-Après le commit de la transaction, émettre l'événement realtime via le gateway Socket.IO :
+Après le commit de la transaction, `RealtimeService` est injecté dans `OrdersService` et appelé **après** le commit :
 ```typescript
-// TODO Phase 6.2
-// await this.realtimeGateway.emit('order_updated', { orderId, previousStatus, nextStatus, actorType });
+// ✅ orders.service.ts — emit systématique après transition()
+this.realtimeService.emitOrderUpdated({
+  orderId, organizationId, eventId, previousStatus: order.status, nextStatus: to, actorType, reason,
+});
+
+// ✅ emit supplémentaire uniquement quand la commande passe en READY
+if (to === OrderStatus.READY) {
+  this.realtimeService.emitOrderReady({
+    orderId, publicOrderNumber, organizationId, eventId, pickupPointId,
+  });
+}
 ```
-Ne jamais émettre AVANT le commit (risque d'état incohérent si la DB rollback).
+Règle invariante : `assertTransition()` lève une exception **avant** `$transaction` ; les emits se font **après** le commit — ne jamais inverser l'ordre. Voir section **Bloc 6.2** ci-dessous pour l'architecture complète du gateway.
 
 ### Endpoints opérateur
 
@@ -1680,5 +1689,1777 @@ L'identifiant du concert (champ `eventId` de l'ordre Prisma) n'est **jamais** in
 | `order_updated` | après chaque `transition()` | `order:`, `organization:`, `event:` |
 | `order_ready` | quand `transition()` → READY | `order:`, `pickup-point:`, `organization:`, `event:` |
 
+---
+
+## [2026-06-01] Phase 7 — Slots + Flaix Foundation
+
+### What Was Built
+
+Deux modules complémentaires :
+
+1. **SlotsModule** — gestion des créneaux de retrait d'une commande. Un `Slot` est un créneau temporel (startAt–endAt) avec une capacité max, scopé optionnellement à un supplier ou un pickup point. Endpoints admin complets pour créer, lister, modifier et supprimer des slots. La méthode `assignOrderToSlot()` est transactionnelle et race-safe.
+
+2. **FlaixModule** — frontière d'intégration entre BREAK EAT et le moteur AI Flaix. V1 = stub HTTP pur (retourne null si FLAIX_API_URL non configuré). Toutes les décisions appliquées sont persistées dans `flaix_decisions` avec leur payload brut.
+
+### Why It Was Built
+
+- **Slots** : permettent au client de choisir un créneau avant paiement (panier → `selectedSlotId`). L'opérateur voit combien de commandes arrivent dans chaque fenêtre de temps → fluidification de la préparation.
+- **Flaix** : per `FLAIX_CONTRACT.md`, toutes les décisions Flaix doivent passer par un seul module. Implémenter le stub maintenant permet d'intégrer la vraie API sans toucher à OrdersService ou SlotsService.
+
+### How It Works
+
+**Slot capacity (race-safe) :**
+```typescript
+// Dans SlotsService.assignOrderToSlot(orderId, slotId, tx)
+const updated = await tx.slot.updateMany({
+  where: { id: slotId, currentLoad: { lt: slot.capacity }, status: { not: CLOSED } },
+  data:  { currentLoad: { increment: 1 } },
+});
+if (updated.count === 0) throw new ConflictException('Slot full or closed concurrently');
+await tx.order.update({ where: { id: orderId }, data: { slotId } });
+// Auto-flip FULL quand currentLoad atteint capacity
+await tx.slot.updateMany({ where: { id: slotId, currentLoad: slot.capacity }, data: { status: FULL } });
+```
+
+**Flaix decision audit (idempotent) :**
+```typescript
+// Dans FlaixService.recordDecision(payload, applied, affectedIds, slotId?)
+await this.prisma.flaixDecision.create({ data: { decisionId, type, ... } });
+// Si P2002 (UNIQUE sur decisionId) → silencieux (déjà enregistré)
+```
+
+### Code References
+
+- `backend/src/modules/slots/slots.service.ts` — CRUD + `assignOrderToSlot()` (race-safe capacity)
+- `backend/src/modules/slots/slots.controller.ts` — endpoints `POST|GET|PATCH|DELETE /events/:id/slots`
+- `backend/src/modules/flaix/flaix.service.ts` — stub HTTP + `recordDecision()` + query helpers
+- `backend/src/modules/flaix/flaix.module.ts` — frontière d'intégration (exports FlaixService uniquement)
+- `backend/prisma/migrations/20260601_phase7_slots_flaix/migration.sql` — tables slots + flaix_decisions, FK carts.selected_slot_id, contrainte FK orders.slot_id
+
+### Data Flow
+
+```
+Customer         SlotsController    SlotsService      DB
+   |──GET slots──────────────────────────────────────→ SELECT WHERE eventId
+   |←──[slot list]─────────────────────────────────────
+
+   |──POST /checkout (cartId, selectedSlotId)
+                              OrdersService
+                                 ↓ assignOrderToSlot(orderId, slotId, tx)
+                                 ↓ updateMany WHERE currentLoad < capacity → increment
+                                 ↓ order.update → slotId
+                                 ↓ updateMany WHERE currentLoad = capacity → FULL
+```
+
+### Dependencies
+
+- Interne : `PrismaService` (@Global), `ConfigService` (FLAIX_API_URL/FLAIX_API_KEY)
+- Externe Flaix : aucune en V1 — stub. URL : `FLAIX_API_URL`. Clé : `FLAIX_API_KEY`.
+
+### Tests and Verification
+
+- `slots.service.spec.ts` — 21 tests
+- `flaix.service.spec.ts` — 12 tests
+- **203 tests au total**, 17 suites, 0 failure
+
+### Risks and Safe Change Rules
+
+- Ne jamais appeler `assignOrderToSlot` HORS d'une `$transaction` Prisma si d'autres writes (order create, stock decrement) doivent être atomiques
+- Ne pas réduire `Slot.capacity` en dessous de `currentLoad` — guard à ajouter en Phase 8
+- La contrainte `CHECK (current_load <= capacity)` en DB bloquera tout incrément aberrant au niveau PostgreSQL
+- Flaix doit rester dans `FlaixModule` uniquement — FLAIX_CONTRACT.md interdit les appels directs depuis d'autres modules
+
+### Debugging Notes
+
+- Pour voir les décisions Flaix appliquées : `SELECT * FROM flaix_decisions WHERE event_id = '...' ORDER BY created_at DESC`
+- Pour voir la charge d'un slot : `SELECT id, label, current_load, capacity, status FROM slots WHERE event_id = '...'`
+- Pour forcer la réouverture d'un slot FULL : `PATCH /events/:eid/slots/:id` avec `{ "status": "OPEN" }`
+
+---
+
+## [2026-06-01] Audit Phase 6 — Findings & Corrections
+
+### P1 — Bugs critiques corrigés
+
+#### SimulatorService — mauvais champs User (`firstName`/`lastName`)
+
+**Problème :** `getOrCreateDemoUser()` utilisait `firstName: 'Demo', lastName: 'Simulator'` alors que le modèle Prisma `User` expose uniquement `displayName: String` (champ mappé `display_name`). L'appel `prisma.user.create` aurait provoqué une erreur TypeScript TS2353 à la compilation et un crash à l'exécution.
+
+**Fix :** `firstName`/`lastName` → `displayName: 'Demo Simulator'`
+
+Fichier : `backend/src/modules/simulator/simulator.service.ts:202`
+
+#### SimulatorService — mauvaise relation Event→Supplier (`event.suppliers`)
+
+**Problème :** `seedEvent()` et `simulateRush()` incluaient `suppliers: { include: { products } }` dans la requête Prisma. Le modèle `Event` n'a PAS de relation directe `suppliers Supplier[]` — il expose `eventSuppliers EventSupplier[]` via la table de jonction `event_suppliers`. L'appel provoquait une erreur TS2353 et un crash Prisma à l'exécution.
+
+**Fix (les deux méthodes) :**
+```typescript
+// ❌ Avant
+include: { suppliers: { include: { products: { where: { status: 'ACTIVE' } } } } }
+const suppliers = event.suppliers;
+
+// ✅ Après
+include: {
+  eventSuppliers: {
+    include: { supplier: { include: { products: { where: { status: 'ACTIVE' } } } } },
+  },
+}
+const suppliers = event.eventSuppliers.map((es) => es.supplier);
+```
+
+Fichier : `backend/src/modules/simulator/simulator.service.ts:36-52` (seedEvent), `116-132` (simulateRush)
+
+### P2 — Écarts documentés (non bloquants Phase 7)
+
+| # | Écart | Action |
+|---|---|---|
+| 2.1 | Gateway CORS `origin: '*'` | À restreindre via `CORS_ORIGINS` env en Phase 7 (staging) |
+| 2.2 | Aucune autorisation de room (n'importe quel user auth peut rejoindre n'importe quelle room) | Limitation V1 documentée — Phase 8 ajoutera des ACL par rôle/organisation |
+| 2.3 | Pas de tests pour `SimulatorService` | À ajouter en Phase 8 avec `progressOrders()` / `randomFailures()` |
+| 2.4 | Endpoint de resync dashboard `GET /dashboards/:id/snapshot` non implémenté | Prévu Phase 8 pour recovery après reconnexion client |
+| 2.5 | Storybook mobile (React Native) non scaffoldé | Reporté Phase 8 (ROADMAP mentionne "web + RN") |
+
+### P3 — Reporté (phases futures)
+
+| # | Sujet | Phase cible |
+|---|---|---|
+| 3.1 | Événements realtime `supplier_status_changed`, `rush_detected`, `queue_updated` non implémentés | Phase 7 (Flaix integration) |
+| 3.2 | Auth `STAGING_ONLY_TOKEN` non utilisée sur les endpoints simulateur | Phase 8 (durcissement sécurité staging) |
+| 3.3 | `progressOrders()` / `randomFailures()` dans SimulatorService | Phase 8 |
+
+### Critères d'acceptance Phase 6 — statut
+
+| Critère | Statut |
+|---|---|
+| Chaque transition persistée et auditée | ✅ Bloc 6.1 |
+| Aucun emit avant le commit DB | ✅ Outbox rule enforced (Bloc 6.2) |
+| Gateway Socket.IO opérationnel avec JWT auth | ✅ Bloc 6.2 |
+| Storybook admin + operator scaffoldés | ✅ Bloc 6.3 |
+| Pipeline EAS Build configuré | ✅ Bloc 6.3 (nécessite `eas init` + EXPO_TOKEN pour activer) |
+| DEMO_MODE toggle opérationnel | ✅ Bloc 6.3 |
+| SimulatorService seed/rush/clear | ✅ Bloc 6.3 (bugs P1 corrigés dans cet audit) |
+| 170 tests passants, 0 failures | ✅ Vérifié post-correction |
+| Backend staging accessible | ✅ Railway (GET /health → 200) |
+| Mobile preview installable via QR | ⏳ Nécessite `eas init` + EXPO_TOKEN côté product owner |
+
+---
+
+## [2026-06-01] Phase 8 — Dashboards + Public Screens
+
+### What Was Built
+
+Deux surfaces utilisateur temps réel pour l'application Break Eat :
+
+1. **Dashboard opérateur** (`/dashboard/[eventId]`) — tableau kanban avec 5 colonnes (PAID, ACCEPTED, PREPARING, READY, RECOVERED), mis à jour en temps réel via Socket.IO. Inclut un formulaire de connexion, des alertes sonores (Web Audio API) et un mode plein écran.
+
+2. **Écran public** (`/public/[eventId]`) — liste des commandes prêtes à récupérer, sans authentification, sans PII. Affiché sur un écran dans le lieu.
+
+Côté backend : endpoint de snapshot dashboard, assignation atomique de slot, endpoints Flaix, et trois nouvelles méthodes simulateur (`progressOrders`, `randomFailures`, `getStats`).
+
+### Why It Was Built
+
+- Le dashboard opérateur est le coeur de l'interface de production — sans lui, les opérateurs ne peuvent pas gérer les commandes en temps réel.
+- L'écran public remplace les systèmes d'affichage dédiés dans les stades : les clients voient leur numéro de commande quand elle est prête, sans avoir à demander.
+- Les méthodes simulateur permettent de tester des scénarios de rush et de récupération sans données réelles.
+
+### How It Works
+
+#### Backend — Dashboard API
+
+```typescript
+// GET /orders/event/:eventId/dashboard → OrdersService.findDashboardByEvent()
+const DASHBOARD_STATUSES = [PAID, ACCEPTED, PREPARING, READY, RECOVERED];
+const orders = await this.prisma.order.findMany({
+  where: { eventId, status: { in: DASHBOARD_STATUSES } },
+  include: { items: true },
+  orderBy: { createdAt: 'asc' },
+});
+// Groupement en mémoire → { eventId, counts: { PAID: n, ... }, orders: { PAID: [...], ... } }
+```
+
+#### Backend — Simulator étendu
+
+```typescript
+// progressOrders() — avance chaque commande DEMO- d'un état
+const NEXT_STATUS = { PAID→ACCEPTED, ACCEPTED→PREPARING, PREPARING→READY, RECOVERED→ACCEPTED };
+for (const order of demoOrders) {
+  const next = NEXT_STATUS[order.status];
+  if (!next) continue;  // COMPLETED/CANCELLED/READY/PICKED_UP skippés
+  await prisma.$transaction([order.update({ status: next }), auditTrail.create(...)]);
+}
+
+// randomFailures(failRate) — annule ou récupère des commandes actives
+// 60% des affectés → CANCELLED, 40% → RECOVERED
+```
+
+#### Frontend — Socket client
+
+```typescript
+// apps/operator/src/lib/realtime/socket-client.ts
+const { io } = await import('socket.io-client');  // Dynamic import (pas de SSR)
+const socket = io(SOCKET_URL, { auth: { token } });
+socket.on('connect', () => {
+  socket.emit('join_room', { room: `event:${eventId}` });
+  if (isReconnect) this.options.onResync?.();  // Déclenche resync REST
+});
+// Déduplication : Set<string>(1000) de eventIds de payload
+```
+
+#### Frontend — useDashboard hook
+
+```typescript
+// Reducer : 11 types d'actions
+type Action =
+  | { type: 'FETCH_START' }
+  | { type: 'FETCH_SUCCESS'; payload: DashboardData }
+  | { type: 'NEW_ORDER' }           // → déclenche fetchSnapshot() (payload socket sans items)
+  | { type: 'ORDER_UPDATED'; payload: Order }   // → déplace la commande entre colonnes
+  | { type: 'ORDER_READY'; payload: {...} }      // → notification + son
+  | { type: 'SET_NOTIFICATION'; payload: ... }
+  | { type: 'ORDER_LOADING'; orderId: string }
+  | { type: 'ORDER_LOADED'; orderId: string }
+  | { type: 'SOCKET_STATUS'; status: 'connected'|'disconnected' }
+  ...
+
+// Polling fallback
+const interval = setInterval(loadSnapshot, pollInterval ?? 10_000);
+// Actif seulement si socketStatus === 'disconnected'
+```
+
+#### Frontend — écran public
+
+```typescript
+// apps/operator/src/app/public/[eventId]/page.tsx
+// Pas de JWT → socket.io refusé → uniquement polling REST
+// useReducer:
+//   ADD_ORDERS (snapshot REST) → ADD_ORDER (event socket order_ready)
+//   CLEAR_NEW (après 3s — retire l'animation highlight)
+//   PRUNE (toutes les 30s — retire les commandes de plus de 5 min)
+```
+
+### Code References
+
+**Backend :**
+- `backend/src/modules/orders/orders.service.ts:findDashboardByEvent` — requête Prisma + groupement mémoire
+- `backend/src/modules/orders/orders.service.ts:assignOrderToSlot` — `$transaction` → SlotsService.assignOrderToSlot
+- `backend/src/modules/orders/orders.controller.ts` — `GET /event/:eventId/dashboard` + `PATCH /:id/assign-slot`
+- `backend/src/modules/flaix/flaix.controller.ts` — `GET /flaix/event/:eid/rush-status` + `GET decisions`
+- `backend/src/modules/simulator/simulator.service.ts:progressOrders` — NEXT_STATUS map + $transaction par order
+- `backend/src/modules/simulator/simulator.service.ts:randomFailures` — shuffle + failRate + $transaction
+
+**Frontend :**
+- `apps/operator/src/lib/realtime/socket-client.ts` — connexion socket.io dynamique (toute la couche WS)
+- `apps/operator/src/lib/api/orders-client.ts` — REST API client (fetchDashboard + toutes les mutations)
+- `apps/operator/src/hooks/useDashboard.ts` — hook principal du dashboard (reducer + socket + polling)
+- `apps/operator/src/hooks/useSound.ts` — beeps Web Audio (OscillatorNode + GainNode, zéro dépendance)
+- `apps/operator/src/components/OrderCard.tsx` — carte commande avec boutons d'action contextuels
+- `apps/operator/src/components/DashboardColumn.tsx` — colonne kanban avec indicateur `hasNew`
+- `apps/operator/src/components/NotificationPopup.tsx` — overlay notification avec auto-dismiss
+- `apps/operator/src/components/PublicScreenRow.tsx` — ligne écran public (ZÉRO PII)
+- `apps/operator/src/app/dashboard/[eventId]/page.tsx` — page dashboard (JWT localStorage, kanban, fullscreen)
+- `apps/operator/src/app/public/[eventId]/page.tsx` — page écran public (sans auth)
+
+### Data Flow
+
+#### Flux temps réel — nouvelle commande
+
+```
+Stripe webhook
+  → OrdersService.createFromPaymentIntent()
+  → $transaction commit
+  → RealtimeService.emitNewOrder()  (outbox — APRÈS commit)
+        rooms: [organization:X, event:Y, supplier:Z]
+
+Client dashboard (event:Y abonné)
+  → socket event 'new_order' reçu
+  → useDashboard dispatch NEW_ORDER
+  → fetchSnapshot() → GET /orders/event/:eid/dashboard
+  → reducer FETCH_SUCCESS → colonnes mises à jour
+  → useSound.playNewOrder() (si notification active)
+  → NotificationPopup 'nouvelle commande' visible 4s
+```
+
+#### Flux temps réel — commande prête
+
+```
+Operator PATCH /orders/:id/mark-ready
+  → OrdersService.transition(PREPARING → READY)
+  → $transaction [order.update, auditTrail.create]
+  → RealtimeService.emitOrderReady()  (outbox)
+        rooms: [order:X, pickup-point:Y, organization:Z, event:W]
+
+Client dashboard (event:W abonné)
+  → socket 'order_ready' → ORDER_READY action
+  → NotificationPopup verte visible 4s + son
+
+Écran public (event:W polling ou socket)
+  → ADD_ORDER reducer → ligne PublicScreenRow isNew=true
+  → après 3s : CLEAR_NEW (retire animation)
+  → après 5min : PRUNE automatique
+```
+
+### Dependencies
+
+- **Interne** : `RealtimeModule`, `SlotsModule`, `FlaixModule`, `PrismaService`
+- **Frontend externe** : `socket.io-client ^4.8.1` (à installer via `pnpm install` dans `apps/operator`)
+- **Web Audio API** : API navigateur native, zéro dépendance externe
+- **Next.js App Router** : `[eventId]` dynamic segments, `'use client'` pour toutes les pages réactives
+
+### Tests and Verification
+
+- `simulator.service.spec.ts` — 15 tests (seed, rush, clear, progressOrders, randomFailures, getStats)
+- `orders.service.spec.ts` — 5 tests ajoutés (findDashboardByEvent × 3, assignOrderToSlot × 2)
+- **Total backend (Phase 8) : 221 tests passants, 18 suites, 0 failure**
+- 4 fichiers Storybook stories avec 19 stories au total pour le package operator
+
+### Audit Phase 8 — Corrections P1 / P2
+
+**P1 — Écran public vide (401 silencieux)**
+- `GET /orders/event/:eid/dashboard` est protégé par `@UseGuards(JwtAuthGuard)` au niveau du contrôleur. L'écran public `/public/[eventId]` appelait cet endpoint sans token — réponse 401 ignorée silencieusement dans le `catch {}` → liste vide affichée.
+- Fix : nouveau `PublicOrdersController` (`@Controller('public/orders')`) sans guard. Nouvel endpoint `GET /public/orders/event/:eventId/ready` retourne `{id, publicOrderNumber, pickupPointId, updatedAt}` uniquement. `findReadyByEvent()` ajouté dans `OrdersService` avec `select` explicite (zéro PII). Frontend mis à jour pour appeler ce endpoint.
+
+**P2 — failRate non borné**
+- `randomFailures(eventId, failRate)` acceptait n'importe quelle valeur, y compris > 1. Un failRate > 1 aurait rendu `roll < rate * 0.6` toujours vrai → 100% des commandes annulées. Fix : `const rate = Math.max(0, Math.min(1, failRate))`.
+
+**P2 — FlaixController sans contrôle org**
+- Les endpoints `GET /flaix/event/:id/rush-status` et `GET /flaix/event/:id/decisions` vérifiaient uniquement que le token JWT était valide, pas que l'utilisateur appartient à l'organisation de l'event. Fix : injection `PrismaService` dans `FlaixController` + méthode privée `assertOrgMemberForEvent(eventId, userId)` appelée au début de chaque handler.
+
+**P2 — isFullscreen désynchronisé**
+- Le toggle fullscreen appelait `setIsFullscreen(!isFullscreen)` directement, sans écouter le navigateur. Appui sur Échap ne mettait pas à jour le state React. Fix : `useEffect` avec `document.addEventListener('fullscreenchange', () => setIsFullscreen(!!document.fullscreenElement))`. Toggle ne modifie plus le state directement.
+
+**Tests ajoutés :** +3 dans `orders.service.spec.ts` pour `findReadyByEvent` (champs minimaux READY, tableau vide, select projection sans PII).
+**Total backend après audit : 224 tests passants, 18 suites, 0 failure**
+
+### Risks and Safe Change Rules
+
+- **Dynamic import socket.io-client** : ne jamais importer `socket.io-client` directement au niveau module (import statique) — le SSR Next.js échouera avec `window is not defined`
+- **JWT dans localStorage** : la page dashboard ne peut pas être rendue côté serveur (SSR). C'est intentionnel — ajouter `'use client'` si d'autres pages parent en avaient besoin.
+- **Polling fallback** : si le socket est déconnecté pendant plus de 10s sans reconnexion, les données peuvent être décalées jusqu'à 10s. Acceptable en V1 ; à réduire à 3s si criticité augmente.
+- **CORS `origin: '*'` sur le gateway** — P2 ouvert depuis Phase 6. À restreindre via `CORS_ORIGINS` env en Phase 9.
+- **Écran public sans auth** : le socket.io gateway rejette la connexion sans token. L'écran public ne reçoit donc les mises à jour en temps réel que via polling REST. Une future V2 pourrait exposer une room publique sans auth pour les écrans d'affichage.
+
+### Debugging Notes
+
+**Dashboard ne charge pas les commandes :**
+1. Vérifier `localStorage.getItem('operator_token')` dans la console navigateur
+2. Vérifier que le backend répond : `GET /api/v1/orders/event/:eventId/dashboard` avec `Authorization: Bearer <token>`
+3. Vérifier l'état socket dans le ConnectionBadge (rouge = déconnecté → polling actif)
+
+**Notifications sonores silencieuses :**
+- `AudioContext` est suspendu par défaut par les navigateurs tant qu'il n'y a pas eu de geste utilisateur
+- `useSound` gère `context.state === 'suspended'` → `context.resume()` avant chaque beep
+- Sur mobile, un premier tap sur la page est nécessaire pour déverrouiller l'audio
+
+**Écran public ne se met pas à jour :**
+1. Vérifier la console pour les erreurs de polling : `GET /api/v1/orders/event/:eventId/active`
+2. L'auto-prune retire les commandes de plus de 5 min — si les commandes ont plus de 5 min, elles n'apparaissent pas
+3. Le socket n'est PAS actif sur l'écran public (pas de token) — uniquement polling REST
+
+---
+
+## [2026-06-01] Phase 9 — CMS basique + Feature Flags
+
+### What Was Built
+
+1. **FeatureFlag** — activer/désactiver des fonctionnalités par scope sans redéploiement
+2. **AppSetting** — stockage JSON de configuration / CMS simple par scope
+3. **FlagScope** — enum partagé `GLOBAL | ORGANIZATION | EVENT`
+4. **CORS hardening** — gateway Socket.IO aligné sur `CORS_ORIGINS` env
+5. **useFeatureFlag** — hook React pour la résolution de flags depuis le frontend
+
+### Why
+
+- Permettre aux opérateurs de modifier le comportement de l'application sans redéployer (feature flags)
+- Stocker des textes et configurations personnalisés par event ou organisation (CMS/AppSettings)
+- Fermer le P2 CORS ouvert depuis Phase 6 : le gateway acceptait `origin: '*'`
+
+### How It Works
+
+#### Résolution de flag (EVENT > ORG > GLOBAL)
+
+```
+resolve(key, { orgId?, eventId? })
+  1. Si eventId fourni → findUnique(key, EVENT, eventId)  → hit? retourner
+  2. Si orgId fourni  → findUnique(key, ORG,   orgId)     → hit? retourner
+  3.                    findFirst(key, GLOBAL)             → hit? retourner
+  4. Aucun résultat   → false (désactivé par défaut)
+```
+
+La même logique s'applique à `AppSettingsService.get()`, qui retourne `null` au lieu de `false` si non trouvé.
+
+#### Upsert (idempotent)
+
+```sql
+UNIQUE(key, scope, scope_id)
+```
+Un seul `upsert()` Prisma gère create et update. Pas de concurrence sur le même flag/setting.
+
+#### CORS gateway
+
+```typescript
+// Avant (Phase 6–8) :
+@WebSocketGateway({ cors: { origin: '*' } })
+
+// Phase 9 :
+@WebSocketGateway({
+  cors: { origin: process.env['CORS_ORIGINS']?.split(',') ?? ['http://localhost:3001'] }
+})
+```
+
+#### useFeatureFlag (frontend)
+
+```typescript
+const { enabled, loading } = useFeatureFlag('rush_mode', { eventId, token });
+if (!enabled) return null; // gate the feature
+```
+
+- Fetch vers `GET /api/v1/feature-flags/resolve?key=&orgId=&eventId=`
+- `enabled = false` pendant le chargement et en cas d'erreur (fail-closed)
+- Cleanup via `cancelled` flag sur démontage React
+
+### Code References
+
+| File | Description |
+|------|-------------|
+| `backend/src/modules/feature-flags/feature-flags.service.ts` | Service principal — resolve(), list(), set(), remove() |
+| `backend/src/modules/feature-flags/feature-flags.controller.ts` | 4 endpoints REST |
+| `backend/src/modules/app-settings/app-settings.service.ts` | get(), list(), set(), remove() avec résolution scope |
+| `backend/src/modules/app-settings/app-settings.controller.ts` | 4 endpoints REST |
+| `backend/prisma/schema.prisma` | enum FlagScope, model FeatureFlag, model AppSetting |
+| `apps/operator/src/hooks/useFeatureFlag.ts` | Hook React |
+
+### API Endpoints
+
+```
+GET    /api/v1/feature-flags                              → liste tous les flags
+GET    /api/v1/feature-flags/resolve?key=&orgId=&eventId= → {key, enabled, resolvedAt}
+POST   /api/v1/feature-flags                              → upsert flag
+DELETE /api/v1/feature-flags/:id                          → supprimer flag
+
+GET    /api/v1/app-settings                               → liste tous les settings
+GET    /api/v1/app-settings/get?key=&orgId=&eventId=      → {key, value, resolvedAt}
+POST   /api/v1/app-settings                               → upsert setting
+DELETE /api/v1/app-settings/:id                           → supprimer setting
+```
+
+### Dependencies
+
+- **Prisma 6** : `FlagScope` enum, `FeatureFlag` + `AppSetting` models, client régénéré via `pnpm db:generate`
+- **class-validator** : DTOs existants (déjà installé)
+
+### Tests and Verification
+
+- `feature-flags.service.spec.ts` — 10 tests (Phase 9) + 3 tests (audit) = 13 tests
+- `app-settings.service.spec.ts` — 11 tests (Phase 9) + 2 tests (audit) = 13 tests
+- **Total backend (Phase 9) : 245 tests passants, 20 suites, 0 failure**
+
+### Audit Phase 9 — Corrections P2
+
+**P2 — ?scope= non validé dans les contrôleurs (→ Prisma 500)**
+- `GET /feature-flags?scope=INVALID` et `GET /app-settings?scope=INVALID` passaient la chaîne invalide directement à Prisma → `PrismaClientValidationError` → HTTP 500.
+- Fix : guard inline dans `list()` de chaque contrôleur : `Object.values(FlagScope).includes(scope)` → sinon `BadRequestException` avec message clair.
+
+**P2 — Validation cross-champ manquante dans set()**
+- `scope=GLOBAL + scopeId fourni` → flag GLOBAL avec `scopeId≠null` stocké. `resolve()` ne le retrouverait pas (filtre `scopeId: null`). État incohérent silencieux.
+- `scope=ORG/EVENT + scopeId absent` → flag stocké avec `scopeId=null`, mais `resolve()` le chercherait dans la bucket GLOBAL, jamais dans ORG/EVENT. Feature flag définitivement perdu.
+- Fix dans `set()` des deux services :
+  ```typescript
+  if (scope === FlagScope.GLOBAL && scopeId) throw BadRequestException(...)
+  if (scope !== FlagScope.GLOBAL && !scopeId) throw BadRequestException(...)
+  ```
+
+**P2 — findFirst(GLOBAL) sans scopeId: null**
+- `findFirst({ key, scope: GLOBAL })` sans `scopeId: null` aurait pu retourner un enregistrement GLOBAL avec `scopeId≠null` (si la garde cross-champ était contournée).
+- Fix : `where: { key, scope: FlagScope.GLOBAL, scopeId: null }` dans les deux services.
+
+**P2 — FeatureFlagsService.remove() → Prisma P2025 non intercepté**
+- `prisma.featureFlag.delete()` direct sans vérification préalable → `PrismaKnownRequestError P2025` non attrapée → HTTP 500.
+- `AppSettingsService.remove()` avait le pattern correct (findUnique + NotFoundException). FeatureFlagsService en était dépourvu.
+- Fix : miroir du pattern AppSettings.
+
+**Tests après audit : 250 passants, 20 suites, 0 failure** (+5 tests d'audit)
+
+### Risks and Safe Change Rules
+
+- **Pas de contrôle de rôle en V1** : tout utilisateur JWT peut lire/écrire les flags et settings. Restreindre à SUPER_ADMIN/ORG_ADMIN en V2.
+- **Pas de cache** : `resolve()` fait 1-3 requêtes DB par appel. Si appelé à haute fréquence, ajouter un cache mémoire (TTL 60s) ou Redis.
+- **scopeId null** : dans Prisma, deux lignes avec `scopeId=null` et la même clé+scope n'entrent PAS en conflit de contrainte unique (PostgreSQL considère les nulls comme inégaux). Cela est intentionnel — il ne peut y avoir qu'un seul flag GLOBAL par clé (on utilise `findFirst` au lieu de `findUnique` pour GLOBAL).
+
+### Debugging Notes
+
+**Flag resolve() retourne toujours false :**
+1. Vérifier que le flag existe : `GET /api/v1/feature-flags?scope=GLOBAL`
+2. Vérifier que `enabled = true` sur le flag
+3. Vérifier que `scopeId` correspond exactement à l'orgId ou eventId passé
+
+**useFeatureFlag retourne toujours loading=false, enabled=false :**
+1. Vérifier que `token` est bien passé dans les options
+2. Vérifier la console réseau — l'endpoint requiert un JWT valide (401 si absent)
+
+---
+
+## [2026-06-02] Phase 10 — QA, Rush Tests, Déploiement
+
+### What Was Built
+
+Phase 10 livre la couche de validation sous charge et l'infrastructure de déploiement en production :
+- **Rush tests** (BLOC 10.1) : validation que 50 / 100 commandes peuvent être créées et progressées sans perte.
+- **Order-loss tests** (BLOC 10.2) : validation que les états terminaux sont protégés et que `findReadyByEvent` est cohérent après reconnexion WebSocket.
+- **Sentry frontend** (BLOC 10.3) : `@sentry/nextjs` sur l'opérateur Next.js, init multi-runtime (browser / Node / Edge).
+- **Logging JSON structuré** (BLOC 10.4) : `JsonLogger` sous-classe de `ConsoleLogger`, JSON one-line par ligne en production.
+- **Docker Compose production** (BLOC 10.5) : Dockerfile multi-stage + `docker-compose.prod.yml` (PostgreSQL 16 + Redis 7 + backend, réseau interne).
+- **Vercel config** (BLOC 10.6) : headers sécurité + tunnel Sentry dans `vercel.json`.
+- **Deployment checklist** (BLOC 10.7) : `DEPLOYMENT_CHECKLIST.md` — 7 sections, 40+ items.
+
+### Why It Was Built
+
+- Les tests de charge sont requis avant la beta pour valider que le `SimulatorService` ne perd pas de commandes sous rush (50–100 ordres simultanés).
+- Les tests d'intégrité valident le comportement des états terminaux (COMPLETED, CANCELLED) — aucune régression possible.
+- Sentry est requis pour tracer les erreurs navigateur en production sans exposer le DSN via les logs.
+- Le logging JSON est requis par Railway et les plateformes de log centralisées (Datadog, Papertrail).
+- Docker Compose prod permet un déploiement self-hosted ou staging isolé.
+- La checklist de déploiement évite les oublis critiques (secrets non réglés, DEMO_MODE activé accidentellement en prod).
+
+### How It Works
+
+#### BLOC 10.1 — Rush tests (rush.spec.ts)
+
+Mock stateful en mémoire : un tableau `store: MockOrder[]` est mis à jour par les implémentations jest.fn() de Prisma :
+- `order.create` → pousse dans `store`
+- `order.findMany` → filtre `store` selon `where`
+- `order.update` → modifie `store[].status` in-place
+- `order.deleteMany` → filtre `store` pour enlever les correspondances
+
+Invariant vérifié à chaque étape : `store.length === N` (aucune création ou suppression parasite).
+
+Séquence de test "no loss" :
+1. `simulateRush(eventId, 50)` → store = 50 ordres PAID
+2. `progressOrders(eventId)` → chaque ordre avance d'un état via `NEXT_STATUS[current]`
+3. Après 6 cycles (PAID→ACCEPTED→PREPARING→READY→PICKED_UP→COMPLETED) : store = 50 ordres COMPLETED
+
+#### BLOC 10.2 — Order loss tests (order-loss.spec.ts)
+
+Utilise la vraie `OrderStateMachineService` (logique pure, aucune dépendance) avec les mocks Prisma + RealtimeService + SlotsService.
+
+Test "terminal state" :
+- `transition('o-completed', ACCEPTED, ...)` → `stateMachine.assertTransition(COMPLETED, ACCEPTED)` → `ALLOWED_TRANSITIONS[COMPLETED] = []` → `BadRequestException`
+
+Test "reconnect" :
+- `findReadyByEvent(eventId)` appelle `prisma.order.findMany({ where: { eventId, status: READY }, select: {...} })`
+- Le mock retourne uniquement les ordres READY filtrés depuis `orderStore`
+- Projection vérifiée : `userId`, `totalCents`, `items` absents du résultat
+
+#### BLOC 10.3 — Sentry frontend
+
+Flux d'initialisation :
+1. `next.config.ts` wrappé avec `withSentryConfig()` → injecte `sentry.client.config.ts` dans le bundle navigateur
+2. `instrumentation.ts` chargé par Next.js 15 au démarrage du runtime :
+   - `NEXT_RUNTIME === 'nodejs'` → importe `sentry.server.config.ts`
+   - `NEXT_RUNTIME === 'edge'` → importe `sentry.edge.config.ts`
+3. Chaque config : `enabled: Boolean(process.env.DSN)` → no-op si DSN absent
+
+Variables d'env :
+- `NEXT_PUBLIC_SENTRY_DSN_OPERATOR` — DSN public (navigateur)
+- `SENTRY_DSN_OPERATOR` — DSN serveur (non exposé au client)
+- `SENTRY_AUTH_TOKEN` — upload source maps (CI/Vercel uniquement)
+
+#### BLOC 10.4 — JsonLogger
+
+```typescript
+// backend/src/logger/json-logger.ts
+class JsonLogger extends ConsoleLogger {
+  private isProduction = process.env.NODE_ENV === 'production';
+  // En production : process.stdout.write(JSON.stringify(entry) + '\n')
+  // Sinon : super.log() (format NestJS coloré)
+}
+```
+
+Utilisé dans `main.ts` :
+```typescript
+const appLogger = new JsonLogger('Bootstrap');
+const app = await NestFactory.create(AppModule, { logger: appLogger });
+```
+
+Format JSON ligne :
+```json
+{"level":"log","timestamp":"2026-06-02T14:00:00.000Z","context":"Bootstrap","message":"Server running on port 3000"}
+```
+
+#### BLOC 10.5 — Docker Compose production
+
+```
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Réseau :
+- `backend` (internal: true) : postgres + redis + service backend, inaccessible depuis l'extérieur
+- `public` (bridge) : expose uniquement le backend sur `${BACKEND_PORT:-3000}:3000`
+
+Variables obligatoires (fail-loud si absentes) :
+- `POSTGRES_PASSWORD` — `${POSTGRES_PASSWORD:?...}` → Docker Compose refuse de démarrer si absent
+- `REDIS_PASSWORD` — idem
+
+Dockerfile multi-stage :
+- Stage `deps` : `pnpm install --frozen-lockfile` (tous deps)
+- Stage `builder` : `pnpm db:generate && pnpm build`
+- Stage `runner` : `pnpm install --prod` + copie des artefacts uniquement
+
+### Code References
+
+- `backend/src/modules/simulator/rush.spec.ts` — tests de charge 50/100 ordres, invariant de count
+- `backend/src/modules/orders/order-loss.spec.ts` — protection états terminaux, reconnect, projection
+- `apps/operator/sentry.client.config.ts` — init Sentry navigateur (DSN, replays, beforeSend)
+- `apps/operator/sentry.server.config.ts` — init Sentry Node.js
+- `apps/operator/sentry.edge.config.ts` — init Sentry Edge
+- `apps/operator/instrumentation.ts` — hook Next.js 15 (charge le bon config selon NEXT_RUNTIME)
+- `apps/operator/next.config.ts` — withSentryConfig (tunnelRoute, hideSourceMaps)
+- `backend/src/logger/json-logger.ts` — JsonLogger : JSON en prod, couleurs en dev
+- `backend/src/main.ts:12` — `new JsonLogger('Bootstrap')` comme logger global NestJS
+- `backend/Dockerfile` — multi-stage build (deps → builder → runner)
+- `docker-compose.prod.yml` — stack production complète
+- `apps/operator/vercel.json` — headers sécurité + rewrite Sentry tunnel
+- `DEPLOYMENT_CHECKLIST.md` — 40+ items pré-déploiement
+
+### Data Flow
+
+**Rush load path :**
+```
+POST /internal/simulator/rush?count=100
+  → SimulatorService.simulateRush(eventId, 100)
+  → boucle 100× : nextDemoSeq() + order.create()
+  → [store] 100 ordres PAID
+POST /internal/simulator/progress
+  → SimulatorService.progressOrders(eventId)
+  → order.findMany(DEMO-, status not COMPLETED/CANCELLED)
+  → pour chaque ordre : $transaction([order.update(nextStatus), orderAuditTrail.create()])
+  → [store] 100 ordres ACCEPTED
+```
+
+**Log JSON path (production) :**
+```
+NestJS appel logger.log('msg', 'Context')
+  → JsonLogger.log()
+  → isProduction=true → emit('log', msg, params)
+  → shouldLog('log') → true
+  → JSON.stringify({level:'log', timestamp, context, message})
+  → process.stdout.write(line + '\n')
+  → Railway/Docker capture stdout → log aggregator
+```
+
+**Sentry error path (operator app) :**
+```
+Browser JS error
+  → Sentry SDK intercepte (auto-instrumentation Next.js)
+  → beforeSend() filtre les faux positifs
+  → tunnelRoute: '/monitoring' → requête via /monitoring/* (pas bloquée par ad-blockers)
+  → Sentry.io dashboard
+```
+
+### Dependencies
+
+- `@sentry/nextjs ^9.0.0` — ajouté à `apps/operator/package.json`
+- `node:22-alpine` — image Docker base
+- `postgres:16-alpine` — PostgreSQL prod
+- `redis:7-alpine` — Redis prod
+- Aucune dépendance backend nouvelle (JsonLogger utilise uniquement `@nestjs/common`)
+
+### Tests and Verification
+
+**rush.spec.ts — 18 tests :**
+- Suite "50-order rush" : 4 tests (created=50, prefix DEMO-, status PAID, IDs uniques)
+- Suite "100-order rush" : 2 tests (created=100, numéros uniques)
+- Suite "progressOrders — no loss" : 3 tests (50 PAID→ACCEPTED, 50 orders → 6 cycles → 50 COMPLETED, count invariant)
+- Suite "combined rush+failures+progress" : 2 tests (total invariant, clearEvent)
+- Suite "getStats consistency" : 2 tests (sum=store.length, split après failures)
+
+**order-loss.spec.ts — 14 tests :**
+- Suite "terminal state protection" : 3 tests (COMPLETED→any, CANCELLED→any, COMPLETED→CANCELLED)
+- Suite "findReadyByEvent reconnect" : 3 tests (5 orders→3 READY, post-transition, empty)
+- Suite "count conservation" : 3 tests (transition invariant, 25 rapides, séquence lifecycle)
+- Suite "minimal projection" : 1 test (pas de PII)
+
+**Total backend Phase 10 : 273 tests passants, 22 suites, 0 failure**
+
+### Risks and Safe Change Rules
+
+- **DEMO_MODE en production** : `main.ts` fait `process.exit(1)` si `DEMO_MODE=true && NODE_ENV=production`. Ne jamais contourner ce guard. Docker Compose prod force `DEMO_MODE=false`.
+- **JsonLogger synchrone** : chaque appel log fait un `process.stdout.write`. Pour un volume > 10k logs/s, envisager un stream buffèrisé.
+- **Sentry replays** : `replaysSessionSampleRate: 0.05` en prod capture 5% des sessions. Implique des données utilisateur dans Sentry. Désactiver si contrainte RGPD.
+- **POSTGRES_PASSWORD et REDIS_PASSWORD** : Docker Compose échoue au démarrage si absents (`:?` syntax). Ne jamais les mettre dans docker-compose.prod.yml directement.
+- **Source maps Sentry** : uploadés seulement si `SENTRY_AUTH_TOKEN` présent. Sans token, les stack traces Sentry ne sont pas lisibles.
+
+### Debugging Notes
+
+**rush.spec.ts échoue :**
+- Vérifier que `prisma.$queryRaw` retourne `[{ nextval: BigInt(n) }]` — sans cela `nextDemoSeq()` retourne `BigInt(0)` et tous les ordres ont le même publicOrderNumber → conflit unique.
+- Si `store.length !== N` après un cycle : vérifier que `order.findMany` mock filtre bien sur `eventId` ET `publicOrderNumber.startsWith('DEMO-')`.
+
+**order-loss.spec.ts : "Nest can't resolve RealtimeService" :**
+- Utiliser le token de classe, pas une string : `{ provide: RealtimeService, useValue: {...} }` (non `{ provide: 'RealtimeService', ... }`).
+
+**JsonLogger ne sort pas de JSON en prod :**
+- Vérifier `NODE_ENV=production` dans les variables d'environnement.
+- `LOG_LEVEL` doit être `log` ou plus bas pour que les messages `log()` soient émis.
+
+**Sentry ne reçoit pas d'erreurs :**
+1. Vérifier que `NEXT_PUBLIC_SENTRY_DSN_OPERATOR` est défini (browser) et `SENTRY_DSN_OPERATOR` (server).
+2. Vérifier que le tunnel `/monitoring` est bien configuré dans `vercel.json` (rewrite) et dans `next.config.ts` (`tunnelRoute`).
+3. Tester avec `Sentry.captureException(new Error('test'))` dans un composant.
+
+---
+
+## [2026-06-02] Audit Phase 11 & 12 — P1 Security Fix + P2 Branding Fix
+
+### What Was Built
+
+A post-implementation audit of Phase 11 (Admin Panel Next.js 15) and Phase 12 (Admin V1 complet, blocs 12.1–12.9).
+Two code fixes were applied and a P3 UX improvement.
+
+### Audit Findings Summary
+
+| Priority | Area | Description | Status |
+|---|---|---|---|
+| P1 | Security | Dashboard `supplierId` query param not enforced — operator could bypass supplier filter | FIXED |
+| P2 | Branding DTO | `@IsUrl()` rejected empty string, making it impossible to clear a logo once set | FIXED |
+| P3 | Admin Dashboard | Quick-nav cards missing Équipe + Lieux sections added in Phase 12 | FIXED |
+| P2 | Team management | No PATCH endpoint to change a member's role or supplier assignment (remove+re-invite required) | Backlog |
+| P3 | Operator app | `window.location.href` used instead of `router.push()` — causes full page reload | Backlog |
+
+### Fix 1 — Dashboard Supplier Enforcement (P1 Security)
+
+**File:** `backend/src/modules/orders/orders.controller.ts` — `findDashboard()`
+
+**Before:** Only checked org membership (`assertOperatorAccess`). A malicious operator could remove `?supplierId=` from the URL to see ALL suppliers' orders.
+
+**After:** The handler now fetches `membership.supplierId` from DB. If the membership has a supplierId, it is **always applied** (the query param is ignored). Operators without a pin can still use the query param for convenience filtering.
+
+```typescript
+const effectiveSupplierId: string | undefined =
+  membership.supplierId ?? supplierId ?? undefined;
+```
+
+**Why this matters:** Phase 12.9 intended supplier-level isolation. The UI enforced this via localStorage, but the API endpoint did not — any operator could hit the API directly without the filter.
+
+### Fix 2 — Branding DTO: Clear logoUrl / primaryColor (P2)
+
+**Files:**
+- `backend/src/modules/organizations/dto/update-org-branding.dto.ts`
+- `backend/src/modules/events/dto/update-event.dto.ts`
+
+**Before:** `@IsUrl()` rejects empty strings. Sending `logoUrl: ''` to clear a logo returned a 400 validation error.
+
+**After:** Added `@Transform(({ value }) => (value === '' ? null : value))` before `@IsUrl()`. Empty string is converted to `null`, which `@IsOptional()` then accepts (it skips all validators for null/undefined). The DB field is set to NULL. Field types updated to `string | null`.
+
+### Code References
+
+- `backend/src/modules/orders/orders.controller.ts:99` — `findDashboard()` — reads membership.supplierId, applies effectiveSupplierId
+- `backend/src/modules/organizations/dto/update-org-branding.dto.ts` — Transform decorator on all 3 branding fields
+- `backend/src/modules/events/dto/update-event.dto.ts` — same Transform pattern
+- `apps/admin/src/app/(admin)/dashboard/page.tsx` — CARDS array now includes Équipe + Lieux
+
+### Tests and Verification
+
+273/273 backend tests pass after fixes. TypeScript: 0 errors (`npx tsc --noEmit`).
+
+### Risks and Safe Change Rules
+
+- The `effectiveSupplierId` logic: if `membership.supplierId` is **null** (no pin), the query param is used as-is. Only a non-null membership supplierId overrides. Never change this precedence order.
+- The `@Transform` runs before `@IsUrl` — this depends on class-transformer's decorator execution order. Do not reorder them.
+
+---
+
+## [2026-06-02] Phase 12 — Blocs 12.7 · 12.8 · 12.9 — Admin Panel complet
+
+### What Was Built
+
+Three blocs completing Phase 12 so the Super Admin can run the full demo flow without touching code.
+
+**BLOC 12.7 — Operator invitation & team management**
+- Schema: `OrganizationMember.supplierId` — optional FK to Supplier, set when `orgRole = OPERATOR`
+- `OrganizationsService.inviteByEmail()` — lookup by email; clear NotFoundException if email not registered
+- `OrganizationsService.getMembers()` — returns members enriched with `user.email/displayName` and `supplier.name`
+- `OrganizationsService.removeMember()` — self-removal guard
+- Admin panel `/team` page — full CRUD: member table with supplier badge, invite form (email + role + supplier picker)
+- `UsersService.findByIdWithMemberships()` — now includes `supplier` in each membership → powers BLOC 12.9
+
+**BLOC 12.8 — Branding**
+- Schema: `Organization` + `Event` each get `logoUrl`, `primaryColor`, `description`
+- `PATCH /organizations/:id/branding` — isolated endpoint for org branding
+- `PATCH /organizations/:orgId/events/:id` — extended to accept branding fields
+- Admin panel: org detail and event detail pages each have a Branding section (logo preview, native color picker + hex input, description textarea)
+
+**BLOC 12.9 — Filtered operator dashboard**
+- `GET /orders/event/:id/dashboard?supplierId=uuid` — optional supplierId param filters orders at DB level
+- Operator app: after login, calls `/auth/me/memberships`, reads `memberships[0].supplierId`, stores to localStorage
+- `useDashboard({ supplierId })` passes filter through to `fetchDashboard()`
+- Dashboard and EventSelector both show a "🏪 Buvette Nord" badge when the operator has a supplier assignment
+
+### Why It Was Built
+
+The Phase 12 admin panel was ~40% complete. Super Admin could create orgs/events/suppliers but could not:
+1. Invite operators by email and assign them to a specific supplier
+2. Set branding (logo, colour, description) on orgs or events
+3. Give operators a filtered view showing only their supplier's orders
+
+These three blocs bring the admin to full self-service for the demo flow.
+
+### How It Works
+
+**Invite flow:**
+1. Admin opens `/team`, types an email address, picks role=OPERATOR, picks supplier "Buvette Nord"
+2. `POST /organizations/:id/invite` → `inviteByEmail()` → finds user by email → creates `OrganizationMember { orgRole: OPERATOR, supplierId: <buvetteNordId> }`
+3. Member appears in the table with the supplier badge
+
+**Branding flow:**
+1. Admin opens `/organizations/:id`, fills logo URL + hex color + description
+2. `PATCH /organizations/:id/branding` → `updateBranding()` → updates Organization row
+3. Same for events via `PATCH /organizations/:orgId/events/:id`
+
+**Filtered dashboard flow:**
+1. Operator logs in to `apps/operator/`
+2. `fetchMeWithMemberships()` returns `memberships[0].supplierId = "buvette-nord-id"`
+3. localStorage stores `operator_supplier_id = "buvette-nord-id"`
+4. `useDashboard({ supplierId: "buvette-nord-id" })` → `fetchDashboard(eventId, token, supplierId)` → `GET /orders/event/:id/dashboard?supplierId=buvette-nord-id`
+5. Backend: `prisma.order.findMany({ where: { eventId, supplierId } })` → only Buvette Nord orders
+
+### Code References
+
+- `backend/prisma/schema.prisma` — `OrganizationMember.supplierId` field + `Supplier.assignedOperators` back-ref
+- `backend/src/modules/organizations/organizations.service.ts` — `inviteByEmail()`, `getMembers()`, `removeMember()`, `updateBranding()`
+- `backend/src/modules/organizations/organizations.controller.ts` — `GET /:id/members`, `POST /:id/invite`, `DELETE /:id/members/:memberId`, `PATCH /:id/branding`
+- `backend/src/modules/orders/orders.service.ts` — `findDashboardByEvent(eventId, supplierId?)`
+- `backend/src/modules/orders/orders.controller.ts` — `?supplierId` query param
+- `apps/admin/src/app/(admin)/team/page.tsx` — team management UI
+- `apps/operator/src/lib/api/orders-client.ts` — `fetchMeWithMemberships()`, `fetchDashboard(supplierId?)`
+- `apps/operator/src/hooks/useDashboard.ts` — `supplierId` option
+- `apps/operator/src/app/page.tsx` — supplier badge in EventSelector
+- `apps/operator/src/app/dashboard/[eventId]/page.tsx` — supplier badge in header
+
+### Data Flow
+
+```
+Admin invites operator by email
+  → POST /organizations/:id/invite { email, role: OPERATOR, supplierId }
+  → OrganizationMember { supplierId: "buvette-nord-id" }
+
+Operator logs in
+  → GET /auth/me/memberships
+  → memberships[0].supplierId = "buvette-nord-id"
+  → localStorage: operator_supplier_id = "buvette-nord-id"
+
+Operator opens dashboard
+  → GET /orders/event/:id/dashboard?supplierId=buvette-nord-id
+  → OrdersService: WHERE supplierId = "buvette-nord-id"
+  → Only Buvette Nord orders shown
+```
+
+### Dependencies
+
+- Prisma 6 — schema migration, client regeneration required after schema change
+- `class-validator` — `@IsEmail`, `@IsUrl`, `@Matches` on new DTOs
+- No new npm packages
+
+### Tests and Verification
+
+- 273/273 backend tests passing
+- 0 TypeScript errors across backend, admin, operator
+- 0 ESLint warnings
+
+### Risks and Safe Change Rules
+
+- `OrganizationMember.supplierId` is nullable — only OPERATOR members need it; ORG_ADMIN/MANAGER leave it null
+- If the supplier is deleted, `onDelete: SetNull` nullifies the assignment — operator will see all orders until reassigned
+- `fetchMeWithMemberships` only reads `memberships[0]` — if an operator is in multiple orgs, only the first is used in V1
+
+### Debugging Notes
+
+```bash
+# Check a member's supplier assignment
+SELECT id, user_id, org_role, supplier_id FROM organization_members WHERE organization_id = '<orgId>';
+
+# Verify filtered dashboard
+curl -H "Authorization: Bearer <token>" \
+  http://localhost:3000/api/v1/orders/event/<eventId>/dashboard?supplierId=<supplierId>
+```
+
+---
+
+## [2026-06-02] Phase 13 — Mobile V1 — Parcours Client Complet
+
+### What Was Built
+
+Application mobile React Native : 9 screens, 2 stores Zustand, 1 API client dédié, navigation avec deep links. Backend : 3 endpoints publics (no auth) + endpoint demo-checkout (DemoGuard).
+
+**Parcours complet** : QR Scan → Event Home → Catalogue → Panier → Créneau → Checkout Demo → Confirmation → Suivi temps réel.
+
+### Why It Was Built
+
+L'objectif Axe 1 est de pouvoir commander dans un faux événement depuis son téléphone en scannant un QR code. Phase 13 implémente ce parcours de A à Z.
+
+### How It Works
+
+1. L'admin génère un QR code `breakeat://event/<uuid>` dans le panel (Phase 12).
+2. L'utilisateur scanne le QR avec l'app mobile → deep link → `EventHomeScreen`.
+3. L'app charge l'événement via `/api/v1/public/events/:id` (pas d'auth).
+4. L'utilisateur choisit un stand → `SupplierCatalogScreen` → charge les produits via `/public/events/:id/suppliers/:supplierId/products`.
+5. L'utilisateur ajoute des articles au panier (state local Zustand).
+6. L'utilisateur sélectionne un créneau via `/public/events/:id/slots`.
+7. L'utilisateur va en checkout → l'app crée un panier backend, ajoute les articles, appelle `POST /carts/:id/demo-checkout`.
+8. Le backend crée un Order avec status PAID sans Stripe (DemoGuard bloque en prod).
+9. L'app navigue vers `OrderTrackingScreen` qui poll `GET /orders/:id` toutes les 5s.
+10. L'opérateur accepte la commande → l'app voit le statut changer.
+
+### Code References
+
+Backend:
+- `backend/src/modules/events/public-events.controller.ts` — 3 routes publiques sans auth
+- `backend/src/modules/cart/cart.service.ts:demoCheckout()` — crée Order PAID sans Stripe, nécessite au moins 1 pickup point dans l'event
+- `backend/src/modules/cart/cart.controller.ts:POST /carts/:id/demo-checkout` — DemoGuard + JwtAuthGuard
+
+Mobile:
+- `apps/mobile/src/store/auth.store.ts` — token JWT + rehydrate depuis AsyncStorage
+- `apps/mobile/src/store/cart.store.ts` — state local du panier (items, slot, totals)
+- `apps/mobile/src/lib/api/mobile-api.ts` — injection Bearer token auto depuis auth.store.getState()
+- `apps/mobile/src/navigation/root-navigator.tsx` — deep link `breakeat://event/:eventId` → EventHomeScreen
+- `apps/mobile/src/screens/qr-scanner.screen.tsx` — VisionCamera v4 useCodeScanner, parse breakeat://
+- `apps/mobile/src/screens/checkout.screen.tsx` — flux en 3 étapes : createCart → addItems × N → demoCheckout
+
+### Data Flow
+
+```
+QR Code (breakeat://event/abc) 
+  → deep link → EventHomeScreen(eventId=abc)
+  → GET /public/events/abc → { event, suppliers }
+  → SupplierCatalogScreen(supplierId)
+  → GET /public/events/abc/suppliers/xyz/products → groups[]
+  → CartStore.addItem() (local)
+  → SlotSelectorScreen
+  → GET /public/events/abc/slots → slots[]
+  → CartStore.setSlot()
+  → CheckoutScreen
+  → POST /carts → { id: cartId }
+  → POST /carts/:cartId/items × N
+  → POST /carts/:cartId/demo-checkout → { orderId, publicOrderNumber, totalCents }
+  → OrderConfirmationScreen → OrderTrackingScreen
+  → GET /orders/:orderId (every 5s) → order.status
+```
+
+### Dependencies
+
+- `react-native-vision-camera@^4.7.3` — scanner QR natif
+- `@react-native-async-storage/async-storage@^3.1.1` — persistance token
+
+### Setup natif requis (à faire après `pnpm install`)
+
+```bash
+# iOS (depuis un Mac, une seule fois)
+cd apps/mobile/ios && pod install
+
+# Backend (mode démo pour demo-checkout)
+# DEMO_MODE=true dans le .env ou via variable d'env
+```
+
+### Debug Commands
+
+```bash
+# Tester les endpoints publics
+curl http://localhost:3000/api/v1/public/events/<eventId>
+curl http://localhost:3000/api/v1/public/events/<eventId>/suppliers/<supplierId>/products
+curl http://localhost:3000/api/v1/public/events/<eventId>/slots
+
+# Tester le demo checkout (DEMO_MODE=true requis)
+# 1. Login → obtenir token
+# 2. POST /carts → {eventId, supplierId} → cartId
+# 3. POST /carts/:cartId/items → {productId, quantity}
+# 4. POST /carts/:cartId/demo-checkout → {orderId}
+# 5. GET /orders/:orderId
+```
+
+---
+
+## [2026-06-02] Phase 12 — Admin Panel V1 Complet + Operator Home V2
+
+### What Was Built
+
+Complétion du panel d'administration pour permettre le parcours démo end-to-end complet : gestion des lieux, catégories, produits par fournisseur, points de retrait, créneaux horaires, QR codes événement. Wizard automatisé "Spartiates Hockey" en 1 clic. Refonte de l'accueil opérateur avec sélecteur d'événements dynamique.
+
+### Why It Was Built
+
+Phase 11 avait créé la structure du panel admin mais laissait des lacunes critiques pour l'autonomie complète : impossible de créer un lieu, des produits, des pickup points ou des créneaux depuis l'interface. Phase 12 comble ces lacunes pour permettre à un admin de configurer un événement de A à Z sans toucher directement à la DB.
+
+### Key Files
+
+| Fichier | Rôle |
+|---------|------|
+| `apps/admin/src/lib/api/admin-client.ts` | +12 fonctions : Venue, Category, Product, PickupPoint, Slot |
+| `apps/admin/src/app/(admin)/venues/page.tsx` | CRUD lieux |
+| `apps/admin/src/app/(admin)/suppliers/[id]/page.tsx` | Catégories + produits par fournisseur |
+| `apps/admin/src/app/(admin)/events/[id]/page.tsx` | Venue info + Pickup Points + Slots + QR Code |
+| `apps/admin/src/app/(admin)/demo-setup/page.tsx` | Wizard "Spartiates Hockey" 9 étapes |
+| `apps/operator/src/app/page.tsx` | Login dark + sélecteur d'événements |
+
+### Important: QR Code
+
+Le QR code pointe vers `breakeat://event/[id]`. Ce deep link sera géré par le mobile app (Phase 13). Pour la génération, on utilise l'API publique `api.qrserver.com` sans installation supplémentaire.
+
+### Important: Demo Wizard Flow
+
+Le wizard `/demo-setup` crée dans l'ordre :
+1. Venue "Patinoire des Spartiates"
+2. Event "Match Spartiates Hockey" (DRAFT → ACTIVE à la fin)
+3. Supplier "Buvette Nord"
+4. Attach supplier to event
+5. Categories "Boissons" + "Snacks"
+6. Products: Coca 2.50€, Bière 4€, Eau 2€, Hot-Dog 5€, Nachos 4.50€
+7. Pickup points: "Comptoir Nord" + "Comptoir Est"
+8. Slots: 20:00-20:20, 20:20-20:40, 20:40-21:00 (capacity 30)
+9. Activate event
+
+### How to Test
+
+```bash
+# 1. Lancer l'admin
+cd apps/admin && pnpm dev   # http://localhost:3001
+
+# 2. Aller sur /demo-setup
+# Cliquer "Créer la démo Spartiates Hockey"
+# Observer les 9 étapes
+
+# 3. Scanner le QR code affiché avec le mobile
+# (Phase 13 à venir)
+
+# 4. Lancer l'opérateur
+cd apps/operator && pnpm dev   # http://localhost:3002
+# Login → sélectionner "Match Spartiates Hockey"
+# → Dashboard en temps réel
+```
+
+---
+
+## [2026-06-02] Phase 11 — Admin Panel (Next.js 15)
+
+### What Was Built
+
+Panel d'administration complet pour Break Eat, accessible uniquement aux utilisateurs ayant un rôle d'admin dans une organisation. Construit avec Next.js 15 App Router (port 3001), il couvre : authentification JWT, gestion des organisations et de leurs membres, gestion des événements et de leurs fournisseurs, feature flags, paramètres application et simulateur de données de démo.
+
+### Why It Was Built
+
+Les phases 1 à 10 ont construit le backend et l'app opérateur. Il manquait un outil pour : configurer les organisations avant le démarrage, gérer les feature flags en runtime, surveiller l'état des commandes et injecter des données de test. L'admin panel remplit ce rôle sans toucher directement à la base de données.
+
+### Architecture
+
+#### App Next.js 15 (port 3001)
+
+```
+apps/admin/
+├── next.config.ts                   — NEXT_PUBLIC_API_URL env block
+├── src/
+│   ├── lib/api/admin-client.ts      — client API centralisé (300 lignes)
+│   └── app/
+│       ├── page.tsx                 — redirect root (token → /dashboard sinon /login)
+│       ├── login/page.tsx           — formulaire d'authentification
+│       └── (admin)/                 — route group Next.js (layout partagé, path invisible)
+│           ├── layout.tsx           — layout protégé + sidebar
+│           ├── dashboard/page.tsx
+│           ├── organizations/[id]/page.tsx
+│           ├── events/page.tsx
+│           ├── events/[id]/page.tsx
+│           ├── feature-flags/page.tsx
+│           ├── settings/page.tsx
+│           └── simulator/page.tsx
+```
+
+#### Gestion de session (localStorage)
+
+| Clé | Valeur | Durée de vie |
+|-----|--------|--------------|
+| `admin_token` | JWT Bearer | Jusqu'à logout |
+| `admin_user` | JSON SafeUser | Jusqu'à logout |
+| `admin_org_id` | UUID organisation | Jusqu'à logout |
+| `admin_org_name` | string | Jusqu'à logout |
+
+`clearSession()` vide les 4 clés. La fonction `req<T>()` détecte automatiquement un 401 et appelle `clearSession()` + `router.replace('/login')`.
+
+#### Endpoint backend ajouté
+
+```
+GET /auth/me/memberships   (JwtAuthGuard)
+```
+
+Retourne l'utilisateur + ses `memberships` incluant le détail de chaque organisation (`id`, `name`, `slug`, `status`). Utilisé exclusivement par le login admin pour identifier l'org à gérer.
+
+Implémentation :
+- `UsersService.findByIdWithMemberships(id)` — Prisma include imbriqué
+- `AuthService.meWithMemberships(userId)` — délègue
+- `AuthController` — route `GET /me/memberships`
+
+### Key Files
+
+| Fichier | Rôle |
+|---------|------|
+| `apps/admin/src/lib/api/admin-client.ts` | Toutes les fonctions API, helpers localStorage, gestion 401 |
+| `apps/admin/src/app/(admin)/layout.tsx` | Protection auth, sidebar, logout |
+| `apps/admin/src/app/login/page.tsx` | Flow login : JWT → memberships → localStorage → redirect |
+| `apps/admin/src/app/(admin)/simulator/page.tsx` | Interface simulateur (DEMO_MODE uniquement) |
+| `backend/src/modules/users/users.service.ts` | `findByIdWithMemberships` |
+| `backend/src/modules/auth/auth.controller.ts` | Route `GET /me/memberships` |
+
+### Important Constraints
+
+- **Route group `(admin)`** — le dossier `(admin)` n'ajoute pas de segment de path. Les routes restent `/dashboard`, `/events`, etc. Il sert uniquement à partager `layout.tsx`.
+- **Relation Prisma** — `User.memberships` (PAS `orgMemberships`). `OrganizationMember.orgRole` (PAS `role`).
+- **Simulateur** — route backend `/api/v1/internal/simulator/events/:id/...` (préfixe global `/api/v1` appliqué). Accessible seulement si `DEMO_MODE=true`.
+- **Ports** — admin: 3001, operator: 3002, backend: 3000.
+
+### How to Test / Debug
+
+```bash
+# Lancer l'admin en dev
+cd apps/admin && pnpm dev   # http://localhost:3001
+
+# Typecheck
+cd apps/admin && pnpm typecheck
+
+# Lint
+cd apps/admin && pnpm lint
+
+# Vérifier l'endpoint memberships (backend doit tourner)
+curl -H "Authorization: Bearer <token>" http://localhost:3000/api/v1/auth/me/memberships
+```
+
+---
+
+## [2026-06-02] Audit Global — Phases 1→10
+
+### What Was Built
+
+Audit de cohérence complet de toutes les phases (1 à 10). L'objectif était une application parfaitement fonctionnelle avec zéro erreur TS, zéro erreur ESLint et 100% des tests verts.
+
+### Why It Was Built
+
+Après 10 phases d'implémentation accumulant chacune de la dette technique mineure (erreurs de type découvertes plus tard, imports inutilisés, noms de symboles incorrects), un audit global consolide la qualité avant la phase suivante.
+
+### How It Works
+
+L'audit a procédé en 3 passes :
+1. **TypeScript** (`pnpm typecheck`) — 4 erreurs trouvées et corrigées
+2. **ESLint** (`pnpm lint`) — 8 erreurs trouvées et corrigées
+3. **Structure** — vérification manuelle de `app.module.ts` (20 modules), guards, migrations, config
+
+### Code References
+
+**Corrections TypeScript :**
+- `backend/src/logger/json-logger.ts:132` — méthode `serializeMessage` (anciennement `formatMessage` : conflit avec `ConsoleLogger` public API)
+- `backend/src/modules/flaix/flaix.controller.ts:73` — `userId_organizationId` (clé composée Prisma, ordre champs `@@unique([userId, organizationId])`)
+- `backend/src/modules/orders/orders.controller.ts:227` — même clé composée
+- `apps/operator/next.config.ts` — `sourcemaps: { deleteSourcemapsAfterUpload: true }` (@sentry/nextjs v9 : `hideSourceMaps` supprimé)
+
+**Corrections ESLint :**
+- `backend/src/modules/flaix/flaix.service.ts` — `_context`, `_userId` (paramètres stub non utilisés)
+- `apps/operator/src/hooks/useDashboard.ts` — directive `eslint-disable react-hooks/exhaustive-deps` supprimée (plugin `eslint-plugin-react-hooks` absent)
+
+**Améliorations config :**
+- `backend/src/config/app.config.ts` — `appEnv` + `logLevel` enregistrés dans `registerAs('app', ...)` pour accès via `ConfigService`
+
+### Data Flow
+
+Pas de nouveau flux de données. L'audit corrige uniquement des erreurs statiques (compilation, lint) et améliore la cohérence du registre de config.
+
+### Dependencies
+
+Aucune dépendance ajoutée. Corrections purement internes.
+
+### Tests and Verification
+
+```bash
+pnpm typecheck    # backend  → exit 0 — 0 erreur
+pnpm typecheck    # operator → exit 0 — 0 erreur
+pnpm lint         # backend  → exit 0 — 0 erreur
+pnpm lint         # operator → exit 0 — 0 erreur
+pnpm test         # backend  → 273/273 — 22 suites — 0 failure — 21.5s
+```
+
+### Risks and Safe Change Rules
+
+**Clé composée Prisma :**
+- `@@unique([fieldA, fieldB])` génère toujours `fieldA_fieldB` (ordre exact des champs, pas alphabétique)
+- Tout `where: { fieldB_fieldA: ... }` sera une erreur TypeScript → toujours vérifier le schéma
+
+**ConsoleLogger API NestJS :**
+- `ConsoleLogger` a plusieurs méthodes publiques (`formatMessage`, `colorize`, etc.)
+- Les sous-classes ne peuvent pas déclarer une méthode `private` avec le même nom qu'une méthode `public` parente
+- Nommer les méthodes privées avec un préfixe distinct (ex: `serializeMessage`, `emitJson`)
+
+**ESLint plugins manquants :**
+- Un `eslint-disable-next-line plugin/rule` dans un fichier est une erreur ESLint si le plugin n'est pas configuré
+- Toujours vérifier que le plugin est dans `eslint.config.mjs` avant d'utiliser ses règles en commentaire
+
+### Debugging Notes
+
+**Identifier toutes les erreurs d'un coup :**
+```bash
+cd backend && pnpm typecheck 2>&1 | grep "error TS"
+cd backend && pnpm lint 2>&1 | grep "error"
+```
+
+**Vérifier une clé composée Prisma :**
+```bash
+# Dans schema.prisma, chercher @@unique pour l'entité concernée
+grep -A2 "@@unique" backend/prisma/schema.prisma
+# L'ordre des champs dans l'array → ordre dans le nom de la clé
+```
+
+---
+
+## [2026-06-03] Refonte design — Package @break-eat/brand (white-label)
+
+### What Was Built
+
+Un **package partagé** `@break-eat/brand` qui centralise tous les tokens de design (couleurs, ombres, police) et le composant logo, consommé par les surfaces web (admin + operator). Toutes les surfaces ont été rebrandées vers l'identité Break Eat : fond blanc, orange `#FC4002`, police Fredoka, wordmark « BREAKEAT » (PNG) et logo « B éclair ». Objectif : **une seule source de vérité** pour le design, réutilisable et configurable (white-label).
+
+### Why It Was Built This Way
+
+- **Un package, pas une copie par app** : avant la refonte, chaque app dupliquait ses couleurs en dur (palette bleu/gris générique Tailwind). Pour un produit white-label multi-tenant, la palette de marque doit être unique et importable. Un workspace package `@break-eat/brand` garantit qu'un changement de token se propage partout.
+- **Inline styles + objet `BRAND`** : le projet utilise des styles inline (pas de Tailwind sur ces écrans). Exposer un objet typé `BRAND` (avec `type Brand = typeof BRAND`) donne l'autocomplétion + la sécurité de type sans build CSS.
+- **Shims de re-export** : les pages admin importaient déjà `@/lib/brand` et `@/components/brand/BreakEatLogo`. Plutôt que réécrire tous les imports, ces deux chemins re-exportent simplement le package → migration sans rupture.
+- **`transpilePackages`** : Next.js 15 doit transpiler un package workspace TS non pré-buildé → déclaré dans `next.config.ts` des deux apps.
+
+### Where The Code Lives
+
+```
+packages/brand/package.json          — @break-eat/brand (workspace:*)
+packages/brand/src/brand.ts          — objet BRAND + type Brand (SOURCE DE VÉRITÉ)
+packages/brand/src/BreakEatLogo.tsx  — logo (lockup complet login / mark seul dashboard)
+packages/brand/src/index.ts          — barrel export
+apps/admin/src/lib/brand.ts                       — shim re-export
+apps/admin/src/components/brand/BreakEatLogo.tsx  — shim re-export
+apps/admin/next.config.ts / apps/operator/next.config.ts — transpilePackages
+```
+
+**Tokens (`packages/brand/src/brand.ts`) :**
+```
+orange #FC4002 · orangeDark #DA3702 · orangeSoft #FDB9A3 · orangeTint rgba(252,64,2,0.08)
+ink #1c1917 · inkSoft #44403c · grey #a8a29e · border #ece3dd
+bg #ffffff · bgSubtle #faf7f5
+shadowSoft 0 12px 44px rgba(252,64,2,0.10) · shadowButton 0 8px 20px rgba(252,64,2,0.28)
+font var(--font-fredoka), system-ui, -apple-system, sans-serif
+```
+
+### How Each Block Works
+
+**10 pages internes admin** rebrandées via une convention de mapping stricte (séparer le *chrome* de marque de la *sémantique fonctionnelle*) :
+
+| Rôle | Ancien | Nouveau |
+|------|--------|---------|
+| Primaire / lien actif | `#2563eb` `#3b82f6` | `BRAND.orange` (hover `orangeDark`) |
+| CTA création « + Nouveau… » | sombre | `orange` + handlers hover |
+| Navigation sombre (raccourcis dashboard/simulateur) | `#111827` `#1f2937` | `BRAND.ink` |
+| Titres | `#111827` | `ink` |
+| Labels / corps | `#374151` `#1f2937` | `inkSoft` |
+| Texte atténué | `#6b7280` `#9ca3af` | `grey` |
+| Bordures | `#d1d5db` `#e5e7eb` | `border` |
+| Fonds clairs / lignes | `#f9fafb` `#f3f4f6` | `bgSubtle` |
+| Cartes | `#fff` | `bg` **+ `1px solid border`** |
+| color-picker white-label (org + event) | default `#2563eb` | default `BRAND.orange` |
+
+Sur chaque CTA orange : `onMouseEnter`/`onMouseLeave` bascule `orange ↔ orangeDark` + `transition: 'background 0.15s ease'` (gardé inactif quand le bouton est `disabled`). `fontFamily: BRAND.font` sur le conteneur de page ; `fontFamily: 'inherit'` sur inputs/selects/buttons/textarea.
+
+### What Must NOT Be Changed Casually
+
+**Les couleurs sémantiques NE sont PAS de la palette de marque** — ne pas les passer en orange :
+- Erreur rouge (`#fee2e2`/`#fca5a5`/`#dc2626`/`#991b1b`), succès vert, warning ambre, money `#059669`
+- Badges catégoriels rôle/scope (ORG_ADMIN ambre, MANAGER violet, MARKETING vert ; scope GLOBAL indigo / ORGANIZATION vert / EVENT jaune)
+- **Légende `STATUS_COLOR` du cycle de vie commande** (PAID `#3b82f6`, ACCEPTED `#8b5cf6`, PREPARING `#f59e0b`, READY `#10b981`, PICKED_UP `#06b6d4`, COMPLETED `#6b7280`, RECOVERED `#f97316`, CANCELLED `#ef4444`) — **partagée avec les écrans opérateur**, c'est un code couleur fonctionnel, pas du branding.
+- `#7c3aed` rush simulateur.
+
+Ces couleurs subsistent volontairement après le grep de contrôle.
+
+### How To Test / Debug
+
+```bash
+# Typecheck admin (doit être vert)
+pnpm --filter @break-eat/admin typecheck      # exit 0
+
+# Aucune couleur de chrome bleu/gris ne doit subsister dans les pages admin
+#   (sauf les couleurs lifecycle sémantiques du simulateur, attendues)
+grep -rnE "#2563eb|#3b82f6|#111827|#1f2937" apps/admin/src/app/\(admin\)
+```
+
+## [2026-06-03] Phase 14 — Groupes, accès privé aux événements & Back Office (SUPER_ADMIN)
+
+### What Was Built
+
+Trois blocs livrés ensemble :
+
+1. **Modèle Groupes + accès privé évènement** (Prisma). Nouvelle entité `Group` rattachée à une organisation (`organizationId` FK), table de jointure `GroupMember` (membre = `userId`, avec `source` MANUAL ou DOMAIN), table de jointure `EventGroup` (PK composite `[eventId, groupId]`), enum `EventVisibility` (PUBLIC/PRIVATE) ajouté sur `Event`, enum `GroupMemberSource`.
+2. **Backend Groupes & enforcement** : module `GroupsService` (CRUD groupes, membres manuels par email, auto-rattachement par domaine email, et **garde d'accès** `canAccessEvent`), plus extension de `EventsService.update()` pour piloter `visibility` + remplacer atomiquement l'ensemble des groupes liés à un évènement.
+3. **Back Office V1 (SUPER_ADMIN)** : module `BackofficeService` exposant les **KPIs globaux** de l'app (CA TTC + CA HT, nombre de commandes, panier moyen HT/TTC, comptes, organisations) et la gestion des organisations ; app Next.js `apps/backoffice` (port 3003) avec overview KPIs, liste/détail organisations et écran groupes. Front admin : pages `/groups` + `/groups/[id]` (dashboard CLUB) et carte « 🔒 Accès & visibilité » sur la fiche évènement.
+
+### Why It Was Built
+
+- **Accès privé** : certaines organisations veulent réserver un évènement à une population précise (membres d'un club, salariés d'une entreprise via leur domaine email). Le besoin immédiat (« Usage #1 ») est le **gating d'accès au niveau évènement** ; l'usage #2 (codes promo ciblés par groupe) est conçu dans le modèle mais **pas encore construit**.
+- **Auto-rattachement par domaine** : éviter la gestion manuelle membre par membre quand la cible est « tous les @entreprise.com ».
+- **Back Office** : l'opérateur de la plateforme (SUPER_ADMIN) a besoin d'une vue de pilotage transverse à toutes les organisations (CA consolidé, volumétrie commandes, panier moyen) et d'un point unique pour créer/superviser les organisations et les groupes — séparé des dashboards tenant (CLUB / OPÉRATEUR).
+
+### How It Works
+
+**Visibilité & gating (runtime) :**
+1. Un évènement porte `visibility` (défaut PUBLIC). En PUBLIC il est servi à tous ; en PRIVATE l'accès est filtré par appartenance à au moins un des groupes liés via `EventGroup`.
+2. La lecture publique d'un évènement passe par `PublicEventsController`, qui appelle `GroupsService.canAccessEvent(eventId, userId|null)`. Si l'évènement est PRIVATE et que le visiteur (anonyme ⇒ `userId = null`) n'est membre d'aucun groupe lié, la garde renvoie `false` ⇒ le contrôleur lève un **404** (on ne divulgue pas l'existence d'un évènement privé).
+3. Côté admin (CLUB), la carte « Accès & visibilité » bascule PUBLIC/PRIVATE et, en PRIVATE, coche les groupes autorisés. La sauvegarde envoie `{ visibility, groupIds }` à `PATCH events/:id`.
+
+**Remplacement atomique de l'ensemble des groupes (`EventsService.update`) :**
+1. Si `groupIds` est fourni et non vide, on vérifie d'abord que **tous** les groupes appartiennent à l'organisation (`group.count` filtré par `organizationId`). Si le compte ne correspond pas ⇒ `BadRequestException` (400) **avant toute écriture** (anti cross-tenant).
+2. Si `groupIds` est défini, l'update évènement + `eventGroup.deleteMany({ eventId })` + `eventGroup.createMany(... skipDuplicates)` sont exécutés dans un seul `$transaction` (remplacement de l'ensemble, pas de delta).
+3. En sauvegarde PUBLIC, le front envoie `groupIds: []` pour purger les liaisons (pas de restriction « zombie » si l'évènement est re-privatisé plus tard).
+
+**Auto-rattachement par domaine (`applyDomainMembershipsForUser`) :** à la connexion/onboarding d'un utilisateur, on cherche les groupes dont `emailDomain` matche le domaine de l'email et on crée les `GroupMember` manquants avec `source = DOMAIN`. Les membres ajoutés à la main portent `source = MANUAL`. Le front distingue les deux par un badge (Manuel / Domaine) et n'autorise le retrait manuel que de façon cohérente.
+
+**KPIs globaux (`BackofficeService.getGlobalKpis`) :** `Order.totalCents` est **TTC**. Le CA HT est dérivé : `caHtCents = round(caTtcCents / (1 + vatRate))` avec `vatRate = app.reporting.vatRate` (défaut **0.10** — resto sur place). Panier moyen calculé séparément HT et TTC (`round(ca / ordersCount)`, 0 si aucune commande). Le payload `revenue` renvoie `{ caTtcCents, caHtCents, vatRate }`.
+
+### Code References
+
+- `backend/prisma/schema.prisma:267` — `model Event` (+ champ `visibility EventVisibility`).
+- `backend/prisma/schema.prisma:765` — `enum EventVisibility { PUBLIC PRIVATE }`.
+- `backend/prisma/schema.prisma:777` / `:799` / `:816` — `model Group` / `model GroupMember` / `model EventGroup` (PK composite `[eventId, groupId]`).
+- `backend/prisma/schema.prisma:756` — `enum GroupMemberSource { MANUAL DOMAIN }`.
+- `backend/prisma/migrations/20260603_phase14_groups_event_visibility/` — migration (appliquée via `migrate deploy`, non destructif).
+- `backend/src/modules/events/events.service.ts:106` — `update()` : garde d'appartenance org (400) + remplacement transactionnel des `EventGroup`.
+- `backend/src/modules/events/events.service.ts:87` — `findOne()` : include `groups: { select: { groupId: true } }` pour préremplir la carte d'accès.
+- `backend/src/modules/groups/groups.service.ts:249` — `canAccessEvent(eventId, userId)` : décision d'accès PUBLIC/PRIVATE.
+- `backend/src/modules/groups/groups.service.ts:197` — `applyDomainMembershipsForUser(userId, email)` : auto-rattachement par domaine.
+- `backend/src/modules/events/public-events.controller.ts:46` — point d'enforcement (404 si non-membre).
+- `backend/src/modules/events/dto/update-event.dto.ts` — `visibility?` (`@IsEnum`) + `groupIds?` (`@IsArray @IsUUID('all', { each: true })`).
+- `backend/src/modules/backoffice/backoffice.service.ts:69` — `getGlobalKpis()` ; `:82` calcul `caHtCents` ; `:88` shape `revenue` ; `:228` `toHtCents = round(ttc / (1 + vatRate))`.
+- `apps/admin/src/lib/api/admin-client.ts` — types `EventVisibility`, `Group`, `GroupMember`, `GroupMemberSource` + 8 fonctions `apiGetGroups`/`apiCreateGroup`/… et extension `apiUpdateEvent`.
+- `apps/admin/src/app/(admin)/groups/page.tsx` / `groups/[id]/page.tsx` — liste/création + détail (édition méta, membres, zone de danger).
+- `apps/admin/src/app/(admin)/events/[id]/page.tsx` — carte « 🔒 Accès & visibilité » (radio PUBLIC/PRIVATE + cases groupes + `handleSaveAccess`).
+- `apps/backoffice/` — app Next.js port 3003 : `(backoffice)/overview` (KPIs), `organizations` + `organizations/[id]`, `groups`.
+
+### Data Flow
+
+- **Admin → backend** : la fiche évènement envoie `PATCH /api/v1/organizations/:orgId/events/:eventId` avec `{ visibility, groupIds }`. Le service valide l'appartenance org puis applique le remplacement transactionnel ; `findOne` renvoie `groups: [{ groupId }]` pour réhydrater l'UI.
+- **Visiteur → évènement** : `GET` évènement public ⇒ `PublicEventsController` ⇒ `canAccessEvent` ⇒ 200 (autorisé) ou 404 (privé + non-membre / anonyme).
+- **Connexion utilisateur** ⇒ `applyDomainMembershipsForUser` crée les `GroupMember` source=DOMAIN ⇒ ces appartenances entrent ensuite dans la décision `canAccessEvent`.
+- **Back Office** : `GET /api/v1/backoffice/kpis` ⇒ agrégation Prisma (somme `Order.totalCents`, counts) ⇒ dérivation HT ⇒ JSON `{ revenue, ordersCount, averageBasket, accountsCount, organizationsCount }` consommé par l'overview.
+
+### Dependencies
+
+- Internes : `PrismaService`, `EventsModule`, `GroupsModule`, `BackofficeModule`, gardes `JwtAuthGuard`/`RolesGuard` + `@Roles(GlobalRole.SUPER_ADMIN)` sur `/backoffice/*`, helper `requireOrgAccess` pour les routes groupes tenant, `ConfigService` (`app.reporting.vatRate`).
+- Externes : Prisma 6.19.3 (`$transaction`, `createMany skipDuplicates`), `class-validator` (`@IsEnum`/`@IsArray`/`@IsUUID`), Next.js 15 (admin + backoffice), `@break-eat/brand`.
+
+### Tests and Verification
+
+- `backend pnpm typecheck` : exit 0.
+- `events.service.spec.ts` : suite verte (incl. 4 tests `update` — set PRIVATE sans `$transaction`, remplacement de l'ensemble avec `$transaction` + `deleteMany`/`createMany skipDuplicates`, purge `groupIds: []` sans `group.count`, rejet cross-org ⇒ `BadRequestException` sans écriture).
+- Suite backend complète : **291/291** sur 23 suites.
+- `admin pnpm typecheck` : exit 0 ; `admin build` : 14 routes (nouvelles `/groups` ~4.23 kB static, `/groups/[id]` ~4.5 kB dynamic).
+
+### Risks and Safe Change Rules
+
+- **Ne jamais transformer le remplacement de l'ensemble en delta** : `EventsService.update` supprime puis recrée tous les `EventGroup` dans un `$transaction`. Un envoi partiel de `groupIds` purge les autres — c'est voulu (l'UI envoie toujours l'état complet).
+- **La garde d'appartenance org doit rester AVANT toute écriture** : le `group.count` filtré par `organizationId` empêche un tenant de lier des groupes d'un autre tenant. Ne pas déplacer après l'update.
+- **404 ≠ 403 pour un évènement privé** : on renvoie volontairement 404 pour ne pas révéler l'existence d'un évènement privé. Conserver ce comportement dans `PublicEventsController`.
+- **`vatRate` = config, pas en dur** : le CA HT dépend de `app.reporting.vatRate` (défaut 0.10). Changer la TVA = changer la config, pas le calcul. `Order.totalCents` reste la source TTC de vérité.
+- **`source` MANUAL vs DOMAIN** : ne pas écraser un membre MANUAL par un rattachement DOMAIN (et inversement) sans règle explicite ; le retrait manuel d'un membre DOMAIN peut être recréé à la prochaine connexion si le domaine matche toujours.
+- **SUPER_ADMIN uniquement** sur `/backoffice/*` : ne pas relâcher la garde de rôle.
+
+### Debugging Notes
+
+- Évènement privé qui « disparaît » côté visiteur : c'est le 404 attendu si non-membre. Vérifier `EventGroup` (liaisons) et `GroupMember` (appartenance, `source`) pour l'utilisateur visé.
+- Membre attendu absent : vérifier que `emailDomain` du groupe matche bien le domaine (normalisé sans `@`, en minuscules) et que `applyDomainMembershipsForUser` a tourné à la dernière connexion.
+- CA HT incohérent : confirmer `app.reporting.vatRate` chargé (défaut 0.10) et que `Order.totalCents` est bien TTC ; recalcul = `round(TTC / (1 + vatRate))`.
+- Sauvegarde d'accès en erreur 400 : un `groupId` n'appartient pas à l'organisation (cross-tenant) — vérifier l'`orgId` courant et les groupes cochés.
+
+## [2026-06-06] App opérateur — Refonte design du board + centralisation des couleurs de statut + LoginForm partagé
+
+### What Was Built
+
+Finition de la refonte white-label sur la surface OPÉRATEUR (`apps/operator`), côté **board** (qui avait été oublié par la passe `0.23.0`, laquelle n'avait traité que le login et le shell) :
+
+1. **Source de vérité unique des statuts** : `components/StatusBadge.tsx` exporte désormais deux maps publiques — `STATUS_COLORS` (couleur par `StatusVariant`) et `STATUS_LABELS` (libellé FR par statut), pour les 8 statuts de `OrderStatus` (PAID, ACCEPTED, PREPARING, READY, PICKED_UP, COMPLETED, CANCELLED, RECOVERED).
+2. **Déduplication** : les copies locales de la table couleur dans `OrderCard.tsx`, `DashboardColumn.tsx` et `NotificationPopup.tsx` (3 duplications) sont supprimées ; ces composants importent maintenant `STATUS_COLORS` depuis `StatusBadge`.
+3. **Alignement BRAND** : les 3 composants kanban + la page dashboard passent aux tokens `@break-eat/brand` (fond blanc/`bgSubtle`, bordures `border`, encres `ink`/`inkSoft`/`grey`, accent `orange`, police Fredoka).
+4. **`LoginForm` partagé** : nouveau `components/LoginForm.tsx`, login opérateur unique consommé par la home (`app/page.tsx`) ET le dashboard (`app/dashboard/[eventId]/page.tsx`). Les deux LoginForm inline (dont l'ancien sombre du dashboard) sont supprimés.
+5. **Header dashboard white-label** : header blanc avec `BreakEatLogo` + wordmark « BREAKEAT », chip fournisseur orange, compteur « commandes actives », et helper local `HeaderButton` (blanc, hover orange) pour les actions ↺ / plein écran / Déconnexion.
+
+### Why It Was Built
+
+- **Cohérence de marque** : un opérateur passe du login (déjà rebrandé blanc/orange) au board (encore sombre `#1f2937` + « 🍔 BREAK EAT ») — la rupture visuelle trahissait une refonte inachevée. Le board est l'écran que l'opérateur fixe toute la journée ; il doit porter l'identité Break Eat.
+- **Une seule source de vérité** : trois copies de la même table couleur dérivaient déjà (teintes différentes par fichier). Centraliser dans `StatusBadge` garantit que badge, bordure de carte, bandeau de colonne et popup partagent exactement la même couleur par statut.
+- **Anti-divergence du login** : extraire `LoginForm` empêche la home et le dashboard de re-développer deux écrans de connexion qui dérivent (le problème exact qui a produit l'ancien LoginForm sombre).
+
+### How It Works
+
+1. **Couleur/Libellé par statut** : tout composant qui doit colorer ou nommer un statut importe `STATUS_COLORS[status]` / `STATUS_LABELS[status]` depuis `./StatusBadge`. `DashboardColumn` en dérive sa bordure haute (`borderTop 3px solid headerColor`), `OrderCard` sa bordure gauche (`borderLeft 4px solid color`) et la couleur de ses boutons d'action, `NotificationPopup` son fond (`READY` → vert, sinon orange de marque).
+2. **Login** : `LoginForm` appelle `login(email, password)` (orders-client), stocke le JWT sous `operator_token`, puis remonte le token via `onLogin(token)`. La home et le dashboard rendent `<LoginForm onLogin={setToken} />` tant que `token` est nul.
+3. **Header** : `HeaderButton` est un bouton blanc bordé `BRAND.border` dont le hover bascule bordure + texte en `BRAND.orange` (transition CSS inline). Le compteur « N commandes actives » somme `data.counts`. `ConnectionBadge` (sémantique connecté/connexion/déconnecté/erreur) est volontairement conservé tel quel.
+
+### Code References
+
+- `apps/operator/src/components/StatusBadge.tsx` — `export const STATUS_COLORS` + `export const STATUS_LABELS` (source de vérité unique des couleurs/libellés de statut) ; `type StatusVariant`.
+- `apps/operator/src/components/OrderCard.tsx` — `import { BRAND }` + `import { StatusBadge, STATUS_COLORS, type StatusVariant } from './StatusBadge'` ; carte = `border BRAND.border` + `borderLeft 4px solid color` ; `ActionButton`/`SmallButton` couleur = `STATUS_COLORS[...]`, disabled = `BRAND.bgSubtle`/`BRAND.grey`.
+- `apps/operator/src/components/DashboardColumn.tsx` — `const headerColor = STATUS_COLORS[status] ?? BRAND.inkSoft` ; conteneur `background BRAND.bgSubtle` + `borderTop 3px solid headerColor` ; maps `COLUMN_BG`/`HEADER_COLOR` supprimées ; `COLUMN_HEADERS` (emojis) conservés.
+- `apps/operator/src/components/NotificationPopup.tsx` — `const bg = isReady ? STATUS_COLORS.READY : BRAND.orange`.
+- `apps/operator/src/components/LoginForm.tsx` (nouveau) — `export function LoginForm({ onLogin })` ; `login()` + `localStorage.setItem('operator_token', accessToken)` ; `BreakEatLogo size={54} showWordmark`.
+- `apps/operator/src/app/page.tsx` — `import { LoginForm }` ; `if (!token) return <LoginForm onLogin={setToken} />` ; LoginForm inline supprimé.
+- `apps/operator/src/app/dashboard/[eventId]/page.tsx` — `function HeaderButton(...)` (helper) ; `<header>` blanc (`BreakEatLogo size={26}` + « BREAKEAT » + chip fournisseur `orangeTint`/`orangeSoft`/`orangeDark`) ; `<main>` `background BRAND.bgSubtle` + `fontFamily BRAND.font` ; LoginForm sombre inline supprimé.
+
+### Data Flow
+
+- **Statut → couleur** : `useDashboard` fournit `data.orders[status]` ; la page mappe chaque ordre en `OrderCardProps` (avec `status: StatusVariant`) ; `OrderCard`/`DashboardColumn`/`NotificationPopup` lisent `STATUS_COLORS[status]` — aucune table couleur locale n'intervient plus.
+- **Auth** : `LoginForm` → `operator_token` (localStorage) → la home lit ce token au montage et bascule sur `EventSelector` ; le dashboard lit ce token et bascule sur le board. Aucun changement de contrat API.
+
+### Dependencies
+
+- Internes : `@break-eat/brand` (`BRAND`, `BreakEatLogo`), `StatusBadge` (maps statut), `orders-client` (`login`), `useDashboard`/`useSound` (inchangés).
+- Externes : React 19 / Next.js 15 (App Router, `'use client'`). Aucune nouvelle dépendance.
+
+### Tests and Verification
+
+- `pnpm --filter @break-eat/operator typecheck` → **exit 0** (le `BreakEatLogo` désormais utilisé dans le header lève l'avertissement import-inutilisé).
+- `pnpm --filter @break-eat/operator lint` → **exit 0**.
+- `pnpm --filter @break-eat/operator build` → **✓ compilé, 4 routes** (`/dashboard/[eventId]` 7.56 kB, `/` 3.9 kB).
+- Vérification manuelle attendue (non bloquante) : login → sélection d'événement → board ; le board doit être blanc, les badges/cartes/colonnes/popup partageant la même couleur par statut.
+
+### Risks and Safe Change Rules
+
+- **Ne pas réintroduire de table couleur locale** : toute couleur de statut doit venir de `STATUS_COLORS` (`StatusBadge.tsx`). Ajouter un statut = l'ajouter dans `STATUS_COLORS` **et** `STATUS_LABELS` (sinon `Record<StatusVariant, …>` casse au typecheck — c'est voulu).
+- **`PAID` = orange de marque** est intentionnel (nouvelle commande = action à traiter). Ne pas le repasser en gris.
+- **`ConnectionBadge` reste sémantique** (vert/ambre/rouge) — ne pas le « rebrander » en orange, il signale l'état réseau.
+- **`LoginForm` est partagé** : toute évolution du login opérateur se fait ici, pas en réinscrivant un formulaire inline dans une page (c'est ce qui avait causé la divergence sombre).
+- **Périmètre** : ceci n'est **pas** la restructuration par créneau (#17). Le board groupe toujours par STATUT. Ne pas confondre cette finition visuelle avec le rebuild par créneau, qui attend la démonstration du workflow par le product owner.
+
+### Debugging Notes
+
+- Couleur de statut incohérente entre badge et carte : chercher une table couleur locale résiduelle ; tout doit pointer vers `STATUS_COLORS`.
+- Erreur de typecheck « Property 'X' is missing in type Record<StatusVariant,…> » : un statut a été ajouté à `StatusVariant` sans entrée dans `STATUS_COLORS`/`STATUS_LABELS`.
+- Login qui diverge entre home et dashboard : vérifier que les deux rendent bien `components/LoginForm.tsx` (pas un formulaire inline).
+
+## [2026-06-07] Phase 11 — Écrans opérateur configurables (fondation backend : schéma + module)
+
+### What Was Built
+
+Fondation backend du board opérateur **paramétrable**. Deux blocs :
+
+1. **Modèle de données (11.1)** — deux nouveaux enums et deux nouveaux modèles, plus un champ sur `Slot` :
+   - `enum SlotKind { IMMEDIATE | PAUSE_1 | PAUSE_2 | GENERAL | CUSTOM }` + `Slot.kind` (@default IMMEDIATE).
+   - `enum OperatorScreenKind { ORDERS_QUEUE | READY | RECOVERED | GENERAL }`.
+   - `OperatorScreenTemplate` (org-scoped, **réutilisable**) : `name`, `kind`, `icon?`, `sortOrder`, `enabled`, `slotKinds[]`, `statuses[]` (`OrderStatus`), `supplierIds[]`, `filters Json`, timestamps.
+   - `EventOperatorScreen` (jonction) : `eventId`+`templateId`, `sortOrder?`/`enabled` en override par événement, `@@unique([eventId,templateId])`.
+2. **OperatorScreensModule (11.2)** — `OperatorScreensService` + 2 contrôleurs (templates nichés sous l'org ; jonction nichée sous l'événement) + 4 DTO + spec (10 tests). Enregistré dans `app.module.ts`.
+
+Périmètre : **backend seul**. L'UI admin (11.3), le rendu opérateur depuis `/resolved` (11.4) et le contrat FlaixPrepPlan (11.5) restent à faire.
+
+### Why It Was Built
+
+- **Paramétrabilité demandée** : « chaque dashboard doit être paramétrable, ajouter des écrans seulement pour certains créneaux, condition d'affichage ». Un board codé en dur (kanban PAID→RECOVERED) ne peut pas exprimer « écran Buvette pour le créneau mi-temps avec récap produits ».
+- **Templates réutilisables (décision de co-conception)** : un club rejoue la même configuration d'écrans à chaque match. Définir au niveau **organisation** puis **appliquer** par événement évite de re-saisir la config à chaque fois ; l'override `sortOrder`/`enabled` par événement permet un ajustement ponctuel sans dupliquer le template.
+- **`SlotKind` plutôt que `slotId`** : les slots sont des UUID **par événement**. Un template qui stockerait des `slotId` ne serait pas portable d'un événement à l'autre. Un **kind stable** (moment de récupération) rend le ciblage par créneau réutilisable. Les commandes sans slot sont assimilées à `IMMEDIATE`.
+
+### How It Works
+
+1. **Accès** : `requireOrgAccess(prisma, userId, orgId, roles)` — écriture template = `MANAGE_ROLES` (ORG_ADMIN/MANAGER), lecture = `ALL_ORG_ROLES`, SUPER_ADMIN bypass (via `globalRole` en DB). Les routes jonction résolvent d'abord `event→organizationId` puis appliquent la même garde.
+2. **Statuts par défaut** : si `template.statuses` est vide, `resolveForEvent` les déduit du `kind` via `DEFAULT_STATUSES` (`ORDERS_QUEUE`→PAID/ACCEPTED/PREPARING, `READY`→READY, `RECOVERED`→PICKED_UP/RECOVERED, `GENERAL`→PAID/ACCEPTED/PREPARING/READY).
+3. **Ordre effectif** : `sortOrder` effectif d'un écran appliqué = `lien.sortOrder ?? template.sortOrder` ; tri final par `sortOrder` puis `name`.
+4. **Épinglage fournisseur** : `effectiveSupplierId = membership.supplierId ?? supplierIdParam ?? null`. L'épingle de l'opérateur (sa `OrganizationMember.supplierId`) **l'emporte** sur le `?supplierId` du query. Quand épinglé, les écrans dont `supplierIds` cible un **autre** fournisseur sont masqués (un écran `supplierIds: []` est visible par tous).
+5. **`filters` opaque + sanitize serveur** : le `ValidationPipe` global (`whitelist`+`forbidNonWhitelisted`) **ne récurse pas** dans une propriété `@IsObject()` — donc les clés internes de `filters` survivent à la validation. On les nettoie côté service avec `sanitizeFilters` (whitelist des clés connues, dédup des tableaux de strings, coercition booléenne de `showRecap`).
+6. **Erreurs** : `mapKnownError` mappe Prisma `P2002` (double application d'un template au même événement) → `ConflictException` ; un template d'une autre org → `NotFoundException` (pas de fuite d'existence).
+
+### Code References
+
+- `backend/prisma/schema.prisma` — `enum SlotKind`, `Slot.kind`, `enum OperatorScreenKind`, `model OperatorScreenTemplate`, `model EventOperatorScreen`, relations `Organization.operatorScreenTemplates` / `Event.operatorScreens`.
+- `backend/prisma/migrations/20260606_phase11_operator_screens/migration.sql` — `CREATE TYPE` (×2), `ALTER TABLE slots ADD COLUMN kind`, `CREATE TABLE operator_screen_templates` / `event_operator_screens`, FK `ON DELETE CASCADE`, unique `(event_id, template_id)`, index.
+- `backend/src/modules/operator-screens/operator-screens.service.ts` — `DEFAULT_STATUSES` (Record `OperatorScreenKind`→`OrderStatus[]`) ; `createTemplate`/`listTemplates`/`getTemplate`/`updateTemplate`/`deleteTemplate` ; `applyToEvent`/`listEventScreens`/`updateEventScreen`/`removeEventScreen` ; `resolveForEvent(eventId, userId, supplierIdParam?)` ; privés `requireTemplateInOrg`/`requireLinkInEvent`/`requireEventAccess` ; statiques `normalizeScreen`/`sanitizeFilters`/`mapKnownError` ; interfaces exportées `ScreenFilters`/`ResolvedOperatorScreen`.
+- `backend/src/modules/operator-screens/operator-screen-templates.controller.ts` — `@Controller('organizations/:orgId/operator-screens')`, `@UseGuards(JwtAuthGuard)`.
+- `backend/src/modules/operator-screens/event-operator-screens.controller.ts` — `@Controller('events/:eventId/operator-screens')`, route `GET 'resolved'` avec `@Query('supplierId')`.
+- `backend/src/modules/operator-screens/dto/*.ts` — `create`/`update`-operator-screen, `apply`/`update`-event-screen.
+- `backend/src/app.module.ts` — `OperatorScreensModule` (section « Phase 11 »).
+
+### Data Flow
+
+- **Config (admin, à venir 11.3)** : `POST organizations/:orgId/operator-screens` crée un template → `POST events/:eventId/operator-screens {templateId}` l'applique → `PATCH :linkId` ajuste `sortOrder`/`enabled` pour cet événement.
+- **Consommation (opérateur, à venir 11.4)** : `GET events/:eventId/operator-screens/resolved` → `resolveForEvent` lit les `EventOperatorScreen` activés (avec template activé), normalise (statuts/ordre), applique l'épinglage fournisseur, renvoie `{ supplierId, screens: ResolvedOperatorScreen[] }`. Le board filtrera les commandes côté client par `statuses`/`slotKinds`/`filters` de chaque écran.
+
+### Dependencies
+
+- Internes : `PrismaService`, `requireOrgAccess` (common), `JwtAuthGuard` + `@CurrentUser()` (`JwtPayload.sub`).
+- Externes : Prisma 6.19.3, `class-validator`/`class-transformer` (DTO). Aucune dépendance nouvelle.
+- Enums Prisma consommés : `OrderStatus`, `OperatorScreenKind`, `SlotKind`.
+
+### Tests and Verification
+
+- `pnpm --filter @break-eat/backend typecheck` → **exit 0**.
+- `pnpm --filter @break-eat/backend lint` → **0 erreur**.
+- `operator-screens.service.spec.ts` → **10/10** : `sanitizeFilters` (garde clés connues / drop inconnues / dédup ; `{}` pour non-objet ; omet tableaux vides + `showRecap` non booléen), `createTemplate` (persiste défauts + trim du nom ; non-membre→403), `resolveForEvent` (statuts par défaut depuis kind + tri par ordre effectif ; pin fournisseur masque les autres ; event inconnu→404), `applyToEvent` (P2002→Conflict ; template cross-org→404).
+- Migration appliquée via `prisma migrate deploy` ; `prisma generate` OK.
+
+### Risks and Safe Change Rules
+
+- **`SlotKind`, pas `slotId`, dans un template** : ne jamais stocker d'`slotId` dans `OperatorScreenTemplate` — ce serait non portable entre événements. Le ciblage par créneau passe par `slotKinds[]`.
+- **L'épingle fournisseur l'emporte** : dans `resolveForEvent`, `membership.supplierId` prime sur le query `?supplierId`. Un opérateur épinglé ne doit pas pouvoir voir les écrans d'un autre fournisseur via le param — ne pas inverser cette priorité.
+- **`statuses` vide = défaut par kind** : un template avec `statuses: []` n'est pas « aucun statut » mais « défaut du kind ». Ne pas confondre tableau vide et absence de filtre dans le rendu.
+- **`@@unique([eventId,templateId])`** : un template ne s'applique qu'une fois par événement ; la double application remonte `P2002`→`Conflict`. Ne pas transformer `applyToEvent` en upsert silencieux sans intention explicite.
+- **`filters` reste opaque côté DTO** : ne pas le passer en classe validée champ-par-champ sans vérifier l'interaction avec `forbidNonWhitelisted` ; aujourd'hui les clés internes survivent **parce que** `@IsObject` ne récurse pas, et c'est `sanitizeFilters` qui fait foi. Toute clé de filtre nouvelle doit être ajoutée à `sanitizeFilters` **et** à `ScreenFilters`.
+- **`onDelete: Cascade`** : supprimer un template purge ses `EventOperatorScreen` ; supprimer un événement purge ses liens. Voulu — ne pas relâcher en `Restrict` sans repenser l'UX de suppression.
+
+### Debugging Notes
+
+- Un écran appliqué n'apparaît pas dans `/resolved` : vérifier que **le lien ET le template** sont `enabled`, et que `supplierIds` ne l'exclut pas pour l'opérateur épinglé.
+- Mauvais ordre des écrans : c'est l'ordre effectif `lien.sortOrder ?? template.sortOrder` puis `name` — un `sortOrder` de lien à `null` retombe sur celui du template.
+- Statuts inattendus sur un écran : si `template.statuses` est vide, ils viennent de `DEFAULT_STATUSES[kind]`. Changer le `kind` change les statuts par défaut.
+- `409 Conflict` à l'application : le template est déjà appliqué à cet événement (`@@unique`). Lister via `GET events/:eventId/operator-screens` avant de réappliquer.
+- Clé de `filters` qui « disparaît » : elle n'est pas dans la whitelist de `sanitizeFilters` — l'ajouter là (et dans `ScreenFilters`).
+
+---
+
+## [2026-06-07] Phase 11.3 — UI admin : écrans opérateur configurables (templates + application par événement)
+
+### What Was Built
+
+L'**interface admin** (Next.js 15, app `@break-eat/admin`) pilotant les deux surfaces backend de la Phase 11 : (1) CRUD des **modèles d'écran réutilisables** au niveau organisation, (2) **application/réordonnancement/activation par événement**. Trois fichiers créés (un builder partagé + deux pages de route) et trois modifiés (client API, nav, page détail événement).
+
+### Why
+
+Le board opérateur doit être **paramétrable sans toucher au code** : un manager configure quels écrans existent (« File de commandes », « Prêtes », « Récupérées »…), pour quels créneaux et fournisseurs, puis choisit lesquels appliquer à chaque match. La fondation backend exposait déjà tout (templates org-scoped + jonction par événement + `resolveForEvent`) ; il manquait l'UI. On modélise l'admin en **deux surfaces** qui calquent exactement les deux surfaces de routes — c'est cohérent avec le pattern déjà établi pour les Groupes (page top-level) et l'accès privé par événement (carte sur le détail).
+
+### How It Works
+
+- **Builder de conditions partagé** : `ScreenConditionsForm` est rendu à l'identique par la page de création et la page d'édition. Le state vit dans une forme **plate** (`ScreenDraft` : `name`/`kind`/`icon`/`sortOrder`/`enabled`/`slotKinds[]`/`statuses[]`/`supplierIds[]`/`categoryIds[]`/`showRecap`). `draftToInput()` reconstruit le `CreateOperatorScreenInput` attendu par l'API (n'inclut `filters.categoryIds` que s'il est non vide, `filters.showRecap` que s'il est `true`) ; `templateToDraft()` fait l'inverse au chargement de l'édition.
+- **Application par événement** : la carte sur `events/[id]` charge en parallèle les écrans appliqués (`apiGetEventScreens`) et le catalogue complet de templates (`apiGetOperatorScreens`). Le sélecteur n'affiche que les templates **non encore appliqués** (`availableTemplates`). La liste appliquée est triée par **ordre effectif** = `lien.sortOrder ?? template.sortOrder` puis `name`.
+- **Réordonnancement** : `moveScreen()` permute deux lignes adjacentes en mémoire puis `persistScreenOrder()` PATCHe un `sortOrder` explicite `0..n-1` **uniquement** sur les lignes dont le `sortOrder` (override de lien) diffère déjà de leur nouvel index — évite les écritures inutiles et rend l'ordre déterministe même quand tous les liens retombaient initialement sur le défaut du template (`sortOrder` de lien `null`).
+
+### Code References
+
+- `apps/admin/src/components/operator-screens/screen-form.tsx` — `ScreenConditionsForm`, `ScreenDraft`/`EMPTY_DRAFT`, `templateToDraft`/`draftToInput`, libellés `KIND_LABELS`/`SLOT_KIND_LABELS`/`STATUS_LABELS` (source unique).
+- `apps/admin/src/app/(admin)/operator-screens/page.tsx` — liste + création (`summarize()` pour la ligne de conditions).
+- `apps/admin/src/app/(admin)/operator-screens/[id]/page.tsx` — édition + suppression (`useParams()` → `screenId`).
+- `apps/admin/src/app/(admin)/events/[id]/page.tsx` — carte « 🖥️ Écrans opérateur » : state `eventScreens`/`orgTemplates`/`applyTemplateId` ; handlers `handleApplyScreen`/`handleToggleScreen`/`handleRemoveScreen` ; `persistScreenOrder`/`moveScreen` ; dérivés `sortedScreens`/`availableTemplates`.
+- `apps/admin/src/lib/api/admin-client.ts` — section « Operator Screens (Phase 11) » : types + 9 fonctions ; `kind?: SlotKind` sur `Slot`.
+- `apps/admin/src/app/(admin)/layout.tsx` — `NAV_ITEMS` : « 🖥️ Écrans opérateur ».
+
+### Data Flow
+
+- **Créer un modèle** : `/operator-screens` (form) → `draftToInput` → `apiCreateOperatorScreen(orgId, input)` → `POST organizations/:orgId/operator-screens`.
+- **Éditer / supprimer** : `/operator-screens/:id` → `apiUpdateOperatorScreen`/`apiDeleteOperatorScreen`.
+- **Appliquer à un événement** : `events/:id` (carte) → `apiApplyEventScreen(eventId, {templateId})` → `POST events/:eventId/operator-screens`. Réordonner/activer → `apiUpdateEventScreen(eventId, linkId, {sortOrder?|enabled?})`. Retirer → `apiRemoveEventScreen`.
+- **Consommation opérateur** (à venir 11.4) : `GET events/:eventId/operator-screens/resolved` (déjà servi par le backend).
+
+### Dependencies
+
+- Internes : `admin-client.ts` (`req<T>` + `getOrgId()`), tokens `@/lib/brand`, `screen-form.tsx`.
+- Conventions admin : pages `'use client'`, données via `useState`/`useEffect`/`useCallback` (pas de TanStack Query dans les pages de feature), styles inline avec tokens BRAND.
+- Aucune dépendance npm nouvelle.
+
+### Tests and Verification
+
+- `pnpm --filter @break-eat/admin typecheck` → **exit 0**.
+- `pnpm --filter @break-eat/admin lint` → **0 erreur**.
+- `pnpm --filter @break-eat/admin build` → **✓ 15 routes** ; nouvelles routes `/operator-screens` (2.41 kB), `/operator-screens/[id]` (2.17 kB) ; `/events/[id]` passe à 7.45 kB.
+- Pas de test unitaire frontend (l'app admin n'a pas de suite Jest) — vérification par typecheck + lint + build, conforme aux autres pages admin.
+
+### Risks and Safe Change Rules
+
+- **Surface UI ⊂ surface serveur** : l'UI n'expose volontairement que `categoryIds` (inclusion) + `showRecap`. `productIds`/`excludeProductIds`/`excludeCategoryIds` existent dans `ScreenFilters` et sont sanitizés serveur — si on les expose, étendre `ScreenDraft` + `draftToInput`/`templateToDraft`, **pas** seulement le formulaire.
+- **Ordre effectif** : toujours trier/raisonner avec `lien.sortOrder ?? template.sortOrder`. Ne pas supposer que `lien.sortOrder` est renseigné (il est `null` tant qu'on n'a pas réordonné).
+- **Réordonnancement déterministe** : `persistScreenOrder` n'écrit que les lignes modifiées ; ne pas le « simplifier » en swap de deux `sortOrder` quand les deux valent `null` (le swap serait un no-op).
+- **Suppression d'un template** = cascade serveur sur tous les `EventOperatorScreen`. Le `confirm()` de la page détail prévient ; ne pas retirer ce garde-fou.
+- **`draftToInput` omet les filtres vides** : ne pas envoyer `filters: { categoryIds: [] }` (bruit) — n'inclure une clé que si elle porte de l'information.
+
+### Debugging Notes
+
+- Un modèle n'apparaît pas dans le sélecteur « Appliquer » : il est **déjà appliqué** à cet événement (filtré par `appliedTemplateIds`) — il est alors dans la liste du dessous.
+- Réordonnancement sans effet visible : vérifier que `apiUpdateEventScreen` renvoie 200 et que `load()` est rappelé ; l'ordre n'est recalculé qu'après rechargement (`sortedScreens` dérive de `eventScreens`).
+- « 409 Conflict » à l'application : doublon `@@unique([eventId,templateId])` — la liste devrait déjà l'avoir masqué ; rafraîchir la page si l'état local est désynchronisé.
+- Libellé de kind/statut manquant : ajouter la clé dans `KIND_LABELS`/`STATUS_LABELS` de `screen-form.tsx` (source unique, pas de map locale dans les pages).
+
+---
+
+## [2026-06-07] Phase 11.4 — Board opérateur : rendu des écrans configurables (onglets + filtrage + Récap produits)
+
+### What Was Built
+
+Le dashboard opérateur (`@break-eat/operator`, `/dashboard/[eventId]`) **rend** désormais les écrans configurés en 11.3 : une barre d'**onglets** (un par écran résolu), chacun filtrant le flux de commandes temps réel par **statut + créneau + catégorie/produit**, plus un panneau **Récap produits** (agrégation par catégorie) et un outil **Accès rapide** (recherche). Côté backend, le payload du dashboard est **enrichi** pour porter les champs dont les écrans ont besoin. Deux fichiers opérateur créés (`lib/screens/filter.ts`, `components/RecapPanel.tsx`), un service backend + son spec modifiés, le client opérateur et la page board modifiés.
+
+### Why
+
+La fondation (11.1/11.2) et l'UI admin (11.3) permettaient de **définir** les écrans, mais le board affichait encore un Kanban fixe à 5 colonnes ignorant la config. Le verrou : le payload `GET /orders/event/:eventId/dashboard` exposait `slotId` (un UUID **par événement**) et `productId`, alors que les écrans filtrent par `slotKinds` (moment de récupération **portable**) et `filters.categoryIds`. **Conséquence** : deux écrans ne différant que par le créneau (« Immédiat » / « 1ère mi-temps » / « 2ème mi-temps », mêmes statuts) auraient rendu un contenu **identique**. Il fallait donc aplatir côté serveur `slotKind` (par commande) et `categoryId`/`categoryName` (par ligne). On ajoute `customerName` (= `user.displayName` seulement) car l'opérateur appelle les clients au retrait et la recherche se fait par nom — c'est une donnée métier nécessaire, exposée derrière l'auth opérateur, jamais l'email/téléphone.
+
+### How It Works
+
+- **Enrichissement backend** (`findDashboardByEvent`) : la requête inclut `slot.kind` + `user.displayName`. Comme `OrderItem` n'a **pas** de relation `product` (le `productId` est un snapshot figé), les catégories sont résolues par **un seul** `product.findMany` batché sur les `productId` **distincts** de toutes les commandes (Map `productId → {categoryId, categoryName}`), puis appliquées en mémoire. `slotKind` retombe sur `IMMEDIATE` quand la commande n'a pas de slot. La forme de réponse `{ eventId, counts, orders }` est **inchangée** ; on n'ajoute que des champs.
+- **`PICKED_UP` ajouté à `DASHBOARD_STATUSES`** : l'écran `RECOVERED` a pour statuts par défaut `[PICKED_UP, RECOVERED]` (cf. `DEFAULT_STATUSES`) ; sans `PICKED_UP` dans le payload, sa colonne « récupérées » serait toujours vide. `COMPLETED`/`CANCELLED` restent exclus (terminaux, hors board).
+- **Filtrage client** (`lib/screens/filter.ts`, helpers **purs**) : `orderMatchesScreen` applique le gate créneau (`slotKinds` vide = tous) puis exige ≥1 ligne passant `itemMatchesFilters` (include/exclude catégorie + produit). `buildScreenColumns(dashboard, screen)` produit, pour l'écran actif, un mini-Kanban scoppé à ses `statuses` (un statut absent du payload → colonne vide, sans planter). `countScreenOrders` alimente le badge d'onglet.
+- **Rendu** : la page fetch `fetchResolvedScreens` **une fois** (config statique), garde la liste des écrans `enabled`, et choisit `activeScreen`. Si des écrans existent → `ScreenTabBar` + colonnes de l'écran actif ; sinon → **fallback** sur le Kanban fixe historique (`FALLBACK_COLUMNS`), garantissant la rétrocompat des événements sans config. Les commandes temps réel continuent d'arriver via `useDashboard` (Socket.IO + polling) — le filtrage est purement dérivé, donc les compteurs d'onglets et le Récap se mettent à jour live.
+- **RecapPanel** : `aggregate()` parcourt les commandes **visibles de l'écran actif** (`boardColumns.flatMap`), regroupe `catégorie → produit → quantité`, trie par quantité. L'Accès rapide filtre ces mêmes commandes par `publicOrderNumber` **ou** `customerName` (max 8 résultats). Le toggle « 📊 Récap » s'initialise depuis `activeScreen.filters.showRecap`.
+
+### Code References
+
+- `backend/src/modules/orders/orders.service.ts` — `findDashboardByEvent` : include `slot.kind`/`user.displayName`, lookup batché `product.findMany`, map d'enrichissement (`slotKind`/`customerName`/`categoryId`/`categoryName`), `DASHBOARD_STATUSES` (+`PICKED_UP`).
+- `backend/src/modules/orders/orders.service.spec.ts` — mock `prisma.product.findMany` ; tests « enriches each order… » et « skips the product lookup… ».
+- `apps/operator/src/lib/api/orders-client.ts` — `Order`/`OrderItem` enrichis ; `ResolvedOperatorScreen`/`ScreenFilters`/`SlotKind`/`OperatorScreenKind` ; `fetchResolvedScreens`.
+- `apps/operator/src/lib/screens/filter.ts` — `orderMatchesScreen`, `itemMatchesFilters`, `buildScreenColumns`, `countScreenOrders`, `hasActiveFilters`.
+- `apps/operator/src/components/RecapPanel.tsx` — `aggregate()`, Accès rapide + Récap produits.
+- `apps/operator/src/app/dashboard/[eventId]/page.tsx` — `loadScreens`/`activeScreen`, `ScreenTabBar`, `toCardProps`, `boardColumns`, `useScreens`, toggle `recapOpen`.
+
+### Data Flow
+
+1. `useDashboard` → `GET /orders/event/:eventId/dashboard?supplierId=` → `{ counts, orders }` enrichis (slotKind/customerName/categoryId/categoryName).
+2. Page mount → `fetchResolvedScreens` → `GET /events/:eventId/operator-screens/resolved?supplierId=` → écrans résolus (fournisseur épinglé appliqué serveur).
+3. `activeScreen` + `data.orders` → `buildScreenColumns` → colonnes (`DashboardColumn` → `OrderCard`). `countScreenOrders` → badges d'onglets.
+4. `boardColumns.flatMap` → `RecapPanel` (agrégation + recherche).
+
+### Dependencies
+
+- Backend : Prisma (relations `Order.slot`/`Order.user`/`Product.category` déjà présentes — **aucune migration**). `SlotKind` importé de `@prisma/client`.
+- Opérateur : helpers purs (aucune dépendance npm) ; `RecapPanel` réutilise `StatusBadge` + tokens `@break-eat/brand`. `DashboardColumn`/`OrderCard` inchangés.
+
+### Tests and Verification
+
+- Backend : `typecheck` exit 0 · `lint` 0 · `jest orders` → **88/88** (3 suites ; 2 tests d'enrichissement ajoutés).
+- Opérateur : `typecheck` exit 0 · `lint` 0 · `build` ✓ (`/dashboard/[eventId]` 9.37 kB). Pas de runner Jest dans l'app opérateur → les helpers `filter.ts` sont purs et couverts par typecheck ; la logique de données côté serveur est testée par jest.
+
+### Risks and Safe Change Rules
+
+- **Ne pas casser la forme `{ eventId, counts, orders }`** : les clients (opérateur board) en dépendent. On **ajoute** des champs, on ne renomme/retire jamais.
+- **`OrderItem` n'a pas de relation `product`** : ne pas tenter `include: { items: { include: { product } } }` (échoue au typecheck). Toujours passer par le lookup batché `product.findMany` sur les `productId` distincts.
+- **`customerName` = `displayName` uniquement** : ne **jamais** ajouter email/téléphone au payload du board (donnée partagée à l'écran). Respecte la contrainte privacy.
+- **Fallback obligatoire** : si `screens.length === 0`, garder le Kanban fixe. Ne pas supposer qu'un événement a forcément des écrans configurés.
+- **Filtrage = dérivé, pas de fetch par onglet** : tout l'état vient d'un seul snapshot `data.orders` ; changer d'onglet ne doit pas déclencher d'appel réseau (sinon on perd le temps réel et on multiplie la charge).
+- **`buildScreenColumns` tolère les statuts absents** : un écran peut lister un statut que le dashboard ne sert pas → colonne vide, pas d'erreur. Si on ajoute un statut aux écrans, vérifier qu'il est dans `DASHBOARD_STATUSES` pour qu'il s'affiche.
+- **Hors périmètre** : regroupement « commandes similaires » (11.4c) et plan de préparation Flaix (11.5) — ne pas les improviser ici ; 11.5 attend le code Flaix (frontière Flaix décide / Break affiche).
+
+### Debugging Notes
+
+- Onglets vides alors que des commandes existent : vérifier que l'écran a les bons `slotKinds` (un écran « 1ère mi-temps » ne montre que les commandes dont `slotKind === 'PAUSE_1'`) et que les commandes portent bien un `slotId` mappé à ce kind (sinon elles tombent en `IMMEDIATE`).
+- Colonne « récupérées » vide : confirmer que `PICKED_UP` est dans `DASHBOARD_STATUSES` (sinon le payload ne les sert pas).
+- Récap vide / catégorie « Autres » : `categoryName` est `null` (produit sans catégorie résolue) → tombe dans le groupe « Autres ». Vérifier que le `product.findMany` retourne bien `category.name`.
+- Aucun onglet ne s'affiche : `fetchResolvedScreens` a échoué (catch → `screens=[]`) **ou** aucun écran `enabled` → fallback Kanban. Vérifier le réseau et que des écrans sont appliqués + activés pour l'événement.
+- Recherche Accès rapide sans résultat : elle ne porte que sur les commandes **de l'écran actif** (volontaire) ; une commande d'un autre écran n'apparaît pas — changer d'onglet.
+
+---
+
+## [2026-06-07] Phase 11.4c — Board opérateur : regroupement visuel « X commandes similaires »
+
+### What Was Built
+
+Le board opérateur peut désormais **empiler les commandes au panier identique** d'une même colonne en une seule **carte de groupe**. Un toggle header « 🧩 Grouper » (désactivé par défaut) bascule chaque colonne entre cartes plates et cartes groupées. Une carte de groupe affiche la composition partagée **une fois**, le total d'articles, l'âge de la plus ancienne, les **badges de n°** de chaque commande, un bouton **batch** (avance tout le lot au statut suivant) et un dépliage « Voir les N » révélant les `OrderCard` individuelles. Deux fichiers opérateur créés (`lib/screens/grouping.ts`, `components/OrderGroupCard.tsx`), `DashboardColumn`/`OrderCard`/page board/stories modifiés. **Aucun changement backend.**
+
+### Why
+
+Réponse au workflow décrit par l'utilisateur : « les groupes de commande se préparent ensemble, et non une par une ». En rush, un même panier (« Burger + Frites ») est commandé en boucle ; les traiter carte par carte multiplie les gestes. Empiler les paniers identiques donne à l'équipe prep une vue « lot » et un bouton pour avancer tout le lot d'un coup. **Frontière respectée** : c'est de l'**affichage owned by Break**, pas de la décision. Le regroupement par **difficulté** (facile/moyen/difficile) est un axe **différent** que **Flaix** décidera (11.5) ; ici on ne regroupe que par **composition exacte**, ce qui ne dépend d'aucune IA et ne pré-empte pas le plan Flaix.
+
+### How It Works
+
+- **`groupSimilarOrders(orders)`** (`lib/screens/grouping.ts`, pur) : construit pour chaque commande une **signature** = ses lignes `productId:quantity` **triées** puis jointes (l'ordre des lignes n'affecte pas l'identité). Les commandes de même signature sont clusterisées dans l'ordre d'arrivée (FIFO-préservé, le snapshot étant trié `createdAt asc`). Une commande au panier unique forme un **groupe de 1** → le board groupé est un **sur-ensemble strict** du board plat : rien n'est caché, rien n'est fusionné au niveau données.
+- **`OrderGroupCard`** : si `group.size === 1`, rend simplement `<OrderCard>` (zéro bruit visuel pour les commandes uniques). Sinon, la carte empilée. Le bouton batch est contextuel au statut (`BATCH_LABEL`) : `PAID→Accepter`, `ACCEPTED→Préparer`, `PREPARING→Marquer prêtes`, `READY→Récupérées`, `RECOVERED→Ré-accepter` ; un statut hors map n'affiche pas de bouton batch. Le dépliage rend chaque `OrderCard` avec ses actions par commande (récupérer/annuler), donc le contrôle individuel reste toujours possible.
+- **`DashboardColumn`** : son API passe de `orders: OrderCardProps[]` à `orders: Order[]` + `toCardProps(order)` (mapping paresseux, nécessaire car le regroupement a besoin du `productId` brut, absent de `OrderCardProps`). Props ajoutées : `grouped?` et `onBatchAdvance?`. En mode groupé, la colonne appelle `groupSimilarOrders` puis rend des `OrderGroupCard` ; sinon des `OrderCard` plates. **Le compteur d'en-tête reste `orders.length`** (nombre de commandes, pas de groupes).
+- **Page board** : état `grouped` (toggle header, **off par défaut**). `batchAdvance(orders)` lit le statut du premier ordre du groupe (tous partagent le statut, le regroupement étant intra-colonne), choisit la transition correspondante et la déclenche pour **toutes** les commandes en parallèle (`Promise.all`) puis `loadSnapshot()`. Le temps réel met ensuite à jour le board.
+
+### Code References
+
+- `apps/operator/src/lib/screens/grouping.ts` — `groupSimilarOrders`, `compositionSignature`, types `OrderGroup`/`GroupedLine`.
+- `apps/operator/src/components/OrderGroupCard.tsx` — carte empilée, `BATCH_LABEL`, dépliage, `runBatch` (busy state).
+- `apps/operator/src/components/DashboardColumn.tsx` — nouvelle API (`orders: Order[]` + `toCardProps` + `grouped` + `onBatchAdvance`), branche groupée/plate.
+- `apps/operator/src/components/OrderCard.tsx` — `elapsed` désormais **exporté**.
+- `apps/operator/src/app/dashboard/[eventId]/page.tsx` — `grouped` state, toggle « 🧩 Grouper », `batchAdvance`, appel `DashboardColumn` mis à jour.
+- `apps/operator/src/stories/DashboardColumn.stories.tsx` — stories migrées + story « groupées ».
+
+### Data Flow
+
+1. `data.orders` (snapshot enrichi 11.4a) → `buildScreenColumns`/fallback → `boardColumns: { status, orders: Order[] }[]`.
+2. `DashboardColumn` reçoit `orders: Order[]` + `grouped`. Si `grouped` → `groupSimilarOrders(orders)` → `OrderGroup[]` → `OrderGroupCard`.
+3. Clic batch → `onBatchAdvance(group.orders)` → `Promise.all(transition par commande)` → `loadSnapshot()` → refetch → re-render.
+4. Dépliage → `group.orders.map(toCardProps)` → `OrderCard` individuelles (actions par commande inchangées).
+
+### Dependencies
+
+- 100 % client opérateur, **aucune dépendance npm ajoutée**, **aucune migration**, **aucun changement backend** (le payload 11.4a fournit déjà `productId` par ligne, seule donnée nécessaire à la signature).
+- Réutilise `OrderCard`/`StatusBadge` + tokens `@break-eat/brand`.
+
+### Tests and Verification
+
+- Opérateur : `typecheck` exit 0 · `lint` 0 · `build` ✓ (`/dashboard/[eventId]` **10.3 kB**, +~0.9 kB vs 11.4). Backend inchangé → `jest orders` reste **88/88**.
+- Pas de runner Jest dans l'app opérateur → `groupSimilarOrders` est pur et déterministe (couvert par typecheck + revue) ; la story Storybook « 6 commandes identiques (groupées) » sert de vérification visuelle.
+
+### Risks and Safe Change Rules
+
+- **Le regroupement ne fusionne jamais les commandes** : chaque `Order` reste une entité indépendante avec son cycle de vie. Ne pas « optimiser » en fusionnant des entités côté données — c'est un pur regroupement d'affichage.
+- **Signature = `productId:quantity` triés** : si on ajoute des options/variantes par ligne au modèle, **les inclure dans la signature** (sinon des paniers réellement différents seraient empilés). Aujourd'hui `OrderItem` n'a pas d'options → safe.
+- **Compteur de colonne = nombre de commandes** : ne pas le remplacer par le nombre de groupes (masquerait le volume réel à préparer).
+- **Toggle off par défaut** : préserver ce défaut tant qu'on n'a pas validé en service réel ; le mode groupé est additif et réversible.
+- **Batch borné aux statuts avançables** : `batchAdvance` ne mappe que `PAID/ACCEPTED/PREPARING/READY/RECOVERED`. Si on étend la state machine, mettre à jour **à la fois** `BATCH_LABEL` (UI) et `advance` (page) — sinon le bouton apparaît sans action, ou inversement.
+- **Distinct de Flaix (11.5)** : ne pas détourner ce regroupement pour simuler la difficulté Flaix. Quand le plan Flaix arrivera, il s'affichera comme un **axe séparé** posé par-dessus, sans remplacer le regroupement « similaires ».
+
+### Debugging Notes
+
+- Le toggle « 🧩 Grouper » n'apparaît pas : il est gardé par `{data && …}` dans le header — il ne s'affiche qu'une fois le premier snapshot chargé.
+- Activer « Grouper » ne change rien visuellement : normal si aucune colonne n'a deux commandes au **panier strictement identique** (même produits **et** mêmes quantités). Les singletons rendent une `OrderCard` normale.
+- Bouton batch absent sur une carte de groupe : le statut de la colonne n'est pas dans `BATCH_LABEL` (ex. `PICKED_UP`) — volontaire (rien à avancer).
+- Le batch laisse des commandes en arrière : depuis l'audit Codex, `batchAdvance` utilise `Promise.allSettled` + `loadSnapshot()` **inconditionnel** + bannière `batchError`. Si N/total échouent, le board est tout de même rafraîchi et la bannière ambre l'indique — réessayer sur celles encore en attente (le board temps réel peut avoir bougé entre l'affichage et le clic).
+- Cartes empilées qui débordent la colonne : le faux « stack » est décalé de 6px et la carte a `marginRight/Bottom: 6` — si une refonte change la largeur de colonne, garder cette marge pour éviter le rognage.
+
+---
+
+## [2026-06-07] Audit Codex — corrections sécurité & robustesse (post-11.4c)
+
+### What Was Built
+
+Trois correctifs issus de l'audit Codex (frontière d'audit : 2026-06-02) :
+1. **Fuite d'événements privés via l'écran public READY** (P1, sécurité). `GET /public/orders/event/:eventId/ready` n'avait **aucun garde** : connaître l'UUID d'un événement privé suffisait à lire les numéros publics de ses commandes prêtes.
+2. **Fichiers `*.tsbuildinfo` suivis par Git** (P2, hygiène). `apps/admin` et `apps/operator` traçaient leur cache de build incrémental TS → diff pollué à chaque build.
+3. **Batch opérateur non atomique** (P2, robustesse UX). L'avance groupée (11.4c) utilisait `Promise.all` : un échec en milieu de lot laissait un état mixte **et** sautait le refresh (le `.then` ne se déclenchait jamais).
+
+### Why
+
+- **Parité de sécurité.** `PublicEventsController` gatait déjà les événements privés (Phase 14.4) ; `PublicOrdersController` était la seule route publique restée ouverte. Un écran public ne doit jamais exposer les commandes d'un événement privé à un anonyme qui devine l'UUID.
+- **Propreté du dépôt / CI.** Un `.tsbuildinfo` versionné crée des conflits et du bruit de diff sans valeur (artefact machine-local).
+- **Confiance opérateur en rush.** En plein coup de feu, un batch partiellement appliqué sans message ni refresh = confusion (l'opérateur ne sait pas quelles commandes ont bougé).
+
+### How It Works
+
+- **Garde READY** : `@UseGuards(OptionalJwtAuthGuard)` + `groupsService.canAccessEvent(eventId, user?.sub ?? null)`. PUBLIC → tout le monde (écran anonyme OK) ; PRIVATE → seulement un membre authentifié d'un groupe lié ; inconnu/refusé → `404` identique (jamais de fuite d'existence). `OrdersModule` importe désormais `GroupsModule`. Le service `findReadyByEvent` est **inchangé** (le gate vit dans le contrôleur, comme pour les events).
+- **`.tsbuildinfo`** : `git rm --cached` des deux fichiers + `*.tsbuildinfo` ajouté à la section « Build outputs » du `.gitignore` racine. Les fichiers restent sur disque, simplement plus suivis.
+- **Batch résilient** : `batchAdvance` passe à `Promise.allSettled`, **toujours** `await loadSnapshot()` (le board reflète l'état réel quoi qu'il arrive), puis si `rejected > 0` affiche une bannière ambre dismissible (`batchError`).
+
+### Code References
+
+- `backend/src/modules/orders/public-orders.controller.ts` — garde + `canAccessEvent`.
+- `backend/src/modules/orders/orders.module.ts` — `imports: [..., GroupsModule]`.
+- `backend/src/modules/orders/public-orders.controller.spec.ts` (créé) — 3 cas : accès anonyme autorisé, propagation du `sub`, **404 + service jamais appelé** quand refusé.
+- `apps/operator/src/app/dashboard/[eventId]/page.tsx` — `batchAdvance` (allSettled), état `batchError`, bannière.
+- `.gitignore` — `*.tsbuildinfo`.
+
+### Data Flow
+
+Écran public TV → `GET /public/orders/event/:id/ready` (sans token) → `OptionalJwtAuthGuard` (user undefined) → `canAccessEvent(id, null)` → PUBLIC `true` (liste servie) / PRIVATE `false` (`404`). Le client public (`/public/[eventId]`) fait `if (!res.ok) return` → board vide, pas de crash.
+
+### Dependencies
+
+- `OptionalJwtAuthGuard`, `CurrentUser`, `JwtPayload`, `GroupsService.canAccessEvent` (tous préexistants, Phase 14.4).
+- Aucune nouvelle dépendance npm.
+
+### Tests
+
+- Backend : **25 suites / 306 tests** (303 → +3 du nouveau spec contrôleur). `typecheck` exit 0.
+- Opérateur : `typecheck` exit 0 · `lint` 0 · `build` ✓ (`/dashboard/[eventId]` 10.5 kB).
+
+### Root Turbo pipeline — mise au point (P1 audit, non-bug)
+
+L'audit signalait `turbo run build/typecheck/lint` cassé (« Unable to find package manager binary »). **Vérifié ici : sain** (3× exit 0 en dry-run, pnpm 11.3.0 = `packageManager`). Tous les environnements réels provisionnent pnpm : CI (`.github/workflows/ci.yml` via `pnpm/action-setup@v4`), Vercel (`vercel.json` → `pnpm install` + `pnpm build`), Railway (`nixpacks.toml` → `corepack prepare pnpm@11.3.0`). L'échec Codex venait de son **sandbox** (pnpm absent du PATH là où Turbo le cherche), pas du dépôt. **Règle** : si `turbo` ne trouve pas le binaire, provisionner pnpm (`corepack enable` / `corepack prepare pnpm@11.3.0 --activate`) ; les builds **package par package** (`pnpm --filter <pkg> build`) sont le fallback fiable.
+
+### Risks and Safe Change Rules
+
+- **Ne jamais rouvrir une route publique sans `canAccessEvent`.** Toute nouvelle route `public/*` lisant des données d'événement doit gater PRIVATE via le même garde, sinon régression de la fuite.
+- **`findReadyByEvent` reste sans gate** : le contrôle d'accès vit dans le **contrôleur**. Ne pas dupliquer (ni retirer) le gate.
+- **Écran public = PUBLIC events.** Pour afficher un écran READY d'un événement **privé**, il faudra un vrai **token d'écran public** (non implémenté) — pas un retrait du garde.
+- **Batch** : garder `allSettled` + reload **inconditionnel**. Un futur endpoint backend batch **transactionnel** serait l'idéal (atomicité réelle) mais reste hors périmètre V1.
+
+### Debugging Notes
+
+- Écran public vide pour un événement : normal si l'événement est **PRIVATE** (404 anonyme) → utiliser un événement PUBLIC ou prévoir un token d'écran. Vérifier `event.visibility`.
+- `OrdersModule` ne démarre pas (DI) : vérifier que `GroupsModule` exporte bien `GroupsService` (il le fait) — pas de cycle car `GroupsModule` n'importe rien.
+- Bannière batch qui persiste : cliquable pour masquer (`setBatchError(null)`) ; elle se réinitialise à chaque nouveau batch.
 
 

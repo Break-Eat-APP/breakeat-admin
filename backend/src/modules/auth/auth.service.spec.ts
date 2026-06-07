@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { UnauthorizedException, ConflictException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
+import { GroupsService } from '../groups/groups.service';
 import { PrismaService } from '../../database/prisma.service';
 
 // ─── Mocks ────────────────────────────────────────────────────
@@ -24,6 +25,10 @@ const mockUsersService = {
   findByEmailWithPassword: jest.fn(),
   findById: jest.fn(),
   validatePassword: jest.fn(),
+};
+
+const mockGroupsService = {
+  applyDomainMembershipsForUser: jest.fn().mockResolvedValue(0),
 };
 
 const mockPrismaService = {
@@ -53,6 +58,7 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: UsersService, useValue: mockUsersService },
+        { provide: GroupsService, useValue: mockGroupsService },
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: JwtService, useValue: mockJwtService },
         { provide: ConfigService, useValue: mockConfigService },

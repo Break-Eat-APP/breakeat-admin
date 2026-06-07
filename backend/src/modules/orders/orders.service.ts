@@ -9,12 +9,14 @@ import {
   OrderActorType,
   OrderStatus,
   PaymentStatus,
+  SlotKind,
   type Order,
   type Prisma,
 } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { OrderStateMachineService } from './order-state-machine.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { SlotsService } from '../slots/slots.service';
 
 /**
  * OrdersService — owns the Order lifecycle from PaymentIntent.succeeded onward.
@@ -36,6 +38,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly stateMachine: OrderStateMachineService,
     private readonly realtimeService: RealtimeService,
+    private readonly slotsService: SlotsService,
   ) {}
 
   /**
@@ -380,6 +383,148 @@ export class OrdersService {
       },
       include: { items: true },
       orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  /**
+   * Returns active orders grouped by status for the operator dashboard.
+   * Only returns the 5 "live" statuses (excludes terminal COMPLETED / CANCELLED).
+   *
+   * Phase 12.9: if supplierId is provided, only returns orders for that supplier.
+   * An OPERATOR assigned to a specific supplier passes their supplierId so they
+   * only see their own orders.
+   *
+   * Phase 11.4: each order is enriched with `slotKind` (resolved from the
+   * order's pickup slot, defaulting to IMMEDIATE when none is assigned) and
+   * each item with its product's `categoryId`. The configurable operator
+   * screens filter the live order stream by slot kind and product category
+   * client-side, so these two fields must travel with every order.
+   *
+   * Response shape:
+   *   { eventId, counts: { PAID: n, … }, orders: { PAID: [...], … } }
+   *   where each order = Order & { slotKind, items: (OrderItem & { categoryId })[] }
+   */
+  async findDashboardByEvent(eventId: string, supplierId?: string) {
+    // Phase 11.4: PICKED_UP is included so the configurable "récupérées" screen
+    // (default statuses = [PICKED_UP, RECOVERED]) can display collected orders.
+    // COMPLETED + CANCELLED stay excluded — they are terminal and off-board.
+    const DASHBOARD_STATUSES = [
+      OrderStatus.PAID,
+      OrderStatus.ACCEPTED,
+      OrderStatus.PREPARING,
+      OrderStatus.READY,
+      OrderStatus.PICKED_UP,
+      OrderStatus.RECOVERED,
+    ] as const;
+
+    const orders = await this.prisma.order.findMany({
+      where: {
+        eventId,
+        status: { in: [...DASHBOARD_STATUSES] },
+        ...(supplierId ? { supplierId } : {}),
+      },
+      include: {
+        items: true,
+        slot: { select: { kind: true } },
+        user: { select: { displayName: true } },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // OrderItem has no `product` relation (productId is a snapshot FK), so we
+    // resolve categoryId via a single batched lookup keyed on productId.
+    const productIds = [
+      ...new Set(orders.flatMap((o) => o.items.map((i) => i.productId))),
+    ];
+    const products = productIds.length
+      ? await this.prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: {
+            id: true,
+            categoryId: true,
+            category: { select: { name: true } },
+          },
+        })
+      : [];
+    const categoryByProduct = new Map(
+      products.map((p) => [
+        p.id,
+        { categoryId: p.categoryId, categoryName: p.category?.name ?? null },
+      ]),
+    );
+
+    // Flatten the slot relation + resolved category into scalar fields the
+    // operator screens can filter on directly (slotKind per order, categoryId
+    // per item).
+    const enriched = orders.map((order) => {
+      const { slot, items, user, ...rest } = order;
+      return {
+        ...rest,
+        slotKind: slot?.kind ?? SlotKind.IMMEDIATE,
+        // displayName only — operators need a name to call out for pickup, but
+        // never the customer's email/phone on the shared board.
+        customerName: user?.displayName ?? null,
+        items: items.map((item) => {
+          const cat = categoryByProduct.get(item.productId);
+          return {
+            ...item,
+            categoryId: cat?.categoryId ?? null,
+            categoryName: cat?.categoryName ?? null,
+          };
+        }),
+      };
+    });
+    type DashboardOrder = (typeof enriched)[number];
+
+    const grouped: Record<string, DashboardOrder[]> = {};
+    const counts: Record<string, number> = {};
+    for (const s of DASHBOARD_STATUSES) {
+      grouped[s] = [];
+      counts[s] = 0;
+    }
+    for (const order of enriched) {
+      if (order.status in grouped) {
+        grouped[order.status].push(order);
+        counts[order.status]++;
+      }
+    }
+
+    return { eventId, counts, orders: grouped };
+  }
+
+  /**
+   * Atomically assigns an order to a pickup slot.
+   * Delegates to SlotsService.assignOrderToSlot (race-safe increment).
+   *
+   * Phase 8: exposed via PATCH /orders/:id/assign-slot — operator only.
+   */
+  async assignOrderToSlot(orderId: string, slotId: string): Promise<Order> {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+
+    let assigned!: Order;
+    await this.prisma.$transaction(async (tx) => {
+      await this.slotsService.assignOrderToSlot(orderId, slotId, tx);
+      assigned = await tx.order.findUniqueOrThrow({ where: { id: orderId } });
+    });
+
+    this.logger.log(`Order ${orderId} assigned to slot ${slotId}`);
+    return assigned;
+  }
+
+  /**
+   * Returns READY orders for a public display screen (no auth required on caller side).
+   * Only exposes the minimum fields needed for the public screen — no PII.
+   *
+   * Used by GET /public/orders/event/:eventId/ready (PublicOrdersController).
+   */
+  async findReadyByEvent(
+    eventId: string,
+  ): Promise<{ id: string; publicOrderNumber: string; pickupPointId: string; updatedAt: Date }[]> {
+    return this.prisma.order.findMany({
+      where: { eventId, status: OrderStatus.READY },
+      select: { id: true, publicOrderNumber: true, pickupPointId: true, updatedAt: true },
+      orderBy: { updatedAt: 'asc' },
     });
   }
 

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { EventStatus } from '@prisma/client';
+import { EventStatus, EventVisibility } from '@prisma/client';
 import { EventsService } from './events.service';
 import { PrismaService } from '../../database/prisma.service';
 
@@ -12,7 +12,9 @@ const EVENT_ID = 'event-1';
 const VENUE_ID = 'venue-1';
 const SUPPLIER_ID = 'supplier-1';
 
-function mockEvent(overrides: Partial<{ status: EventStatus }> = {}) {
+function mockEvent(
+  overrides: Partial<{ status: EventStatus; visibility: EventVisibility }> = {},
+) {
   return {
     id: EVENT_ID,
     organizationId: ORG_ID,
@@ -21,6 +23,7 @@ function mockEvent(overrides: Partial<{ status: EventStatus }> = {}) {
     startAt: new Date('2026-06-01T09:00:00Z'),
     endAt: new Date('2026-06-01T18:00:00Z'),
     status: EventStatus.DRAFT,
+    visibility: EventVisibility.PUBLIC,
     activeFeatureFlags: {},
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -61,6 +64,10 @@ describe('EventsService', () => {
               create: jest.fn(),
               delete: jest.fn(),
             },
+            // Phase 14.7 — group access wiring
+            group: { count: jest.fn() },
+            eventGroup: { deleteMany: jest.fn(), createMany: jest.fn() },
+            $transaction: jest.fn(),
           },
         },
       ],
@@ -129,6 +136,99 @@ describe('EventsService', () => {
           endAt: '2026-06-01T09:00:00Z',
         }),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  // ─── update (Phase 14.7 — visibility + group access) ─────────
+
+  describe('update', () => {
+    it('sets event visibility to PRIVATE', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.event.findFirst as jest.Mock).mockResolvedValue(mockEvent());
+      const updated = mockEvent({ visibility: EventVisibility.PRIVATE });
+      (prisma.event.update as jest.Mock).mockResolvedValue(updated);
+
+      const result = await service.update(ORG_ID, EVENT_ID, USER_ID, {
+        visibility: EventVisibility.PRIVATE,
+      });
+
+      expect(result.visibility).toBe(EventVisibility.PRIVATE);
+      expect(prisma.event.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: EVENT_ID },
+          data: expect.objectContaining({ visibility: EventVisibility.PRIVATE }),
+        }),
+      );
+      // No group set provided → must not touch the join table.
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.eventGroup.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('replaces the event group set when groupIds are provided', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.event.findFirst as jest.Mock).mockResolvedValue(mockEvent());
+      // Both groups belong to the org.
+      (prisma.group.count as jest.Mock).mockResolvedValue(2);
+      (prisma.event.update as jest.Mock).mockResolvedValue(
+        mockEvent({ visibility: EventVisibility.PRIVATE }),
+      );
+      (prisma.eventGroup.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+      (prisma.eventGroup.createMany as jest.Mock).mockResolvedValue({ count: 2 });
+      // Run the transaction callback against the same prisma mock.
+      (prisma.$transaction as jest.Mock).mockImplementation(async (cb) => cb(prisma));
+
+      await service.update(ORG_ID, EVENT_ID, USER_ID, {
+        visibility: EventVisibility.PRIVATE,
+        groupIds: ['group-1', 'group-2'],
+      });
+
+      expect(prisma.group.count).toHaveBeenCalledWith({
+        where: { id: { in: ['group-1', 'group-2'] }, organizationId: ORG_ID },
+      });
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.eventGroup.deleteMany).toHaveBeenCalledWith({
+        where: { eventId: EVENT_ID },
+      });
+      expect(prisma.eventGroup.createMany).toHaveBeenCalledWith({
+        data: [
+          { eventId: EVENT_ID, groupId: 'group-1' },
+          { eventId: EVENT_ID, groupId: 'group-2' },
+        ],
+        skipDuplicates: true,
+      });
+    });
+
+    it('clears all group links when groupIds is an empty array', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.event.findFirst as jest.Mock).mockResolvedValue(mockEvent());
+      (prisma.event.update as jest.Mock).mockResolvedValue(mockEvent());
+      (prisma.eventGroup.deleteMany as jest.Mock).mockResolvedValue({ count: 3 });
+      (prisma.$transaction as jest.Mock).mockImplementation(async (cb) => cb(prisma));
+
+      await service.update(ORG_ID, EVENT_ID, USER_ID, { groupIds: [] });
+
+      // Empty set: no ownership check needed, wipe links, create nothing.
+      expect(prisma.group.count).not.toHaveBeenCalled();
+      expect(prisma.eventGroup.deleteMany).toHaveBeenCalledWith({
+        where: { eventId: EVENT_ID },
+      });
+      expect(prisma.eventGroup.createMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects groupIds that do not all belong to the org', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.event.findFirst as jest.Mock).mockResolvedValue(mockEvent());
+      // Only 1 of the 2 requested groups is owned by this org.
+      (prisma.group.count as jest.Mock).mockResolvedValue(1);
+
+      await expect(
+        service.update(ORG_ID, EVENT_ID, USER_ID, {
+          groupIds: ['group-1', 'foreign-group'],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.eventGroup.deleteMany).not.toHaveBeenCalled();
     });
   });
 

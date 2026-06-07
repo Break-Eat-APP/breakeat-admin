@@ -58,4 +58,15 @@ export class AuthController {
   me(@CurrentUser() user: JwtPayload) {
     return this.authService.me(user.sub);
   }
+
+  /**
+   * GET /auth/me/memberships — requires valid JWT
+   * Returns the current user + all organisation memberships with org name/slug.
+   * Used exclusively by the admin panel to resolve which orgs the caller manages.
+   */
+  @Get('me/memberships')
+  @UseGuards(JwtAuthGuard)
+  meWithMemberships(@CurrentUser() user: JwtPayload) {
+    return this.authService.meWithMemberships(user.sub);
+  }
 }

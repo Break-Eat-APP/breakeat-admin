@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { PrismaService } from '../../database/prisma.service';
 import { UsersService } from '../users/users.service';
+import { GroupsService } from '../groups/groups.service';
 import type { SafeUser } from '../users/users.service';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
@@ -41,6 +42,7 @@ export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
+    private readonly groupsService: GroupsService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
   ) {}
@@ -56,6 +58,9 @@ export class AuthService {
       displayName: dto.displayName,
       phone: dto.phone,
     });
+
+    // Phase 14 — auto-join any group whose emailDomain matches this address.
+    await this.syncDomainGroups(user.id, user.email);
 
     const tokens = await this.generateTokens(user);
 
@@ -90,6 +95,11 @@ export class AuthService {
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash: _hash, ...safeUser } = user;
+
+    // Phase 14 — keep domain-based group memberships in sync on every login
+    // (covers users created before a matching group existed). Idempotent.
+    await this.syncDomainGroups(safeUser.id, safeUser.email);
+
     const tokens = await this.generateTokens(safeUser);
 
     this.logger.log(`User logged in: ${user.id} (${user.email})`);
@@ -150,7 +160,30 @@ export class AuthService {
     return this.usersService.findById(userId);
   }
 
+  /**
+   * Returns the user profile extended with all organisation memberships.
+   * Used by GET /auth/me/memberships for the admin panel.
+   * The admin panel calls this once after login to resolve which org the user manages.
+   */
+  async meWithMemberships(userId: string) {
+    return this.usersService.findByIdWithMemberships(userId);
+  }
+
   // ─── Private helpers ──────────────────────────────────────
+
+  /**
+   * Best-effort domain-based group enrolment. Never blocks auth: a failure here
+   * is logged and swallowed so login/register still succeed.
+   */
+  private async syncDomainGroups(userId: string, email: string): Promise<void> {
+    try {
+      await this.groupsService.applyDomainMembershipsForUser(userId, email);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Domain auto-join failed for user ${userId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
 
   private async generateTokens(user: SafeUser): Promise<AuthTokens> {
     const payload: JwtPayload = {

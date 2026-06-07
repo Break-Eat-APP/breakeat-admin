@@ -1,10 +1,11 @@
 import {
-  Body,
   Controller,
   Delete,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
+  ParseFloatPipe,
   ParseIntPipe,
   ParseUUIDPipe,
   Post,
@@ -62,5 +63,39 @@ export class SimulatorController {
   @HttpCode(HttpStatus.OK)
   async clearEvent(@Param('eventId', ParseUUIDPipe) eventId: string) {
     return this.simulatorService.clearEvent(eventId);
+  }
+
+  /**
+   * POST /internal/simulator/events/:eventId/progress
+   * Steps all active demo orders forward one lifecycle state.
+   * PAID→ACCEPTED→PREPARING→READY→PICKED_UP→COMPLETED, RECOVERED→ACCEPTED.
+   */
+  @Post('events/:eventId/progress')
+  @HttpCode(HttpStatus.OK)
+  async progressOrders(@Param('eventId', ParseUUIDPipe) eventId: string) {
+    return this.simulatorService.progressOrders(eventId);
+  }
+
+  /**
+   * POST /internal/simulator/events/:eventId/random-failures?failRate=0.2
+   * Randomly cancels or recovers some active demo orders.
+   * failRate = fraction of eligible orders to affect (0–1, default 0.2).
+   */
+  @Post('events/:eventId/random-failures')
+  @HttpCode(HttpStatus.OK)
+  async randomFailures(
+    @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Query('failRate', new ParseFloatPipe({ optional: true })) failRate?: number,
+  ) {
+    return this.simulatorService.randomFailures(eventId, failRate ?? 0.2);
+  }
+
+  /**
+   * GET /internal/simulator/events/:eventId/stats
+   * Returns a count of demo orders by status for the event.
+   */
+  @Get('events/:eventId/stats')
+  async getStats(@Param('eventId', ParseUUIDPipe) eventId: string) {
+    return this.simulatorService.getStats(eventId);
   }
 }

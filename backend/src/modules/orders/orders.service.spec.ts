@@ -4,6 +4,7 @@ import { CartStatus, OrderActorType, OrderStatus, PaymentStatus } from '@prisma/
 import { OrdersService } from './orders.service';
 import { OrderStateMachineService } from './order-state-machine.service';
 import { RealtimeService } from '../realtime/realtime.service';
+import { SlotsService } from '../slots/slots.service';
 import { PrismaService } from '../../database/prisma.service';
 
 const USER_ID = 'user-1';
@@ -72,6 +73,7 @@ describe('OrdersService', () => {
   let service: OrdersService;
   let prisma: jest.Mocked<PrismaService>;
   let realtime: jest.Mocked<RealtimeService>;
+  let slotsService: jest.Mocked<SlotsService>;
   const transactionMock = jest.fn();
 
   beforeEach(async () => {
@@ -90,6 +92,12 @@ describe('OrdersService', () => {
           },
         },
         {
+          provide: SlotsService,
+          useValue: {
+            assignOrderToSlot: jest.fn(),
+          },
+        },
+        {
           provide: PrismaService,
           useValue: {
             payment: {
@@ -97,9 +105,11 @@ describe('OrdersService', () => {
               upsert: jest.fn(),
             },
             cart: { findUnique: jest.fn() },
+            product: { findMany: jest.fn() },
             order: {
               findFirst: jest.fn(),
               findUnique: jest.fn(),
+              findUniqueOrThrow: jest.fn(),
               findMany: jest.fn(),
               update: jest.fn(),
             },
@@ -117,6 +127,7 @@ describe('OrdersService', () => {
     service = module.get(OrdersService);
     prisma = module.get(PrismaService);
     realtime = module.get(RealtimeService);
+    slotsService = module.get(SlotsService);
   });
 
   // ─── createFromPaymentIntent ──────────────────────────────────
@@ -539,6 +550,179 @@ describe('OrdersService', () => {
 
       // Must not hit the audit trail table
       expect(prisma.orderAuditTrail.findMany as jest.Mock).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── findDashboardByEvent ─────────────────────────────────────
+
+  describe('findDashboardByEvent', () => {
+    it('returns orders grouped by status with counts', async () => {
+      const orders = [
+        { ...mockOrder(OrderStatus.PAID), items: [] },
+        { ...mockOrder(OrderStatus.PAID), id: 'order-2', items: [] },
+        { ...mockOrder(OrderStatus.PREPARING), id: 'order-3', items: [] },
+        { ...mockOrder(OrderStatus.READY), id: 'order-4', items: [] },
+      ];
+      (prisma.order.findMany as jest.Mock).mockResolvedValue(orders);
+
+      const result = await service.findDashboardByEvent(EVENT_ID);
+
+      expect(result.eventId).toBe(EVENT_ID);
+      expect(result.counts.PAID).toBe(2);
+      expect(result.counts.PREPARING).toBe(1);
+      expect(result.counts.READY).toBe(1);
+      expect(result.counts.ACCEPTED).toBe(0);
+      expect(result.orders.PAID).toHaveLength(2);
+      expect(result.orders.PREPARING).toHaveLength(1);
+    });
+
+    it('returns empty groups when no active orders', async () => {
+      (prisma.order.findMany as jest.Mock).mockResolvedValue([]);
+
+      const result = await service.findDashboardByEvent(EVENT_ID);
+
+      expect(result.counts.PAID).toBe(0);
+      expect(result.orders.PAID).toEqual([]);
+    });
+
+    it('queries the active dashboard statuses incl. PICKED_UP (excludes COMPLETED + CANCELLED)', async () => {
+      (prisma.order.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findDashboardByEvent(EVENT_ID);
+
+      const callArg = (prisma.order.findMany as jest.Mock).mock.calls[0][0];
+      const queriedStatuses: string[] = callArg.where.status.in;
+      expect(queriedStatuses).toContain(OrderStatus.PAID);
+      expect(queriedStatuses).toContain(OrderStatus.PICKED_UP);
+      expect(queriedStatuses).toContain(OrderStatus.RECOVERED);
+      expect(queriedStatuses).not.toContain(OrderStatus.COMPLETED);
+      expect(queriedStatuses).not.toContain(OrderStatus.CANCELLED);
+    });
+
+    it('enriches each order with slotKind, customerName and each item with categoryId (Phase 11.4)', async () => {
+      (prisma.order.findMany as jest.Mock).mockResolvedValue([
+        {
+          ...mockOrder(OrderStatus.PAID),
+          slot: { kind: 'PAUSE_1' },
+          user: { displayName: 'Leslie Zaragoza' },
+          items: [
+            { id: 'item-1', productId: 'prod-a', quantity: 2 },
+            { id: 'item-2', productId: 'prod-b', quantity: 1 },
+          ],
+        },
+        {
+          ...mockOrder(OrderStatus.READY),
+          id: 'order-2',
+          slot: null,
+          user: null,
+          items: [{ id: 'item-3', productId: 'prod-a', quantity: 1 }],
+        },
+      ]);
+      (prisma.product.findMany as jest.Mock).mockResolvedValue([
+        { id: 'prod-a', categoryId: 'cat-food', category: { name: 'Salé' } },
+        { id: 'prod-b', categoryId: 'cat-drink', category: { name: 'Boisson' } },
+      ]);
+
+      const result = await service.findDashboardByEvent(EVENT_ID);
+
+      // Slot kind is flattened onto the order; null slot falls back to IMMEDIATE.
+      expect(result.orders.PAID[0].slotKind).toBe('PAUSE_1');
+      expect(result.orders.READY[0].slotKind).toBe('IMMEDIATE');
+      // Customer display name is flattened; null user → null name.
+      expect(result.orders.PAID[0].customerName).toBe('Leslie Zaragoza');
+      expect(result.orders.READY[0].customerName).toBeNull();
+      // categoryId + categoryName resolved per item from the batched lookup.
+      expect(result.orders.PAID[0].items[0].categoryId).toBe('cat-food');
+      expect(result.orders.PAID[0].items[0].categoryName).toBe('Salé');
+      expect(result.orders.PAID[0].items[1].categoryId).toBe('cat-drink');
+      expect(result.orders.PAID[0].items[1].categoryName).toBe('Boisson');
+      expect(result.orders.READY[0].items[0].categoryId).toBe('cat-food');
+      // Distinct productIds only (prod-a appears twice → queried once).
+      const productQuery = (prisma.product.findMany as jest.Mock).mock.calls[0][0];
+      expect(productQuery.where.id.in.sort()).toEqual(['prod-a', 'prod-b']);
+    });
+
+    it('skips the product lookup entirely when no orders have items', async () => {
+      (prisma.order.findMany as jest.Mock).mockResolvedValue([
+        { ...mockOrder(OrderStatus.PAID), slot: null, items: [] },
+      ]);
+
+      await service.findDashboardByEvent(EVENT_ID);
+
+      expect(prisma.product.findMany as jest.Mock).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── assignOrderToSlot ────────────────────────────────────────
+
+  describe('assignOrderToSlot', () => {
+    const SLOT_ID = 'slot-uuid';
+
+    it('assigns order to slot and returns updated order', async () => {
+      const assignedOrder = { ...mockOrder(), slotId: SLOT_ID };
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder());
+      (slotsService.assignOrderToSlot as jest.Mock).mockResolvedValue(undefined);
+      (prisma.order.findUniqueOrThrow as jest.Mock).mockResolvedValue(assignedOrder);
+
+      // $transaction runs the async callback in-line
+      transactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
+        return cb(prisma);
+      });
+
+      const result = await service.assignOrderToSlot(ORDER_ID, SLOT_ID);
+
+      expect(slotsService.assignOrderToSlot).toHaveBeenCalledWith(ORDER_ID, SLOT_ID, prisma);
+      expect(result.slotId).toBe(SLOT_ID);
+    });
+
+    it('throws NotFoundException when order does not exist', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.assignOrderToSlot(ORDER_ID, SLOT_ID)).rejects.toThrow(NotFoundException);
+      expect(transactionMock).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── findReadyByEvent ─────────────────────────────────────────
+
+  describe('findReadyByEvent', () => {
+    it('returns minimal READY order fields for the event', async () => {
+      const readyOrders = [
+        { id: 'r1', publicOrderNumber: 'BE-0001', pickupPointId: 'pp-1', updatedAt: new Date() },
+        { id: 'r2', publicOrderNumber: 'BE-0002', pickupPointId: 'pp-2', updatedAt: new Date() },
+      ];
+      (prisma.order.findMany as jest.Mock).mockResolvedValue(readyOrders);
+
+      const result = await service.findReadyByEvent(EVENT_ID);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('r1');
+      expect(result[0].publicOrderNumber).toBe('BE-0001');
+      expect(result[0].pickupPointId).toBe('pp-1');
+    });
+
+    it('returns empty array when no READY orders', async () => {
+      (prisma.order.findMany as jest.Mock).mockResolvedValue([]);
+
+      const result = await service.findReadyByEvent(EVENT_ID);
+
+      expect(result).toEqual([]);
+    });
+
+    it('queries only READY status with select projection (no PII)', async () => {
+      (prisma.order.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findReadyByEvent(EVENT_ID);
+
+      const callArg = (prisma.order.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArg.where.status).toBe(OrderStatus.READY);
+      expect(callArg.where.eventId).toBe(EVENT_ID);
+      expect(callArg.select).toMatchObject({
+        id: true,
+        publicOrderNumber: true,
+        pickupPointId: true,
+        updatedAt: true,
+      });
     });
   });
 });
