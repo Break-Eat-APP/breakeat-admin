@@ -1400,7 +1400,8 @@ pnpm build       # 4 packages ✅
 - Historique : v0.8.0 était passé de `turbo` à `pnpm -r run` pour contourner un souci de résolution du binaire pnpm par Turbo sur Windows.
 - Problème découvert par l'audit (2e passe) : `corepack pnpm typecheck` exécute le script `typecheck`, dont le corps `pnpm -r run typecheck` appelle un **`pnpm` imbriqué qui n'est PAS dans le PATH** (pnpm vit dans le cache corepack, pas dans `node_modules/.bin`) → échec.
 - **Fix racine :** `turbo` EST dans `node_modules/.bin` (donc ajouté au PATH par pnpm quand il lance un script). `turbo run typecheck` se résout donc toujours. Les tâches par-package (`tsc --noEmit`, `eslint`) sont des binaires locaux que Turbo lance directement — elles n'ont jamais besoin de `pnpm`.
-- **Vérifié :** `corepack pnpm typecheck` ET `corepack pnpm lint` → 4/4 packages verts, via les scripts (la commande exacte que l'audit disait cassée).
+- **Vérifié :** `corepack pnpm typecheck` ET `corepack pnpm lint` → tous les packages verts, via les scripts (la commande exacte que l'audit disait cassée). *(NB : le « 4/4 » d'origine date d'avant l'ajout de `apps/backoffice` + `apps/mobile` ; le compte de packages a augmenté, le résultat reste vert.)*
+- ⚠️ **Prérequis d'environnement (voir la section [2026-06-07] « Root Turbo pipeline — mise au point », plus bas, qui fait foi) :** `turbo run` n'est vert QUE si `pnpm` est résoluble sur le PATH. Un sandbox sans pnpm (ex. l'auditeur Codex) renvoie « Unable to find package manager binary » — c'est un **manque d'environnement, PAS un bug du dépôt**. Remède : provisionner pnpm (`corepack enable && corepack prepare pnpm@11.3.0 --activate`). Fallback fiable : builds **package par package** (`pnpm --filter <pkg> build`). CI / Vercel / Railway provisionnent tous pnpm 11.3.0, donc le pipeline est vert partout en réel.
 
 **Invocation correcte (dev, CI, et audit Codex) :**
 ```bash
