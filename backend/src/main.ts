@@ -35,8 +35,13 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  // CORS — origins controlled via env
-  const corsOrigins = process.env.CORS_ORIGINS?.split(',') ?? ['http://localhost:3001'];
+  // CORS — origins controlled via env. Défaut couvre les 3 dashboards dev
+  // (admin 3001, opérateur 3002, back office 3003).
+  const corsOrigins = process.env.CORS_ORIGINS?.split(',') ?? [
+    'http://localhost:3001',
+    'http://localhost:3002',
+    'http://localhost:3003',
+  ];
   app.enableCors({ origin: corsOrigins, credentials: true });
 
   // Global prefix — /health and /webhooks are excluded so they remain at their root paths.
