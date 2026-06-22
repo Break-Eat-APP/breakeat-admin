@@ -2,8 +2,11 @@
 
 import { useState } from 'react';
 import {
+  apiGetVenues,
   apiCreateVenue,
+  apiUpdateVenue,
   apiCreateEvent,
+  apiGetSuppliers,
   apiCreateSupplier,
   apiAttachSupplier,
   apiCreateCategory,
@@ -49,15 +52,15 @@ export default function DemoSetupPage() {
     if (!orgId) { setGlobalError('Aucune organisation sélectionnée.'); return; }
 
     const STEPS: StepResult[] = [
-      { label: '🏟️ Création du lieu (Patinoire des Spartiates)', status: 'pending' },
-      { label: '🎪 Création de l\'événement (Match Spartiates)', status: 'pending' },
-      { label: '🍔 Création du fournisseur (Buvette Nord)', status: 'pending' },
-      { label: '🔗 Attachement du fournisseur à l\'événement', status: 'pending' },
-      { label: '📂 Création des catégories (Boissons, Snacks)', status: 'pending' },
-      { label: '🥤 Création des produits (Coca, Hot-Dog, Bière)', status: 'pending' },
-      { label: '📍 Création des points de retrait', status: 'pending' },
-      { label: '⏰ Création des créneaux horaires', status: 'pending' },
-      { label: '✅ Activation de l\'événement', status: 'pending' },
+      { label: 'Lieu du club (réutilisé si existant)', status: 'pending' },
+      { label: 'Création de l\'événement (Match Spartiates)', status: 'pending' },
+      { label: 'Création du fournisseur (Buvette Nord)', status: 'pending' },
+      { label: 'Attachement du fournisseur à l\'événement', status: 'pending' },
+      { label: 'Création des catégories (Boissons, Snacks)', status: 'pending' },
+      { label: 'Création des produits (Coca, Hot-Dog, Bière)', status: 'pending' },
+      { label: 'Création des points de retrait', status: 'pending' },
+      { label: 'Création des créneaux horaires', status: 'pending' },
+      { label: 'Activation de l\'événement', status: 'pending' },
     ];
     setSteps(STEPS);
     setRunning(true);
@@ -79,13 +82,24 @@ export default function DemoSetupPage() {
       const endDate = new Date(startDate);
       endDate.setHours(23, 0, 0, 0);
 
-      const venue = await apiCreateVenue(orgId, {
+      // Un club = un lieu : on réutilise le lieu existant de l'org au lieu d'en
+      // recréer un à chaque run (évite les doublons de « Patinoire des Spartiates »).
+      const venueData = {
         name: 'Patinoire des Spartiates',
         address: '1 Avenue du Sport, 75012 Paris',
         timezone: 'Europe/Paris',
-      });
-      venueId = venue.id;
-      updateStep(0, { status: 'ok', detail: `ID: ${venue.id.slice(0, 8)}…` });
+      };
+      const existingVenues = await apiGetVenues(orgId);
+      const venueList = Array.isArray(existingVenues) ? existingVenues : [];
+      if (venueList.length > 0) {
+        const v = await apiUpdateVenue(orgId, venueList[0].id, venueData);
+        venueId = v.id;
+        updateStep(0, { status: 'ok', detail: `réutilisé · ${v.id.slice(0, 8)}…` });
+      } else {
+        const v = await apiCreateVenue(orgId, venueData);
+        venueId = v.id;
+        updateStep(0, { status: 'ok', detail: `créé · ${v.id.slice(0, 8)}…` });
+      }
 
       // Step 1 — Event
       updateStep(1, { status: 'running' });
@@ -98,14 +112,24 @@ export default function DemoSetupPage() {
       eventId = event.id;
       updateStep(1, { status: 'ok', detail: `ID: ${event.id.slice(0, 8)}…` });
 
-      // Step 2 — Supplier
+      // Step 2 — Supplier (réutilise « Buvette Nord » si elle existe déjà → pas de doublon)
       updateStep(2, { status: 'running' });
-      const supplier = await apiCreateSupplier(orgId, {
-        name: 'Buvette Nord',
-        preparationZone: 'Zone A — Entrée nord',
-      });
+      const existingSups = await apiGetSuppliers(orgId);
+      const reused = (Array.isArray(existingSups) ? existingSups : []).find(
+        (s) => s.name === 'Buvette Nord',
+      );
+      let supplier;
+      if (reused) {
+        supplier = reused;
+        updateStep(2, { status: 'ok', detail: `réutilisée · ${reused.id.slice(0, 8)}…` });
+      } else {
+        supplier = await apiCreateSupplier(orgId, {
+          name: 'Buvette Nord',
+          preparationZone: 'Zone A — Entrée nord',
+        });
+        updateStep(2, { status: 'ok', detail: `créée · ${supplier.id.slice(0, 8)}…` });
+      }
       supplierId = supplier.id;
-      updateStep(2, { status: 'ok', detail: `ID: ${supplier.id.slice(0, 8)}…` });
 
       // Step 3 — Attach
       updateStep(3, { status: 'running' });
@@ -197,8 +221,8 @@ export default function DemoSetupPage() {
   return (
     <div style={{ padding: 32, fontFamily: BRAND.font }}>
       {/* Header */}
-      <h1 style={{ fontSize: 26, fontWeight: 800, color: BRAND.ink, margin: '0 0 8px' }}>
-        🏒 Démo — Spartiates Hockey
+      <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: '0 0 8px', letterSpacing: -0.3 }}>
+        Démo — Spartiates Hockey
       </h1>
       <p style={{ color: BRAND.grey, fontSize: 14, marginBottom: 8 }}>
         Crée en un clic tout l&apos;environnement de démonstration complet : lieu, événement, fournisseur, produits, points de retrait et créneaux.
@@ -226,7 +250,7 @@ export default function DemoSetupPage() {
             boxShadow: BRAND.shadowButton,
           }}
         >
-          🚀 Créer la démo Spartiates Hockey
+          Créer la démo Spartiates Hockey
         </button>
       )}
 
@@ -258,7 +282,7 @@ export default function DemoSetupPage() {
       {/* Success result */}
       {done && (
         <div style={{ background: '#f0fdf4', border: '2px solid #16a34a', borderRadius: 12, padding: 24, marginBottom: 24 }}>
-          <div style={{ fontWeight: 800, fontSize: 16, color: '#166534', marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, fontSize: 16, color: '#166534', marginBottom: 16 }}>
             ✅ Démo créée avec succès !
           </div>
 

@@ -141,15 +141,15 @@ export default function SimulatorPage() {
 
   return (
     <div style={{ padding: 32, fontFamily: BRAND.font }}>
-      <h1 style={{ fontSize: 26, fontWeight: 800, color: BRAND.ink, margin: '0 0 8px' }}>
-        🚀 Simulateur
+      <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: '0 0 8px', letterSpacing: -0.3 }}>
+        Simulateur
       </h1>
       <p style={{ color: '#dc2626', fontSize: 13, marginBottom: 24, background: '#fee2e2', borderRadius: 6, padding: '8px 12px', display: 'inline-block' }}>
         ⚠️ Réservé aux environnements <strong>DEMO_MODE=true</strong>. Ne jamais utiliser en production.
       </p>
 
       {/* Event selector */}
-      <div style={{ background: BRAND.bg, borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(28,25,23,0.06)', border: `1px solid ${BRAND.border}`, marginBottom: 24 }}>
+      <div style={{ background: BRAND.surface, borderRadius: 12, padding: 20, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}`, marginBottom: 24 }}>
         <label style={{ display: 'block', fontWeight: 600, fontSize: 13, color: BRAND.inkSoft, marginBottom: 8 }}>
           Événement cible
         </label>
@@ -157,7 +157,7 @@ export default function SimulatorPage() {
           <select
             value={selectedEventId}
             onChange={(e) => setSelectedEventId(e.target.value)}
-            style={{ flex: 1, padding: '9px 12px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 14, background: BRAND.bg, fontFamily: 'inherit' }}
+            style={{ flex: 1, padding: '9px 12px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 14, background: BRAND.surface, fontFamily: 'inherit' }}
           >
             <option value="">Sélectionner un événement…</option>
             {events.map((ev) => (
@@ -189,8 +189,8 @@ export default function SimulatorPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 24 }}>
 
         {/* Seed */}
-        <div style={{ background: BRAND.bg, borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(28,25,23,0.06)', border: `1px solid ${BRAND.border}` }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: BRAND.ink }}>🌱 Seed</div>
+        <div style={{ background: BRAND.surface, borderRadius: 12, padding: 20, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}` }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: BRAND.ink }}>Seed</div>
           <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 12px' }}>
             Crée un mix d&apos;ordres à différents stades du cycle de vie.
           </p>
@@ -218,8 +218,8 @@ export default function SimulatorPage() {
         </div>
 
         {/* Rush */}
-        <div style={{ background: BRAND.bg, borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(28,25,23,0.06)', border: `1px solid ${BRAND.border}` }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: BRAND.ink }}>⚡ Rush</div>
+        <div style={{ background: BRAND.surface, borderRadius: 12, padding: 20, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}` }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: BRAND.ink }}>Rush</div>
           <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 12px' }}>
             Injecte N commandes PAID simultanément pour simuler un rush.
           </p>
@@ -247,8 +247,8 @@ export default function SimulatorPage() {
         </div>
 
         {/* Progress */}
-        <div style={{ background: BRAND.bg, borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(28,25,23,0.06)', border: `1px solid ${BRAND.border}` }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: BRAND.ink }}>⏩ Progresser</div>
+        <div style={{ background: BRAND.surface, borderRadius: 12, padding: 20, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}` }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: BRAND.ink }}>Progresser</div>
           <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 16px' }}>
             Avance toutes les commandes actives d&apos;une étape dans le cycle de vie.
           </p>
@@ -265,8 +265,8 @@ export default function SimulatorPage() {
         </div>
 
         {/* Random failures */}
-        <div style={{ background: BRAND.bg, borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(28,25,23,0.06)', border: `1px solid ${BRAND.border}` }}>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: BRAND.ink }}>🎲 Pannes aléatoires</div>
+        <div style={{ background: BRAND.surface, borderRadius: 12, padding: 20, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}` }}>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: BRAND.ink }}>Pannes aléatoires</div>
           <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 12px' }}>
             Annule ou récupère aléatoirement une fraction des commandes actives.
           </p>
@@ -296,8 +296,8 @@ export default function SimulatorPage() {
       </div>
 
       {/* Clear */}
-      <div style={{ background: BRAND.bg, borderRadius: 12, padding: 20, boxShadow: '0 1px 3px rgba(28,25,23,0.06)', marginBottom: 24, border: '2px solid #fee2e2' }}>
-        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: '#dc2626' }}>🗑️ Nettoyer l&apos;événement</div>
+      <div style={{ background: BRAND.surface, borderRadius: 12, padding: 20, boxShadow: BRAND.shadowCard, marginBottom: 24, border: '2px solid #fee2e2' }}>
+        <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 8, color: '#dc2626' }}>Nettoyer l&apos;événement</div>
         <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 12px' }}>
           Supprime toutes les commandes de démo (<code>DEMO-*</code>) de l&apos;événement. Irréversible.
         </p>

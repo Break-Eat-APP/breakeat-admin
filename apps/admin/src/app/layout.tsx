@@ -1,21 +1,28 @@
 import type { Metadata } from 'next';
-import { Fredoka } from 'next/font/google';
+import { Inter, Jost } from 'next/font/google';
 import { QueryProvider } from '@/providers/query-provider';
 import './globals.css';
 
 /**
- * Brand typography (Phase 11 refonte v2).
- *   - Fredoka → toute l'UI (body, labels, boutons…) — "Fredoka partout".
+ * Brand typography (refonte v3).
+ *   - Inter → toute l'UI (body, labels, boutons…). Police de travail pro,
+ *     neutre et lisible (remplace Fredoka, jugée trop "enfant" pour des outils).
+ *   - Jost  → textes description / sous-titres dans l'app mobile (éditeur
+ *     d'apparence + rendu client). Géométrique, moderne, lisible à petite taille.
  *
- * Le logotype "BREAKEAT" n'est PAS du texte : c'est l'artwork officiel
- * (apps/admin/public/logo-full.png), donc aucune police web dédiée au
- * wordmark n'est chargée. Voir @/components/brand/BreakEatLogo.
+ * Le logo "B éclair" reste l'artwork officiel (SVG), non géré ici.
  */
-const fredoka = Fredoka({
+const inter = Inter({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-fredoka',
+  variable: '--font-sans',
   display: 'swap',
+});
+
+const jost = Jost({
+  subsets: ['latin'],
+  variable: '--font-jost',
+  display: 'swap',
+  weight: ['300', '400', '500', '600'],
 });
 
 export const metadata: Metadata = {
@@ -25,7 +32,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={fredoka.variable}>
+    <html lang="fr" className={`${inter.variable} ${jost.variable}`}>
       <body>
         <QueryProvider>{children}</QueryProvider>
       </body>

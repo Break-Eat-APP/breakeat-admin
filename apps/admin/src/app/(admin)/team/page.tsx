@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { Store } from 'lucide-react';
 import {
   apiGetOrgMembers,
   apiInviteMember,
@@ -181,8 +182,8 @@ export default function TeamPage() {
     <div style={{ padding: 32, maxWidth: 960, fontFamily: BRAND.font }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: BRAND.ink, margin: '0 0 4px' }}>
-          👥 Équipe
+        <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: '0 0 4px', letterSpacing: -0.3 }}>
+          Équipe
         </h1>
         <p style={{ color: BRAND.grey, fontSize: 14, margin: 0 }}>
           Gérez les membres et leurs accès. Les opérateurs peuvent être assignés à un fournisseur spécifique.
@@ -195,10 +196,10 @@ export default function TeamPage() {
       {/* ── Invite form ─────────────────────────────────────────── */}
       <div
         style={{
-          background: BRAND.bg,
+          background: BRAND.surface,
           borderRadius: 12,
           padding: 24,
-          boxShadow: '0 1px 3px rgba(28,25,23,0.06)',
+          boxShadow: BRAND.shadowCard,
           marginBottom: 24,
           border: `1px solid ${BRAND.border}`,
         }}
@@ -255,7 +256,7 @@ export default function TeamPage() {
                   borderRadius: 7,
                   border: `1.5px solid ${BRAND.border}`,
                   fontSize: 14,
-                  background: BRAND.bg,
+                  background: BRAND.surface,
                   fontFamily: 'inherit',
                 }}
               >
@@ -279,7 +280,7 @@ export default function TeamPage() {
                     borderRadius: 7,
                     border: `1.5px solid ${BRAND.border}`,
                     fontSize: 14,
-                    background: BRAND.bg,
+                    background: BRAND.surface,
                     fontFamily: 'inherit',
                   }}
                 >
@@ -323,9 +324,9 @@ export default function TeamPage() {
       {/* ── Members list ────────────────────────────────────────── */}
       <div
         style={{
-          background: BRAND.bg,
+          background: BRAND.surface,
           borderRadius: 12,
-          boxShadow: '0 1px 3px rgba(28,25,23,0.06)',
+          boxShadow: BRAND.shadowCard,
           border: `1px solid ${BRAND.border}`,
           overflow: 'hidden',
         }}
@@ -387,7 +388,7 @@ export default function TeamPage() {
                       {m.user.displayName}
                     </div>
                     <div style={{ fontSize: 11, color: BRAND.grey, marginTop: 2 }}>
-                      {m.user.globalRole === 'SUPER_ADMIN' ? '⭐ Super Admin' : ''}
+                      {m.user.globalRole === 'SUPER_ADMIN' ? 'Super Admin' : ''}
                     </div>
                   </td>
 
@@ -417,7 +418,8 @@ export default function TeamPage() {
                           gap: 4,
                         }}
                       >
-                        🏪 {m.supplier.name}
+                        <Store size={13} strokeWidth={2} />
+                        {m.supplier.name}
                       </span>
                     ) : (
                       <span style={{ color: BRAND.grey, fontSize: 13 }}>—</span>

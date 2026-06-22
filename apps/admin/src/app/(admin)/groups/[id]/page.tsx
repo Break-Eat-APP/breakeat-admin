@@ -30,10 +30,10 @@ function Card({
   return (
     <div
       style={{
-        background: BRAND.bg,
+        background: BRAND.surface,
         borderRadius: 12,
         padding: 24,
-        boxShadow: '0 1px 3px rgba(28,25,23,0.06)',
+        boxShadow: BRAND.shadowCard,
         border: `1px solid ${BRAND.border}`,
         marginBottom: 24,
       }}
@@ -198,7 +198,7 @@ export default function GroupDetailPage() {
 
       {/* Header */}
       <div style={{ margin: '12px 0 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: BRAND.ink, margin: 0 }}>{group.name}</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0 }}>{group.name}</h1>
         {group.emailDomain && (
           <span
             style={{

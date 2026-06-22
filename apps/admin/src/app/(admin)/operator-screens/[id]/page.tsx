@@ -132,7 +132,7 @@ export default function OperatorScreenDetailPage() {
       {/* Header */}
       <div style={{ margin: '12px 0 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ fontSize: 28 }}>{template.icon || '🖥️'}</span>
-        <h1 style={{ fontSize: 26, fontWeight: 800, color: BRAND.ink, margin: 0 }}>{template.name}</h1>
+        <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0 }}>{template.name}</h1>
         {!template.enabled && <span style={disabledBadge}>désactivé</span>}
       </div>
 
@@ -224,10 +224,10 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
   return (
     <div
       style={{
-        background: BRAND.bg,
+        background: BRAND.surface,
         borderRadius: 12,
         padding: 24,
-        boxShadow: '0 1px 3px rgba(28,25,23,0.06)',
+        boxShadow: BRAND.shadowCard,
         border: `1px solid ${BRAND.border}`,
         marginBottom: 24,
       }}

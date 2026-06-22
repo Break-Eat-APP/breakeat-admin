@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
 import {
   apiGetAppSettings,
   apiSetAppSetting,
@@ -106,7 +107,7 @@ export default function SettingsPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: BRAND.ink, margin: 0 }}>⚙️ Paramètres</h1>
+          <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0, letterSpacing: -0.3 }}>Paramètres</h1>
           <p style={{ color: BRAND.grey, fontSize: 14, margin: '4px 0 0' }}>
             Configuration clé-valeur JSON par scope
           </p>
@@ -149,7 +150,7 @@ export default function SettingsPage() {
       {showForm && (
         <form
           onSubmit={handleSave}
-          style={{ background: BRAND.bg, borderRadius: 12, padding: 24, boxShadow: BRAND.shadowSoft, marginBottom: 24, border: `2px solid ${BRAND.orange}` }}
+          style={{ background: BRAND.surface, borderRadius: 12, padding: 24, boxShadow: BRAND.shadowSoft, marginBottom: 24, border: `2px solid ${BRAND.orange}` }}
         >
           <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.ink, margin: '0 0 16px' }}>
             Créer / mettre à jour un paramètre
@@ -171,7 +172,7 @@ export default function SettingsPage() {
               <select
                 value={form.scope}
                 onChange={(e) => setForm((f) => ({ ...f, scope: e.target.value, scopeId: '' }))}
-                style={{ ...inp, background: BRAND.bg }}
+                style={{ ...inp, background: BRAND.surface }}
               >
                 {SCOPES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
@@ -232,12 +233,14 @@ export default function SettingsPage() {
       {loading ? (
         <div style={{ color: BRAND.grey, fontSize: 14 }}>Chargement…</div>
       ) : settings.length === 0 ? (
-        <div style={{ background: BRAND.bg, borderRadius: 12, padding: 40, textAlign: 'center', color: BRAND.grey, boxShadow: '0 1px 3px rgba(28,25,23,0.06)', border: `1px solid ${BRAND.border}` }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>⚙️</div>
+        <div style={{ background: BRAND.surface, borderRadius: BRAND.radius.card, padding: 40, textAlign: 'center', color: BRAND.grey, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}` }}>
+          <div style={{ width: 52, height: 52, borderRadius: 15, background: BRAND.bgSubtle, color: BRAND.inkSoft, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <SlidersHorizontal size={24} strokeWidth={1.75} />
+          </div>
           <div style={{ fontWeight: 600 }}>Aucun paramètre</div>
         </div>
       ) : (
-        <div style={{ background: BRAND.bg, borderRadius: 12, boxShadow: '0 1px 3px rgba(28,25,23,0.06)', border: `1px solid ${BRAND.border}`, overflow: 'hidden' }}>
+        <div style={{ background: BRAND.surface, borderRadius: 12, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}`, overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr style={{ borderBottom: `2px solid ${BRAND.border}`, background: BRAND.bgSubtle }}>
