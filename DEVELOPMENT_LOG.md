@@ -14,6 +14,94 @@
 
 ---
 
+## PHASE 17 — Bloc B + C4 — 2026-06-15
+
+**Statut :** ✅ Livré (B complet, C4 complet ; C1/C2/C3 en attente décision push)
+
+### B1 — Pages multiples (app white-label)
+- `HomeAppearance.pages: AppPage[]` ; `AppCardAction.type` ajoute `'page'` (+ `pageId`).
+- Admin : extraction `CardEditor` (réutilisé accueil + pages), section « Pages secondaires », helpers page-aware (`updateCards(pageId|null, fn)`, `addPage/removePage/renamePage`), aperçu avec sélecteur d'écran.
+- Mobile : `AppearanceHome` gère un `currentPageId` (navigation interne + bouton retour).
+
+### B2 — 1–4 points de retrait par buvette
+- `PickupPointsService.create` : cap 4 par supplier (scopé event). `remove()` + DELETE controller (refus si commandes liées). `apiDeletePickupPoint`.
+- Event page : select buvette dans le form, suppression, libellé buvette par point.
+
+### B3 — Créneaux illimités + générateur en lot
+- `handleGenerateSlots` : boucle de création de N créneaux consécutifs (durée/capacité paramétrables). Coexiste avec l'ajout unitaire.
+
+### C4 — Exploitant externe (parrainage)
+- Schéma `Supplier.isExternal` + `referralCode @unique`. Migration : drift PK pré-existant (SQL-first) → `ALTER TABLE` direct via psql + `prisma generate` (backend arrêté pour libérer le DLL Windows).
+- Service : `generateUniqueReferralCode` (`BE-XXXXXX`), `regenerateReferralCode`, `findByReferralCode`. Controller : `POST :id/referral`, `GET referral/:code`.
+- Admin : création (checkbox), carte parrainage (copie/régénération), badge liste.
+
+### Décisions
+- **Migration en SQL direct** assumée : le projet a un drift PK (ids `gen_random_uuid()` côté DB vs `@default(uuid())` côté schéma) → `prisma migrate dev` recréerait toutes les PK (dangereux). ALTER ciblé = sûr.
+
+---
+
+## PHASE 18 — Fondation push Expo — 2026-06-15
+
+**Statut :** ✅ Fondation livrée (token registry + ExpoPushService). C1/C2/C3 (logique) à suivre.
+
+### Contexte
+Client a choisi **Expo Push** comme canal. ⚠️ L'app mobile est **bare React Native** (0.79.2, pas Expo-managed) → l'obtention du jeton Expo demande d'installer les modules Expo dans l'app bare + config FCM/APNs + rebuild natif (étape client).
+
+### Livré
+- Table `push_tokens` (SQL direct) + modèle Prisma `PushToken` (+ relation `User.pushTokens`).
+- `backend/src/modules/notifications/` : `ExpoPushService` (POST exp.host/--/api/v2/push/send, batches 100, détecte `DeviceNotRegistered`), `PushTokensService` (upsert/delete/lookup/purge), `PushTokensController` (`POST`/`DELETE /push-tokens`), `NotificationsModule` (exporte les services pour C1/C2/C3), câblé dans `app.module.ts`.
+- Test `expo-push.service.spec.ts` (validation format jeton + court-circuit jetons invalides) — vert.
+- Mobile : `apiRegisterPushToken` / `apiUnregisterPushToken` (sans dépendance native, pour ne pas casser le bundle).
+
+### C1 — Notifs par étape de commande (livré)
+- `OrderNotificationsService.notifyStatusChange` lit `app.notifications` (app-settings, scope org), résout le modèle du statut, envoie aux jetons du client. Hook fire-and-forget dans `OrdersService.transition` (after-commit). Specs orders mises à jour (mock provider). Page admin `notifications/page.tsx` (toggle + titre/message par étape).
+
+### C2 — Push programmés (livré)
+- `@nestjs/schedule` installé + `ScheduleModule.forRoot()` dans AppModule. Modèle `ScheduledPush` (table `scheduled_pushes`, SQL direct). `ScheduledPushService` : CRUD + `@Cron(EVERY_MINUTE) processDue()` → envoie les PENDING dus, marque SENT/FAILED. Audience = jetons des users ayant commandé dans l'org (et l'event si précisé). Controller CRUD org-scopé. Page admin `campaigns/page.tsx`.
+
+### C3 — Campagne -50 % auto (livré partiel)
+- Même pipeline, `kind=DISCOUNT_CAMPAIGN` + `discountPercent`. Déclenchement horaire → push d'annonce automatique.
+- ⚠️ **Reste** : appliquer la remise au panier. Le prix est figé au checkout (`cartItem.priceSnapshotCents`) et doit == montant Stripe → la remise doit se brancher AU checkout (cart.service / création du PaymentIntent), pas à la création de commande. Pièce sensible (financier) volontairement différée.
+
+### Mobile (à faire côté natif)
+- App = bare RN. Installer modules Expo + `expo-notifications`, util `registerForPushNotificationsAsync`, appel post-login → `apiRegisterPushToken` (déjà dispo).
+
+---
+
+## PHASE 16 — « Apparence de l'app » v2 — 2026-06-08
+
+**Statut :** ✅ Livré
+
+### Objectif
+Compléter le configurateur d'écran d'accueil (éditeur admin + rendu mobile) selon la spec client complète : police Jost, wording optionnel, réordonnancement, toggle Flaix.
+
+### Blocs
+
+**Bloc 16.1 — Police Jost**
+- `apps/admin/src/app/layout.tsx` : import `Jost` (next/font/google), variable CSS `--font-jost`, ajouté à `className` html.
+- Utilisée dans `PhonePreview` pour le sous-titre (poids 400, Jost géométrique/moderne).
+
+**Bloc 16.2 — Toggle Flaix (admin + mobile)**
+- `appearance/page.tsx` : composant `Toggle` (pill animé CSS inline, pas de lib externe) ; carte « Intégration Flaix » ; `patchFlaix(v)` ; fix normalisation `flaixTakeover ?? false`.
+- `mobile-api.ts` : `flaixTakeover?: boolean` dans `HomeAppearance`.
+- `event-home.screen.tsx` : early return si `flaixTakeover === true` → écran placeholder (Phase 11.5).
+
+**Bloc 16.3 — Réordonnancement cartes**
+- `moveCard(id, dir: -1|1)` : swap par index, immutable update.
+- Boutons ▲/▼ sur chaque ligne de carte (`arrowBtn` style helper, désactivés en bord de liste).
+
+**Bloc 16.4 — Wording non-obligatoire**
+- `addCard` : `title: ''` au lieu de `'Nouvelle carte'`.
+- Input placeholder `"Titre (optionnel)"`.
+- `PhonePreview` : `{!!c.title && <div>...</div>}` pour icône/image seule.
+
+### Décisions
+- **Jost ≠ Fredoka** : Jost (géométrique, uppercase propre, bon rendu mobile) pour descriptions/sous-titres uniquement. Inter reste pour l'UI admin.
+- **Toggle custom** : pas de lib externe pour le switch. Le pill CSS animé est suffisant ici.
+- **Phase 11.5 toujours bloquée** sur le SDK Flaix. Le placeholder mobile est intentionnel pour ne pas bloquer le reste.
+
+---
+
 ## PHASE 0 — Source of Truth `/brain`
 
 **Date :** 25/05/2026
@@ -2473,6 +2561,263 @@ pnpm --filter @break-eat/operator lint       → 0 erreur (régression)
 
 ### Prochaine étape
 Approfondir le back office (vues SUPER_ADMIN), tester le board opérateur en conditions réelles, documenter les 2 P1 (migration UUID + paymentStatus @map) dans les 4 docs. **Phase 11.5** (plan de préparation Flaix) reste **en attente du code Flaix**.
+
+---
+
+## PHASE 16 — Admin polish : allègement Fredoka + Wizard multi-buvettes
+
+**Date :** 07/06/2026
+**Statut :** ✅ Terminée (validation visuelle Fredoka en attente côté utilisateur)
+
+### BLOC 16.1 — Allègement typographique (Fredoka + anthracite)
+**Fichiers modifiés :**
+```
+packages/brand/src/brand.ts
+  — ink #1c1917 → #2d2926 (anthracite chaud adouci) ; token unique propagé aux 3 apps
+apps/admin/src/app/(admin)/**  (16 pages)
+  — fontWeight: 800 → 600 : dashboard, events, events/[id], venues, groups, groups/[id],
+    settings, feature-flags, simulator, team, operator-screens, operator-screens/[id],
+    organizations/[id], suppliers/[id], demo-setup, wizard
+```
+**Principe** : Fredoka chargée en 400/500/600/700 → un 800 inline clampait déjà à 700 ; on descend volontairement à 600. Décision utilisateur : **garder Fredoka**, alléger poids + ink (pas de changement de police).
+
+### BLOC 16.2 — Wizard multi-buvettes
+**Fichiers modifiés :**
+```
+apps/admin/src/app/(admin)/wizard/page.tsx (refonte étape Produits → Buvettes)
+  — type Buvette { id, name, prepZone, pickupPoint, categories[], products[] }
+  — WizardData.buvettes[] (remplace supplierName/prepZone/categories/products/pickupPoints à plat)
+  — StepBuvettes + BuvetteCard : N buvettes (ajout/retrait), chacune zone/retrait/catégories/produits
+  — StepSlots : générateur de créneaux seul (retrait déplacé sur la buvette) + rappel lecture seule
+  — runConfiguration : catégories dédupliquées (catMap) + 1 tâche/buvette (supplier+attach+pickup+produits)
+  — TEMPLATES : Stade (2 buvettes Nord/Sud), Festival (Food Truck + Bar), Entreprise (1)
+  — Recap : cartes « Buvettes & menu » + « Retrait »
+```
+**Principe** : **aucun changement backend** — le modèle supportait déjà Event↔Supplier M:N et pickup→supplier. Le wizard orchestre l'existant : un même lieu → N fournisseurs en un parcours.
+
+### Vérification (Phase 16)
+```
+pnpm --filter @break-eat/admin typecheck → exit 0
+pnpm --filter @break-eat/admin lint      → 0 erreur
+```
+Aucune migration, aucune dépendance npm, aucun fichier backend touché.
+
+### Prochaine étape
+Validation visuelle de l'allègement Fredoka. Parking (non retenu pour l'instant) : page « Hub Configuration » (vue d'ensemble + accès rapide à chaque réglage) et éditeur convivial Notifs/Push. **Phase 11.5** (plan de préparation Flaix) toujours en attente du code Flaix.
+
+---
+
+## PHASE 17 — Refonte v3 « chaleureux premium » (Inter + Lucide)
+
+**Date :** 07/06/2026
+**Statut :** 🚧 En cours — bloc 1 livré (fondations + sidebar + dashboard) ; pages restantes à suivre
+
+Pivot artistique (client) : sortir du look « dashboard IA ». Fredoka → **Inter** ; emojis de menu → **Lucide** ; direction **« chaleureux premium »** (canevas crème, cartes blanches, profondeur douce neutre, orange maîtrisé). Logo « B éclair » laissé tel quel.
+
+### BLOC 17.1 — Fondations (tokens + police, 3 apps)
+**Fichiers modifiés :**
+```
+packages/brand/src/brand.ts
+  — font → Inter (var --font-sans) ; bg #ffffff→#fcfaf8 (crème) ; inkSoft #44403c→#57514c
+  — + surface #ffffff (cartes) ; bgSubtle #f5efe9 ; shadowCard/shadowSoft NEUTRES ; radius {card,control,pill}
+apps/{admin,operator,backoffice}/src/app/layout.tsx — next/font Fredoka → Inter (--font-sans)
+apps/{admin,operator,backoffice}/src/app/globals.css — body var(--font-sans), bg #fcfaf8, color #2d2926
+```
+**Dépendance :** `lucide-react` ajouté aux 3 apps (authenticité vérifiée : registry npm officiel, repo lucide-icons/lucide, licence ISC ; 1.x par mi-2026).
+
+### BLOC 17.2 — Sidebar admin (Lucide + IA groupée)
+**Fichiers modifiés :**
+```
+apps/admin/src/app/(admin)/layout.tsx
+  — NAV_GROUPS : Pilotage / Configuration / Organisation / Système / Outils
+  — icônes Lucide (LucideIcon) à la place des emojis ; pastille active arrondie (fini le filet gauche)
+  — rail blanc (surface) sur canevas crème
+apps/admin/src/app/(admin)/events/page.tsx
+  — titre « Événements & configuration » + description grise (centre de paramétrage)
+```
+
+### BLOC 17.3 — Dashboard manager
+**Fichiers modifiés :**
+```
+apps/admin/src/app/(admin)/dashboard/page.tsx
+  — dé-emoji : greeting ; InfoCard 🏢/🔒/🎪 → Building2/Lock/CalendarDays ; ↻ → RefreshCw ; › → ChevronRight
+  — KpiCard / EventRow / InfoCard en surface + shadowCard (hover shadowSoft + lift) ; typo resserrée
+```
+
+### BLOC 17.4 — « Lieu » intégré à Organisation (section « Lieux » retirée)
+Décision produit : **un club = un lieu**. La section multi-lieux et le « coller un UUID de venue » dans l'événement sont supprimés.
+**Fichiers modifiés :**
+```
+apps/admin/src/app/(admin)/layout.tsx — item « Lieux » retiré du menu (import MapPin retiré)
+apps/admin/src/app/(admin)/organizations/[id]/page.tsx
+  — carte « Lieu » (nom/adresse/fuseau) : create si absent, sinon update ; SectionCard → surface/shadowCard
+  — chips lecture seule pour d'éventuels lieux supplémentaires (multi-sites résiduel)
+apps/admin/src/app/(admin)/events/page.tsx
+  — formulaire : lieu auto (0 → invite Organisation + submit off ; 1 → lecture seule ; >1 → select)
+apps/admin/src/lib/api/admin-client.ts — apiUpdateVenue → PATCH /organizations/:orgId/venues/:id (endpoint existant)
+apps/admin/src/app/(admin)/venues/page.tsx — réduit à une redirection vers Organisation
+```
+
+### BLOC 17.5 — Consolidation lieux + cause racine
+**Données (transaction SQL, démo, accord explicite)** : 4 lieux « Patinoire des Spartiates » dupliqués → 3 événements repointés sur le lieu canonique (20 commandes + 2 comptoirs), 3 doublons supprimés → **1 lieu** (UPDATE 3 events · DELETE 3 venues).
+**Cause racine corrigée (code) :**
+```
+apps/admin/src/app/(admin)/wizard/page.tsx      — tâche « Lieu du club » : réutilise le venue existant (apiGetVenues→apiUpdateVenue) sinon crée
+apps/admin/src/app/(admin)/demo-setup/page.tsx  — Step 0 : idem (réutilise le lieu, ne le recrée plus)
+```
+Note : `docker exec` nécessite `-i` pour transmettre un heredoc SQL sur stdin (sans `-i`, psql ne reçoit rien — piège constaté).
+
+### BLOC 17.6 — Nettoyage événements dupliqués (données démo)
+3 événements « Match Spartiates Hockey » en double (DRAFT/CANCELLED, 0 commande) supprimés en transaction (accord explicite). FK vérifiées avant : `event_suppliers` CASCADE (4 liens auto-supprimés), `slots`/`pickup_points`/`orders`/`event_groups`/`event_operator_screens` = 0. État final : **1 lieu · 1 événement actif · 20 commandes · 2 comptoirs**.
+
+### BLOC 17.7 — Sweep premium des pages admin
+Recette par page : titre dé-emoji (+letter-spacing), cartes `BRAND.bg`→`BRAND.surface` + `shadowCard`, état vide en icône Lucide (pastille), chevrons `›`→`ChevronRight`.
+```
+settings/page.tsx          — Paramètres (SlidersHorizontal)
+groups/page.tsx            — Groupes (Tags, ChevronRight)
+team/page.tsx              — Équipe (Store pour chip fournisseur ; ⭐ retiré)
+operator-screens/page.tsx  — Écrans opérateur (MonitorSmartphone, ChevronRight ; t.icon laissé = data)
+feature-flags/page.tsx     — Feature Flags (Flag)
+simulator/page.tsx         — Simulateur (emojis de sections retirés ; ⚠️ DEMO conservé)
+events/[id]/page.tsx       — fiche événement (1428 l) : composant Card → surface/shadowCard ; 8 titres dé-emoji ; visibilité 🌍/🔒 → Globe/Lock ; copie 📋 → Copy ; tpl.icon laissé (data)
+```
+**Renommage** (demande client) : `layout.tsx` nav + `wizard/page.tsx` H1 « Configurer un club » → **« Configurer mon lieu »** (le lieu est le repère persistant du club).
+
+### BLOC 17.8 — Fin du sweep (détails admin + wizard + démo + operator + backoffice)
+**Admin (reste) :**
+```
+groups/[id] · operator-screens/[id] · suppliers/[id]  — composant Card → surface/shadowCard (en-têtes déjà propres)
+wizard/page.tsx        — icônes templates 🏒🎪🏢 → Lucide Trophy/Tent/Building2 (<t.icon/>) ; titres recap dé-emoji ; labels de tâches dé-emoji ; aperçu push ⚡ → Zap
+demo-setup/page.tsx    — H1, bouton, 9 labels d'étapes dé-emoji (ticks de statut transitoires conservés)
+```
+**Backoffice :**
+```
+(backoffice)/layout.tsx  — sidebar refonte : NAV emojis → Lucide (LayoutDashboard/Building2/Users), pastille active arrondie, rail surface ; canevas main reste BRAND.bg (crème)
+overview/page.tsx        — KPI cards → surface + shadowCard
+(les autres pages backoffice étaient déjà propres : pas d'emoji, typo nette)
+```
+**Operator** (console rush — design fonctionnel conservé, juste aligné) :
+```
+OrderCard / OrderGroupCard  — ombre → couches neutres (cohérent shadowCard)
+page.tsx + dashboard/[eventId]  — chip fournisseur 🏪 → icône Store
+DashboardColumn.tsx  — en-têtes de colonnes dé-emoji (🔔/✅/🍳… → texte ; couleurs conservées)
+public/[eventId]  — « 🍔 BREAK EAT » → « BREAKEAT »
+NotificationPopup  — ✅/🔔 → Lucide CheckCircle2/Bell
+```
+**Piège corrigé** : le chip operator avait déjà `display/alignItems/gap` → mon ajout créait des clés dupliquées (TS1117). Retiré.
+
+### Vérification finale (sweep v3 complet)
+```
+admin / operator / backoffice : typecheck 0 · lint 0
+```
+Aucune migration, aucun fichier backend touché. **Sweep refonte v3 terminé** sur les 3 apps web.
+**Piège** : `replace_all` sur `background: BRAND.bg` (sans virgule) capture aussi `BRAND.bgSubtle` → `BRAND.surfaceSubtle` (inexistant). Toujours inclure la virgule.
+
+### Vérification (Phase 17 — blocs 1 + Lieu)
+```
+pnpm --filter @break-eat/admin      typecheck → 0 · lint → 0
+pnpm --filter @break-eat/operator   typecheck → 0 · lint → 0
+pnpm --filter @break-eat/backoffice typecheck → 0 · lint → 0
+```
+Aucune migration, aucun fichier backend touché (réutilise le PATCH venue existant).
+
+### Prochaine étape
+Valider la direction avec le client, puis polir les ~14 autres pages admin (dé-emoji + cartes `surface`/`shadowCard`) et le contenu operator/backoffice. Option à confirmer : fusionner Organisation + Équipe sous un parent à onglets.
+
+---
+
+## PHASE 18 — Section « Buvettes » (config club-level + rattachement événement)
+
+**Date :** 08/06/2026
+**Statut :** ✅ Terminée (frontend ; aucun backend — CRUD fournisseur déjà complet)
+
+Demande client : configurer les buvettes **une fois** (niveau club) puis les **attribuer** aux événements, avec accès direct. Le modèle le permettait déjà (Supplier org-level, Event↔Supplier M:N) ; il manquait la **section menu**.
+
+### BLOC 18.1 — Client + nav
+```
+admin-client.ts  — apiUpdateSupplier (PATCH /…/suppliers/:id) + apiUpdateSupplierStatus (PATCH /…/suppliers/:id/status)
+(admin)/layout.tsx — item « Buvettes » (Store) dans le groupe Configuration
+```
+
+### BLOC 18.2 — Page liste + détail enrichi
+```
++ (admin)/suppliers/page.tsx — liste premium : création (nom/zone), cartes surface/shadowCard, icône Store, badge statut
+~ (admin)/suppliers/[id]/page.tsx
+    — fil d'Ariane → « ← Buvettes » ; en-tête dé-emoji + badge statut
+    — carte « Réglages » : édition nom/zone (apiUpdateSupplier) + bascule statut OPEN/PAUSED/CLOSED/OFFLINE (apiUpdateSupplierStatus)
+    — carte « Rattacher à un événement » : dropdown événements + apiAttachSupplier
+    — produits/catégories/prix : inchangés (déjà présents)
+```
+
+### Vérification (Phase 18)
+```
+admin typecheck 0 · lint 0
+PATCH /organizations/:org/suppliers/:id/status → HTTP 200 (testé en live)
+```
+**Dette données** : 4 « Buvette Nord » dupliquées en base démo (1 OPEN + 3 CLOSED orphelines) — à consolider (accord) + faire que démo-setup réutilise la buvette (comme le lieu).
+
+### Prochaine étape
+Câbler la couleur de branding sur l'app mobile (point 3 du plan). Option : consolider les buvettes dupliquées.
+
+---
+
+## PHASE 19 — « Apparence de l'app » (configurateur de cartes white-label)
+
+**Date :** 08/06/2026
+**Statut :** 🚧 En cours — éditeur accueil (v1) + exposition backend faits ; rendu mobile + upload + écran carte à venir
+
+Le manager configure l'écran d'accueil de l'app cliente comme un **constructeur de cartes** (icône/image, couleurs, taille, disposition), avec presets par type de lieu. Choix client : les deux écrans (accueil d'abord), styles globaux + surcharge par carte, image par upload (URL en attendant).
+
+### BLOC 19.1 — Éditeur admin + aperçu live
+```
++ (admin)/appearance/page.tsx — éditeur : presets (Stade/Entreprise/Festival), thème global
+    (couleurs primaire/texte/icône/fond, colonnes, taille), cartes (titre, icône Lucide,
+    surcharge couleurs, image URL) ; APERÇU LIVE maquette téléphone ; save/load app-settings (app.appearance.home, ORGANIZATION)
+~ (admin)/layout.tsx — nav « Apparence de l'app » (Palette)
+```
+
+### BLOC 19.2 — Branding exposé à l'app
+```
+~ backend/.../public-events.controller.ts — GET /public/events/:id renvoie branding {primaryColor, logoUrl} + appearance (config org ou null)
+```
+Données seedées en démo (app_settings) ; endpoint vérifié au typecheck. ⚠️ Backend en cours d'exécution PAS en watch → redémarrage requis pour servir les nouveaux champs live.
+
+### BLOC 19.3 — Éditeur aligné sur le cahier des charges client
+Le client a fourni le gabarit (maquettes) : logo centré → titre MAJUSCULE → sous-titre minuscule → grille de cartes (1 ou 2 colonnes), cartes en texte seul / icône / image.
+```
+(admin)/appearance/page.tsx
+  — modèle : ajout header {showLogo, title, subtitle, titleColor, subtitleColor} ; carte icon='' = texte seul
+  — éditeur : carte « En-tête » (logo + titres + couleurs) ; bouton « Texte » dans le sélecteur de visuel
+  — presets refondus : Stade (TRIBUNE NORD/SUD/EST/OUEST texte doré), Entreprise (cartes photo), Festival (icônes)
+  — aperçu : en-tête configurable (logo placeholder + titre maj + sous-titre) ; cartes texte/icône/image (image = photo plein cadre + titre surimprimé)
+  — normalisation au chargement (compat anciennes configs sans header)
+```
+Note : `@next/next/no-img-element` n'est pas dans la config eslint admin → ne pas mettre de `eslint-disable` pour cette règle (sinon « rule not found »). Le `<img>` passe sans directive.
+
+### BLOC 19.4 — Action par carte + RENDU mobile (boucle fermée)
+Client a confirmé : la grille DEVIENT l'accueil ; Stade = 4 TRIBUNES = 4 buvettes (taper → menu) ; icônes via lucide-react-native.
+```
+(admin)/appearance/page.tsx
+  — modèle carte : + action {type: none|supplier|orders|scan|url, supplierId?, url?}
+  — chargement des buvettes (apiGetSuppliers) ; sélecteur d'action par carte (+ dropdown buvette / champ URL)
+  — preset Stade : cartes action=supplier (le manager choisit la buvette)
+apps/mobile/src/lib/api/mobile-api.ts — types HomeAppearance/AppCard/AppCardAction + branding/appearance sur PublicEvent
+apps/mobile/src/screens/event-home.screen.tsx
+  — composant AppearanceHome : logo centré → titre MAJ → sous-titre → grille (cartes texte/image, RN core ; icône = v2)
+  — branche : si appearance définie → rend le gabarit, sinon repli sélection de stand
+  — handleCardAction : supplier→catalog, scan→QRScanner, url→Linking, orders→no-op
+```
+**Données** : config Stade re-seedée (header + 4 TRIBUNE) après reprise de Docker.
+**Ops** : backend relancé en watch (`start:dev`) — il était DOWN (crash quand Docker s'est arrêté). `GET /public/events/:id` expose maintenant branding + appearance (vérifié live).
+
+### Vérification (Phase 19 — boucle fermée)
+```
+admin typecheck 0 · lint 0 · backend typecheck 0 · mobile typecheck 0
+GET /public/events/:id → branding + appearance (4 cartes) servis en live
+```
+
+### Prochaine étape
+Cartes icône côté app (lucide-react-native + react-native-svg, natif → rebuild) ; upload image (stockage) ; écran carte/menu (style BK) ; définir ensemble le contenu fin des templates.
 
 ---
 
