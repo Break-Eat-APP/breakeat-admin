@@ -50,10 +50,56 @@ export class SuppliersService {
         organizationId,
         name: dto.name,
         preparationZone: dto.preparationZone,
+        isExternal: dto.isExternal ?? false,
+        // Un exploitant externe reçoit d'emblée un code de parrainage unique.
+        referralCode: dto.isExternal ? await this.generateUniqueReferralCode() : null,
       },
     });
 
     this.logger.log(`Supplier created: ${supplier.id} ("${supplier.name}") in org ${organizationId}`);
+    return supplier;
+  }
+
+  /** Génère un code de parrainage unique au format BE-XXXXXX (6 alphanum. sans ambiguïté). */
+  private async generateUniqueReferralCode(): Promise<string> {
+    const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans I,O,0,1
+    for (let attempt = 0; attempt < 10; attempt++) {
+      let body = '';
+      for (let i = 0; i < 6; i++) body += ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+      const code = `BE-${body}`;
+      const clash = await this.prisma.supplier.findUnique({ where: { referralCode: code } });
+      if (!clash) return code;
+    }
+    throw new BadRequestException('Impossible de générer un code de parrainage, réessayez.');
+  }
+
+  /** (Re)génère le code de parrainage d'un exploitant — marque aussi la buvette comme externe. */
+  async regenerateReferralCode(
+    organizationId: string,
+    supplierId: string,
+    userId: string,
+  ): Promise<Supplier> {
+    await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
+    const existing = await this.prisma.supplier.findFirst({
+      where: { id: supplierId, organizationId },
+    });
+    if (!existing) throw new NotFoundException('Supplier not found');
+
+    const code = await this.generateUniqueReferralCode();
+    return this.prisma.supplier.update({
+      where: { id: supplierId },
+      data: { isExternal: true, referralCode: code },
+    });
+  }
+
+  /** Recherche une buvette par son code de parrainage (pour rattacher un exploitant externe). */
+  async findByReferralCode(code: string, userId: string): Promise<Supplier> {
+    const supplier = await this.prisma.supplier.findUnique({
+      where: { referralCode: code },
+    });
+    if (!supplier) throw new NotFoundException('Code de parrainage invalide');
+    // L'appelant doit être membre de l'organisation propriétaire.
+    await requireOrgAccess(this.prisma, userId, supplier.organizationId, ALL_ORG_ROLES);
     return supplier;
   }
 

@@ -192,8 +192,51 @@ model User {
   carts            Cart[]
   orders           Order[]
   groupMemberships GroupMember[]
+  pushTokens       PushToken[]
 
   @@map("users")
+}
+
+/// Push programmé (C2) ou campagne promo automatique (C3).
+/// kind = 'PUSH' (simple notification) | 'DISCOUNT_CAMPAIGN' (remise + push).
+model ScheduledPush {
+  id              String    @id @default(uuid())
+  organizationId  String    @map("organization_id")
+  eventId         String?   @map("event_id")
+  kind            String    @default("PUSH")
+  title           String
+  body            String    @default("")
+  /// Pourcentage de remise pour les campagnes DISCOUNT_CAMPAIGN (ex. 50).
+  discountPercent Int?      @map("discount_percent")
+  scheduledAt     DateTime  @map("scheduled_at")
+  status          String    @default("PENDING")
+  sentAt          DateTime? @map("sent_at")
+  sentCount       Int       @default(0) @map("sent_count")
+  createdBy       String?   @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  event        Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt])
+  @@index([organizationId])
+  @@map("scheduled_pushes")
+}
+
+/// Jeton de push Expo enregistré par un appareil client (notifications C1/C2/C3).
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  platform  String   @default("unknown")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_tokens")
 }
 
 /// A company, venue operator or event owner.
@@ -219,6 +262,7 @@ model Organization {
   groups       Group[]
   /// PHASE 11 — reusable operator-dashboard screen definitions
   operatorScreenTemplates OperatorScreenTemplate[]
+  scheduledPushes         ScheduledPush[]
 
   @@map("organizations")
 }
@@ -294,6 +338,7 @@ model Event {
   groups         EventGroup[]
   /// PHASE 11 — screen templates applied to this event (with per-event order/toggle)
   operatorScreens EventOperatorScreen[]
+  scheduledPushes ScheduledPush[]
 
   @@map("events")
 }
@@ -306,6 +351,10 @@ model Supplier {
   name            String
   status          SupplierStatus @default(CLOSED)
   preparationZone String?        @map("preparation_zone")
+  /// Exploitant externe (food-truck, traiteur tiers…) référencé via code de parrainage.
+  isExternal      Boolean        @default(false) @map("is_external")
+  /// Code de parrainage unique — partagé à l'exploitant externe pour le rattacher au club.
+  referralCode    String?        @unique @map("referral_code")
   /// Stripe Connect account ID — populated during Phase 5 onboarding.
   stripeAccountId       String?              @map("stripe_account_id")
   stripeAccountStatus   StripeAccountStatus  @default(NOT_ONBOARDED) @map("stripe_account_status")

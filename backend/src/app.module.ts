@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './database/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
@@ -26,6 +27,7 @@ import { GroupsModule } from './modules/groups/groups.module';
 import { BackofficeModule } from './modules/backoffice/backoffice.module';
 import { OperatorScreensModule } from './modules/operator-screens/operator-screens.module';
 import { StatsModule } from './modules/stats/stats.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import appConfig from './config/app.config';
 
 @Module({
@@ -38,6 +40,8 @@ import appConfig from './config/app.config';
     }),
     // PrismaModule is global — PrismaService available everywhere
     PrismaModule,
+    // Phase 18 — cron pour les pushs programmés / campagnes (C2/C3)
+    ScheduleModule.forRoot(),
     HealthModule,
     // Phase 2
     UsersModule,
@@ -73,6 +77,8 @@ import appConfig from './config/app.config';
     OperatorScreensModule,
     // Phase 15 — Manager dashboard (org/event analytics)
     StatsModule,
+    // Phase 18 — Notifications push (fondation Expo : C1/C2/C3)
+    NotificationsModule,
   ],
 })
 export class AppModule {}

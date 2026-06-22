@@ -53,12 +53,27 @@ export class PickupPointsService {
       }
     }
 
-    // Optionally verify supplier belongs to org
+    // Optionally verify supplier belongs to org + enforce the 1–4 cap per buvette
     if (dto.supplierId) {
       const supplier = await this.prisma.supplier.findFirst({
         where: { id: dto.supplierId, organizationId },
       });
       if (!supplier) throw new NotFoundException('Supplier not found in this organization');
+
+      // A buvette (supplier) can have at most 4 pickup points, scoped to the event
+      // when one is provided (so the cap is per-event, not global to the supplier).
+      const existingCount = await this.prisma.pickupPoint.count({
+        where: {
+          organizationId,
+          supplierId: dto.supplierId,
+          ...(dto.eventId ? { eventId: dto.eventId } : {}),
+        },
+      });
+      if (existingCount >= 4) {
+        throw new BadRequestException(
+          'Une buvette ne peut avoir que 4 points de retrait maximum.',
+        );
+      }
     }
 
     const pp = await this.prisma.pickupPoint.create({
@@ -121,5 +136,32 @@ export class PickupPointsService {
 
     this.logger.log(`PickupPoint updated: ${pickupPointId} in org ${organizationId}`);
     return updated;
+  }
+
+  async remove(
+    organizationId: string,
+    pickupPointId: string,
+    userId: string,
+  ): Promise<{ deleted: string }> {
+    await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
+
+    const existing = await this.prisma.pickupPoint.findFirst({
+      where: { id: pickupPointId, organizationId },
+    });
+    if (!existing) throw new NotFoundException('Pickup point not found');
+
+    // Refuse deletion if any order already references this pickup point.
+    const orderCount = await this.prisma.order.count({
+      where: { pickupPointId },
+    });
+    if (orderCount > 0) {
+      throw new BadRequestException(
+        `Impossible de supprimer : ${orderCount} commande(s) y sont rattachées.`,
+      );
+    }
+
+    await this.prisma.pickupPoint.delete({ where: { id: pickupPointId } });
+    this.logger.log(`PickupPoint deleted: ${pickupPointId} in org ${organizationId}`);
+    return { deleted: pickupPointId };
   }
 }
