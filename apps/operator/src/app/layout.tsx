@@ -1,17 +1,16 @@
 import type { Metadata } from 'next';
-import { Fredoka } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import { QueryProvider } from '@/providers/query-provider';
 import './globals.css';
 
 /**
- * Brand typography (Phase 11 refonte v2) — "Fredoka partout".
- * Le logotype "BREAKEAT" est l'artwork officiel (public/logo-*.png),
- * pas du texte ; tokens partagés via @break-eat/brand.
+ * Brand typography (refonte v3) — Inter pour toute l'UI (remplace Fredoka).
+ * Police de travail pro, lisible en rush ; tokens partagés via @break-eat/brand.
+ * Le logo "B éclair" reste l'artwork officiel (SVG).
  */
-const fredoka = Fredoka({
+const inter = Inter({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-fredoka',
+  variable: '--font-sans',
   display: 'swap',
 });
 
@@ -22,7 +21,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={fredoka.variable}>
+    <html lang="fr" className={inter.variable}>
       <body>
         <QueryProvider>{children}</QueryProvider>
       </body>

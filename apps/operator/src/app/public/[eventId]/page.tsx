@@ -170,7 +170,7 @@ export default function PublicReadyScreen() {
         }}
       >
         <div>
-          <div style={{ fontWeight: 900, fontSize: 24 }}>🍔 BREAK EAT</div>
+          <div style={{ fontWeight: 800, fontSize: 24, letterSpacing: -0.5 }}>BREAKEAT</div>
           <div style={{ fontSize: 13, opacity: 0.8 }}>Commandes prêtes à récupérer</div>
         </div>
         <button

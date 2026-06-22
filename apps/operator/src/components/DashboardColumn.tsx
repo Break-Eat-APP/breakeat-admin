@@ -13,14 +13,14 @@ import { groupSimilarOrders } from '@/lib/screens/grouping';
  */
 
 const COLUMN_HEADERS: Record<StatusVariant, string> = {
-  PAID:      '🔔 Nouvelles',
-  ACCEPTED:  '👍 Acceptées',
-  PREPARING: '🍳 En préparation',
-  READY:     '✅ Prêtes',
-  PICKED_UP: '📦 Récupérées',
-  COMPLETED: '✔ Terminées',
-  CANCELLED: '✕ Annulées',
-  RECOVERED: '↩ Récupération',
+  PAID:      'Nouvelles',
+  ACCEPTED:  'Acceptées',
+  PREPARING: 'En préparation',
+  READY:     'Prêtes',
+  PICKED_UP: 'Récupérées',
+  COMPLETED: 'Terminées',
+  CANCELLED: 'Annulées',
+  RECOVERED: 'Récupération',
 };
 
 export interface DashboardColumnProps {
@@ -104,6 +104,26 @@ export function DashboardColumn({
           {orders.length}
         </span>
       </div>
+
+      {/* Résumé produits à préparer — visible si la colonne a des commandes */}
+      {orders.length > 0 && (() => {
+        const totals: Record<string, number> = {};
+        for (const o of orders) {
+          for (const it of o.items) {
+            totals[it.productNameSnapshot] = (totals[it.productNameSnapshot] ?? 0) + it.quantity;
+          }
+        }
+        const entries = Object.entries(totals).sort((a, b) => b[1] - a[1]);
+        return (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8, padding: '6px 8px', background: '#fff', borderRadius: 8, border: `1px solid ${BRAND.border}` }}>
+            {entries.map(([name, qty]) => (
+              <span key={name} style={{ fontSize: 11, background: BRAND.bgSubtle, border: `1px solid ${BRAND.border}`, borderRadius: 5, padding: '1px 7px', color: BRAND.ink, fontWeight: 600 }}>
+                {name} <span style={{ color: headerColor, fontWeight: 800 }}>×{qty}</span>
+              </span>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Empty state */}
       {orders.length === 0 && (
