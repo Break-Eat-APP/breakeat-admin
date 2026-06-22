@@ -53,6 +53,64 @@ export interface LoginResponse {
   };
 }
 
+// ─── Notifications push (fondation Expo — C1/C2/C3) ──────────────────────────────
+// Enregistre / désenregistre le jeton de push de l'appareil auprès du backend.
+// Le jeton Expo est obtenu via expo-notifications côté natif (voir docs : la mise
+// en place native est requise dans cette app bare RN avant que ceci ne soit appelé).
+
+export async function apiRegisterPushToken(token: string, platform?: string): Promise<void> {
+  await req<{ ok: boolean }>('/push-tokens', {
+    method: 'POST',
+    body: JSON.stringify({ token, platform }),
+  });
+}
+
+export async function apiUnregisterPushToken(token: string): Promise<void> {
+  await req<{ ok: boolean }>('/push-tokens', {
+    method: 'DELETE',
+    body: JSON.stringify({ token }),
+  });
+}
+
+// ─── « Apparence de l'app » (config white-label éditée côté dashboard) ───────────
+
+export interface AppCardAction {
+  type: 'none' | 'supplier' | 'orders' | 'scan' | 'url' | 'page';
+  supplierId?: string;
+  url?: string;
+  pageId?: string;
+}
+export interface AppCard {
+  id: string;
+  title: string;
+  icon: string;
+  iconColor?: string;
+  imageUrl?: string;
+  textColor?: string;
+  action?: AppCardAction;
+}
+export interface AppPage {
+  id: string;
+  name: string;
+  cards: AppCard[];
+}
+export interface HomeAppearance {
+  preset: string;
+  /** Lorsque true : l'interface standard est masquée, Flaix prend le dessus (plan du lieu + sélection de place). */
+  flaixTakeover?: boolean;
+  header: { showLogo: boolean; title: string; subtitle: string; titleColor: string; subtitleColor: string };
+  theme: {
+    primaryColor: string;
+    textColor: string;
+    iconColor: string;
+    background: string;
+    columns: 1 | 2;
+    cardSize: 'sm' | 'md' | 'lg';
+  };
+  cards: AppCard[];
+  pages?: AppPage[];
+}
+
 export interface PublicEvent {
   id: string;
   name: string;
@@ -60,6 +118,8 @@ export interface PublicEvent {
   startAt: string;
   endAt: string;
   venue: { id: string; name: string; address: string } | null;
+  branding?: { primaryColor: string | null; logoUrl: string | null } | null;
+  appearance?: HomeAppearance | null;
   suppliers: Array<{
     id: string;
     name: string;
