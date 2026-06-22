@@ -2,12 +2,17 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
+import { MapPin } from 'lucide-react';
 import {
   apiGetOrganization,
   apiAddMember,
   apiUpdateOrgBranding,
+  apiGetVenues,
+  apiCreateVenue,
+  apiUpdateVenue,
   type Organization,
   type OrgMember,
+  type Venue,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 
@@ -30,12 +35,12 @@ function SectionCard({ title, children }: { title: string; children: React.React
   return (
     <div
       style={{
-        background: BRAND.bg,
-        borderRadius: 12,
+        background: BRAND.surface,
+        borderRadius: BRAND.radius.card,
         padding: 24,
-        boxShadow: '0 1px 3px rgba(28,25,23,0.06)',
+        boxShadow: BRAND.shadowCard,
         border: `1px solid ${BRAND.border}`,
-        marginBottom: 24,
+        marginBottom: 20,
       }}
     >
       <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.ink, margin: '0 0 16px' }}>
@@ -71,16 +76,34 @@ export default function OrganizationDetailPage() {
   const [brandingError, setBrandingError] = useState('');
   const [brandingSuccess, setBrandingSuccess] = useState('');
 
+  // Lieu (venue) — un club = un lieu. On gère le lieu principal ici.
+  const [venue, setVenue] = useState<Venue | null>(null);
+  const [extraVenues, setExtraVenues] = useState<Venue[]>([]);
+  const [venueName, setVenueName] = useState('');
+  const [venueAddress, setVenueAddress] = useState('');
+  const [venueTimezone, setVenueTimezone] = useState('');
+  const [savingVenue, setSavingVenue] = useState(false);
+  const [venueError, setVenueError] = useState('');
+  const [venueSuccess, setVenueSuccess] = useState('');
+
   const loadOrg = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await apiGetOrganization(orgId);
+      const [data, venues] = await Promise.all([apiGetOrganization(orgId), apiGetVenues(orgId)]);
       setOrg(data);
       // Pre-fill branding form with existing values
       setBrandingLogoUrl(data.logoUrl ?? '');
       setBrandingColor(data.primaryColor ?? '');
       setBrandingDesc(data.description ?? '');
+      // Lieu principal = premier lieu (modèle 1 club = 1 lieu)
+      const list = Array.isArray(venues) ? venues : [];
+      const primary = list[0] ?? null;
+      setVenue(primary);
+      setExtraVenues(list.slice(1));
+      setVenueName(primary?.name ?? '');
+      setVenueAddress(primary?.address ?? '');
+      setVenueTimezone(primary?.timezone ?? '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de chargement');
     } finally {
@@ -127,6 +150,36 @@ export default function OrganizationDetailPage() {
     }
   }
 
+  async function handleSaveVenue(e: React.FormEvent) {
+    e.preventDefault();
+    if (!venueName.trim() || !venueAddress.trim()) {
+      setVenueError('Le nom et l’adresse du lieu sont requis.');
+      return;
+    }
+    setSavingVenue(true);
+    setVenueError('');
+    setVenueSuccess('');
+    try {
+      const payload = {
+        name: venueName.trim(),
+        address: venueAddress.trim(),
+        timezone: venueTimezone.trim() || 'Europe/Paris',
+      };
+      if (venue) {
+        await apiUpdateVenue(orgId, venue.id, payload);
+        setVenueSuccess('Lieu mis à jour.');
+      } else {
+        await apiCreateVenue(orgId, payload);
+        setVenueSuccess('Lieu créé.');
+      }
+      await loadOrg();
+    } catch (err) {
+      setVenueError(err instanceof Error ? err.message : 'Erreur');
+    } finally {
+      setSavingVenue(false);
+    }
+  }
+
   if (loading) return <PageShell>Chargement…</PageShell>;
   if (error) return <PageShell><ErrorBanner msg={error} /></PageShell>;
   if (!org) return null;
@@ -138,7 +191,7 @@ export default function OrganizationDetailPage() {
       {/* Page header */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: BRAND.ink, margin: 0 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0 }}>
             {org.name}
           </h1>
           <span
@@ -160,6 +213,101 @@ export default function OrganizationDetailPage() {
           id : <code style={{ background: BRAND.bgSubtle, padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>{org.id}</code>
         </div>
       </div>
+
+      {/* Lieu — un club = un lieu */}
+      <SectionCard title="Lieu">
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 11,
+              background: BRAND.orangeTint,
+              color: BRAND.orange,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <MapPin size={19} strokeWidth={1.9} />
+          </div>
+          <p style={{ color: BRAND.inkSoft, fontSize: 13.5, margin: 0, lineHeight: 1.55, maxWidth: 560 }}>
+            Le lieu physique de ton club (stade, patinoire, salle). Il porte l’adresse affichée aux clients
+            et le fuseau horaire des créneaux — tes événements l’utilisent automatiquement.
+          </p>
+        </div>
+
+        <form onSubmit={handleSaveVenue}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px', gap: 12, marginBottom: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={venueFieldLabel}>Nom du lieu *</label>
+              <input
+                value={venueName}
+                onChange={(e) => setVenueName(e.target.value)}
+                placeholder="Patinoire des Spartiates"
+                style={venueFieldInput}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={venueFieldLabel}>Fuseau horaire</label>
+              <input
+                value={venueTimezone}
+                onChange={(e) => setVenueTimezone(e.target.value)}
+                placeholder="Europe/Paris"
+                style={venueFieldInput}
+              />
+            </div>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={venueFieldLabel}>Adresse *</label>
+              <input
+                value={venueAddress}
+                onChange={(e) => setVenueAddress(e.target.value)}
+                placeholder="1 Avenue du Sport, 75012 Paris"
+                style={venueFieldInput}
+              />
+            </div>
+          </div>
+          {venueError && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 10 }}>{venueError}</div>}
+          {venueSuccess && <div style={{ color: '#16a34a', fontSize: 13, marginBottom: 10 }}>{venueSuccess}</div>}
+          <button
+            type="submit"
+            disabled={savingVenue}
+            style={{
+              background: savingVenue ? BRAND.grey : BRAND.orange,
+              color: '#fff',
+              border: 'none',
+              borderRadius: BRAND.radius.control,
+              padding: '9px 20px',
+              fontWeight: 600,
+              fontSize: 13.5,
+              cursor: savingVenue ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+              boxShadow: savingVenue ? 'none' : BRAND.shadowButton,
+            }}
+          >
+            {savingVenue ? 'Enregistrement…' : venue ? 'Enregistrer le lieu' : 'Créer le lieu'}
+          </button>
+        </form>
+
+        {extraVenues.length > 0 && (
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${BRAND.border}` }}>
+            <div style={{ fontSize: 12, color: BRAND.grey, marginBottom: 6 }}>
+              Autres lieux de cette organisation ({extraVenues.length}) — cas multi-sites, gérés au niveau plateforme :
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {extraVenues.map((v) => (
+                <span
+                  key={v.id}
+                  style={{ background: BRAND.bgSubtle, border: `1px solid ${BRAND.border}`, borderRadius: 8, padding: '4px 10px', fontSize: 12, color: BRAND.inkSoft }}
+                >
+                  {v.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </SectionCard>
 
       {/* Members */}
       <SectionCard title={`Membres (${org.members?.length ?? 0})`}>
@@ -397,3 +545,14 @@ function ErrorBanner({ msg }: { msg: string }) {
     </div>
   );
 }
+
+const venueFieldLabel: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: BRAND.inkSoft };
+const venueFieldInput: React.CSSProperties = {
+  width: '100%',
+  padding: '9px 12px',
+  borderRadius: BRAND.radius.control,
+  border: `1px solid ${BRAND.border}`,
+  fontSize: 13.5,
+  fontFamily: 'inherit',
+  boxSizing: 'border-box',
+};

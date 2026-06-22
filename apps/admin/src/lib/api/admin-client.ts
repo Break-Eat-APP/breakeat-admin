@@ -177,6 +177,8 @@ export interface Supplier {
   slug?: string;
   status: string;
   preparationZone?: string | null;
+  isExternal?: boolean;
+  referralCode?: string | null;
   organizationId: string;
   createdAt: string;
 }
@@ -333,9 +335,65 @@ export async function apiGetSuppliers(orgId: string): Promise<Supplier[]> {
 
 export async function apiCreateSupplier(
   orgId: string,
-  data: { name: string; preparationZone?: string },
+  data: { name: string; preparationZone?: string; isExternal?: boolean },
 ): Promise<Supplier> {
   return req<Supplier>('POST', `/organizations/${orgId}/suppliers`, data);
+}
+
+/** (Re)génère le code de parrainage d'un exploitant externe. */
+export async function apiRegenerateReferral(
+  orgId: string,
+  supplierId: string,
+): Promise<Supplier> {
+  return req<Supplier>('POST', `/organizations/${orgId}/suppliers/${supplierId}/referral`, {});
+}
+
+// ─── Push programmés & campagnes (C2/C3) ────────────────────────────────────────
+
+export interface ScheduledPush {
+  id: string;
+  organizationId: string;
+  eventId: string | null;
+  kind: 'PUSH' | 'DISCOUNT_CAMPAIGN';
+  title: string;
+  body: string;
+  discountPercent: number | null;
+  scheduledAt: string;
+  status: 'PENDING' | 'SENT' | 'CANCELLED' | 'FAILED';
+  sentAt: string | null;
+  sentCount: number;
+  createdAt: string;
+}
+
+export async function apiGetScheduledPushes(orgId: string): Promise<ScheduledPush[]> {
+  return req<ScheduledPush[]>('GET', `/organizations/${orgId}/scheduled-pushes`);
+}
+
+export async function apiCreateScheduledPush(
+  orgId: string,
+  data: { eventId?: string; kind?: 'PUSH' | 'DISCOUNT_CAMPAIGN'; title: string; body?: string; discountPercent?: number; scheduledAt: string },
+): Promise<ScheduledPush> {
+  return req<ScheduledPush>('POST', `/organizations/${orgId}/scheduled-pushes`, data);
+}
+
+export async function apiCancelScheduledPush(orgId: string, id: string): Promise<ScheduledPush> {
+  return req<ScheduledPush>('DELETE', `/organizations/${orgId}/scheduled-pushes/${id}`);
+}
+
+export async function apiUpdateSupplier(
+  orgId: string,
+  supplierId: string,
+  data: { name?: string; preparationZone?: string },
+): Promise<Supplier> {
+  return req<Supplier>('PATCH', `/organizations/${orgId}/suppliers/${supplierId}`, data);
+}
+
+export async function apiUpdateSupplierStatus(
+  orgId: string,
+  supplierId: string,
+  status: string,
+): Promise<Supplier> {
+  return req<Supplier>('PATCH', `/organizations/${orgId}/suppliers/${supplierId}/status`, { status });
 }
 
 // ─── Groups (Phase 14.7) ────────────────────────────────────────────────────────
@@ -635,6 +693,14 @@ export async function apiCreateVenue(
   return req<Venue>('POST', `/organizations/${orgId}/venues`, data);
 }
 
+export async function apiUpdateVenue(
+  orgId: string,
+  venueId: string,
+  data: { name?: string; address?: string; timezone?: string },
+): Promise<Venue> {
+  return req<Venue>('PATCH', `/organizations/${orgId}/venues/${venueId}`, data);
+}
+
 // ─── Categories ───────────────────────────────────────────────────────────────
 
 export interface Category {
@@ -679,7 +745,7 @@ export async function apiGetProducts(orgId: string, supplierId: string): Promise
 export async function apiCreateProduct(
   orgId: string,
   supplierId: string,
-  data: { name: string; price: number; categoryId: string; description?: string },
+  data: { name: string; price: number; categoryId: string; description?: string; imageUrl?: string },
 ): Promise<Product> {
   return req<Product>('POST', `/organizations/${orgId}/suppliers/${supplierId}/products`, data);
 }
@@ -721,6 +787,13 @@ export async function apiCreatePickupPoint(
   data: { name: string; venueId: string; eventId?: string; supplierId?: string },
 ): Promise<PickupPoint> {
   return req<PickupPoint>('POST', `/organizations/${orgId}/pickup-points`, data);
+}
+
+export async function apiDeletePickupPoint(
+  orgId: string,
+  pickupPointId: string,
+): Promise<{ deleted: string }> {
+  return req<{ deleted: string }>('DELETE', `/organizations/${orgId}/pickup-points/${pickupPointId}`);
 }
 
 // ─── Slots ────────────────────────────────────────────────────────────────────

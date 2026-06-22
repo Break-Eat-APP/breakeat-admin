@@ -2,7 +2,15 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { apiGetEvents, apiCreateEvent, type AdminEvent, getOrgId } from '@/lib/api/admin-client';
+import { MapPin } from 'lucide-react';
+import {
+  apiGetEvents,
+  apiCreateEvent,
+  apiGetVenues,
+  type AdminEvent,
+  type Venue,
+  getOrgId,
+} from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
@@ -34,6 +42,7 @@ const EMPTY_FORM: CreateForm = { venueId: '', name: '', startAt: '', endAt: '' }
 
 export default function EventsPage() {
   const [events, setEvents] = useState<AdminEvent[]>([]);
+  const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -48,8 +57,9 @@ export default function EventsPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await apiGetEvents(orgId);
-      setEvents(Array.isArray(data) ? data : []);
+      const [evs, vns] = await Promise.all([apiGetEvents(orgId), apiGetVenues(orgId)]);
+      setEvents(Array.isArray(evs) ? evs : []);
+      setVenues(Array.isArray(vns) ? vns : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de chargement');
     } finally {
@@ -58,6 +68,13 @@ export default function EventsPage() {
   }, [orgId]);
 
   useEffect(() => { void loadEvents(); }, [loadEvents]);
+
+  // Un club = un lieu : pré-sélectionne le lieu du club dans le formulaire (plus d'UUID à coller).
+  useEffect(() => {
+    if (venues.length > 0 && !form.venueId) {
+      setForm((f) => ({ ...f, venueId: venues[0].id }));
+    }
+  }, [venues, form.venueId]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -95,10 +112,14 @@ export default function EventsPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: BRAND.ink, margin: 0 }}>
-            🎪 Événements
+          <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0, letterSpacing: -0.3 }}>
+            Événements &amp; configuration
           </h1>
-          <p style={{ color: BRAND.grey, fontSize: 14, margin: '4px 0 0' }}>
+          <p style={{ color: BRAND.inkSoft, fontSize: 13.5, margin: '6px 0 0', lineHeight: 1.55, maxWidth: 580 }}>
+            Le centre de paramétrage de ton club : chaque événement réunit ses buvettes &amp; produits,
+            créneaux, points de retrait, écrans opérateur et statistiques — tout se configure depuis sa fiche.
+          </p>
+          <p style={{ color: BRAND.grey, fontSize: 12.5, margin: '7px 0 0' }}>
             {events.length} événement{events.length !== 1 ? 's' : ''}
           </p>
         </div>
@@ -152,15 +173,55 @@ export default function EventsPage() {
               />
             </div>
             <div style={{ gridColumn: '1 / -1' }}>
-              <label style={labelStyle}>Venue ID (UUID) *</label>
-              <input
-                type="text"
-                value={form.venueId}
-                onChange={(e) => setForm((f) => ({ ...f, venueId: e.target.value }))}
-                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                required
-                style={{ ...inputStyle, fontFamily: 'monospace', fontSize: 12 }}
-              />
+              <label style={labelStyle}>Lieu</label>
+              {venues.length === 0 ? (
+                <div
+                  style={{
+                    background: BRAND.orangeTint,
+                    border: `1px solid ${BRAND.orangeSoft}`,
+                    borderRadius: BRAND.radius.control,
+                    padding: '12px 14px',
+                    fontSize: 13,
+                    color: BRAND.inkSoft,
+                  }}
+                >
+                  Aucun lieu défini pour ton club.{' '}
+                  <Link href={`/organizations/${orgId}`} style={{ color: BRAND.orange, fontWeight: 600 }}>
+                    Crée ton lieu dans « Organisation »
+                  </Link>{' '}
+                  d&apos;abord — il sera ensuite utilisé automatiquement.
+                </div>
+              ) : venues.length === 1 ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '10px 14px',
+                    borderRadius: BRAND.radius.control,
+                    border: `1px solid ${BRAND.border}`,
+                    background: BRAND.bgSubtle,
+                    fontSize: 13.5,
+                    color: BRAND.ink,
+                  }}
+                >
+                  <MapPin size={16} strokeWidth={1.9} color={BRAND.orange} style={{ flexShrink: 0 }} />
+                  <strong style={{ fontWeight: 600 }}>{venues[0].name}</strong>
+                  <span style={{ color: BRAND.grey }}>· {venues[0].address}</span>
+                </div>
+              ) : (
+                <select
+                  value={form.venueId}
+                  onChange={(e) => setForm((f) => ({ ...f, venueId: e.target.value }))}
+                  style={{ ...inputStyle, cursor: 'pointer' }}
+                >
+                  {venues.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name} — {v.address}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
             <div>
               <label style={labelStyle}>Date de début *</label>
@@ -189,16 +250,16 @@ export default function EventsPage() {
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button
               type="submit"
-              disabled={creating}
+              disabled={creating || venues.length === 0}
               style={{
-                background: creating ? BRAND.grey : BRAND.orange,
+                background: creating || venues.length === 0 ? BRAND.grey : BRAND.orange,
                 color: '#fff',
                 border: 'none',
                 borderRadius: 8,
                 padding: '10px 24px',
                 fontWeight: 600,
                 fontSize: 14,
-                cursor: creating ? 'not-allowed' : 'pointer',
+                cursor: creating || venues.length === 0 ? 'not-allowed' : 'pointer',
                 fontFamily: 'inherit',
               }}
             >
