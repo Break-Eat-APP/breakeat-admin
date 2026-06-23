@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { FlagScope, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { requireScopedAccess, filterScopedRows } from '../../common/helpers/scoped-setting-access';
 import type { SetAppSettingDto } from './dto/set-app-setting.dto';
 
 /**
@@ -27,8 +28,15 @@ export class AppSettingsService {
   async get(
     key: string,
     context: { orgId?: string; eventId?: string } = {},
+    userId?: string,
   ): Promise<Prisma.JsonValue | null> {
     const { orgId, eventId } = context;
+
+    // Autorisation lecture sur le contexte le plus spécifique fourni.
+    if (userId) {
+      if (eventId) await requireScopedAccess(this.prisma, userId, FlagScope.EVENT, eventId, 'read');
+      else if (orgId) await requireScopedAccess(this.prisma, userId, FlagScope.ORGANIZATION, orgId, 'read');
+    }
 
     if (eventId) {
       const s = await this.prisma.appSetting.findUnique({
@@ -57,14 +65,16 @@ export class AppSettingsService {
   /**
    * List all settings, optionally filtered by scope / scopeId.
    */
-  async list(scope?: FlagScope, scopeId?: string) {
-    return this.prisma.appSetting.findMany({
+  async list(scope?: FlagScope, scopeId?: string, userId?: string) {
+    const rows = await this.prisma.appSetting.findMany({
       where: {
         ...(scope !== undefined ? { scope } : {}),
         ...(scopeId !== undefined ? { scopeId } : {}),
       },
       orderBy: [{ scope: 'asc' }, { key: 'asc' }],
     });
+    // Filtrage par droits : un membre ne voit que GLOBAL + ses orgs/événements.
+    return userId ? filterScopedRows(this.prisma, userId, rows) : rows;
   }
 
   /**
@@ -74,8 +84,10 @@ export class AppSettingsService {
    *   - scope === GLOBAL  → scopeId must be absent
    *   - scope !== GLOBAL  → scopeId must be provided
    */
-  async set(dto: SetAppSettingDto) {
+  async set(dto: SetAppSettingDto, userId?: string) {
     const { key, scope, scopeId, value } = dto;
+
+    if (userId) await requireScopedAccess(this.prisma, userId, scope, scopeId, 'write');
 
     if (scope === FlagScope.GLOBAL && scopeId) {
       throw new BadRequestException('scopeId must not be set when scope is GLOBAL');
@@ -96,9 +108,10 @@ export class AppSettingsService {
    * Delete a setting by id.
    * Throws NotFoundException if not found.
    */
-  async remove(id: string) {
+  async remove(id: string, userId?: string) {
     const existing = await this.prisma.appSetting.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`AppSetting ${id} not found`);
+    if (userId) await requireScopedAccess(this.prisma, userId, existing.scope, existing.scopeId, 'write');
     return this.prisma.appSetting.delete({ where: { id } });
   }
 }

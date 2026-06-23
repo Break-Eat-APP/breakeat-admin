@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { FlagScope, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { requireScopedAccess, filterScopedRows } from '../../common/helpers/scoped-setting-access';
 import type { SetFeatureFlagDto } from './dto/set-feature-flag.dto';
 
 /**
@@ -61,14 +62,16 @@ export class FeatureFlagsService {
   async list(
     scope?: FlagScope,
     scopeId?: string,
+    userId?: string,
   ) {
-    return this.prisma.featureFlag.findMany({
+    const rows = await this.prisma.featureFlag.findMany({
       where: {
         ...(scope !== undefined ? { scope } : {}),
         ...(scopeId !== undefined ? { scopeId } : {}),
       },
       orderBy: [{ scope: 'asc' }, { key: 'asc' }],
     });
+    return userId ? filterScopedRows(this.prisma, userId, rows) : rows;
   }
 
   /**
@@ -78,8 +81,10 @@ export class FeatureFlagsService {
    *   - scope === GLOBAL  → scopeId must be absent
    *   - scope !== GLOBAL  → scopeId must be provided
    */
-  async set(dto: SetFeatureFlagDto) {
+  async set(dto: SetFeatureFlagDto, userId?: string) {
     const { key, scope, scopeId, enabled, metadata } = dto;
+
+    if (userId) await requireScopedAccess(this.prisma, userId, scope, scopeId, 'write');
 
     if (scope === FlagScope.GLOBAL && scopeId) {
       throw new BadRequestException('scopeId must not be set when scope is GLOBAL');
@@ -102,9 +107,10 @@ export class FeatureFlagsService {
    * Delete a feature flag by id.
    * Throws NotFoundException if not found (mirrors AppSettingsService pattern).
    */
-  async remove(id: string) {
+  async remove(id: string, userId?: string) {
     const existing = await this.prisma.featureFlag.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException(`FeatureFlag ${id} not found`);
+    if (userId) await requireScopedAccess(this.prisma, userId, existing.scope, existing.scopeId, 'write');
     return this.prisma.featureFlag.delete({ where: { id } });
   }
 }

@@ -12,15 +12,17 @@ import {
 } from '@nestjs/common';
 import { FlagScope } from '@prisma/client';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { AppSettingsService } from './app-settings.service';
 import { SetAppSettingDto } from './dto/set-app-setting.dto';
 
 /**
  * AppSettingsController — CRUD API for app settings / basic CMS.
  *
- * All routes require JWT authentication.
- * In V1, any authenticated user can read/write settings.
- * In V2, restrict writes to SUPER_ADMIN / ORG_ADMIN.
+ * Auth (Codex P1) : JWT requis + autorisation par portée —
+ *   GLOBAL = SUPER_ADMIN ; ORGANIZATION/EVENT = appartenance org (write = MANAGE_ROLES).
+ *   Les listes/lectures sont filtrées selon les droits de l'appelant.
  *
  * Routes:
  *   GET  /app-settings          — list all settings (optional ?scope=&scopeId=)
@@ -39,13 +41,14 @@ export class AppSettingsController {
    */
   @Get()
   list(
+    @CurrentUser() user: JwtPayload,
     @Query('scope') scope?: string,
     @Query('scopeId') scopeId?: string,
   ) {
     if (scope !== undefined && !Object.values(FlagScope).includes(scope as FlagScope)) {
       throw new BadRequestException(`Invalid scope: "${scope}". Must be one of: ${Object.values(FlagScope).join(', ')}`);
     }
-    return this.appSettingsService.list(scope as FlagScope | undefined, scopeId);
+    return this.appSettingsService.list(scope as FlagScope | undefined, scopeId, user.sub);
   }
 
   /**
@@ -54,11 +57,12 @@ export class AppSettingsController {
    */
   @Get('get')
   async get(
+    @CurrentUser() user: JwtPayload,
     @Query('key') key: string,
     @Query('orgId') orgId?: string,
     @Query('eventId') eventId?: string,
   ) {
-    const value = await this.appSettingsService.get(key, { orgId, eventId });
+    const value = await this.appSettingsService.get(key, { orgId, eventId }, user.sub);
     return { key, value, resolvedAt: new Date().toISOString() };
   }
 
@@ -67,8 +71,8 @@ export class AppSettingsController {
    * Creates or updates a setting (upsert).
    */
   @Post()
-  set(@Body() dto: SetAppSettingDto) {
-    return this.appSettingsService.set(dto);
+  set(@CurrentUser() user: JwtPayload, @Body() dto: SetAppSettingDto) {
+    return this.appSettingsService.set(dto, user.sub);
   }
 
   /**
@@ -76,7 +80,7 @@ export class AppSettingsController {
    * Deletes a setting by id.
    */
   @Delete(':id')
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.appSettingsService.remove(id);
+  remove(@CurrentUser() user: JwtPayload, @Param('id', ParseUUIDPipe) id: string) {
+    return this.appSettingsService.remove(id, user.sub);
   }
 }
