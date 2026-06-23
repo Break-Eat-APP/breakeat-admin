@@ -41,6 +41,15 @@ export class ScheduledPushService {
     const when = new Date(dto.scheduledAt);
     if (isNaN(when.getTime())) throw new BadRequestException('Date invalide.');
 
+    // P2 — l'événement ciblé doit appartenir à l'organisation.
+    if (dto.eventId) {
+      const event = await this.prisma.event.findFirst({
+        where: { id: dto.eventId, organizationId: orgId },
+        select: { id: true },
+      });
+      if (!event) throw new BadRequestException("L'événement n'appartient pas à cette organisation.");
+    }
+
     return this.prisma.scheduledPush.create({
       data: {
         organizationId: orgId,
@@ -84,8 +93,15 @@ export class ScheduledPushService {
 
   /** Traite une entrée due : envoie le push, met à jour le statut. */
   async process(id: string): Promise<void> {
+    // P2 — claim atomique PENDING → PROCESSING : empêche le double envoi
+    // si plusieurs instances/cron lisent la même entrée en même temps.
+    const claim = await this.prisma.scheduledPush.updateMany({
+      where: { id, status: 'PENDING' },
+      data: { status: 'PROCESSING' },
+    });
+    if (claim.count === 0) return; // déjà pris en charge par un autre worker
     const sp = await this.prisma.scheduledPush.findUnique({ where: { id } });
-    if (!sp || sp.status !== 'PENDING') return;
+    if (!sp) return;
     try {
       const tokens = await this.resolveAudience(sp.organizationId, sp.eventId);
       const result = await this.expoPush.send(
