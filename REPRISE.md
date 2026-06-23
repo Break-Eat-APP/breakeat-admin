@@ -1,0 +1,48 @@
+# 🔖 POINT DE REPRISE — Break Eat
+
+> Ouvre ce fichier en premier dans une nouvelle session. Tout l'état utile est ici + dans les 4 docs (`CHANGELOG.md`, `DEVELOPMENT_LOG.md`, `brain/ENGINEERING_MANUAL.md`, `brain/TASK_SUMMARY.md`) + le git.
+
+_Dernière mise à jour : 2026-06-23_
+
+## Où on en est
+- **Branche git** : `feat/dashboard-config-blocs-abc` (poussée sur `origin`). PR à créer :
+  https://github.com/Break-Eat-APP/breakeat-admin/pull/new/feat/dashboard-config-blocs-abc
+- **9 commits** propres par domaine (deps, design, operator, backend, admin, mobile, docs, cors).
+- Working tree **clean** au moment de l'écriture.
+
+## ✅ Livré
+- **Refonte v3** « chaleureux premium » (Inter + Jost, Lucide, tokens `packages/brand`).
+- **Comptabilité** (`/accounting`) : CA TTC/HT, TVA 10 %, détail par événement.
+- **Buvettes** (`/suppliers` + détail) : images produits, zone de prépa retirée de l'UI.
+- **Exploitant externe / parrainage** : `Supplier.isExternal` + `referralCode` (`BE-XXXXXX`).
+- **Apparence de l'app** (`/appearance`) : cartes (texte/icône/image), **pages multiples**, liens externes (Instagram/YouTube), action `page`, toggle Flaix, aperçu live. Rendu mobile + navigation multi-pages.
+- **Points de retrait** : 1–4 par buvette (cap backend + suppression).
+- **Créneaux** : générateur en lot + ajout unitaire (illimité).
+- **Opérateur** : résumé des produits à préparer par colonne.
+- **Notifications C1** (`/notifications`) : modèle push par étape de commande, hook dans `OrdersService.transition`.
+- **Campagnes & push C2/C3** (`/campaigns`) : push programmés (cron `@nestjs/schedule`) + campagne `DISCOUNT_CAMPAIGN` (annonce auto).
+- **Fondation push Expo** : `backend/src/modules/notifications/` (`ExpoPushService`, `PushTokensService`, registre tokens, `ScheduledPush`).
+- **Fix CORS** : `.env` + `main.ts` autorisent 3001/3002/3003 (réglait le « Failed to fetch » du back office).
+
+## ⏳ Reste à faire
+1. **Remise C3 au checkout** : appliquer le `discountPercent` au panier. ⚠️ Sensible — le prix est figé au checkout (`cartItem.priceSnapshotCents` == montant Stripe) ; la remise doit se brancher dans `cart.service` (création du PaymentIntent), pas à la création de commande.
+2. **Setup natif Expo mobile** (côté user) : app = bare RN. Installer modules Expo + `expo-notifications` + FCM/APNs + rebuild, puis créer `apps/mobile/src/lib/push.ts` (`registerForPush`) et l'appeler post-login. Les méthodes API (`apiRegisterPushToken`) existent déjà.
+3. **Audit Codex** de la branche.
+
+## ⚠️ Dette technique connue (à signaler à Codex)
+- **Migrations en SQL direct** (pas `prisma migrate`) à cause d'un drift PK pré-existant (`gen_random_uuid()` en DB vs `@default(uuid())` au schéma). Concerne : `push_tokens`, `scheduled_pushes`, `suppliers.referral_code/is_external`.
+- Après tout changement de schéma : **arrêter le backend** (DLL Windows verrouillé) → `prisma generate` → relancer.
+
+## 🚀 Lancer l'environnement (Windows)
+`pnpm` n'est pas dans le PATH → utiliser **corepack** (Node est OK) :
+```
+corepack pnpm --filter @break-eat/backend start:dev    # port 3000
+corepack pnpm --filter @break-eat/admin dev            # port 3001
+corepack pnpm --filter @break-eat/backoffice dev       # port 3003
+corepack pnpm --filter @break-eat/operator dev         # port 3002
+```
+Docker (Postgres/Redis) doit tourner. DB = `breakeat_dev`.
+
+## 🔑 Connexion (dev)
+- URL : http://localhost:3001 (manager) · http://localhost:3003 (back office)
+- `admin@breakeat.test` / `BreakEat2026!` (SUPER_ADMIN)
