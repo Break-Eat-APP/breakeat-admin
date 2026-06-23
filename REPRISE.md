@@ -4,7 +4,29 @@
 
 _Dernière mise à jour : 2026-06-23_
 
-## Où on en est
+## 🚨 NOUVELLE DIRECTION (2026-06-23) — pivot app mobile
+L'app Break Eat devient la **porte d'entrée du click-and-collect Flaix** (Flaix gère la config + le parcours commande). Rôle de l'app Break Eat :
+1. Téléchargement + inscription (peut-être différée au paiement).
+2. **Découverte des lieux** : recherche + géolocalisation.
+3. Choix du lieu → **Flaix prend le dessus**.
+4. **Profil classique** (compte, historique).
+
+Dashboards manager / back office **en pause** (on y reviendra). Priorité = app mobile.
+
+### Décisions d'archi (confirmées 2026-06-23)
+- **Flaix = intégration API**. Le client reste dans l'app Break Eat (ne voit rien) ; Flaix « prend le dessus » au moment de **choisir son emplacement** (appels API en arrière-plan, l'UI reste Break Eat).
+- **Lieux = backend Break Eat** (table `venues` existante). Flaix ne sert qu'à la commande/emplacement.
+- **Auth = optionnelle**. Navigation libre des lieux ; profil/historique seulement si connecté ; connexion jamais bloquante avant Flaix.
+
+### Plan de build app mobile
+1. **Découverte des lieux** : écran liste + recherche (nom/ville) + tri par géolocalisation. ⚠️ Backend : ajouter `latitude`/`longitude` à `venues` + endpoint public de recherche (`GET /public/venues?q=&lat=&lng=`).
+2. **Auth optionnelle** : navigation libre ; écran login/signup atteignable mais non bloquant (auth.store existe déjà).
+3. **Profil classique** : compte + historique de commandes (si connecté).
+4. **Handoff Flaix** : à la sélection d'un lieu/emplacement → appel API Flaix. ⚠️ **Bloqué** sur le contrat d'API Flaix (FLAIX_CONTRACT.md non écrit, Phase 11.5). En attendant : écran placeholder « emplacement / Flaix » câblé mais stubbé.
+
+Dépendance externe : **spec/clé API Flaix** nécessaire pour le point 4.
+
+## Où on en est (dashboards — état figé)
 - **Branche git** : `feat/dashboard-config-blocs-abc` (poussée sur `origin`). PR à créer :
   https://github.com/Break-Eat-APP/breakeat-admin/pull/new/feat/dashboard-config-blocs-abc
 - **9 commits** propres par domaine (deps, design, operator, backend, admin, mobile, docs, cors).
