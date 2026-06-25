@@ -22,7 +22,8 @@ import { SetFeatureFlagDto } from './dto/set-feature-flag.dto';
  *
  * Auth (Codex P1) : JWT requis + autorisation par portée —
  *   GLOBAL = SUPER_ADMIN ; ORGANIZATION/EVENT = appartenance org (write = MANAGE_ROLES).
- *   Listes filtrées selon les droits. `resolve` reste lisible (résolution interne).
+ *   Listes filtrées selon les droits. `resolve` vérifie l'accès en lecture à la
+ *   portée demandée (orgId/eventId) — empêche la fuite cross-org (Codex P2).
  *
  * Routes:
  *   GET  /feature-flags          — list all flags (optional ?scope=&scopeId=)
@@ -58,11 +59,12 @@ export class FeatureFlagsController {
    */
   @Get('resolve')
   async resolve(
+    @CurrentUser() user: JwtPayload,
     @Query('key') key: string,
     @Query('orgId') orgId?: string,
     @Query('eventId') eventId?: string,
   ) {
-    const enabled = await this.featureFlagsService.resolve(key, { orgId, eventId });
+    const enabled = await this.featureFlagsService.resolve(key, { orgId, eventId }, user.sub);
     return { key, enabled, resolvedAt: new Date().toISOString() };
   }
 

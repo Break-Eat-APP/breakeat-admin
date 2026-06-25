@@ -18,6 +18,14 @@ import type { UpdateSupplierStatusDto } from './dto/update-supplier-status.dto';
 import type { CreateOnboardingLinkDto } from './dto/create-onboarding-link.dto';
 import { StripeAccountStatus, type Supplier } from '@prisma/client';
 
+/** Projection publique renvoyée à un exploitant externe résolvant un code de parrainage. */
+export interface ReferralLookupResult {
+  id: string;
+  name: string;
+  isExternal: boolean;
+  organization: { id: string; name: string };
+}
+
 /**
  * SuppliersService owns all supplier persistence logic.
  *
@@ -92,15 +100,37 @@ export class SuppliersService {
     });
   }
 
-  /** Recherche une buvette par son code de parrainage (pour rattacher un exploitant externe). */
-  async findByReferralCode(code: string, userId: string): Promise<Supplier> {
+  /**
+   * Résout une buvette à partir de son code de parrainage.
+   *
+   * Le code est un SECRET partagé par le club à l'exploitant externe : le posséder
+   * fait office d'autorisation (modèle « lien d'invitation »). On n'exige donc PAS
+   * que l'appelant soit déjà membre de l'org — sinon l'exploitant externe, par
+   * définition non-membre, ne pourrait jamais s'en servir (Codex P2). Le contrôleur
+   * impose tout de même une session (JwtAuthGuard). On ne renvoie qu'une projection
+   * minimale, sans données sensibles (Stripe, statut, etc.).
+   */
+  async findByReferralCode(code: string, userId: string): Promise<ReferralLookupResult> {
     const supplier = await this.prisma.supplier.findUnique({
       where: { referralCode: code },
+      select: {
+        id: true,
+        name: true,
+        isExternal: true,
+        organization: { select: { id: true, name: true } },
+      },
     });
-    if (!supplier) throw new NotFoundException('Code de parrainage invalide');
-    // L'appelant doit être membre de l'organisation propriétaire.
-    await requireOrgAccess(this.prisma, userId, supplier.organizationId, ALL_ORG_ROLES);
-    return supplier;
+    // Réponse identique pour code inexistant ou buvette non marquée externe : pas de fuite.
+    if (!supplier || !supplier.isExternal) {
+      throw new NotFoundException('Code de parrainage invalide');
+    }
+    this.logger.log(`Referral code resolved to supplier ${supplier.id} by user ${userId}`);
+    return {
+      id: supplier.id,
+      name: supplier.name,
+      isExternal: supplier.isExternal,
+      organization: supplier.organization,
+    };
   }
 
   async findAllByOrg(organizationId: string, userId: string): Promise<Supplier[]> {

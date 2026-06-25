@@ -22,12 +22,27 @@ export class FeatureFlagsService {
   /**
    * Resolve a feature flag for a given context.
    * Precedence: EVENT → ORGANIZATION → GLOBAL → false (not found)
+   *
+   * Autorisation (Codex P2) : quand `userId` est fourni (appel via l'API HTTP),
+   * on vérifie l'accès en lecture à la portée la plus spécifique demandée afin de
+   * ne pas exposer l'état des flags d'une autre org à qui devine son UUID. Les
+   * appels internes (sans `userId`) restent libres.
    */
   async resolve(
     key: string,
     context: { orgId?: string; eventId?: string } = {},
+    userId?: string,
   ): Promise<boolean> {
     const { orgId, eventId } = context;
+
+    if (userId) {
+      if (eventId) {
+        await requireScopedAccess(this.prisma, userId, FlagScope.EVENT, eventId, 'read');
+      } else if (orgId) {
+        await requireScopedAccess(this.prisma, userId, FlagScope.ORGANIZATION, orgId, 'read');
+      }
+      // Sans orgId/eventId : résolution GLOBALE uniquement, lisible par tout membre authentifié.
+    }
 
     // 1. Event-scoped flag (most specific)
     if (eventId) {
