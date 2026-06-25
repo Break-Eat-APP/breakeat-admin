@@ -47,6 +47,19 @@ export class OrdersController {
 
   // ─── Customer ────────────────────────────────────────────────
 
+  /**
+   * GET /api/v1/orders — historique des commandes de l'utilisateur courant.
+   * Triées de la plus récente à la plus ancienne. (Doit précéder `:id`.)
+   */
+  @Get()
+  async findMine(@CurrentUser() user: JwtPayload) {
+    return this.prisma.order.findMany({
+      where: { userId: user.sub },
+      orderBy: { createdAt: 'desc' },
+      include: { items: true },
+    });
+  }
+
   /** GET /api/v1/orders/:id — caller must own the order. */
   @Get(':id')
   async findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {

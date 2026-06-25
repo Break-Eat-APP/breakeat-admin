@@ -296,6 +296,9 @@ model Venue {
   organizationId String      @map("organization_id")
   name           String
   address        String
+  /// PHASE 16 — coordonnées pour la découverte géolocalisée (app mobile). Nullable.
+  latitude       Float?
+  longitude      Float?
   timezone       String      @default("Europe/Paris")
   status         VenueStatus @default(ACTIVE)
   createdAt      DateTime    @default(now()) @map("created_at")
