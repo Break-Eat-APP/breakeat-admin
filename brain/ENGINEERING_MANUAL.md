@@ -3448,7 +3448,7 @@ Trois correctifs issus de l'audit Codex (frontière d'audit : 2026-06-02) :
 
 ### Root Turbo pipeline — mise au point (P1 audit, non-bug)
 
-L'audit signalait `turbo run build/typecheck/lint` cassé (« Unable to find package manager binary »). **Vérifié ici : sain** (3× exit 0 en dry-run, pnpm 11.3.0 = `packageManager`). Tous les environnements réels provisionnent pnpm : CI (`.github/workflows/ci.yml` via `pnpm/action-setup@v4`), Vercel (`vercel.json` → `pnpm install` + `pnpm build`), Railway (`nixpacks.toml` → `corepack prepare pnpm@11.3.0`). L'échec Codex venait de son **sandbox** (pnpm absent du PATH là où Turbo le cherche), pas du dépôt. **Règle** : si `turbo` ne trouve pas le binaire, provisionner pnpm (`corepack enable` / `corepack prepare pnpm@11.3.0 --activate`) ; les builds **package par package** (`pnpm --filter <pkg> build`) sont le fallback fiable.
+L'audit signalait `turbo run build/typecheck/lint` cassé (« Unable to find package manager binary »). **Vérifié ici : sain** (exécution réelle — `typecheck` 5/5 et `lint` 5/5 exit 0 le 2026-06-24, pas seulement en dry-run ; pnpm 11.3.0 = `packageManager`). Tous les environnements réels provisionnent pnpm : CI (`.github/workflows/ci.yml` via `pnpm/action-setup@v4`), Vercel (`vercel.json` → `pnpm install` + `pnpm build`), Railway (`nixpacks.toml` → `corepack prepare pnpm@11.3.0`). L'échec Codex venait de son **sandbox** (pnpm absent du PATH là où Turbo le cherche), pas du dépôt. **Règle** : si `turbo` ne trouve pas le binaire, provisionner pnpm (`corepack enable` / `corepack prepare pnpm@11.3.0 --activate`) ; les builds **package par package** (`pnpm --filter <pkg> build`) sont le fallback fiable.
 
 ### Risks and Safe Change Rules
 
@@ -3682,7 +3682,7 @@ Une **section menu « Buvettes »** dans l'admin. Modèle déjà en place (`Supp
 ## [2026-06-15] Fondation push Expo (Phase 18)
 
 - `backend/src/modules/notifications/` : `ExpoPushService` (envoi via `https://exp.host/--/api/v2/push/send`, batches 100, renvoie `{sent,failed,invalidTokens}` — purge les `DeviceNotRegistered`), `PushTokensService` (upsert par jeton unique, `tokensForUsers`, `purgeInvalid`), `PushTokensController` (`POST`/`DELETE /push-tokens`, auth JWT). `NotificationsModule` **exporte** `ExpoPushService` + `PushTokensService` pour C1/C2/C3.
-- Modèle `PushToken` (table `push_tokens`, FK user cascade). Migration en SQL direct (drift PK).
+- Modèle `PushToken` (table `push_tokens`, FK user cascade). Appliqué d'abord en SQL direct (drift PK) ; **rattrapé** par la migration versionnée `20260607_phase15_notifications_referral` (créée 2026-06-24) — une base neuve la crée via `prisma migrate deploy`.
 - ⚠️ **Mobile = bare RN** : pas d'`expo` installé. Pour activer : installer les modules Expo + `expo-notifications`, config FCM/APNs, rebuild natif, puis appeler `apiRegisterPushToken` après login. Les méthodes API mobile existent déjà.
 ### C1/C2/C3 (livrés sur la fondation)
 - **C1** `OrderNotificationsService` : lit `app.notifications` (app-settings org), envoie un push par transition. Hook **fire-and-forget** dans `OrdersService.transition` (jamais bloquant). Config éditée via page admin `/notifications` (API app-settings). Specs orders : ajouter un mock provider `OrderNotificationsService` dans les `TestingModule`.
@@ -3707,7 +3707,7 @@ Une **section menu « Buvettes »** dans l'admin. Modèle déjà en place (`Supp
 
 ### Parrainage exploitant (C4)
 - `Supplier.isExternal` + `referralCode @unique`. Code `BE-XXXXXX` (alphabet sans I/O/0/1). Endpoints : `POST /suppliers/:id/referral` (régénère, marque externe), `GET /suppliers/referral/:code` (lookup, exige membership de l'org propriétaire).
-- ⚠️ **Migration** : appliquée en `ALTER TABLE` SQL direct (drift PK pré-existant rend `prisma migrate dev` dangereux). Après tout changement de schéma : arrêter le backend (DLL Windows verrouillé) → `prisma generate` → relancer.
+- ⚠️ **Migration** : appliquée d'abord en `ALTER TABLE` SQL direct (drift PK pré-existant rend `prisma migrate dev` dangereux), puis **rattrapée** par la migration versionnée `20260607_phase15_notifications_referral` (`suppliers.is_external` + `referral_code`). Une base neuve les crée via `migrate deploy`. Après tout changement de schéma : arrêter le backend (DLL Windows verrouillé) → `prisma generate` → relancer.
 
 ---
 

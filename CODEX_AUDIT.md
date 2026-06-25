@@ -2,6 +2,15 @@
 
 État : dépôt clean, `prisma validate` OK. Ne pas passer à l'étape suivante avant les P1.
 
+## ✅ Avancement correctifs — 2e tour (2026-06-24)
+- **P1 migration manquante** : FAIT. Migration versionnée `20260607_phase15_notifications_referral` (`scheduled_pushes`, `push_tokens`, `suppliers.is_external`/`referral_code`) **+ `migration_lock.toml` créé** (il était absent → bloquait aussi `migrate deploy`). Vérif : toutes les tables du schéma sont couvertes par l'historique. ⏳ Reste (DB dev allumée) : `prisma migrate resolve --applied 20260607_phase15_notifications_referral`.
+- **P1 pipeline** : VÉRIFIÉ VERT (typecheck 5/5, lint 5/5 en exécution réelle). Cause des échecs = (a) pnpm hors PATH sans `corepack enable` ; (b) install local cassé (symlink `@sentry/nextjs` orphelin) → réparé par `pnpm install`. **Aucun bug de code.** Docs corrigées (Turbo « réel » + mentions « SQL direct » marquées rattrapées).
+- **P2 referral externe** : FAIT. `findByReferralCode` n'exige plus l'appartenance (le code = la crédential, modèle lien d'invitation) ; renvoie une projection minimale (pas de fuite Stripe) ; 404 identique si code inconnu OU buvette non externe. 4 tests.
+- **P2 feature-flags/resolve** : FAIT. `resolve` reçoit `CurrentUser` + vérifie l'accès en lecture à la portée demandée (orgId/eventId) → plus de fuite cross-org. 2 tests.
+- **P3 ScheduledPush PROCESSING** : FAIT. Type admin + label UI campaigns alignés sur l'état `PROCESSING`.
+- Tests : **backend 29 suites / 332 tests verts**.
+- **RESTE** : P3 #8 (icônes mobile), docs .docx Phases 15/18.
+
 ## ✅ Avancement correctifs (2026-06-23)
 - **P1 #1 sécurité app-settings/feature-flags** : FAIT (helper `requireScopedAccess` + `filterScopedRows`, contrôleurs `CurrentUser`, 9 tests). Commit `fix(security)`.
 - **P2 #4 double-envoi push** : FAIT (claim atomique PENDING→PROCESSING).

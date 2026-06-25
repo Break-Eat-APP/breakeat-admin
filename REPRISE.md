@@ -52,7 +52,11 @@ Dépendance externe : **spec/clé API Flaix** nécessaire pour le point 4.
 3. **Audit Codex** de la branche.
 
 ## ⚠️ Dette technique connue (à signaler à Codex)
-- **Migrations en SQL direct** (pas `prisma migrate`) à cause d'un drift PK pré-existant (`gen_random_uuid()` en DB vs `@default(uuid())` au schéma). Concerne : `push_tokens`, `scheduled_pushes`, `suppliers.referral_code/is_external`.
+- ~~Migrations en SQL direct manquantes pour `push_tokens`, `scheduled_pushes`, `suppliers.referral_code/is_external`.~~ **Résolu (2026-06-24)** : migration versionnée `backend/prisma/migrations/20260607_phase15_notifications_referral` créée + `migration_lock.toml` ajouté (était absent → bloquait `migrate deploy`). Une base neuve (Railway) crée désormais ces objets via `prisma migrate deploy`.
+  - ⏳ **Étape restante (DB dev allumée)** : marquer la migration comme déjà appliquée pour ne pas la rejouer sur dev (objets créés jadis en SQL direct) :
+    `corepack pnpm --filter @break-eat/backend exec prisma migrate resolve --applied 20260607_phase15_notifications_referral`
+  - Le drift PK historique demeure (`gen_random_uuid()` en DB vs `@default(uuid())` au schéma) mais est bénin : `migrate deploy` ne vérifie pas le drift (seul `migrate dev` le ferait).
+- **Pipeline racine** : `turbo run` est vert (typecheck 5/5, lint 5/5) **à condition que pnpm soit sur le PATH** → `corepack enable` requis une fois (sinon « Unable to find package manager binary »). Fallback : `pnpm --filter <pkg> <script>`.
 - Après tout changement de schéma : **arrêter le backend** (DLL Windows verrouillé) → `prisma generate` → relancer.
 
 ## 🚀 Lancer l'environnement (Windows)
