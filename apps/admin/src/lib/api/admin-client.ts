@@ -359,7 +359,7 @@ export interface ScheduledPush {
   body: string;
   discountPercent: number | null;
   scheduledAt: string;
-  status: 'PENDING' | 'SENT' | 'CANCELLED' | 'FAILED';
+  status: 'PENDING' | 'PROCESSING' | 'SENT' | 'CANCELLED' | 'FAILED';
   sentAt: string | null;
   sentCount: number;
   createdAt: string;

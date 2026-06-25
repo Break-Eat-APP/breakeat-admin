@@ -14,10 +14,11 @@ import {
 import { BRAND } from '@/lib/brand';
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  PENDING:   { bg: '#fef3c7', color: '#92400e', label: 'En attente' },
-  SENT:      { bg: '#d1fae5', color: '#065f46', label: 'Envoyé' },
-  CANCELLED: { bg: BRAND.bgSubtle, color: BRAND.inkSoft, label: 'Annulé' },
-  FAILED:    { bg: '#fee2e2', color: '#991b1b', label: 'Échec' },
+  PENDING:    { bg: '#fef3c7', color: '#92400e', label: 'En attente' },
+  PROCESSING: { bg: '#dbeafe', color: '#1e40af', label: 'Envoi en cours' },
+  SENT:       { bg: '#d1fae5', color: '#065f46', label: 'Envoyé' },
+  CANCELLED:  { bg: BRAND.bgSubtle, color: BRAND.inkSoft, label: 'Annulé' },
+  FAILED:     { bg: '#fee2e2', color: '#991b1b', label: 'Échec' },
 };
 
 type Kind = 'PUSH' | 'DISCOUNT_CAMPAIGN';
