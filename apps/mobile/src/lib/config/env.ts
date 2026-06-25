@@ -12,8 +12,15 @@
  */
 
 export const ENV = {
-  /** Backend API base URL. Override in .env → API_URL=http://192.168.x.x:3000/api/v1 */
-  API_URL: (process.env['API_URL'] as string | undefined) ?? 'http://localhost:3000/api/v1',
+  /**
+   * Backend API base URL.
+   *  • Build/prod : définir EXPO_PUBLIC_API_URL (Expo l'inline au build).
+   *    ex. EXPO_PUBLIC_API_URL=https://breakeat-admin-production.up.railway.app/api/v1
+   *  • Dev local : fallback sur l'IP LAN du PC (émulateur/téléphone même Wi-Fi).
+   */
+  API_URL:
+    (process.env['EXPO_PUBLIC_API_URL'] as string | undefined) ??
+    'http://192.168.1.133:3000/api/v1',
 
   /** Sentry DSN for mobile. Leave empty to disable Sentry. */
   SENTRY_DSN: (process.env['SENTRY_DSN_MOBILE'] as string | undefined) ?? '',

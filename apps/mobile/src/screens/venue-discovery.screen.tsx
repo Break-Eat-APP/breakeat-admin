@@ -1,0 +1,250 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Platform,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type TextStyle,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '@navigation/root-navigator';
+import { apiSearchVenues, type PublicVenue } from '@lib/api/mobile-api';
+import { useUserLocation } from '@lib/hooks/use-user-location';
+import { THEME, shadowCard, FONT } from '@lib/theme';
+import { BreakEatLogo } from '@components/break-eat-logo';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
+
+// Supprime le contour bleu de focus du navigateur (react-native-web uniquement).
+const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null;
+
+export function VenueDiscoveryScreen() {
+  const navigation = useNavigation<Nav>();
+  const { coords, status: locStatus, request: requestLocation } = useUserLocation();
+
+  const [query, setQuery] = useState('');
+  const [venues, setVenues] = useState<PublicVenue[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiSearchVenues({
+        q: query.trim() || undefined,
+        lat: coords?.lat,
+        lng: coords?.lng,
+      });
+      setVenues(data);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Erreur de chargement');
+    } finally {
+      setLoading(false);
+    }
+  }, [query, coords]);
+
+  useEffect(() => {
+    const t = setTimeout(() => void load(), 300);
+    return () => clearTimeout(t);
+  }, [load]);
+
+  const handleSelect = (venue: PublicVenue) => {
+    if (venue.currentEventId) {
+      navigation.navigate('EventHome', { eventId: venue.currentEventId });
+    }
+  };
+
+  return (
+    <View style={styles.root}>
+      {/* Bandeau orange + logo */}
+      <SafeAreaView edges={['top']} style={styles.band}>
+        <View style={styles.logoRow}>
+          <BreakEatLogo size={30} variant="white" />
+          <Text style={styles.wordmark}>BREAKEAT</Text>
+        </View>
+      </SafeAreaView>
+
+      {/* Recherche (pill, icône cible = géoloc) */}
+      <View style={styles.searchWrap}>
+        <View style={[styles.searchBox, shadowCard]}>
+          <TextInput
+            style={[styles.searchInput, NO_OUTLINE]}
+            placeholder="Entrez une ville, une adresse, un lieu"
+            placeholderTextColor={THEME.grey}
+            value={query}
+            onChangeText={setQuery}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+          <Pressable onPress={requestLocation} hitSlop={10}>
+            {locStatus === 'requesting' ? (
+              <ActivityIndicator color={THEME.orange} size="small" />
+            ) : (
+              <Ionicons
+                name="locate"
+                size={22}
+                color={locStatus === 'granted' ? THEME.orange : THEME.ink}
+              />
+            )}
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Titre */}
+      <View style={styles.titleBlock}>
+        <Text style={styles.title}>LA BUVETTE EN LIGNE</Text>
+        <Text style={styles.subtitle}>File prioritaire &amp; sans file d'attente</Text>
+      </View>
+
+      {/* Liste des lieux (1 colonne) */}
+      {loading && venues.length === 0 ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={THEME.orange} />
+        </View>
+      ) : error ? (
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable style={styles.retryBtn} onPress={() => void load()}>
+            <Text style={styles.retryText}>Réessayer</Text>
+          </Pressable>
+        </View>
+      ) : venues.length === 0 ? (
+        <View style={styles.centered}>
+          <Text style={styles.emptyText}>
+            {query.trim() ? 'Aucun lieu pour cette recherche.' : 'Aucun lieu disponible.'}
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={venues}
+          keyExtractor={(v) => v.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={THEME.orange} />
+          }
+          renderItem={({ item }) => <VenueCard venue={item} onPress={() => handleSelect(item)} />}
+        />
+      )}
+    </View>
+  );
+}
+
+function VenueCard({ venue, onPress }: { venue: PublicVenue; onPress: () => void }) {
+  const closed = !venue.currentEventId;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, shadowCard, pressed && !closed && styles.cardPressed]}
+    >
+      {venue.imageUrl ? (
+        <Image source={{ uri: venue.imageUrl }} style={styles.cardImg} resizeMode="contain" />
+      ) : (
+        <Text style={styles.cardName}>{venue.name}</Text>
+      )}
+
+      {(venue.distanceKm !== null || closed) && (
+        <View style={styles.cardMeta}>
+          {venue.distanceKm !== null && (
+            <View style={styles.distancePill}>
+              <Ionicons name="navigate" size={12} color={THEME.orange} />
+              <Text style={styles.distanceText}>{formatDistance(venue.distanceKm)}</Text>
+            </View>
+          )}
+          {closed && <Text style={styles.soonText}>Bientôt</Text>}
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function formatDistance(km: number): string {
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  return `${km.toFixed(km < 10 ? 1 : 0)} km`;
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: THEME.bg },
+
+  band: { backgroundColor: THEME.orange, paddingBottom: 28 },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingTop: 18,
+    paddingBottom: 14,
+  },
+  wordmark: { color: '#fff', fontSize: 24, fontFamily: FONT.bold, letterSpacing: 1 },
+
+  searchWrap: { paddingHorizontal: 16, marginTop: 18 },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: THEME.surface,
+    borderRadius: THEME.radius.pill,
+    paddingHorizontal: 20,
+    paddingVertical: 4,
+    gap: 10,
+  },
+  searchInput: { flex: 1, paddingVertical: 14, fontSize: 15, color: THEME.ink, fontFamily: FONT.regular },
+
+  titleBlock: { alignItems: 'center', paddingTop: 26, paddingBottom: 18 },
+  title: { color: THEME.orange, fontSize: 26, fontFamily: FONT.bold, letterSpacing: 0.5 },
+  subtitle: { color: THEME.inkSoft, fontSize: 14, marginTop: 4, fontFamily: FONT.medium },
+
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
+  errorText: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center', fontFamily: FONT.regular },
+  emptyText: { color: THEME.grey, fontSize: 14, textAlign: 'center', fontFamily: FONT.regular },
+  retryBtn: {
+    backgroundColor: THEME.orange,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: THEME.radius.pill,
+  },
+  retryText: { color: '#fff', fontFamily: FONT.bold, fontSize: 15 },
+
+  list: { paddingHorizontal: 20, paddingBottom: 120, gap: 18 },
+  card: {
+    backgroundColor: THEME.surface,
+    borderRadius: 20,
+    height: 150,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  cardPressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
+  cardImg: { width: '70%', height: '70%' },
+  cardName: { color: THEME.ink, fontSize: 20, fontFamily: FONT.bold, textAlign: 'center' },
+  cardMeta: { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  distancePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: THEME.orangeTint,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: THEME.radius.pill,
+  },
+  distanceText: { color: THEME.orange, fontSize: 12, fontFamily: FONT.bold },
+  soonText: {
+    color: THEME.grey,
+    fontSize: 11,
+    fontFamily: FONT.bold,
+    backgroundColor: THEME.bgSubtle,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: THEME.radius.pill,
+    overflow: 'hidden',
+  },
+});

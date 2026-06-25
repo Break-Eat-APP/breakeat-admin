@@ -1,5 +1,9 @@
 import React, { useEffect } from 'react';
-import { NavigationContainer, type LinkingOptions } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  type LinkingOptions,
+  type NavigatorScreenParams,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { useAuthStore } from '@store/auth.store';
@@ -12,18 +16,24 @@ import { SlotSelectorScreen } from '@screens/slot-selector.screen';
 import { CheckoutScreen } from '@screens/checkout.screen';
 import { OrderConfirmationScreen } from '@screens/order-confirmation.screen';
 import { OrderTrackingScreen } from '@screens/order-tracking.screen';
+import { MainTabs, type MainTabParamList } from '@navigation/main-tabs';
+import { THEME } from '@lib/theme';
 
 /**
- * Full route param map — Phase 13.
+ * Navigation de production — pivot click-and-collect (Phase 16).
  *
- * All screens live in a single stack to support deep links
- * from the QR code scheme: breakeat://event/<uuid>
+ * Entrée = barre d'onglets partagée (Lieux · Mes commandes · Commander · Panier ·
+ * Autre, cf. main-tabs). L'auth est OPTIONNELLE : `Login` est une modale jamais
+ * bloquante. Le flux de commande (EventHome → … → Checkout) est empilé par-dessus
+ * les onglets et sert de cible au handoff Flaix (sur EventHome).
  */
 export type RootStackParamList = {
-  // Auth
+  MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
+
+  // Auth (optionnelle, non bloquante)
   Login: { pendingEventId?: string } | undefined;
 
-  // Main app flow
+  // Flux de commande / deep links
   QRScanner: undefined;
   EventHome: { eventId: string };
   SupplierCatalog: { eventId: string; supplierId: string };
@@ -36,10 +46,7 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-/**
- * Deep link configuration.
- * breakeat://event/<eventId>  →  EventHomeScreen
- */
+/** Deep link : breakeat://event/<eventId> → EventHome */
 const linking: LinkingOptions<RootStackParamList> = {
   prefixes: ['breakeat://'],
   config: {
@@ -50,15 +57,15 @@ const linking: LinkingOptions<RootStackParamList> = {
 };
 
 export function RootNavigator() {
-  const { token, isLoading, rehydrate } = useAuthStore();
+  const { isLoading, rehydrate } = useAuthStore();
 
-  // Rehydrate from AsyncStorage on first mount
+  // Réhydrate la session depuis AsyncStorage au premier montage.
   useEffect(() => {
     void rehydrate();
   }, [rehydrate]);
 
   if (isLoading) {
-    // Keep splash visible while loading session
+    // Garde le splash visible pendant le chargement de session.
     return null;
   }
 
@@ -68,18 +75,16 @@ export function RootNavigator() {
         screenOptions={{
           headerShown: false,
           animation: 'slide_from_right',
-          contentStyle: { backgroundColor: '#0f172a' },
+          contentStyle: { backgroundColor: THEME.bg },
         }}
       >
-        {/* Entry point depends on auth state */}
-        {!token ? (
-          <Stack.Screen name="Login" component={LoginScreen} />
-        ) : null}
+        <Stack.Screen name="MainTabs" component={MainTabs} />
 
-        {/* QR Scanner — home screen for logged-in users */}
+        {/* Auth — présentée en modale, jamais bloquante */}
+        <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
+
+        {/* Flux de commande / deep links */}
         <Stack.Screen name="QRScanner" component={QRScannerScreen} />
-
-        {/* Event flow */}
         <Stack.Screen name="EventHome" component={EventHomeScreen} />
         <Stack.Screen name="SupplierCatalog" component={SupplierCatalogScreen} />
         <Stack.Screen name="Cart" component={CartScreen} />
@@ -87,11 +92,6 @@ export function RootNavigator() {
         <Stack.Screen name="Checkout" component={CheckoutScreen} />
         <Stack.Screen name="OrderConfirmation" component={OrderConfirmationScreen} />
         <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
-
-        {/* Login always accessible (for non-authed checkout flow) */}
-        {token ? (
-          <Stack.Screen name="Login" component={LoginScreen} />
-        ) : null}
       </Stack.Navigator>
     </NavigationContainer>
   );

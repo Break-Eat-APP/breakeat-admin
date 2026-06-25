@@ -16,5 +16,5 @@
       "@components/*": ["src/components/*"]
     }
   },
-  "include": ["src/**/*", "index.js", "App.tsx"]
+  "include": ["src/**/*", "index.js", "App.tsx", "App.expo.tsx", "index.expo.js"]
 }

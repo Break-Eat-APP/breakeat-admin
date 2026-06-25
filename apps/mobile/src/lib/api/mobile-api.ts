@@ -216,6 +216,37 @@ export const apiRegister = (email: string, password: string, firstName: string, 
     body: JSON.stringify({ email, password, firstName, lastName }),
   });
 
+// ─── Découverte des lieux (public, no auth required) ───────────
+
+export interface PublicVenue {
+  id: string;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  imageUrl: string | null;
+  primaryColor: string | null;
+  /** Événement actif sur ce lieu → cible de navigation (null si aucun). */
+  currentEventId: string | null;
+  /** Distance en km depuis l'utilisateur (null si pas de géoloc ou pas de coords). */
+  distanceKm: number | null;
+}
+
+export const apiSearchVenues = (params: {
+  q?: string;
+  lat?: number;
+  lng?: number;
+  radiusKm?: number;
+} = {}) => {
+  const parts: string[] = [];
+  if (params.q) parts.push(`q=${encodeURIComponent(params.q)}`);
+  if (params.lat !== undefined) parts.push(`lat=${params.lat}`);
+  if (params.lng !== undefined) parts.push(`lng=${params.lng}`);
+  if (params.radiusKm !== undefined) parts.push(`radiusKm=${params.radiusKm}`);
+  const suffix = parts.length ? `?${parts.join('&')}` : '';
+  return req<PublicVenue[]>(`/public/venues${suffix}`);
+};
+
 // ─── Public event browsing (no auth required) ─────────────────
 
 export const apiGetPublicEvent = (eventId: string) =>
@@ -251,6 +282,10 @@ export const apiDemoCheckout = (cartId: string) =>
 
 export const apiGetOrder = (orderId: string) =>
   req<Order>(`/orders/${orderId}`);
+
+/** Historique des commandes de l'utilisateur connecté (plus récentes d'abord). */
+export const apiGetMyOrders = () =>
+  req<Order[]>('/orders');
 
 // ─── Helpers ──────────────────────────────────────────────────
 
