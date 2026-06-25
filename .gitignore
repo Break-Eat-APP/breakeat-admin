@@ -72,3 +72,6 @@ apps/mobile/.expo
 
 # Sentry
 .sentryclirc
+
+# Local Claude tooling (preview launch config)
+.claude/
