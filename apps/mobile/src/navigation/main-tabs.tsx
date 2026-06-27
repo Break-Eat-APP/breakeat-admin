@@ -18,22 +18,21 @@ import { ProfileScreen } from '@screens/profile.screen';
  */
 export type MainTabParamList = {
   Lieux: undefined;
-  Commandes: undefined;
-  Commander: undefined;
   Panier: undefined;
+  Commandes: undefined;
   Autre: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-/** Gros bouton central « Commander » surélevé (logo B) — façon Burger King. */
-function CommanderFab({ onPress }: BottomTabBarButtonProps) {
+/** Gros bouton central « Mes commandes » surélevé (logo B) — façon Burger King. */
+function CommandesFab({ onPress }: BottomTabBarButtonProps) {
   return (
     <Pressable onPress={onPress} style={styles.fabWrap}>
       <View style={styles.fab}>
-        <BreakEatLogo size={30} variant="white" />
+        <BreakEatLogo size={40} variant="white" />
       </View>
-      <Text style={styles.fabLabel}>Commander</Text>
+      <Text style={styles.fabLabel}>Mes commandes</Text>
     </Pressable>
   );
 }
@@ -68,29 +67,17 @@ export function MainTabs() {
         }}
       />
       <Tab.Screen
+        name="Panier"
+        component={PanierTabScreen}
+        options={{ tabBarIcon: ({ color }) => <Ionicons name="cart-outline" size={24} color={color} /> }}
+      />
+      <Tab.Screen
         name="Commandes"
         component={OrderHistoryScreen}
         options={{
           tabBarLabel: 'Mes commandes',
-          tabBarIcon: ({ color }) => <Ionicons name="receipt-outline" size={24} color={color} />,
+          tabBarButton: (props) => <CommandesFab {...props} />,
         }}
-      />
-      <Tab.Screen
-        name="Commander"
-        component={OrderHistoryScreen}
-        options={{ tabBarButton: (props) => <CommanderFab {...props} /> }}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            // Raccourci « commander » → renvoie vers « Mes commandes » pour l'instant.
-            e.preventDefault();
-            navigation.navigate('Commandes');
-          },
-        })}
-      />
-      <Tab.Screen
-        name="Panier"
-        component={PanierTabScreen}
-        options={{ tabBarIcon: ({ color }) => <Ionicons name="cart-outline" size={24} color={color} /> }}
       />
       <Tab.Screen
         name="Autre"

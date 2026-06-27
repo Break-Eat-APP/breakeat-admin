@@ -20,7 +20,8 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiSearchVenues, type PublicVenue } from '@lib/api/mobile-api';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { THEME, shadowCard, FONT } from '@lib/theme';
-import { BreakEatLogo } from '@components/break-eat-logo';
+
+const LOGO_FULL_WHITE = require('../../assets/logo-full-white.png');
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -69,8 +70,7 @@ export function VenueDiscoveryScreen() {
       {/* Bandeau orange + logo */}
       <SafeAreaView edges={['top']} style={styles.band}>
         <View style={styles.logoRow}>
-          <BreakEatLogo size={30} variant="white" />
-          <Text style={styles.wordmark}>BREAKEAT</Text>
+          <Image source={LOGO_FULL_WHITE} style={styles.lockup} resizeMode="contain" />
         </View>
       </SafeAreaView>
 
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     paddingTop: 18,
     paddingBottom: 14,
   },
-  wordmark: { color: '#fff', fontSize: 24, fontFamily: FONT.bold, letterSpacing: 1 },
+  lockup: { height: 56, aspectRatio: 760 / 212 },
 
   searchWrap: { paddingHorizontal: 16, marginTop: 18 },
   searchBox: {
