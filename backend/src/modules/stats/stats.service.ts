@@ -81,7 +81,8 @@ export interface EventStats {
  * SUPER_ADMIN bypasses (handled inside requireOrgAccess).
  *
  * Revenue rule (mirrors BackofficeService): an order counts toward CA only when
- * paymentStatus = SUCCEEDED. CA HT = round(CA TTC / (1 + vatRate)).
+ * paymentStatus = SUCCEEDED ET status ≠ CANCELLED (commandes annulées exclues,
+ * cohérent avec le libellé de l'UI compta). CA HT = round(CA TTC / (1 + vatRate)).
  *
  * Read-only: no schema, no writes — pure aggregation over existing tables.
  */
@@ -114,7 +115,7 @@ export class StatsService {
 
     const [agg, events, perEvent] = await Promise.all([
       this.prisma.order.aggregate({
-        where: { organizationId: orgId, paymentStatus: PaymentStatus.SUCCEEDED },
+        where: { organizationId: orgId, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } },
         _sum: { totalCents: true },
         _count: { _all: true },
       }),
@@ -125,7 +126,7 @@ export class StatsService {
       }),
       this.prisma.order.groupBy({
         by: ['eventId'],
-        where: { organizationId: orgId, paymentStatus: PaymentStatus.SUCCEEDED },
+        where: { organizationId: orgId, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } },
         _sum: { totalCents: true },
         _count: { _all: true },
       }),
@@ -197,18 +198,18 @@ export class StatsService {
 
     const [agg, byStatus, topItems] = await Promise.all([
       this.prisma.order.aggregate({
-        where: { eventId, paymentStatus: PaymentStatus.SUCCEEDED },
+        where: { eventId, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } },
         _sum: { totalCents: true },
         _count: { _all: true },
       }),
       this.prisma.order.groupBy({
         by: ['status'],
-        where: { eventId, paymentStatus: PaymentStatus.SUCCEEDED },
+        where: { eventId, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } },
         _count: { _all: true },
       }),
       this.prisma.orderItem.groupBy({
         by: ['productId', 'productNameSnapshot'],
-        where: { order: { eventId, paymentStatus: PaymentStatus.SUCCEEDED } },
+        where: { order: { eventId, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } } },
         _sum: { quantity: true, lineTotalCents: true },
         orderBy: { _sum: { quantity: 'desc' } },
         take: 10,

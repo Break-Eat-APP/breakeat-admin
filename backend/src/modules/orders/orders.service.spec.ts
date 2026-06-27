@@ -5,6 +5,7 @@ import { OrdersService } from './orders.service';
 import { OrderStateMachineService } from './order-state-machine.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { SlotsService } from '../slots/slots.service';
+import { OrderNotificationsService } from '../notifications/order-notifications.service';
 import { PrismaService } from '../../database/prisma.service';
 
 const USER_ID = 'user-1';
@@ -95,6 +96,12 @@ describe('OrdersService', () => {
           provide: SlotsService,
           useValue: {
             assignOrderToSlot: jest.fn(),
+          },
+        },
+        {
+          provide: OrderNotificationsService,
+          useValue: {
+            notifyStatusChange: jest.fn(),
           },
         },
         {

@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -75,5 +76,16 @@ export class PickupPointsController {
     @Body() dto: UpdatePickupPointDto,
   ) {
     return this.pickupPointsService.update(orgId, id, user.sub, dto);
+  }
+
+  /** DELETE /api/v1/organizations/:orgId/pickup-points/:id */
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  remove(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.pickupPointsService.remove(orgId, id, user.sub);
   }
 }

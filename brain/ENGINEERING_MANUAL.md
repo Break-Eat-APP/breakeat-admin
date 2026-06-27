@@ -3448,7 +3448,7 @@ Trois correctifs issus de l'audit Codex (frontière d'audit : 2026-06-02) :
 
 ### Root Turbo pipeline — mise au point (P1 audit, non-bug)
 
-L'audit signalait `turbo run build/typecheck/lint` cassé (« Unable to find package manager binary »). **Vérifié ici : sain** (3× exit 0 en dry-run, pnpm 11.3.0 = `packageManager`). Tous les environnements réels provisionnent pnpm : CI (`.github/workflows/ci.yml` via `pnpm/action-setup@v4`), Vercel (`vercel.json` → `pnpm install` + `pnpm build`), Railway (`nixpacks.toml` → `corepack prepare pnpm@11.3.0`). L'échec Codex venait de son **sandbox** (pnpm absent du PATH là où Turbo le cherche), pas du dépôt. **Règle** : si `turbo` ne trouve pas le binaire, provisionner pnpm (`corepack enable` / `corepack prepare pnpm@11.3.0 --activate`) ; les builds **package par package** (`pnpm --filter <pkg> build`) sont le fallback fiable.
+L'audit signalait `turbo run build/typecheck/lint` cassé (« Unable to find package manager binary »). **Vérifié ici : sain** (exécution réelle — `typecheck` 5/5 et `lint` 5/5 exit 0 le 2026-06-24, pas seulement en dry-run ; pnpm 11.3.0 = `packageManager`). Tous les environnements réels provisionnent pnpm : CI (`.github/workflows/ci.yml` via `pnpm/action-setup@v4`), Vercel (`vercel.json` → `pnpm install` + `pnpm build`), Railway (`nixpacks.toml` → `corepack prepare pnpm@11.3.0`). L'échec Codex venait de son **sandbox** (pnpm absent du PATH là où Turbo le cherche), pas du dépôt. **Règle** : si `turbo` ne trouve pas le binaire, provisionner pnpm (`corepack enable` / `corepack prepare pnpm@11.3.0 --activate`) ; les builds **package par package** (`pnpm --filter <pkg> build`) sont le fallback fiable.
 
 ### Risks and Safe Change Rules
 
@@ -3547,5 +3547,218 @@ Première brique d'**analytics manager**, entièrement **lecture seule** (aucune
 - Top produits vide alors qu'il y a des ventes : `orderItem.groupBy` filtre par `order: { eventId, paymentStatus: SUCCEEDED }` — si les commandes ne sont pas `SUCCEEDED`, aucune ligne ne remonte.
 - `activeEventsCount` à 0 avec un événement « en cours » : la fenêtre est `startAt ≤ now ≤ endAt` en UTC ; vérifier les fuseaux/`startAt`/`endAt` de l'événement.
 - 404 sur `/events/:id/stats` : l'UUID est validé par `ParseUUIDPipe` (400 si malformé) puis `findUnique` (404 si absent) — distinguer les deux selon le code HTTP.
+
+## [2026-06-07] Admin — Allègement Fredoka + Wizard multi-buvettes
+
+### What Was Built
+Deux ajustements du panel manager livrés dans la même session.
+
+**1. Allègement typographique.** Retour utilisateur : le dashboard manager paraissait « trop noir / gras ». Décision (choix explicite) : **garder Fredoka**, baisser les poids et adoucir le near-black.
+- `packages/brand/src/brand.ts` : token `ink` `#1c1917` → `#2d2926` (anthracite chaud). **Source unique** → propagation automatique aux 3 apps (admin/operator/backoffice) via `BRAND.ink`.
+- 16 pages admin : tout `fontWeight: 800` inline → `600`. Fredoka est chargée via `next/font/google` en poids `['400','500','600','700']` uniquement ; un `800` inline clampait déjà à 700, donc le rendu réel passe de 700 → 600 (titres sensiblement moins lourds).
+
+**2. Wizard multi-buvettes.** Le wizard `/wizard` (parcours guidé « Configurer mon club ») ne créait qu'**un** fournisseur. Or un lieu/stade peut exploiter **plusieurs buvettes/stands**. L'étape « Produits & prix » devient **« Buvettes & produits »** et gère N buvettes.
+- Nouveau type `Buvette { id, name, prepZone, pickupPoint, categories: string[], products: ProductDraft[] }`. `WizardData` porte `buvettes: Buvette[]` (remplace les anciens champs à plat `supplierName`/`prepZone`/`categories`/`products`/`pickupPoints`).
+- Étape 2 : liste de cartes `BuvetteCard` (ajout/retrait, min. 1). Chaque carte = nom, zone de prépa (opt.), point de retrait, chips catégories (≥1), table produits (nom / prix € / catégorie). Le `<select>` catégorie d'un produit ne propose que les catégories **de sa buvette**.
+- Étape 3 « Créneaux » : le point de retrait étant désormais porté par chaque buvette, l'étape ne contient plus que le **générateur de créneaux** (partagés par l'événement) + un encart **lecture seule** récapitulant « buvette → point de retrait ».
+- Récap : carte « 🍔 Buvettes & menu » (noms des buvettes, nb catégories uniques, total produits) + carte « ⏰ Retrait » (points de retrait agrégés, créneaux).
+
+### How It Works (exécution)
+`runConfiguration()` construit une liste de tâches **ordonnée par dépendances**, exécutées **séquentiellement** avec log de progression live (le pattern « collecter tous les inputs puis tout créer en une passe » évite les doublons sur Back/Next) :
+1. Branding (couleur / logo / description).
+2. Lieu (`apiCreateVenue`) → `venueId`.
+3. Événement (`apiCreateEvent`) → `eventId`.
+4. **Catégories dédupliquées** : `Array.from(new Set(buvettes.flatMap(b => b.categories)))` créées une seule fois (`apiCreateCategory`) → `catMap[name] = id`. Une catégorie homonyme dans 2 buvettes = **une** ligne org.
+5. **Une tâche par buvette** : `apiCreateSupplier` → `apiAttachSupplier(eventId)` → `apiCreatePickupPoint({ supplierId })` si renseigné → `apiCreateProduct` (en parallèle, `categoryId: catMap[p.category]`).
+6. Créneaux (`apiCreateSlot`, niveau événement), préférences notifications (`apiSetAppSetting`), campagne push optionnelle, activation (`apiUpdateEventStatus ACTIVE`).
+
+### Why (zéro backend)
+Le modèle supportait **déjà** le multi-fournisseur : `Org → Supplier` (N), `Event ↔ Supplier` M:N (attach/detach), `PickupPoint` rattachable à un `supplierId`. Le wizard ne fait qu'**orchestrer l'existant** — aucune migration, aucun nouvel endpoint.
+
+### Code References
+- `packages/brand/src/brand.ts` — `ink: '#2d2926'` (était `#1c1917`).
+- `apps/admin/src/app/(admin)/wizard/page.tsx` — types `Buvette`/`WizardData`/`DoneResult` ; `TEMPLATES` (buvettes pré-remplies) ; `validate()` (étapes 2/3) ; `runConfiguration()` (tâches multi-buvettes) ; composants `StepBuvettes` + `BuvetteCard` ; `StepSlots` (générateur seul) ; `Recap` (cartes Buvettes/Retrait).
+- 16 pages `apps/admin/src/app/(admin)/**` — `fontWeight 800 → 600`.
+
+### Dependencies
+- Client API admin **préexistant** : `apiCreateVenue` / `Event` / `Supplier` / `AttachSupplier` / `CreateCategory` / `CreateProduct` / `CreatePickupPoint` / `CreateSlot` / `UpdateEventStatus` / `UpdateOrgBranding` / `SetAppSetting`. Aucun ajout.
+- Police : `next/font/google` Fredoka (poids 400–700) via `--font-fredoka` → `BRAND.font`. `transpilePackages: ['@break-eat/brand']` permet le hot-reload des tokens.
+
+### Tests and Verification
+- Admin : `typecheck` exit 0 · `lint` 0. (Le wizard est un composant client sans test unitaire dédié ; les garde-fous sont dans `validate()` par étape.)
+- Aucune migration, aucune dépendance npm, aucun fichier backend touché → pas de régression backend possible.
+
+### Risks and Safe Change Rules
+- **Catégories org-scoped** : ne jamais créer une catégorie par buvette sans dédup — sinon doublons « Boissons » en base. Toujours passer par le `Set` + `catMap`.
+- **Ordre des tâches invariant** : venue → event avant tout supplier/attach/pickup/slot ; catégories avant produits. Insérer une étape au mauvais endroit casse les FKs.
+- **Point de retrait par buvette** : si on réintroduit des points de retrait « événement » (sans supplier), garder les deux notions distinctes — un pickup peut viser un `supplierId` précis.
+- **Poids Fredoka** : ne pas réintroduire `fontWeight: 800` (clamp à 700, incohérent avec l'allègement). Max 700.
+- **`ink` est partagé** : modifier `brand.ts` impacte operator + backoffice. Tester les 3 surfaces avant de retoucher.
+
+### Debugging Notes
+- Produit créé sans catégorie / erreur FK : `catMap[p.category]` `undefined` → la catégorie n'était pas dans `buvette.categories` à l'exécution (vérifier que `removeCategory` réaffecte bien les produits orphelins vers une catégorie restante).
+- Une seule buvette créée alors que plusieurs saisies : vérifier que chaque `Buvette.id` est unique (`uid()`), sinon la `key` React fusionne les cartes.
+- Couleur de texte inchangée après édition de `brand.ts` : le hot-reload du package brand dépend de `transpilePackages` + `exports` pointant le `.ts` source ; redémarrer le dev server si besoin.
+
+## [2026-06-07] Refonte v3 « chaleureux premium » — Inter + Lucide (bloc 1)
+
+### What Was Built
+Pivot de direction artistique demandé par le client (« je ne veux pas que mes dash ressemblent à tous les autres dash créés par IA »). Trois décisions, prises via choix explicite :
+1. **Police → Inter** (Fredoka abandonnée, jugée « trop enfant » pour des outils pro).
+2. **Icônes → Lucide** (ligne fines, monochromes) en remplacement des emojis de navigation.
+3. **Direction → « chaleureux premium »** : canevas blanc cassé chaud, cartes blanches qui ressortent, profondeur **douce et neutre** (fini les ombres orangées génériques), orange maîtrisé, arrondis cohérents.
+
+Le logo « B éclair » (SVG `BreakEatLogo`) est **laissé tel quel** — révision ultérieure. Ce bloc 1 couvre les **fondations** (tokens + police, propagées aux 3 apps) + la **sidebar admin** + le **dashboard manager**. Les ~14 autres pages admin et le contenu operator/backoffice suivront (même recette).
+
+### How It Works
+**Tokens (source unique `packages/brand/src/brand.ts`).** Un seul fichier pilote les 3 surfaces :
+- `font` → `var(--font-sans), <stack système>` (chaque app câble `--font-sans` via `next/font/google` `Inter` dans son `layout.tsx`, variable font → toute la plage de graisses, aucun clamp).
+- `bg` `#fcfaf8` (canevas crème) ; `surface` `#ffffff` (**nouveau** — cartes) ; `bgSubtle` `#f5efe9` (insets/chips) ; `inkSoft` adouci `#57514c`.
+- Ombres **neutres en couches** : `shadowCard` (carte au repos) + `shadowSoft` (élévation/hover), sans teinte orange (la teinte orange est gardée seulement sur `shadowButton`, signature CTA).
+- `radius {card:16, control:12, pill:999}` (**nouveau** — le nouveau code s'y réfère).
+
+**Recette « premium » d'une carte** : `background: BRAND.surface` + `border 1px BRAND.border` + `boxShadow: BRAND.shadowCard` ; au survol (éléments cliquables) → `shadowSoft` + `translateY(-1px)`. Le canevas crème (`bg`) fait ressortir les cartes blanches.
+
+**Sidebar admin** (`(admin)/layout.tsx`) : `NAV_GROUPS` (Pilotage / Configuration / Organisation / Système / Outils) — chaque item porte un composant **`LucideIcon`** (plus de string emoji). Rendu : titre de groupe gris capitales, items en `<Link>` avec **pastille active arrondie** (`orangeTint` + `radius 10`, fini le filet gauche 3px). Rail en `surface` (blanc) sur canevas crème.
+
+### Code References
+- `packages/brand/src/brand.ts` — tokens v3 (`font` Inter, `bg`/`surface`/`bgSubtle`, `shadowCard`/`shadowSoft`/`shadowButton`, `radius`).
+- `apps/{admin,operator,backoffice}/src/app/layout.tsx` — `Inter({ variable: '--font-sans' })`.
+- `apps/{admin,operator,backoffice}/src/app/globals.css` — body font/canevas/couleur.
+- `apps/admin/src/app/(admin)/layout.tsx` — `NAV_GROUPS`, icônes Lucide, pastille active.
+- `apps/admin/src/app/(admin)/events/page.tsx` — titre « Événements & configuration » + description grise.
+- `apps/admin/src/app/(admin)/dashboard/page.tsx` — Lucide (`RefreshCw`/`ChevronRight`/`Building2`/`Lock`/`CalendarDays`), `KpiCard`/`EventRow`/`InfoCard` en `surface`+`shadowCard`.
+
+### Dependencies
+- `lucide-react@^1.x` (3 apps). **Vérifié authentique** : `require.resolve` → registry npm officiel, `repository: lucide-icons/lucide`, `homepage: lucide.dev`, licence ISC. Par mi-2026 lucide-react est en 1.x (cadence de release élevée), d'où le `^1.17.0` qui peut surprendre.
+- Inter via `next/font/google` (déjà présent, comme Fredoka avant). Aucune autre dépendance.
+
+### Tests and Verification
+- Admin / Operator / Backoffice : `typecheck` exit 0 · `lint` 0.
+- Aucune migration, aucun fichier backend touché.
+
+### Risks and Safe Change Rules
+- **Plus de `var(--font-fredoka)`** : tout passe par `--font-sans`. Ne pas réintroduire Fredoka sur les dashboards.
+- **Ombres neutres** : ne pas recréer des `boxShadow` orangés sur les cartes (effet « IA générique »). L'orange reste sur le CTA (`shadowButton`) uniquement.
+- **`surface` vs `bg`** : cartes = `surface` (blanc) ; page = `bg` (crème). Ne pas mettre une carte en `bg` (elle disparaît sur le canevas).
+- **Icônes = composants** : `NAV_GROUPS[].icon` est un `LucideIcon` (PascalCase), pas une string. Pour ajouter un item, importer l'icône depuis `lucide-react`.
+- **`ink`/`surface`/tokens partagés** : un changement dans `brand.ts` touche les 3 apps — vérifier admin + operator + backoffice.
+
+### Debugging Notes
+- Icône de menu absente / erreur de build : le nom n'existe pas dans `lucide-react` (vérifier la casse exacte, ex. `MonitorSmartphone`, `CalendarDays`).
+- Cartes « plates » (sans relief) : `boxShadow: BRAND.shadowCard` manquant, ou carte posée sur `surface` au lieu de `bg` (pas de contraste).
+- Police encore Fredoka après bascule : `--font-fredoka` résiduel dans un `globals.css` ou un composant ; tout doit pointer `--font-sans`. Redémarrer le dev server (hot-reload de `next/font`).
+
+### Lieu — modèle « 1 club = 1 lieu » (IA)
+Décision produit : un club gère **un seul lieu** (stade/patinoire), mais **plusieurs buvettes/stands** dedans (cf. wizard multi-buvettes). Conséquence dans le panel manager :
+- La section **« Lieux »** est **retirée du menu** ; le lieu vit dans **« Organisation »** (`organizations/[id]`) comme une carte (nom + adresse + fuseau). Create si absent, sinon `apiUpdateVenue` (`PATCH /organizations/:orgId/venues/:id`, endpoint backend préexistant).
+- Le **formulaire d'événement** n'a plus de champ « Venue ID (UUID) » : il **résout le lieu automatiquement** via `apiGetVenues` — 0 lieu → invite vers Organisation + submit désactivé ; 1 lieu → affichage lecture seule + `venueId` auto ; >1 → `<select>` (cas multi-sites résiduel).
+- `/venues` ne fait plus que **rediriger** vers Organisation.
+- **Le data model n'a PAS changé** : `Event.venueId` reste requis, `Org → N Venues` reste possible (white-label multi-sites) ; seule la **présentation** change pour coller au cas mono-lieu.
+- **Doublons de lieux (résolu)** : la base démo avait accumulé 4 « Patinoire des Spartiates ». Cause réelle = `demo-setup/page.tsx` (et le wizard) créaient un venue à chaque run. **Corrigé** : les deux réutilisent maintenant le venue existant de l'org (`apiGetVenues` → `apiUpdateVenue`, sinon `apiCreateVenue`). Données consolidées en 1 lieu via transaction SQL (events repointés, doublons supprimés). **Piège ops** : `docker exec` veut `-i` pour lire un heredoc sur stdin (sinon psql ne reçoit rien et la transaction ne s'exécute pas).
+
+## [2026-06-08] Section « Buvettes » (config club-level + rattachement événement)
+
+### What Was Built
+Une **section menu « Buvettes »** dans l'admin. Modèle déjà en place (`Supplier` = niveau organisation ; `Event ↔ Supplier` M:N via `eventSupplier`) ; il manquait juste l'IA : les buvettes ne se créaient que dans le wizard ou la fiche événement, sans vue d'ensemble. Désormais : config **une fois** au niveau club, puis **rattachement** à chaque événement.
+
+- **Liste** (`suppliers/page.tsx`, nouveau) : `apiGetSuppliers` + `apiCreateSupplier` ; cartes premium (`surface`/`shadowCard`, icône `Store`, badge de statut). 
+- **Détail** (`suppliers/[id]`, enrichi) : carte **Réglages** (nom/zone → `apiUpdateSupplier` ; statut OPEN/PAUSED/CLOSED/OFFLINE → `apiUpdateSupplierStatus`) + carte **Rattacher à un événement** (`apiGetEvents` dropdown → `apiAttachSupplier`). La gestion produits/catégories/prix était déjà là.
+- Nav : item « Buvettes » (`Store`) dans le groupe Configuration.
+
+### Code References
+- `apps/admin/src/lib/api/admin-client.ts` — `apiUpdateSupplier` (`PATCH /organizations/:orgId/suppliers/:id`), `apiUpdateSupplierStatus` (`PATCH /…/:id/status`, body `{status}`). Endpoints backend **préexistants**.
+- `apps/admin/src/app/(admin)/suppliers/page.tsx` (liste) · `suppliers/[id]/page.tsx` (détail) · `(admin)/layout.tsx` (nav).
+
+### Risks and Safe Change Rules
+- **Buvette = Supplier (org-level)**, pas par événement. Ne pas dupliquer une buvette par événement — on la **rattache** (eventSupplier). Le wizard/démo-setup doivent **réutiliser** une buvette existante plutôt que d'en créer une (sinon doublons, cf. « Buvette Nord » ×4 en base démo).
+- `SupplierStatus` : `OPEN | PAUSED | CLOSED | OFFLINE`. Toute nouvelle valeur doit être ajoutée au mapping `STATUS_STYLE`/`STATUS_OPTIONS` (liste + détail).
+- **Zéro backend** : le CRUD fournisseur (+ statut + Stripe onboarding) existait déjà. Ne pas réimplémenter.
+
+### Debugging Notes
+- « Rattacher » échoue : la buvette est probablement **déjà rattachée** à cet événement (l'attache est idempotente côté contrat mais l'API renvoie une erreur si doublon) — message affiché à l'utilisateur.
+- Liste de buvettes avec doublons : dette de données démo (runs répétés). La consolidation se fait en SQL (repointer `eventSupplier`/`product` puis supprimer), pas dans l'UI.
+
+## [2026-06-15] Fondation push Expo (Phase 18)
+
+- `backend/src/modules/notifications/` : `ExpoPushService` (envoi via `https://exp.host/--/api/v2/push/send`, batches 100, renvoie `{sent,failed,invalidTokens}` — purge les `DeviceNotRegistered`), `PushTokensService` (upsert par jeton unique, `tokensForUsers`, `purgeInvalid`), `PushTokensController` (`POST`/`DELETE /push-tokens`, auth JWT). `NotificationsModule` **exporte** `ExpoPushService` + `PushTokensService` pour C1/C2/C3.
+- Modèle `PushToken` (table `push_tokens`, FK user cascade). Appliqué d'abord en SQL direct (drift PK) ; **rattrapé** par la migration versionnée `20260607_phase15_notifications_referral` (créée 2026-06-24) — une base neuve la crée via `prisma migrate deploy`.
+- ⚠️ **Mobile = bare RN** : pas d'`expo` installé. Pour activer : installer les modules Expo + `expo-notifications`, config FCM/APNs, rebuild natif, puis appeler `apiRegisterPushToken` après login. Les méthodes API mobile existent déjà.
+### C1/C2/C3 (livrés sur la fondation)
+- **C1** `OrderNotificationsService` : lit `app.notifications` (app-settings org), envoie un push par transition. Hook **fire-and-forget** dans `OrdersService.transition` (jamais bloquant). Config éditée via page admin `/notifications` (API app-settings). Specs orders : ajouter un mock provider `OrderNotificationsService` dans les `TestingModule`.
+- **C2** `ScheduledPush` (table `scheduled_pushes`) + `ScheduledPushService` avec `@Cron(EVERY_MINUTE)` (via `ScheduleModule.forRoot()` dans AppModule). Audience = jetons des users ayant commandé dans l'org/event. Page admin `/campaigns`.
+- **C3** `kind=DISCOUNT_CAMPAIGN` + `discountPercent` : push d'annonce auto à l'heure. ⚠️ **La remise n'est PAS encore appliquée au prix** — le pricing est figé au checkout (`cartItem.priceSnapshotCents` == montant Stripe) ; toute remise doit se brancher dans `cart.service` au moment du checkout/PaymentIntent, sinon l'invariant `order.total == intent.amount` casse (refus de création de commande). Suivi dédié.
+- ⚠️ Après tout changement de schéma : backend arrêté → `prisma generate` → relancer (DLL Windows).
+
+---
+
+## [2026-06-15] Bloc B + C4 — pages app, points de retrait, créneaux, parrainage exploitant
+
+### Pages multiples (B1)
+- Modèle : `HomeAppearance.pages: AppPage[]` (`{id,name,cards}`), action carte `'page'` (`pageId`). Les liens externes utilisent `'url'`.
+- Admin `appearance/page.tsx` : `CardEditor` extrait et réutilisé (accueil + pages) ; helpers `updateCards(pageId|null, fn)`. Le `null` cible la home, sinon une page.
+- Mobile `event-home.screen.tsx` : `AppearanceHome` a un état `currentPageId` ; une carte `'page'` navigue en interne, les autres délèguent à `handleCardAction`.
+
+### Points de retrait 1–4 (B2)
+- `PickupPointsService.create` plafonne à 4 par `supplierId` (scopé `eventId` si fourni). `remove()` refuse si des `order.pickupPointId` pointent dessus. DELETE `/organizations/:orgId/pickup-points/:id`.
+
+### Créneaux (B3)
+- Aucune limite backend (`SlotsService.create` ne cap pas). Le générateur en lot est **côté admin** (boucle de POST), pas un endpoint dédié.
+
+### Parrainage exploitant (C4)
+- `Supplier.isExternal` + `referralCode @unique`. Code `BE-XXXXXX` (alphabet sans I/O/0/1). Endpoints : `POST /suppliers/:id/referral` (régénère, marque externe), `GET /suppliers/referral/:code` (lookup, exige membership de l'org propriétaire).
+- ⚠️ **Migration** : appliquée d'abord en `ALTER TABLE` SQL direct (drift PK pré-existant rend `prisma migrate dev` dangereux), puis **rattrapée** par la migration versionnée `20260607_phase15_notifications_referral` (`suppliers.is_external` + `referral_code`). Une base neuve les crée via `migrate deploy`. Après tout changement de schéma : arrêter le backend (DLL Windows verrouillé) → `prisma generate` → relancer.
+
+---
+
+## [2026-06-08] « Apparence de l'app » v2 — Flaix, Jost, réordonnancement, wording optionnel
+
+### What Was Added
+Spec client complète pour le configurateur d'écran d'accueil.
+
+**Nouveaux champs / comportements :**
+- `flaixTakeover: boolean` (défaut `false`) — si `true`, l'app masque l'interface standard et affiche un écran « Plan du lieu » (intégration Flaix Phase 11.5). Côté admin : carte **Intégration Flaix** avec toggle pill animé.
+- **Réordonnancement** : `moveCard(id, dir: -1|1)` swap par index immutable ; boutons ▲/▼ sur chaque ligne.
+- **Wording optionnel** : `title` peut être vide (icône ou image seule) ; `PhonePreview` masque le div texte si vide.
+- **Police Jost** : `apps/admin/src/app/layout.tsx` charge Jost via `next/font/google` (variable `--font-jost`) ; utilisée dans `PhonePreview` pour le sous-titre.
+- **Normalisation** : `flaixTakeover ?? false` dans le bloc chargement de la config.
+
+**Mobile :**
+- `HomeAppearance.flaixTakeover?: boolean` dans `mobile-api.ts`.
+- `event-home.screen.tsx` : early return placeholder si `flaixTakeover === true`.
+
+---
+
+## [2026-06-08] « Apparence de l'app » — configurateur d'écran d'accueil white-label (boucle fermée)
+
+### What Was Built
+Un **constructeur d'écran d'accueil** pour l'app cliente, piloté depuis le dashboard (cahier des charges client : logo centré → titre MAJUSCULE → sous-titre minuscule → grille de cartes ; cartes texte/icône/image ; presets par type de lieu).
+
+**Modèle (config JSON, app-settings clé `app.appearance.home`, scope ORGANIZATION) :**
+- `header { showLogo, title, subtitle, titleColor, subtitleColor }`
+- `theme { primaryColor, textColor, iconColor, background, columns: 1|2, cardSize: sm|md|lg }`
+- `cards[] { id, title, icon (clé Lucide ou '' = texte seul), iconColor?, imageUrl?, textColor?, action }`
+- `action { type: none|supplier|orders|scan|url, supplierId?, url? }`
+- `flaixTakeover: boolean` (ajouté v2 — voir entrée ci-dessus)
+
+**Chaîne complète (dashboard → backend → app) :**
+1. **Admin** `(admin)/appearance/page.tsx` — éditeur + **aperçu live** (maquette téléphone) ; presets Stade/Entreprise/Festival ; charge les buvettes (`apiGetSuppliers`) pour le sélecteur d'action.
+2. **Backend** `public-events.controller.ts` — `GET /public/events/:id` joint `branding` (event→org primaryColor/logoUrl) + `appearance` (app-setting de l'org).
+3. **Mobile** `event-home.screen.tsx` — `AppearanceHome` rend le gabarit si `event.appearance` existe (sinon repli sélection de stand) ; `handleCardAction` mappe l'action → navigation (`supplier`→SupplierCatalog, `scan`→QRScanner, `url`→Linking).
+
+### Code References
+- `apps/admin/src/app/(admin)/appearance/page.tsx` (éditeur), `(admin)/layout.tsx` (nav Palette).
+- `backend/src/modules/events/public-events.controller.ts` (`findEvent` : `branding` + `appearance`).
+- `apps/mobile/src/lib/api/mobile-api.ts` (types), `apps/mobile/src/screens/event-home.screen.tsx` (`AppearanceHome`, `handleCardAction`).
+
+### Risks and Safe Change Rules
+- **Backward-compat de la config** : l'éditeur **normalise** au chargement (header/theme/cards par défaut si absents). Toute évolution du modèle doit rester tolérante aux configs anciennes (Stripe-like : ne pas casser un JSON existant).
+- **Cartes icône côté app** : pas encore rendues en RN (pas de lib d'icônes). Le **Stade** (texte) marche ; corporate/festival (icônes) → v2 avec `lucide-react-native` + `react-native-svg` (natif, rebuild requis).
+- **`@next/next/no-img-element`** n'est pas dans la config eslint admin → ne pas mettre de directive `eslint-disable` pour cette règle.
+
+### Debugging Notes
+- L'app affiche la sélection de stand au lieu du gabarit : `event.appearance` est `null` (le club n'a rien sauvegardé) ou le backend sert l'ancien code (relancer `start:dev`).
+- Endpoint public sans `branding`/`appearance` : backend pas relancé (NestJS doit recompiler) — vérifier `curl /public/events/:id`.
+- Backend DOWN après arrêt de Docker : le process Node crashe (perte connexion Postgres) ; relancer `pnpm --filter @break-eat/backend start:dev` (les conteneurs Docker et le process Node sont distincts).
 
 

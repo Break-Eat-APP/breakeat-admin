@@ -114,7 +114,7 @@ export function OrderGroupCard({
           borderRadius: 12,
           padding: 14,
           background: '#fff',
-          boxShadow: '0 1px 3px rgba(28,25,23,0.06)',
+          boxShadow: '0 1px 2px rgba(45,41,38,0.05), 0 4px 14px rgba(45,41,38,0.05)',
           fontFamily: BRAND.font,
           color: BRAND.ink,
         }}

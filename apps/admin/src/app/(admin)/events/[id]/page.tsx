@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { Globe, Lock, Copy } from 'lucide-react';
 import {
   apiGetEvent,
   apiUpdateEventStatus,
@@ -13,6 +14,7 @@ import {
   apiCreateSupplier,
   apiGetPickupPoints,
   apiCreatePickupPoint,
+  apiDeletePickupPoint,
   apiGetVenues,
   apiGetSlots,
   apiCreateSlot,
@@ -60,7 +62,7 @@ function Card({ title, children, action }: {
   action?: React.ReactNode;
 }) {
   return (
-    <div style={{ background: BRAND.bg, borderRadius: 12, padding: 24, boxShadow: '0 1px 3px rgba(28,25,23,0.06)', border: `1px solid ${BRAND.border}`, marginBottom: 24 }}>
+    <div style={{ background: BRAND.surface, borderRadius: 12, padding: 24, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}`, marginBottom: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.ink, margin: 0 }}>{title}</h2>
         {action}
@@ -104,6 +106,7 @@ export default function EventDetailPage() {
 
   // Pickup point form
   const [ppName, setPpName] = useState('');
+  const [ppSupplierId, setPpSupplierId] = useState('');
   const [creatingPp, setCreatingPp] = useState(false);
   const [ppError, setPpError] = useState('');
 
@@ -111,6 +114,11 @@ export default function EventDetailPage() {
   const [slotForm, setSlotForm] = useState({ startAt: '', endAt: '', capacity: '20', label: '' });
   const [creatingSlot, setCreatingSlot] = useState(false);
   const [slotError, setSlotError] = useState('');
+
+  // Bulk slot generator
+  const [bulkForm, setBulkForm] = useState({ start: '', count: '6', duration: '15', capacity: '20' });
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState('');
 
   // Branding form
   const [brandDesc, setBrandDesc] = useState('');
@@ -272,6 +280,7 @@ export default function EventDetailPage() {
         name: ppName.trim(),
         venueId: event.venueId,
         eventId: event.id,
+        supplierId: ppSupplierId || undefined,
       });
       setPpName('');
       await load();
@@ -279,6 +288,52 @@ export default function EventDetailPage() {
       setPpError(err instanceof Error ? err.message : 'Erreur');
     } finally {
       setCreatingPp(false);
+    }
+  }
+
+  async function handleDeletePickupPoint(ppId: string) {
+    if (!confirm('Supprimer ce point de retrait ?')) return;
+    try {
+      await apiDeletePickupPoint(orgId, ppId);
+      await load();
+    } catch (err) {
+      setPpError(err instanceof Error ? err.message : 'Erreur');
+    }
+  }
+
+  // Génère N créneaux consécutifs de durée fixe à partir d'une heure de départ.
+  async function handleGenerateSlots(e: React.FormEvent) {
+    e.preventDefault();
+    setBulkBusy(true);
+    setBulkError('');
+    try {
+      const count = parseInt(bulkForm.count, 10);
+      const durationMin = parseInt(bulkForm.duration, 10);
+      const capacity = parseInt(bulkForm.capacity, 10);
+      if (!bulkForm.start) throw new Error('Heure de départ requise');
+      if (isNaN(count) || count < 1 || count > 100) throw new Error('Nombre de créneaux : 1 à 100');
+      if (isNaN(durationMin) || durationMin < 1) throw new Error('Durée invalide');
+      if (isNaN(capacity) || capacity < 1) throw new Error('Capacité invalide');
+
+      let cursor = new Date(bulkForm.start);
+      for (let i = 0; i < count; i++) {
+        const start = new Date(cursor);
+        const end = new Date(cursor.getTime() + durationMin * 60 * 1000);
+        const fmt = (d: Date) => d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        await apiCreateSlot(eventId, {
+          startAt: start.toISOString(),
+          endAt: end.toISOString(),
+          capacity,
+          label: `${fmt(start)} – ${fmt(end)}`,
+        });
+        cursor = end;
+      }
+      setBulkForm({ start: '', count: '6', duration: '15', capacity: '20' });
+      await load();
+    } catch (err) {
+      setBulkError(err instanceof Error ? err.message : 'Erreur');
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -449,7 +504,7 @@ export default function EventDetailPage() {
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: BRAND.ink, margin: 0 }}>
+          <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0 }}>
             {event.name}
           </h1>
           <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: '3px 12px', fontSize: 12, fontWeight: 600 }}>
@@ -464,12 +519,12 @@ export default function EventDetailPage() {
       </div>
 
       {/* Stats (Phase 15) */}
-      <Card title="📊 Statistiques de l'événement">
+      <Card title="Statistiques de l'événement">
         {statsLoading ? (
           <p style={{ color: BRAND.grey, fontSize: 14, margin: 0 }}>Chargement des statistiques…</p>
         ) : statsDenied ? (
           <p style={{ color: BRAND.grey, fontSize: 14, margin: 0 }}>
-            🔒 Le chiffre d&apos;affaires est réservé aux rôles Administrateur d&apos;organisation et Manager.
+            Le chiffre d&apos;affaires est réservé aux rôles Administrateur d&apos;organisation et Manager.
           </p>
         ) : statsError ? (
           <div style={{ color: '#dc2626', fontSize: 14 }}>{statsError}</div>
@@ -519,7 +574,7 @@ export default function EventDetailPage() {
                       <span style={{ fontSize: 12, fontWeight: 600, color: on ? sty.color : BRAND.grey }}>
                         {ORDER_STATUS_LABEL[s]}
                       </span>
-                      <span style={{ fontSize: 13, fontWeight: 800, color: on ? sty.color : BRAND.grey }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: on ? sty.color : BRAND.grey }}>
                         {count}
                       </span>
                     </div>
@@ -569,7 +624,7 @@ export default function EventDetailPage() {
           <select
             value={newStatus}
             onChange={(e) => setNewStatus(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 14, background: BRAND.bg, fontFamily: 'inherit' }}
+            style={{ padding: '8px 12px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 14, background: BRAND.surface, fontFamily: 'inherit' }}
           >
             {EVENT_STATUSES.map((s) => (
               <option key={s} value={s}>{s}</option>
@@ -602,7 +657,7 @@ export default function EventDetailPage() {
       </Card>
 
       {/* Access & visibility (Phase 14.7) */}
-      <Card title="🔒 Accès & visibilité">
+      <Card title="Accès & visibilité">
         <form onSubmit={handleSaveAccess}>
           <p style={{ color: BRAND.grey, fontSize: 13, margin: '0 0 16px', maxWidth: 620 }}>
             Un événement <strong>public</strong> est visible et commandable par tous. Un
@@ -641,7 +696,7 @@ export default function EventDetailPage() {
                       gap: 8,
                     }}
                   >
-                    <span>{v === 'PUBLIC' ? '🌍' : '🔒'}</span>
+                    <span style={{ display: 'inline-flex' }}>{v === 'PUBLIC' ? <Globe size={15} strokeWidth={1.9} /> : <Lock size={15} strokeWidth={1.9} />}</span>
                     {v === 'PUBLIC' ? 'Public' : 'Privé'}
                   </div>
                   <div style={{ fontSize: 12, color: BRAND.grey, marginTop: 3 }}>
@@ -818,7 +873,7 @@ export default function EventDetailPage() {
             value={attachId}
             onChange={(e) => setAttachId(e.target.value)}
             required
-            style={{ flex: 1, minWidth: 200, padding: '8px 10px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 13, background: BRAND.bg, fontFamily: 'inherit' }}
+            style={{ flex: 1, minWidth: 200, padding: '8px 10px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 13, background: BRAND.surface, fontFamily: 'inherit' }}
           >
             <option value="">Sélectionner un fournisseur existant…</option>
             {orgSuppliers.filter((s) => !attachedIds.has(s.id)).map((s) => (
@@ -864,7 +919,7 @@ export default function EventDetailPage() {
       </Card>
 
       {/* Venue info */}
-      <Card title="🏟️ Lieu">
+      <Card title="Lieu">
         {venue ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ flex: 1 }}>
@@ -883,7 +938,7 @@ export default function EventDetailPage() {
 
       {/* Suppliers — add link to manage products */}
       {suppliers.length > 0 && (
-        <Card title="🏪 Gérer les produits par fournisseur">
+        <Card title="Gérer les produits par fournisseur">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {suppliers.map((s) => (
               <Link
@@ -903,16 +958,31 @@ export default function EventDetailPage() {
       )}
 
       {/* Pickup Points */}
-      <Card title={`📍 Points de retrait (${pickupPoints.length})`}>
-        <form onSubmit={handleCreatePickupPoint} style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+      <Card title={`Points de retrait (${pickupPoints.length})`}>
+        <p style={{ color: BRAND.grey, fontSize: 13, margin: '0 0 12px', lineHeight: 1.5 }}>
+          Rattache jusqu&apos;à <strong>4 points de retrait par buvette</strong> (comptoirs). Le client choisit
+          où récupérer sa commande.
+        </p>
+        <form onSubmit={handleCreatePickupPoint} style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
           <input
             type="text"
             value={ppName}
             onChange={(e) => setPpName(e.target.value)}
-            placeholder="Nom du point de retrait (ex: Comptoir Nord)"
+            placeholder="Nom (ex: Comptoir Nord)"
             required
-            style={{ flex: 1, padding: '8px 12px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 14, fontFamily: 'inherit' }}
+            style={{ flex: '1 1 200px', padding: '8px 12px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 14, fontFamily: 'inherit' }}
           />
+          <select
+            value={ppSupplierId}
+            onChange={(e) => setPpSupplierId(e.target.value)}
+            style={{ flex: '0 1 200px', padding: '8px 12px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 14, fontFamily: 'inherit', background: BRAND.bg, cursor: 'pointer' }}
+          >
+            <option value="">Sans buvette précise</option>
+            {suppliers.map((s) => {
+              const cnt = pickupPoints.filter((pp) => pp.supplierId === s.id).length;
+              return <option key={s.id} value={s.id} disabled={cnt >= 4}>{s.name} ({cnt}/4){cnt >= 4 ? ' — plein' : ''}</option>;
+            })}
+          </select>
           <button
             type="submit"
             disabled={creatingPp || !ppName.trim()}
@@ -928,26 +998,74 @@ export default function EventDetailPage() {
           <p style={{ color: BRAND.grey, fontSize: 14, margin: 0 }}>Aucun point de retrait.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {pickupPoints.map((pp) => (
-              <div key={pp.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: BRAND.bgSubtle, borderRadius: 8 }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: BRAND.ink }}>📍 {pp.name}</div>
+            {pickupPoints.map((pp) => {
+              const sup = suppliers.find((s) => s.id === pp.supplierId);
+              return (
+                <div key={pp.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', background: BRAND.bgSubtle, borderRadius: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: BRAND.ink }}>{pp.name}</div>
+                    {sup && <div style={{ fontSize: 12, color: BRAND.orange, fontWeight: 600 }}>🍺 {sup.name}</div>}
+                  </div>
+                  <button
+                    onClick={() => void navigator.clipboard?.writeText(pp.id)}
+                    title="Copier l'ID"
+                    style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}`, borderRadius: 4, padding: '4px 8px', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', fontFamily: 'inherit', color: BRAND.inkSoft }}
+                  >
+                    <Copy size={13} strokeWidth={2} />
+                  </button>
+                  <button
+                    onClick={() => void handleDeletePickupPoint(pp.id)}
+                    title="Supprimer"
+                    style={{ background: 'none', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: 4, padding: '4px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    Suppr.
+                  </button>
                 </div>
-                <code style={{ fontSize: 11, color: BRAND.grey }}>{pp.id.slice(0, 8)}…</code>
-                <button
-                  onClick={() => void navigator.clipboard?.writeText(pp.id)}
-                  style={{ background: BRAND.bgSubtle, border: `1px solid ${BRAND.border}`, borderRadius: 4, padding: '3px 8px', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}
-                >
-                  📋
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>
 
       {/* Time Slots */}
-      <Card title={`⏰ Créneaux horaires (${slots.length})`}>
+      <Card title={`Créneaux horaires (${slots.length})`}>
+        {/* Générateur en lot — créneaux personnalisables, sans limite */}
+        <div style={{ background: BRAND.orangeTint, borderRadius: 8, padding: 16, marginBottom: 16, border: `1px solid ${BRAND.orangeSoft}` }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.orange, marginBottom: 4 }}>⚡ Générer en lot</div>
+          <p style={{ fontSize: 12.5, color: BRAND.inkSoft, margin: '0 0 12px', lineHeight: 1.5 }}>
+            Crée plusieurs créneaux consécutifs d&apos;un coup. Tu peux ensuite en ajouter / supprimer à volonté.
+          </p>
+          <form onSubmit={handleGenerateSlots}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.8fr 0.8fr 0.8fr', gap: 10, marginBottom: 10 }}>
+              <div>
+                <label style={slotLbl}>1er créneau — début *</label>
+                <input type="datetime-local" value={bulkForm.start} onChange={(e) => setBulkForm((f) => ({ ...f, start: e.target.value }))} required style={slotInp} />
+              </div>
+              <div>
+                <label style={slotLbl}>Nombre</label>
+                <input type="number" min="1" max="100" value={bulkForm.count} onChange={(e) => setBulkForm((f) => ({ ...f, count: e.target.value }))} style={slotInp} />
+              </div>
+              <div>
+                <label style={slotLbl}>Durée (min)</label>
+                <input type="number" min="1" value={bulkForm.duration} onChange={(e) => setBulkForm((f) => ({ ...f, duration: e.target.value }))} style={slotInp} />
+              </div>
+              <div>
+                <label style={slotLbl}>Capacité</label>
+                <input type="number" min="1" value={bulkForm.capacity} onChange={(e) => setBulkForm((f) => ({ ...f, capacity: e.target.value }))} style={slotInp} />
+              </div>
+            </div>
+            {bulkError && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 8 }}>{bulkError}</div>}
+            <button
+              type="submit"
+              disabled={bulkBusy}
+              style={{ background: bulkBusy ? BRAND.grey : BRAND.orange, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 600, fontSize: 13, cursor: bulkBusy ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+            >
+              {bulkBusy ? 'Génération…' : `Générer ${bulkForm.count || '?'} créneaux`}
+            </button>
+          </form>
+        </div>
+
+        <div style={{ fontSize: 12, fontWeight: 700, color: BRAND.grey, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>Ou ajouter un créneau précis</div>
         <form
           onSubmit={handleCreateSlot}
           style={{ background: BRAND.bgSubtle, borderRadius: 8, padding: 16, marginBottom: 16, border: `1px solid ${BRAND.border}` }}
@@ -1068,7 +1186,7 @@ export default function EventDetailPage() {
                 onMouseLeave={(e) => { e.currentTarget.style.background = BRAND.orange; }}
                 style={{ background: BRAND.orange, color: '#fff', border: 'none', borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.15s ease' }}
               >
-                📋 Copier le lien
+                Copier le lien
               </button>
               <a
                 href={`https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=breakeat%3A%2F%2Fevent%2F${event.id}`}
@@ -1170,7 +1288,7 @@ export default function EventDetailPage() {
 
       {/* Operator screens (Phase 11) */}
       <Card
-        title="🖥️ Écrans opérateur"
+        title="Écrans opérateur"
         action={
           <Link
             href="/operator-screens"
@@ -1193,7 +1311,7 @@ export default function EventDetailPage() {
             value={applyTemplateId}
             onChange={(e) => setApplyTemplateId(e.target.value)}
             disabled={availableTemplates.length === 0}
-            style={{ flex: 1, minWidth: 220, padding: '8px 10px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 13, background: BRAND.bg, fontFamily: 'inherit' }}
+            style={{ flex: 1, minWidth: 220, padding: '8px 10px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 13, background: BRAND.surface, fontFamily: 'inherit' }}
           >
             <option value="">
               {availableTemplates.length === 0
@@ -1277,7 +1395,7 @@ export default function EventDetailPage() {
 
                   <button
                     onClick={() => void handleToggleScreen(s.id, !s.enabled)}
-                    style={{ background: BRAND.bg, border: `1px solid ${BRAND.border}`, color: BRAND.inkSoft, borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                    style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}`, color: BRAND.inkSoft, borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
                   >
                     {s.enabled ? 'Désactiver' : 'Activer'}
                   </button>
@@ -1295,7 +1413,7 @@ export default function EventDetailPage() {
       </Card>
 
       {/* Operator Dashboard shortcut */}
-      <Card title="📊 Dashboard opérateur">
+      <Card title="Dashboard opérateur">
         <p style={{ color: BRAND.grey, fontSize: 14, margin: '0 0 12px' }}>
           Accédez au dashboard opérateur pour gérer les commandes en temps réel.
         </p>
@@ -1413,7 +1531,7 @@ function StatTile({ label, value, sub, accent = false }: {
       <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3, color: accent ? BRAND.orange : BRAND.grey, marginBottom: 6 }}>
         {label}
       </div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: accent ? BRAND.orange : BRAND.ink, lineHeight: 1.1 }}>
+      <div style={{ fontSize: 22, fontWeight: 600, color: accent ? BRAND.orange : BRAND.ink, lineHeight: 1.1 }}>
         {value}
       </div>
       {sub && <div style={{ fontSize: 11, color: BRAND.grey, marginTop: 5 }}>{sub}</div>}

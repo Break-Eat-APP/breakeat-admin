@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { RefreshCw, ChevronRight, Building2, Lock, CalendarDays, type LucideIcon } from 'lucide-react';
 import {
   apiGetOrgStats,
   getStoredUser,
@@ -60,18 +61,19 @@ function KpiCard({
   return (
     <div
       style={{
-        background: accent ? BRAND.orangeTint : '#fff',
+        background: accent ? BRAND.orangeTint : BRAND.surface,
         border: `1px solid ${accent ? BRAND.orangeSoft : BRAND.border}`,
-        borderRadius: 14,
+        borderRadius: BRAND.radius.card,
         padding: '18px 20px',
         minWidth: 0,
+        boxShadow: accent ? 'none' : BRAND.shadowCard,
       }}
     >
       <div
         style={{
-          fontSize: 12,
-          fontWeight: 700,
-          letterSpacing: 0.3,
+          fontSize: 11.5,
+          fontWeight: 600,
+          letterSpacing: 0.4,
           textTransform: 'uppercase',
           color: accent ? BRAND.orange : BRAND.grey,
           marginBottom: 8,
@@ -79,7 +81,7 @@ function KpiCard({
       >
         {label}
       </div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: accent ? BRAND.orange : BRAND.ink, lineHeight: 1.1 }}>
+      <div style={{ fontSize: 27, fontWeight: 600, color: accent ? BRAND.orange : BRAND.ink, lineHeight: 1.1, letterSpacing: -0.4 }}>
         {value}
       </div>
       {sub && <div style={{ fontSize: 12, color: BRAND.grey, marginTop: 6 }}>{sub}</div>}
@@ -146,8 +148,8 @@ export default function DashboardPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: BRAND.ink, margin: 0 }}>
-            Bonjour{userName ? `, ${userName}` : ''} 👋
+          <h1 style={{ fontSize: 28, fontWeight: 600, color: BRAND.ink, margin: 0, letterSpacing: -0.5 }}>
+            Bonjour{userName ? `, ${userName}` : ''}
           </h1>
           {orgName && (
             <p style={{ color: BRAND.grey, marginTop: 6, fontSize: 14 }}>
@@ -165,10 +167,13 @@ export default function DashboardPage() {
             e.currentTarget.style.borderColor = BRAND.border;
           }}
           style={{
-            background: '#fff',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 7,
+            background: BRAND.surface,
             color: BRAND.inkSoft,
             border: `1px solid ${BRAND.border}`,
-            borderRadius: 8,
+            borderRadius: BRAND.radius.control,
             padding: '8px 14px',
             fontWeight: 600,
             fontSize: 13,
@@ -178,14 +183,15 @@ export default function DashboardPage() {
             whiteSpace: 'nowrap',
           }}
         >
-          {loading ? 'Chargement…' : '↻ Rafraîchir'}
+          <RefreshCw size={15} strokeWidth={2} style={{ opacity: loading ? 0.5 : 1 }} />
+          {loading ? 'Chargement…' : 'Rafraîchir'}
         </button>
       </div>
 
       {/* ── No org selected ── */}
       {!orgId && !loading && (
         <InfoCard
-          icon="🏢"
+          icon={Building2}
           title="Aucune organisation sélectionnée"
           text="Reconnectez-vous pour choisir une organisation de travail."
         />
@@ -194,7 +200,7 @@ export default function DashboardPage() {
       {/* ── Access denied (operators / marketing) ── */}
       {denied && (
         <InfoCard
-          icon="🔒"
+          icon={Lock}
           title="Statistiques réservées aux managers"
           text="Le chiffre d'affaires et les indicateurs de l'organisation sont accessibles aux rôles Administrateur d'organisation et Manager. Utilisez le menu latéral pour accéder aux sections autorisées."
         />
@@ -256,7 +262,7 @@ export default function DashboardPage() {
 
           {/* Per-event breakdown */}
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-            <h2 style={{ fontSize: 18, fontWeight: 800, color: BRAND.ink, margin: 0 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, color: BRAND.ink, margin: 0 }}>
               Performance par événement
             </h2>
             <Link href="/events" style={{ fontSize: 13, fontWeight: 600, color: BRAND.orange, textDecoration: 'none' }}>
@@ -266,7 +272,7 @@ export default function DashboardPage() {
 
           {stats.events.length === 0 ? (
             <InfoCard
-              icon="🎪"
+              icon={CalendarDays}
               title="Aucun événement"
               text="Créez un premier événement pour commencer à suivre vos ventes."
               cta={{ href: '/events', label: 'Créer un événement →' }}
@@ -311,20 +317,24 @@ function EventRow({ ev, active }: { ev: OrgEventStat; active: boolean }) {
     <Link href={`/events/${ev.id}`} style={{ textDecoration: 'none' }}>
       <div
         style={{
-          background: '#fff',
-          borderRadius: 12,
+          background: BRAND.surface,
+          borderRadius: 14,
           padding: '14px 18px',
           border: `1px solid ${active ? BRAND.orangeSoft : BRAND.border}`,
           display: 'flex',
           alignItems: 'center',
           gap: 16,
           cursor: 'pointer',
+          boxShadow: BRAND.shadowCard,
+          transition: 'box-shadow 0.15s ease, transform 0.15s ease',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.boxShadow = BRAND.shadowSoft;
+          e.currentTarget.style.transform = 'translateY(-1px)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.boxShadow = 'none';
+          e.currentTarget.style.boxShadow = BRAND.shadowCard;
+          e.currentTarget.style.transform = 'translateY(0)';
         }}
       >
         {/* Name + meta */}
@@ -382,7 +392,7 @@ function EventRow({ ev, active }: { ev: OrgEventStat; active: boolean }) {
         >
           {ev.status}
         </span>
-        <span style={{ color: BRAND.grey, fontSize: 18 }}>›</span>
+        <ChevronRight size={18} strokeWidth={2} color={BRAND.grey} style={{ flexShrink: 0 }} />
       </div>
     </Link>
   );
@@ -392,7 +402,7 @@ function Metric({ label, value, strong = false }: { label: string; value: string
   return (
     <div style={{ textAlign: 'right', minWidth: 84 }}>
       <div style={{ fontSize: 11, color: BRAND.grey, fontWeight: 600 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: strong ? 800 : 600, color: strong ? BRAND.orange : BRAND.ink }}>
+      <div style={{ fontSize: 14, fontWeight: strong ? 700 : 600, color: strong ? BRAND.orange : BRAND.ink }}>
         {value}
       </div>
     </div>
@@ -400,12 +410,12 @@ function Metric({ label, value, strong = false }: { label: string; value: string
 }
 
 function InfoCard({
-  icon,
+  icon: Icon,
   title,
   text,
   cta,
 }: {
-  icon: string;
+  icon: LucideIcon;
   title: string;
   text: string;
   cta?: { href: string; label: string };
@@ -413,16 +423,31 @@ function InfoCard({
   return (
     <div
       style={{
-        background: '#fff',
-        borderRadius: 14,
+        background: BRAND.surface,
+        borderRadius: BRAND.radius.card,
         padding: 32,
         textAlign: 'center',
         color: BRAND.grey,
         border: `1px solid ${BRAND.border}`,
         marginBottom: 20,
+        boxShadow: BRAND.shadowCard,
       }}
     >
-      <div style={{ fontSize: 40, marginBottom: 12 }}>{icon}</div>
+      <div
+        style={{
+          width: 52,
+          height: 52,
+          borderRadius: 15,
+          background: BRAND.bgSubtle,
+          color: BRAND.inkSoft,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 14,
+        }}
+      >
+        <Icon size={24} strokeWidth={1.75} />
+      </div>
       <div style={{ fontWeight: 700, fontSize: 16, color: BRAND.ink }}>{title}</div>
       <div style={{ fontSize: 13, marginTop: 6, maxWidth: 520, marginLeft: 'auto', marginRight: 'auto', lineHeight: 1.5 }}>
         {text}

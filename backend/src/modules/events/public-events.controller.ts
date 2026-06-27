@@ -7,7 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { ProductStatus, SlotStatus } from '@prisma/client';
+import { ProductStatus, SlotStatus, FlagScope } from '@prisma/client';
 import { GroupsService } from '../groups/groups.service';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -62,6 +62,7 @@ export class PublicEventsController {
       where: { id: eventId },
       include: {
         venue: { select: { id: true, name: true, address: true } },
+        organization: { select: { primaryColor: true, logoUrl: true } },
         eventSuppliers: {
           include: {
             supplier: {
@@ -78,6 +79,17 @@ export class PublicEventsController {
     });
     if (!event) throw new NotFoundException('Event not found');
 
+    // White-label : la config « Apparence de l'app » (écran d'accueil) est éditée
+    // côté dashboard et stockée en app-settings ; l'app cliente la lit ici.
+    const appearanceSetting = await this.prisma.appSetting.findFirst({
+      where: {
+        key: 'app.appearance.home',
+        scope: FlagScope.ORGANIZATION,
+        scopeId: event.organizationId,
+      },
+      select: { value: true },
+    });
+
     return {
       id: event.id,
       name: event.name,
@@ -85,6 +97,13 @@ export class PublicEventsController {
       startAt: event.startAt,
       endAt: event.endAt,
       venue: event.venue,
+      // Branding du club : couleur de l'événement en priorité, sinon celle de l'org.
+      branding: {
+        primaryColor: event.primaryColor ?? event.organization?.primaryColor ?? null,
+        logoUrl: event.logoUrl ?? event.organization?.logoUrl ?? null,
+      },
+      // Config d'apparence (cartes d'accueil) — null si le club n'a rien configuré.
+      appearance: appearanceSetting?.value ?? null,
       suppliers: event.eventSuppliers.map((es) => ({
         id: es.supplier.id,
         name: es.supplier.name,

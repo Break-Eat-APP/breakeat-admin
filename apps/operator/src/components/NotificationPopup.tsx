@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { Bell, CheckCircle2 } from 'lucide-react';
 import { BRAND } from '@break-eat/brand';
 import { STATUS_COLORS } from './StatusBadge';
 
@@ -40,7 +41,7 @@ export function NotificationPopup({
 
   const isReady = notification.type === 'order_ready';
   const bg = isReady ? STATUS_COLORS.READY : BRAND.orange;
-  const icon = isReady ? '✅' : '🔔';
+  const Icon = isReady ? CheckCircle2 : Bell;
   const title = isReady ? 'Commande prête !' : 'Nouvelle commande !';
 
   return (
@@ -74,7 +75,7 @@ export function NotificationPopup({
           fontFamily: BRAND.font,
         }}
       >
-        <span style={{ fontSize: 28 }}>{icon}</span>
+        <Icon size={28} strokeWidth={2.2} style={{ flexShrink: 0 }} />
         <div>
           <div style={{ fontWeight: 800, fontSize: 16 }}>{title}</div>
           <div style={{ fontSize: 13, opacity: 0.9 }}>

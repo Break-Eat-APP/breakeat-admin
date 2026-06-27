@@ -19,6 +19,7 @@ import { OrdersService } from './orders.service';
 import { OrderStateMachineService } from './order-state-machine.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { SlotsService } from '../slots/slots.service';
+import { OrderNotificationsService } from '../notifications/order-notifications.service';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -117,6 +118,7 @@ describe('OrdersService — Order Loss & Concurrent Transition Tests (BLOC 10.2)
         { provide: PrismaService,   useValue: prisma        },
         { provide: RealtimeService, useValue: realtimeMock  },
         { provide: SlotsService,    useValue: slotsMock     },
+        { provide: OrderNotificationsService, useValue: { notifyStatusChange: jest.fn() } },
       ],
     }).compile();
 

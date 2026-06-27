@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { Tags, ChevronRight } from 'lucide-react';
 import {
   apiGetGroups,
   apiCreateGroup,
@@ -93,8 +94,8 @@ export default function GroupsPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800, color: BRAND.ink, margin: 0 }}>
-            🏷️ Groupes
+          <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0, letterSpacing: -0.3 }}>
+            Groupes
           </h1>
           <p style={{ color: BRAND.grey, fontSize: 14, margin: '4px 0 0' }}>
             {groups.length} groupe{groups.length !== 1 ? 's' : ''}
@@ -136,7 +137,7 @@ export default function GroupsPage() {
         <form
           onSubmit={handleCreate}
           style={{
-            background: BRAND.bg,
+            background: BRAND.surface,
             borderRadius: 12,
             padding: 24,
             boxShadow: BRAND.shadowSoft,
@@ -234,16 +235,18 @@ export default function GroupsPage() {
       ) : groups.length === 0 ? (
         <div
           style={{
-            background: BRAND.bg,
+            background: BRAND.surface,
             borderRadius: 12,
             padding: 40,
             textAlign: 'center',
             color: BRAND.grey,
-            boxShadow: '0 1px 3px rgba(28,25,23,0.06)',
+            boxShadow: BRAND.shadowCard,
             border: `1px solid ${BRAND.border}`,
           }}
         >
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🏷️</div>
+          <div style={{ width: 52, height: 52, borderRadius: 15, background: BRAND.bgSubtle, color: BRAND.inkSoft, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+            <Tags size={24} strokeWidth={1.75} />
+          </div>
           <div style={{ fontWeight: 600 }}>Aucun groupe</div>
           <div style={{ fontSize: 13, marginTop: 4 }}>Créez votre premier groupe ci-dessus.</div>
         </div>
@@ -253,10 +256,10 @@ export default function GroupsPage() {
             <Link key={g.id} href={`/groups/${g.id}`} style={{ textDecoration: 'none' }}>
               <div
                 style={{
-                  background: BRAND.bg,
+                  background: BRAND.surface,
                   borderRadius: 10,
                   padding: '16px 20px',
-                  boxShadow: '0 1px 3px rgba(28,25,23,0.06)',
+                  boxShadow: BRAND.shadowCard,
                   border: `1px solid ${BRAND.border}`,
                   display: 'flex',
                   alignItems: 'center',
@@ -303,7 +306,7 @@ export default function GroupsPage() {
                 <span style={{ fontSize: 13, color: BRAND.inkSoft, minWidth: 80, textAlign: 'right' }}>
                   {g._count?.events ?? 0} évén.
                 </span>
-                <span style={{ color: BRAND.grey, fontSize: 18 }}>›</span>
+                <ChevronRight size={18} strokeWidth={2} color={BRAND.grey} style={{ flexShrink: 0 }} />
               </div>
             </Link>
           ))}

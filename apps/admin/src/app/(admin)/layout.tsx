@@ -3,22 +3,76 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import {
+  LayoutDashboard,
+  Receipt,
+  Wand2,
+  CalendarDays,
+  Store,
+  Tags,
+  Palette,
+  Bell,
+  Megaphone,
+  MonitorSmartphone,
+  Building2,
+  Users,
+  Settings,
+  Flag,
+  Rocket,
+  FlaskConical,
+  type LucideIcon,
+} from 'lucide-react';
 import { getToken, getOrgId, getOrgName, getStoredUser, clearSession } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 import { BreakEatLogo } from '@/components/brand/BreakEatLogo';
 
-const NAV_ITEMS = [
-  { href: '/dashboard',       icon: '🏠', label: 'Tableau de bord' },
-  { href: '/organizations',   icon: '🏢', label: 'Organisation' },
-  { href: '/team',            icon: '👥', label: 'Équipe' },
-  { href: '/venues',          icon: '🏟️', label: 'Lieux' },
-  { href: '/events',          icon: '🎪', label: 'Événements' },
-  { href: '/groups',          icon: '🏷️', label: 'Groupes' },
-  { href: '/operator-screens', icon: '🖥️', label: 'Écrans opérateur' },
-  { href: '/feature-flags',   icon: '🏳️', label: 'Feature Flags' },
-  { href: '/settings',        icon: '⚙️', label: 'Paramètres' },
-  { href: '/simulator',       icon: '🚀', label: 'Simulateur' },
-  { href: '/demo-setup',      icon: '🏒', label: 'Démo Spartiates' },
+type NavItem = { href: string; icon: LucideIcon; label: string };
+type NavGroup = { title: string; items: NavItem[] };
+
+// Grouped navigation — structure le menu par intention (pilotage / config /
+// organisation / système / outils) pour un repérage rapide et un rendu soigné.
+const NAV_GROUPS: NavGroup[] = [
+  {
+    title: 'Pilotage',
+    items: [
+      { href: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
+      { href: '/accounting', icon: Receipt, label: 'Comptabilité' },
+    ],
+  },
+  {
+    title: 'Configuration',
+    items: [
+      { href: '/wizard', icon: Wand2, label: 'Configurer mon lieu' },
+      { href: '/events', icon: CalendarDays, label: 'Événements & config' },
+      { href: '/suppliers', icon: Store, label: 'Buvettes' },
+      { href: '/groups', icon: Tags, label: 'Groupes' },
+      { href: '/operator-screens', icon: MonitorSmartphone, label: 'Écrans opérateur' },
+      { href: '/appearance', icon: Palette, label: "Apparence de l'app" },
+      { href: '/notifications', icon: Bell, label: 'Notifications' },
+      { href: '/campaigns', icon: Megaphone, label: 'Campagnes & push' },
+    ],
+  },
+  {
+    title: 'Organisation',
+    items: [
+      { href: '/organizations', icon: Building2, label: 'Organisation' },
+      { href: '/team', icon: Users, label: 'Équipe' },
+    ],
+  },
+  {
+    title: 'Système',
+    items: [
+      { href: '/settings', icon: Settings, label: 'Paramètres' },
+      { href: '/feature-flags', icon: Flag, label: 'Feature Flags' },
+    ],
+  },
+  {
+    title: 'Outils',
+    items: [
+      { href: '/simulator', icon: Rocket, label: 'Simulateur' },
+      { href: '/demo-setup', icon: FlaskConical, label: 'Démo Spartiates' },
+    ],
+  },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -73,11 +127,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         color: BRAND.ink,
       }}
     >
-      {/* ─── Sidebar (refonte v2 — blanc / orange #FC4002) ────────────────── */}
+      {/* ─── Sidebar (refonte v3 — rail blanc sur canevas crème) ──────────── */}
       <aside
         style={{
-          width: 240,
-          background: BRAND.bg,
+          width: 244,
+          background: BRAND.surface,
           borderRight: `1px solid ${BRAND.border}`,
           display: 'flex',
           flexDirection: 'column',
@@ -135,48 +189,65 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         )}
 
-        {/* Navigation */}
-        <nav style={{ flex: 1, padding: '12px 0' }}>
-          {NAV_ITEMS.map(({ href, icon, label }) => {
-            // For /organizations, redirect to specific org id if available
-            const resolvedHref =
-              href === '/organizations' && getOrgId()
-                ? `/organizations/${getOrgId()}`
-                : href;
-
-            const isActive =
-              pathname === resolvedHref ||
-              (href !== '/dashboard' && pathname.startsWith(href));
-
-            return (
-              <Link
-                key={href}
-                href={resolvedHref}
+        {/* Navigation — groupée par intention, icônes Lucide, pastille active arrondie */}
+        <nav style={{ flex: 1, padding: '10px 0 14px' }}>
+          {NAV_GROUPS.map((group, gi) => (
+            <div key={group.title} style={{ marginTop: gi === 0 ? 4 : 14 }}>
+              <div
                 style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '10px 20px',
-                  color: isActive ? BRAND.orange : BRAND.inkSoft,
-                  background: isActive ? BRAND.orangeTint : 'transparent',
-                  textDecoration: 'none',
-                  fontSize: 14,
-                  fontWeight: isActive ? 600 : 500,
-                  borderLeft: isActive ? `3px solid ${BRAND.orange}` : '3px solid transparent',
-                  transition: 'background 0.12s, color 0.12s',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) e.currentTarget.style.background = BRAND.bgSubtle;
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) e.currentTarget.style.background = 'transparent';
+                  padding: '0 22px 6px',
+                  fontSize: 10.5,
+                  fontWeight: 600,
+                  letterSpacing: 0.8,
+                  textTransform: 'uppercase',
+                  color: BRAND.grey,
                 }}
               >
-                <span style={{ fontSize: 16 }}>{icon}</span>
-                {label}
-              </Link>
-            );
-          })}
+                {group.title}
+              </div>
+              {group.items.map(({ href, icon: Icon, label }) => {
+                // For /organizations, redirect to specific org id if available
+                const resolvedHref =
+                  href === '/organizations' && getOrgId()
+                    ? `/organizations/${getOrgId()}`
+                    : href;
+
+                const isActive =
+                  pathname === resolvedHref ||
+                  (href !== '/dashboard' && pathname.startsWith(href));
+
+                return (
+                  <Link
+                    key={href}
+                    href={resolvedHref}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 11,
+                      margin: '1px 10px',
+                      padding: '9px 12px',
+                      borderRadius: 10,
+                      color: isActive ? BRAND.orange : BRAND.inkSoft,
+                      background: isActive ? BRAND.orangeTint : 'transparent',
+                      textDecoration: 'none',
+                      fontSize: 13.5,
+                      fontWeight: isActive ? 600 : 500,
+                      transition: 'background 0.12s, color 0.12s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) e.currentTarget.style.background = BRAND.bgSubtle;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <Icon size={18} strokeWidth={1.75} style={{ flexShrink: 0 }} />
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* User + logout */}

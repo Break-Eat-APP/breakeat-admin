@@ -93,9 +93,9 @@ describe('StatsService', () => {
 
       const result = await service.getOrgOverview(ORG_ID, USER_ID);
 
-      // Only SUCCEEDED payments count, scoped to the org.
+      // Only SUCCEEDED payments count, scoped to the org, CANCELLED excluded.
       expect(prisma.order.aggregate).toHaveBeenCalledWith({
-        where: { organizationId: ORG_ID, paymentStatus: PaymentStatus.SUCCEEDED },
+        where: { organizationId: ORG_ID, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } },
         _sum: { totalCents: true },
         _count: { _all: true },
       });
@@ -173,7 +173,7 @@ describe('StatsService', () => {
       // Top products query is scoped via the related order.
       expect(prisma.orderItem.groupBy).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { order: { eventId: EVENT_ID, paymentStatus: PaymentStatus.SUCCEEDED } },
+          where: { order: { eventId: EVENT_ID, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } } },
         }),
       );
 

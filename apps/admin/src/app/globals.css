@@ -1,13 +1,13 @@
-/* Phase 11 refonte v2 — Break Eat design.
-   Brand: neutral white background (no shapes), vivid orange accents (#FC4002), NO gradients.
-   Font: Fredoka partout. Design tokens live in @/lib/brand (BRAND). */
+/* Refonte v3 — Break Eat design ("chaleureux premium").
+   Brand: warm off-white canvas (#fcfaf8), vivid orange accents (#FC4002), NO gradients.
+   Font: Inter partout. Design tokens live in @/lib/brand (BRAND). */
 *, *::before, *::after { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: var(--font-fredoka), system-ui, -apple-system, sans-serif;
-  background: #ffffff;
-  color: #1c1917;
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  background: #fcfaf8;
+  color: #2d2926;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }

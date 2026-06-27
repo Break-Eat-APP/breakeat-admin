@@ -17,6 +17,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { OrderStateMachineService } from './order-state-machine.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { SlotsService } from '../slots/slots.service';
+import { OrderNotificationsService } from '../notifications/order-notifications.service';
 
 /**
  * OrdersService — owns the Order lifecycle from PaymentIntent.succeeded onward.
@@ -39,6 +40,7 @@ export class OrdersService {
     private readonly stateMachine: OrderStateMachineService,
     private readonly realtimeService: RealtimeService,
     private readonly slotsService: SlotsService,
+    private readonly orderNotifications: OrderNotificationsService,
   ) {}
 
   /**
@@ -365,6 +367,16 @@ export class OrdersService {
         pickupPointId: updated.pickupPointId,
       });
     }
+
+    // C1 — notification push au client selon le modèle configuré pour ce statut.
+    // Fire-and-forget : un échec d'envoi ne doit pas impacter la transition.
+    void this.orderNotifications.notifyStatusChange({
+      id: updated.id,
+      userId: updated.userId,
+      organizationId: updated.organizationId,
+      status: updated.status,
+      publicOrderNumber: updated.publicOrderNumber,
+    });
 
     return updated;
   }

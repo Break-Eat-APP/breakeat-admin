@@ -1,8 +1,9 @@
 import { Test } from '@nestjs/testing';
 import { FlagScope } from '@prisma/client';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { FeatureFlagsService } from './feature-flags.service';
 import { PrismaService } from '../../database/prisma.service';
+import { OrgRole } from '../../common/enums/role.enum';
 
 // ─── Prisma mock ─────────────────────────────────────────────────
 
@@ -14,6 +15,10 @@ const prisma = {
     upsert: jest.fn(),
     delete: jest.fn(),
   },
+  // Utilisés par requireScopedAccess / requireOrgAccess (autorisation de `resolve`).
+  user: { findUnique: jest.fn() },
+  organizationMember: { findUnique: jest.fn() },
+  event: { findUnique: jest.fn() },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -115,6 +120,30 @@ describe('FeatureFlagsService', () => {
       expect(prisma.featureFlag.findUnique).toHaveBeenCalledTimes(1);
       const callArgs = (prisma.featureFlag.findUnique as jest.Mock).mock.calls[0][0];
       expect(callArgs.where.key_scope_scopeId.scope).toBe(FlagScope.ORGANIZATION);
+    });
+
+    // ─── Autorisation par portée (Codex P2) ──────────────────────
+    it('denies resolve for an org the caller is not a member of (Codex P2)', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ globalRole: 'CUSTOMER' });
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.resolve('my_feature', { orgId: ORG_ID }, 'intruder-uuid'),
+      ).rejects.toThrow(ForbiddenException);
+
+      // Le flag n'est jamais lu : on a coupé avant la fuite.
+      expect(prisma.featureFlag.findUnique).not.toHaveBeenCalled();
+      expect(prisma.featureFlag.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('allows resolve for a member of the requested org (Codex P2)', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ globalRole: 'CUSTOMER' });
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue({ orgRole: OrgRole.MANAGER });
+      (prisma.featureFlag.findUnique as jest.Mock).mockResolvedValue({ enabled: true });
+
+      const result = await service.resolve('my_feature', { orgId: ORG_ID }, 'member-uuid');
+
+      expect(result).toBe(true);
     });
   });
 

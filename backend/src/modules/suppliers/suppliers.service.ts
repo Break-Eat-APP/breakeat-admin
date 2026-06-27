@@ -18,6 +18,14 @@ import type { UpdateSupplierStatusDto } from './dto/update-supplier-status.dto';
 import type { CreateOnboardingLinkDto } from './dto/create-onboarding-link.dto';
 import { StripeAccountStatus, type Supplier } from '@prisma/client';
 
+/** Projection publique renvoyée à un exploitant externe résolvant un code de parrainage. */
+export interface ReferralLookupResult {
+  id: string;
+  name: string;
+  isExternal: boolean;
+  organization: { id: string; name: string };
+}
+
 /**
  * SuppliersService owns all supplier persistence logic.
  *
@@ -50,11 +58,79 @@ export class SuppliersService {
         organizationId,
         name: dto.name,
         preparationZone: dto.preparationZone,
+        isExternal: dto.isExternal ?? false,
+        // Un exploitant externe reçoit d'emblée un code de parrainage unique.
+        referralCode: dto.isExternal ? await this.generateUniqueReferralCode() : null,
       },
     });
 
     this.logger.log(`Supplier created: ${supplier.id} ("${supplier.name}") in org ${organizationId}`);
     return supplier;
+  }
+
+  /** Génère un code de parrainage unique au format BE-XXXXXX (6 alphanum. sans ambiguïté). */
+  private async generateUniqueReferralCode(): Promise<string> {
+    const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sans I,O,0,1
+    for (let attempt = 0; attempt < 10; attempt++) {
+      let body = '';
+      for (let i = 0; i < 6; i++) body += ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+      const code = `BE-${body}`;
+      const clash = await this.prisma.supplier.findUnique({ where: { referralCode: code } });
+      if (!clash) return code;
+    }
+    throw new BadRequestException('Impossible de générer un code de parrainage, réessayez.');
+  }
+
+  /** (Re)génère le code de parrainage d'un exploitant — marque aussi la buvette comme externe. */
+  async regenerateReferralCode(
+    organizationId: string,
+    supplierId: string,
+    userId: string,
+  ): Promise<Supplier> {
+    await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
+    const existing = await this.prisma.supplier.findFirst({
+      where: { id: supplierId, organizationId },
+    });
+    if (!existing) throw new NotFoundException('Supplier not found');
+
+    const code = await this.generateUniqueReferralCode();
+    return this.prisma.supplier.update({
+      where: { id: supplierId },
+      data: { isExternal: true, referralCode: code },
+    });
+  }
+
+  /**
+   * Résout une buvette à partir de son code de parrainage.
+   *
+   * Le code est un SECRET partagé par le club à l'exploitant externe : le posséder
+   * fait office d'autorisation (modèle « lien d'invitation »). On n'exige donc PAS
+   * que l'appelant soit déjà membre de l'org — sinon l'exploitant externe, par
+   * définition non-membre, ne pourrait jamais s'en servir (Codex P2). Le contrôleur
+   * impose tout de même une session (JwtAuthGuard). On ne renvoie qu'une projection
+   * minimale, sans données sensibles (Stripe, statut, etc.).
+   */
+  async findByReferralCode(code: string, userId: string): Promise<ReferralLookupResult> {
+    const supplier = await this.prisma.supplier.findUnique({
+      where: { referralCode: code },
+      select: {
+        id: true,
+        name: true,
+        isExternal: true,
+        organization: { select: { id: true, name: true } },
+      },
+    });
+    // Réponse identique pour code inexistant ou buvette non marquée externe : pas de fuite.
+    if (!supplier || !supplier.isExternal) {
+      throw new NotFoundException('Code de parrainage invalide');
+    }
+    this.logger.log(`Referral code resolved to supplier ${supplier.id} by user ${userId}`);
+    return {
+      id: supplier.id,
+      name: supplier.name,
+      isExternal: supplier.isExternal,
+      organization: supplier.organization,
+    };
   }
 
   async findAllByOrg(organizationId: string, userId: string): Promise<Supplier[]> {

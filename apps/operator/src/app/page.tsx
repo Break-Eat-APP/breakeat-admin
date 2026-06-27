@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Store } from 'lucide-react';
 import { fetchMeWithMemberships } from '@/lib/api/orders-client';
 import { BRAND, BreakEatLogo } from '@break-eat/brand';
 import { LoginForm } from '@/components/LoginForm';
@@ -101,7 +102,7 @@ function EventSelector({ token }: { token: string }) {
                 color: BRAND.orangeDark,
               }}
             >
-              🏪 {supplierName}
+<Store size={14} strokeWidth={2} style={{ flexShrink: 0 }} /> {supplierName}
             </div>
           )}
         </div>

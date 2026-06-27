@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { LayoutDashboard, Building2, Users, type LucideIcon } from 'lucide-react';
 import { BRAND, BreakEatLogo } from '@break-eat/brand';
 import {
   getToken,
@@ -11,10 +12,10 @@ import {
   isSuperAdmin,
 } from '@/lib/api/backoffice-client';
 
-const NAV_ITEMS = [
-  { href: '/overview', icon: '📊', label: "Vue d'ensemble" },
-  { href: '/organizations', icon: '🏢', label: 'Organisations' },
-  { href: '/groups', icon: '👥', label: 'Groupes & accès' },
+const NAV_ITEMS: { href: string; icon: LucideIcon; label: string }[] = [
+  { href: '/overview', icon: LayoutDashboard, label: "Vue d'ensemble" },
+  { href: '/organizations', icon: Building2, label: 'Organisations' },
+  { href: '/groups', icon: Users, label: 'Groupes & accès' },
 ];
 
 export default function BackofficeLayout({ children }: { children: React.ReactNode }) {
@@ -73,8 +74,8 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
       {/* ─── Sidebar ──────────────────────────────────────────────────────── */}
       <aside
         style={{
-          width: 240,
-          background: BRAND.bg,
+          width: 244,
+          background: BRAND.surface,
           borderRight: `1px solid ${BRAND.border}`,
           display: 'flex',
           flexDirection: 'column',
@@ -114,9 +115,9 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
           </div>
         </div>
 
-        {/* Navigation */}
+        {/* Navigation — icônes Lucide, pastille active arrondie */}
         <nav style={{ flex: 1, padding: '12px 0' }}>
-          {NAV_ITEMS.map(({ href, icon, label }) => {
+          {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
             const isActive =
               pathname === href || (href !== '/overview' && pathname.startsWith(href));
 
@@ -127,14 +128,15 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 10,
-                  padding: '10px 20px',
+                  gap: 11,
+                  margin: '1px 10px',
+                  padding: '9px 12px',
+                  borderRadius: 10,
                   color: isActive ? BRAND.orange : BRAND.inkSoft,
                   background: isActive ? BRAND.orangeTint : 'transparent',
                   textDecoration: 'none',
-                  fontSize: 14,
+                  fontSize: 13.5,
                   fontWeight: isActive ? 600 : 500,
-                  borderLeft: isActive ? `3px solid ${BRAND.orange}` : '3px solid transparent',
                   transition: 'background 0.12s, color 0.12s',
                 }}
                 onMouseEnter={(e) => {
@@ -144,7 +146,7 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
                   if (!isActive) e.currentTarget.style.background = 'transparent';
                 }}
               >
-                <span style={{ fontSize: 16 }}>{icon}</span>
+                <Icon size={18} strokeWidth={1.75} style={{ flexShrink: 0 }} />
                 {label}
               </Link>
             );

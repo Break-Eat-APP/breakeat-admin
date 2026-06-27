@@ -2,15 +2,24 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
+  Linking,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
-import { apiGetPublicEvent, formatTime, type PublicEvent } from '@lib/api/mobile-api';
+import {
+  apiGetPublicEvent,
+  formatTime,
+  type PublicEvent,
+  type HomeAppearance,
+  type AppCard,
+} from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
 import { useAuthStore } from '@store/auth.store';
 
@@ -61,6 +70,16 @@ export function EventHomeScreen({ route, navigation }: Props) {
     navigation.navigate('SupplierCatalog', { eventId, supplierId });
   };
 
+  // Action d'une carte de l'écran d'accueil configurable (« Apparence de l'app »).
+  const handleCardAction = (card: AppCard) => {
+    const a = card.action;
+    if (!a || a.type === 'none') return;
+    if (a.type === 'supplier' && a.supplierId) { handleSelectSupplier(a.supplierId); return; }
+    if (a.type === 'scan') { navigation.navigate('QRScanner'); return; }
+    if (a.type === 'url' && a.url) { void Linking.openURL(a.url); return; }
+    // 'orders' : pas encore d'écran liste de commandes côté app → no-op pour l'instant.
+  };
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -86,6 +105,36 @@ export function EventHomeScreen({ route, navigation }: Props) {
   }
 
   const status = STATUS_LABELS[event.status] ?? { label: event.status, color: '#6b7280' };
+
+  // Mode Flaix : l'interface du lieu est désactivée, Flaix gère la suite.
+  // (intégration Phase 11.5 — affiche un placeholder jusqu'à l'arrivée du SDK Flaix)
+  if (event.appearance?.flaixTakeover) {
+    return (
+      <View style={styles.centered}>
+        <Text style={{ fontSize: 48, marginBottom: 16 }}>🏟️</Text>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: '#1c1917', textAlign: 'center', marginBottom: 8 }}>
+          Plan du lieu
+        </Text>
+        <Text style={{ fontSize: 14, color: '#78716c', textAlign: 'center', maxWidth: 260, lineHeight: 20 }}>
+          L'intégration Flaix est active. Sélectionne ton emplacement sur le plan du stade pour commander.
+        </Text>
+        <Text style={{ fontSize: 11, color: '#a8a29e', marginTop: 24 }}>
+          Intégration Flaix — à venir (Phase 11.5)
+        </Text>
+      </View>
+    );
+  }
+
+  // Écran d'accueil configurable (white-label) si le club a défini une apparence.
+  if (event.appearance && Array.isArray(event.appearance.cards) && event.appearance.cards.length > 0) {
+    return (
+      <AppearanceHome
+        appearance={event.appearance}
+        logoUrl={event.branding?.logoUrl ?? null}
+        onCard={handleCardAction}
+      />
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -179,6 +228,123 @@ export function EventHomeScreen({ route, navigation }: Props) {
         </View>
       )}
     </View>
+  );
+}
+
+// ─── Écran d'accueil configurable (« Apparence de l'app ») ────────────────────────
+// Rend le gabarit défini côté dashboard : logo centré → titre MAJUSCULE → sous-titre
+// → grille de cartes (texte / image). Les cartes icône s'afficheront en v2 (lib d'icônes).
+
+function AppearanceHome({
+  appearance,
+  logoUrl,
+  onCard,
+}: {
+  appearance: HomeAppearance;
+  logoUrl: string | null;
+  onCard: (c: AppCard) => void;
+}) {
+  const { header, theme } = appearance;
+  const pages = appearance.pages ?? [];
+  const cardW = theme.columns === 2 ? '47%' : '92%';
+  const minH = theme.cardSize === 'lg' ? 122 : theme.cardSize === 'sm' ? 80 : 100;
+
+  // Navigation interne entre l'accueil et les pages secondaires.
+  const [currentPageId, setCurrentPageId] = useState<string | null>(null);
+  const activePage = currentPageId ? pages.find((p) => p.id === currentPageId) ?? null : null;
+  const cards = activePage ? activePage.cards : appearance.cards;
+
+  // Une carte « page » navigue en interne ; sinon on délègue (buvette, lien, scan…).
+  const handlePress = (c: AppCard) => {
+    if (c.action?.type === 'page' && c.action.pageId && pages.some((p) => p.id === c.action!.pageId)) {
+      setCurrentPageId(c.action.pageId);
+      return;
+    }
+    onCard(c);
+  };
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      contentContainerStyle={{ padding: 20, alignItems: 'center', paddingBottom: 40 }}
+    >
+      {activePage ? (
+        /* En-tête d'une page secondaire : retour + nom de la page */
+        <View style={{ width: '100%', marginTop: 22 }}>
+          <Pressable onPress={() => setCurrentPageId(null)} hitSlop={10}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.primaryColor }}>‹ Accueil</Text>
+          </Pressable>
+          <Text style={{ fontSize: 22, fontWeight: '800', color: header.titleColor, textTransform: 'uppercase', marginTop: 14 }}>
+            {activePage.name}
+          </Text>
+        </View>
+      ) : (
+        <>
+          {/* En-tête d'accueil */}
+          {header.showLogo && logoUrl ? (
+            <Image source={{ uri: logoUrl }} style={{ width: 96, height: 96, marginTop: 22, marginBottom: 16 }} resizeMode="contain" />
+          ) : header.showLogo ? (
+            <View style={{ width: 66, height: 66, borderRadius: 16, backgroundColor: theme.primaryColor, marginTop: 22, marginBottom: 16, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ color: '#fff', fontSize: 32, fontWeight: '800' }}>B</Text>
+            </View>
+          ) : (
+            <View style={{ height: 22 }} />
+          )}
+          {!!header.title && (
+            <Text style={{ fontSize: 22, fontWeight: '800', color: header.titleColor, textAlign: 'center', textTransform: 'uppercase', lineHeight: 28 }}>
+              {header.title}
+            </Text>
+          )}
+          {!!header.subtitle && (
+            <Text style={{ fontSize: 14, fontWeight: '600', color: header.subtitleColor, textAlign: 'center', marginTop: 12 }}>
+              {header.subtitle}
+            </Text>
+          )}
+        </>
+      )}
+
+      {/* Grille de cartes */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', width: '100%', marginTop: 26 }}>
+        {cards.map((c) => {
+          const textColor = c.textColor || theme.textColor;
+          return (
+            <Pressable
+              key={c.id}
+              onPress={() => handlePress(c)}
+              style={({ pressed }) => [
+                {
+                  width: cardW,
+                  minHeight: minH,
+                  marginBottom: 16,
+                  backgroundColor: '#fff',
+                  borderRadius: 18,
+                  overflow: 'hidden',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  padding: c.imageUrl ? 0 : 16,
+                  shadowColor: '#1c1917',
+                  shadowOpacity: 0.12,
+                  shadowRadius: 12,
+                  shadowOffset: { width: 0, height: 6 },
+                  elevation: 3,
+                },
+                pressed ? { opacity: 0.85 } : null,
+              ]}
+            >
+              {c.imageUrl ? (
+                <>
+                  <Image source={{ uri: c.imageUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                  <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.28)' }]} />
+                  <Text style={{ color: c.textColor || '#fff', fontSize: 16, fontWeight: '800', textAlign: 'center', paddingHorizontal: 8 }}>{c.title}</Text>
+                </>
+              ) : (
+                <Text style={{ color: textColor, fontSize: 17, fontWeight: '800', textAlign: 'center' }}>{c.title}</Text>
+              )}
+            </Pressable>
+          );
+        })}
+      </View>
+    </ScrollView>
   );
 }
 

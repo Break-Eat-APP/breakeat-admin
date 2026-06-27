@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsBoolean, MinLength, MaxLength } from 'class-validator';
 
 export class CreateSupplierDto {
   @IsString()
@@ -11,4 +11,9 @@ export class CreateSupplierDto {
   @IsOptional()
   @MaxLength(100)
   preparationZone?: string;
+
+  /** Exploitant externe (food-truck, traiteur tiers…). Génère un code de parrainage. */
+  @IsBoolean()
+  @IsOptional()
+  isExternal?: boolean;
 }

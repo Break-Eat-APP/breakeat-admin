@@ -2,6 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Store } from 'lucide-react';
 import { BRAND, BreakEatLogo } from '@break-eat/brand';
 import { DashboardColumn } from '@/components/DashboardColumn';
 import { NotificationPopup } from '@/components/NotificationPopup';
@@ -397,7 +398,7 @@ export default function DashboardPage() {
             fontWeight: 700,
             color: BRAND.orangeDark,
           }}>
-            🏪 {supplierName}
+            <Store size={14} strokeWidth={2} style={{ flexShrink: 0 }} /> {supplierName}
           </span>
         ) : (
           <span style={{ color: BRAND.grey, fontSize: 12, fontFamily: 'monospace' }}>{eventId}</span>

@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -14,17 +15,33 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiLogin, apiRegister } from '@lib/api/mobile-api';
 import { useAuthStore } from '@store/auth.store';
+import { THEME, shadowCard, FONT } from '@lib/theme';
+import { BreakEatLogo } from '@components/break-eat-logo';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
-export function LoginScreen({ navigation }: Props) {
+export function LoginScreen({ navigation, route }: Props) {
   const { setAuth } = useAuthStore();
+  const pendingEventId = route.params?.pendingEventId;
+
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  /** Après succès / passage invité : reprendre le parcours (événement en attente ou retour). */
+  const proceed = () => {
+    if (pendingEventId) {
+      navigation.replace('EventHome', { eventId: pendingEventId });
+    } else if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.replace('MainTabs');
+    }
+  };
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
@@ -35,16 +52,14 @@ export function LoginScreen({ navigation }: Props) {
       Alert.alert('Champs requis', 'Prénom et nom sont obligatoires.');
       return;
     }
-
     setLoading(true);
     try {
       const res =
         mode === 'login'
           ? await apiLogin(email.trim(), password)
           : await apiRegister(email.trim(), password, firstName.trim(), lastName.trim());
-
       await setAuth(res.accessToken, res.user);
-      // Navigation will react automatically via RootNavigator (token → AppStack)
+      proceed();
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erreur inconnue';
       Alert.alert('Erreur', msg.includes('401') ? 'Email ou mot de passe incorrect.' : msg);
@@ -53,62 +68,78 @@ export function LoginScreen({ navigation }: Props) {
     }
   };
 
-  // If we came from a deep link to a specific event, go back to it
-  const handleGuestSkip = () => {
-    const params = navigation.getState()?.routes?.find((r) => r.name === 'Login')?.params;
-    const pendingEventId = (params as { pendingEventId?: string } | undefined)?.pendingEventId;
-    if (pendingEventId) {
-      navigation.replace('EventHome', { eventId: pendingEventId });
-    } else {
-      navigation.replace('QRScanner');
-    }
-  };
+  const social = (provider: string) =>
+    Alert.alert('Bientôt', `Connexion avec ${provider} disponible prochainement.`);
 
   return (
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <View style={styles.inner}>
-        {/* Logo */}
-        <Text style={styles.logo}>BREAK EAT</Text>
-        <Text style={styles.tagline}>Commandez en un scan</Text>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {/* En-tête */}
+        <View style={styles.header}>
+          {navigation.canGoBack() && (
+            <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={styles.back}>
+              <Text style={styles.backIcon}>‹</Text>
+            </Pressable>
+          )}
+          <Text style={styles.title}>Bienvenue chez Break Eat</Text>
+        </View>
 
-        {/* Mode tabs */}
+        {/* Logo */}
+        <View style={styles.logoWrap}>
+          <BreakEatLogo size={64} variant="orange" />
+        </View>
+
+        {/* Bandeau fidélité */}
+        <View style={[styles.banner, shadowCard]}>
+          <Text style={styles.bannerTitle}>Chez nous, être fidèle ça régale vraiment.</Text>
+          <Text style={styles.bannerSub}>Commandez, gagnez des récompenses.</Text>
+        </View>
+
+        {/* Onglets */}
         <View style={styles.tabs}>
-          <Pressable
-            onPress={() => setMode('login')}
-            style={[styles.tab, mode === 'login' && styles.tabActive]}
-          >
-            <Text style={[styles.tabText, mode === 'login' && styles.tabTextActive]}>
-              Connexion
-            </Text>
-          </Pressable>
           <Pressable
             onPress={() => setMode('register')}
             style={[styles.tab, mode === 'register' && styles.tabActive]}
           >
-            <Text style={[styles.tabText, mode === 'register' && styles.tabTextActive]}>
-              Inscription
-            </Text>
+            <Text style={[styles.tabText, mode === 'register' && styles.tabTextActive]}>Inscription</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setMode('login')}
+            style={[styles.tab, mode === 'login' && styles.tabActive]}
+          >
+            <Text style={[styles.tabText, mode === 'login' && styles.tabTextActive]}>Connexion</Text>
           </Pressable>
         </View>
 
-        {/* Fields */}
+        {/* Boutons sociaux (placeholders) */}
+        <SocialButton label="Continuer avec Facebook" onPress={() => social('Facebook')} />
+        <SocialButton label="Continuer avec Google" onPress={() => social('Google')} />
+        <SocialButton label="Continuer avec Apple" onPress={() => social('Apple')} />
+
+        <View style={styles.orRow}>
+          <View style={styles.orLine} />
+          <Text style={styles.orText}>ou</Text>
+          <View style={styles.orLine} />
+        </View>
+
+        {/* Champs */}
         {mode === 'register' && (
-          <View style={styles.row}>
+          <View style={styles.nameRow}>
             <TextInput
-              style={[styles.input, { flex: 1, marginRight: 8 }]}
-              placeholder="Prénom"
-              placeholderTextColor="#6b7280"
+              style={[styles.input, styles.inputHalf]}
+              placeholder="Prénom*"
+              placeholderTextColor={THEME.grey}
               value={firstName}
               onChangeText={setFirstName}
               autoCapitalize="words"
             />
             <TextInput
-              style={[styles.input, { flex: 1 }]}
-              placeholder="Nom"
-              placeholderTextColor="#6b7280"
+              style={[styles.input, styles.inputHalf]}
+              placeholder="Nom*"
+              placeholderTextColor={THEME.grey}
               value={lastName}
               onChangeText={setLastName}
               autoCapitalize="words"
@@ -118,128 +149,162 @@ export function LoginScreen({ navigation }: Props) {
 
         <TextInput
           style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#6b7280"
+          placeholder="Email*"
+          placeholderTextColor={THEME.grey}
           value={email}
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
           autoComplete="email"
         />
-        <TextInput
-          style={styles.input}
-          placeholder="Mot de passe"
-          placeholderTextColor="#6b7280"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
+        <View style={styles.passwordRow}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Mot de passe*"
+            placeholderTextColor={THEME.grey}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+          />
+          <Pressable onPress={() => setShowPassword((s) => !s)} hitSlop={8}>
+            <Text style={styles.eye}>{showPassword ? '🙈' : '👁'}</Text>
+          </Pressable>
+        </View>
+
+        {mode === 'login' && (
+          <Pressable
+            onPress={() => Alert.alert('Bientôt', 'Réinitialisation du mot de passe à venir.')}
+            style={styles.forgot}
+          >
+            <Text style={styles.forgotText}>Mot de passe oublié ?</Text>
+          </Pressable>
+        )}
 
         <Pressable
-          style={[styles.btn, loading && styles.btnDisabled]}
+          style={[styles.submit, loading && styles.submitDisabled]}
           onPress={handleSubmit}
           disabled={loading}
         >
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.btnText}>
-              {mode === 'login' ? 'Se connecter' : "S'inscrire"}
-            </Text>
+            <Text style={styles.submitText}>{mode === 'login' ? 'Se connecter' : "S'inscrire"}</Text>
           )}
         </Pressable>
 
-        <Pressable onPress={handleGuestSkip} style={styles.skipBtn}>
-          <Text style={styles.skipText}>Continuer sans compte →</Text>
+        <Pressable onPress={proceed} style={styles.skip}>
+          <Text style={styles.skipText}>Se connecter plus tard</Text>
         </Pressable>
-      </View>
+
+        <Text style={styles.mentions}>* Mentions obligatoires</Text>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
+function SocialButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.social, pressed && styles.pressed]}
+    >
+      <Text style={styles.socialText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: '#111827',
-  },
-  inner: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-    gap: 12,
-  },
-  logo: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: '#ffffff',
-    letterSpacing: 3,
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  tagline: {
-    fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'center',
+  root: { flex: 1, backgroundColor: THEME.bg },
+  scroll: { paddingHorizontal: 24, paddingTop: 56, paddingBottom: 40 },
+
+  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
+  back: { paddingRight: 8 },
+  backIcon: { color: THEME.ink, fontSize: 30, lineHeight: 30, fontWeight: '700' },
+  title: { flex: 1, color: THEME.ink, fontSize: 22, fontFamily: FONT.bold, textAlign: 'center' },
+
+  logoWrap: { alignItems: 'center', marginBottom: 18 },
+
+  banner: {
+    backgroundColor: THEME.orange,
+    borderRadius: THEME.radius.card,
+    padding: 18,
     marginBottom: 24,
   },
+  bannerTitle: { color: '#fff', fontSize: 17, fontFamily: FONT.bold, lineHeight: 23 },
+  bannerSub: { color: '#fff', fontSize: 13, marginTop: 6, opacity: 0.92, fontFamily: FONT.regular },
+
   tabs: {
     flexDirection: 'row',
-    backgroundColor: '#1f2937',
-    borderRadius: 10,
+    backgroundColor: THEME.bgSubtle,
+    borderRadius: THEME.radius.control,
     padding: 4,
+    marginBottom: 24,
+  },
+  tab: { flex: 1, paddingVertical: 11, alignItems: 'center', borderRadius: THEME.radius.control - 4 },
+  tabActive: { backgroundColor: THEME.surface, ...shadowCard },
+  tabText: { color: THEME.inkSoft, fontSize: 15, fontFamily: FONT.semibold },
+  tabTextActive: { color: THEME.orange },
+
+  social: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: THEME.surface,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: THEME.radius.control,
+    paddingVertical: 15,
+    marginBottom: 12,
+  },
+  pressed: { opacity: 0.7 },
+  socialText: { color: THEME.ink, fontSize: 15, fontFamily: FONT.semibold },
+
+  orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 12 },
+  orLine: { flex: 1, height: 1, backgroundColor: THEME.border },
+  orText: { color: THEME.inkSoft, fontSize: 14, fontFamily: FONT.medium },
+
+  nameRow: { flexDirection: 'row', gap: 12 },
+  input: {
+    backgroundColor: THEME.surface,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: THEME.radius.control,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    fontSize: 15,
+    color: THEME.ink,
+    marginBottom: 12,
+    fontFamily: FONT.regular,
+  },
+  inputHalf: { flex: 1 },
+  passwordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: THEME.surface,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    borderRadius: THEME.radius.control,
+    paddingHorizontal: 16,
     marginBottom: 8,
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 7,
-  },
-  tabActive: {
-    backgroundColor: '#2563eb',
-  },
-  tabText: {
-    color: '#6b7280',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  tabTextActive: {
-    color: '#ffffff',
-  },
-  row: {
-    flexDirection: 'row',
-  },
-  input: {
-    backgroundColor: '#1f2937',
-    color: '#ffffff',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 10,
-    fontSize: 15,
-    borderWidth: 1,
-    borderColor: '#374151',
-  },
-  btn: {
-    backgroundColor: '#2563eb',
+  passwordInput: { flex: 1, paddingVertical: 15, fontSize: 15, color: THEME.ink, fontFamily: FONT.regular },
+  eye: { fontSize: 18, paddingLeft: 8 },
+
+  forgot: { alignSelf: 'flex-end', paddingVertical: 8 },
+  forgotText: { color: THEME.orange, fontSize: 13, fontFamily: FONT.semibold },
+
+  submit: {
+    backgroundColor: THEME.orange,
+    borderRadius: THEME.radius.pill,
     paddingVertical: 16,
-    borderRadius: 12,
     alignItems: 'center',
     marginTop: 8,
   },
-  btnDisabled: {
-    opacity: 0.6,
-  },
-  btnText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  skipBtn: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  skipText: {
-    color: '#6b7280',
-    fontSize: 13,
-  },
+  submitDisabled: { opacity: 0.6 },
+  submitText: { color: '#fff', fontSize: 16, fontFamily: FONT.bold },
+
+  skip: { alignItems: 'center', paddingVertical: 16 },
+  skipText: { color: THEME.orange, fontSize: 15, fontFamily: FONT.semibold },
+
+  mentions: { color: THEME.grey, fontSize: 12, textAlign: 'center', marginTop: 4, fontFamily: FONT.regular },
 });

@@ -76,6 +76,28 @@ export class SuppliersController {
     return this.suppliersService.updateStatus(orgId, id, user.sub, dto);
   }
 
+  // ─── Parrainage exploitant externe ───────────────────────────
+
+  /** POST /api/v1/organizations/:orgId/suppliers/:id/referral — (re)génère le code. */
+  @Post(':id/referral')
+  @HttpCode(HttpStatus.OK)
+  regenerateReferral(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.suppliersService.regenerateReferralCode(orgId, id, user.sub);
+  }
+
+  /** GET /api/v1/organizations/:orgId/suppliers/referral/:code — recherche par code. */
+  @Get('referral/:code')
+  findByReferral(
+    @Param('code') code: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.suppliersService.findByReferralCode(code, user.sub);
+  }
+
   // ─── Stripe Connect ──────────────────────────────────────────
 
   /**

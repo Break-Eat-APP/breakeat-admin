@@ -101,10 +101,11 @@ function KpiCard({
   return (
     <div
       style={{
-        background: accent ? BRAND.orangeTint : BRAND.bgSubtle,
-        border: `1px solid ${accent ? BRAND.orange : BRAND.border}`,
-        borderRadius: 16,
+        background: accent ? BRAND.orangeTint : BRAND.surface,
+        border: `1px solid ${accent ? BRAND.orangeSoft : BRAND.border}`,
+        borderRadius: BRAND.radius.card,
         padding: '20px 22px',
+        boxShadow: accent ? 'none' : BRAND.shadowCard,
       }}
     >
       <div
