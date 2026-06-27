@@ -57,7 +57,7 @@ const OrderTrackingStub = (_: NativeStackScreenProps<RootStackParamList, 'OrderT
 export default function AppPreview() {
   const setReady = useAppStore((s) => s.setReady);
   const rehydrate = useAuthStore((s) => s.rehydrate);
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Fredoka_400Regular,
     Fredoka_500Medium,
     Fredoka_600SemiBold,
@@ -69,7 +69,8 @@ export default function AppPreview() {
     void rehydrate();
   }, [setReady, rehydrate]);
 
-  if (!fontsLoaded) return null;
+  // Ne pas rester bloqué sur écran blanc si une police échoue à charger.
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>
