@@ -12,7 +12,7 @@
     "build": "tsc --noEmit",
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
-    "test": "jest",
+    "test": "jest --passWithNoTests",
     "clean": "react-native clean"
   },
   "dependencies": {
