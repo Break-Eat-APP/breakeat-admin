@@ -1,29 +1,46 @@
 /* eslint-disable */
 // Post-traitement de l'export web Expo pour hébergement statique (Netlify/Vercel).
 //
-// pnpm range les assets sous `dist/assets/__node_modules/.pnpm/…`. Or les hôtes
-// statiques (Netlify) IGNORENT les dossiers commençant par un point → les polices
-// (Fredoka + @expo/vector-icons) renvoient 404, la police casse et les icônes
-// disparaissent. On renomme `.pnpm` → `pnpm` et on corrige les références dans le bundle.
+// pnpm range les assets (polices Fredoka + @expo/vector-icons, icônes de navigation…)
+// sous `dist/assets/__node_modules/.pnpm/@scope+pkg@version/…`. Ce chemin est REFUSÉ
+// par les hôtes statiques (dossier `.pnpm` commençant par un point, dossier
+// `__node_modules`, caractères `@`/`+`) → 404 → police cassée + icônes absentes.
+//
+// Fix robuste : on déplace TOUS ces assets vers un dossier plat `dist/vendor/`
+// (noms déjà hashés, donc uniques) et on réécrit les références dans le build.
 const fs = require('fs');
 const path = require('path');
 
 const dist = path.join(__dirname, '..', 'dist');
-const dotPnpm = path.join(dist, 'assets', '__node_modules', '.pnpm');
-const pnpm = path.join(dist, 'assets', '__node_modules', 'pnpm');
+const nm = path.join(dist, 'assets', '__node_modules');
+const vendor = path.join(dist, 'vendor');
 
 if (!fs.existsSync(dist)) {
-  console.error('fix-web-assets: dossier dist introuvable — lance `expo export -p web` d\'abord.');
+  console.error("fix-web-assets: dossier dist introuvable — lance `expo export -p web` d'abord.");
   process.exit(1);
 }
 
-if (fs.existsSync(dotPnpm)) {
-  fs.rmSync(pnpm, { recursive: true, force: true });
-  fs.renameSync(dotPnpm, pnpm);
-  console.log('fix-web-assets: dossier .pnpm renommé en pnpm');
+let moved = 0;
+if (fs.existsSync(nm)) {
+  fs.mkdirSync(vendor, { recursive: true });
+  const stack = [nm];
+  while (stack.length) {
+    const dir = stack.pop();
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) stack.push(p);
+      else {
+        // Nom de base (déjà content-hashé par Expo → collision quasi impossible).
+        fs.renameSync(p, path.join(vendor, e.name));
+        moved++;
+      }
+    }
+  }
+  fs.rmSync(nm, { recursive: true, force: true });
 }
 
-// Réécrit les références "/.pnpm/" -> "/pnpm/" dans tous les fichiers texte du build.
+// Réécrit toute référence ".../assets/__node_modules/<...>/<base>.<ext>" -> "/vendor/<base>.<ext>".
+const re = /((?:\.\.)?\/)?assets\/__node_modules\/[^\s"'()]+?\/([\w.\-]+\.\w+)/g;
 let patched = 0;
 function walk(dir) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -31,12 +48,15 @@ function walk(dir) {
     if (e.isDirectory()) walk(p);
     else if (/\.(js|json|html|map|css)$/.test(e.name)) {
       const c = fs.readFileSync(p, 'utf8');
-      if (c.includes('/.pnpm/')) {
-        fs.writeFileSync(p, c.split('/.pnpm/').join('/pnpm/'));
-        patched++;
+      if (c.includes('assets/__node_modules/')) {
+        const out = c.replace(re, (_m, lead, base) => `${lead || '/'}vendor/${base}`);
+        if (out !== c) {
+          fs.writeFileSync(p, out);
+          patched++;
+        }
       }
     }
   }
 }
 walk(dist);
-console.log(`fix-web-assets: ${patched} fichier(s) corrigé(s). Prêt pour l'hébergement statique.`);
+console.log(`fix-web-assets: ${moved} asset(s) déplacé(s) vers /vendor, ${patched} fichier(s) réécrit(s). Prêt pour hébergement statique.`);
