@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, Building2, Users, type LucideIcon } from 'lucide-react';
+import { LayoutDashboard, Building2, Users, Bell, type LucideIcon } from 'lucide-react';
 import { BRAND, BreakEatLogo } from '@break-eat/brand';
 import {
   getToken,
@@ -16,6 +16,7 @@ const NAV_ITEMS: { href: string; icon: LucideIcon; label: string }[] = [
   { href: '/overview', icon: LayoutDashboard, label: "Vue d'ensemble" },
   { href: '/organizations', icon: Building2, label: 'Organisations' },
   { href: '/groups', icon: Users, label: 'Groupes & accès' },
+  { href: '/notifications', icon: Bell, label: 'Notifications' },
 ];
 
 export default function BackofficeLayout({ children }: { children: React.ReactNode }) {
