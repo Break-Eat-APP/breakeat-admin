@@ -9,7 +9,11 @@ import {
   apiUpdateOrganization,
   apiActivateOrganization,
   apiDeactivateOrganization,
+  apiGetVenues,
+  apiCreateVenue,
+  apiUpdateVenue,
   type OrgDetail,
+  type Venue,
 } from '@/lib/api/backoffice-client';
 import { StatusBadge } from '@/components/status-badge';
 
@@ -71,6 +75,60 @@ export default function OrganizationDetailPage({
   const deactivateMut = useMutation({
     mutationFn: () => apiDeactivateOrganization(id),
     onSuccess: invalidate,
+  });
+
+  // ── Lieu du club (config plateforme — un club = un lieu) ──
+  const venuesQuery = useQuery<Venue[]>({
+    queryKey: ['backoffice', 'venues', id],
+    queryFn: () => apiGetVenues(id),
+  });
+  const venue = venuesQuery.data?.[0] ?? null;
+  const [vName, setVName] = useState('');
+  const [vAddress, setVAddress] = useState('');
+  const [vLat, setVLat] = useState('');
+  const [vLng, setVLng] = useState('');
+  const [vTerms, setVTerms] = useState('');
+  const [vFlaixOn, setVFlaixOn] = useState(false);
+  const [vFlaixId, setVFlaixId] = useState('');
+  const [venueError, setVenueError] = useState('');
+  const [venueSavedAt, setVenueSavedAt] = useState(0);
+
+  useEffect(() => {
+    if (venue) {
+      setVName(venue.name);
+      setVAddress(venue.address);
+      setVLat(venue.latitude != null ? String(venue.latitude) : '');
+      setVLng(venue.longitude != null ? String(venue.longitude) : '');
+      setVTerms(venue.searchTerms ?? '');
+      setVFlaixOn(!!venue.flaixEnabled);
+      setVFlaixId(venue.flaixVenueId ?? '');
+    }
+  }, [venue]);
+
+  const saveVenueMut = useMutation({
+    mutationFn: () => {
+      const lat = vLat.trim() ? Number(vLat.trim().replace(',', '.')) : null;
+      const lng = vLng.trim() ? Number(vLng.trim().replace(',', '.')) : null;
+      if ((lat !== null && Number.isNaN(lat)) || (lng !== null && Number.isNaN(lng))) {
+        return Promise.reject(new Error('Latitude / longitude invalides (ex. 43.296, 5.370).'));
+      }
+      const payload = {
+        name: vName.trim(),
+        address: vAddress.trim(),
+        latitude: lat,
+        longitude: lng,
+        searchTerms: vTerms.trim() || null,
+        flaixEnabled: vFlaixOn,
+        flaixVenueId: vFlaixId.trim() || null,
+      };
+      return venue ? apiUpdateVenue(id, venue.id, payload) : apiCreateVenue(id, payload);
+    },
+    onSuccess: () => {
+      setVenueError('');
+      setVenueSavedAt(Date.now());
+      qc.invalidateQueries({ queryKey: ['backoffice', 'venues', id] });
+    },
+    onError: (e) => setVenueError(e instanceof Error ? e.message : 'Échec de l’enregistrement'),
   });
 
   return (
@@ -171,6 +229,59 @@ export default function OrganizationDetailPage({
                   <span style={{ fontSize: 13, color: '#059669' }}>Enregistré ✓</span>
                 )}
                 {saveError && <span style={{ fontSize: 13, color: '#dc2626' }}>{saveError}</span>}
+              </div>
+            </form>
+          </section>
+
+          {/* Lieu du club */}
+          <section style={{ ...card, marginTop: 20 }}>
+            <h2 style={cardTitle}>Lieu du club {venue ? '' : '— non configuré'}</h2>
+            <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 16px', lineHeight: 1.5 }}>
+              Ce lieu apparaît dans l’app cliente (onglet « Lieux »). Renseigne les coordonnées
+              pour le tri par proximité, les mots-clés pour la recherche, et active Flaix si la
+              commande passe par Flaix.
+            </p>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                saveVenueMut.mutate();
+              }}
+              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
+              <Field label="Nom du lieu">
+                <input value={vName} onChange={(e) => setVName(e.target.value)} placeholder="Patinoire des Spartiates" style={inputStyle} required />
+              </Field>
+              <Field label="Adresse">
+                <input value={vAddress} onChange={(e) => setVAddress(e.target.value)} placeholder="Le Palais omnisports, Marseille" style={inputStyle} required />
+              </Field>
+              <Field label="Mots-clés de recherche">
+                <input value={vTerms} onChange={(e) => setVTerms(e.target.value)} placeholder="marseille, spartiates, patinoire" style={inputStyle} />
+              </Field>
+              <div style={{ display: 'flex', gap: 16 }}>
+                <Field label="Latitude">
+                  <input value={vLat} onChange={(e) => setVLat(e.target.value)} placeholder="43.296" style={inputStyle} />
+                </Field>
+                <Field label="Longitude">
+                  <input value={vLng} onChange={(e) => setVLng(e.target.value)} placeholder="5.370" style={inputStyle} />
+                </Field>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: BRAND.ink }}>
+                <input type="checkbox" checked={vFlaixOn} onChange={(e) => setVFlaixOn(e.target.checked)} />
+                Flaix activé — la commande passe par Flaix (le club n’utilise pas le dashboard Break Eat)
+              </label>
+              {vFlaixOn && (
+                <Field label="Identifiant Flaix du lieu">
+                  <input value={vFlaixId} onChange={(e) => setVFlaixId(e.target.value)} placeholder="flx_..." style={inputStyle} />
+                </Field>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <button type="submit" disabled={saveVenueMut.isPending} style={primaryBtn}>
+                  {saveVenueMut.isPending ? 'Enregistrement…' : venue ? 'Enregistrer le lieu' : 'Créer le lieu'}
+                </button>
+                {venueSavedAt > 0 && !saveVenueMut.isPending && !venueError && (
+                  <span style={{ fontSize: 13, color: '#059669' }}>Enregistré ✓</span>
+                )}
+                {venueError && <span style={{ fontSize: 13, color: '#dc2626' }}>{venueError}</span>}
               </div>
             </form>
           </section>

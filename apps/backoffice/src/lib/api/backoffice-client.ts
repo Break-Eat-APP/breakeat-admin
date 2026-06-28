@@ -219,6 +219,52 @@ export async function apiDeactivateOrganization(id: string): Promise<OrgListItem
   return req<OrgListItem>('PATCH', `/backoffice/organizations/${id}/deactivate`);
 }
 
+// ─── Lieux (config plateforme — un club = un lieu) ──────────────────────────────
+// Endpoints org-scopés ; le token back office est SUPER_ADMIN → accès à toute org.
+
+export interface Venue {
+  id: string;
+  name: string;
+  address: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  searchTerms?: string | null;
+  flaixEnabled?: boolean;
+  flaixVenueId?: string | null;
+  timezone?: string | null;
+  status: string;
+}
+
+export interface VenueInput {
+  name?: string;
+  address?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  searchTerms?: string | null;
+  flaixEnabled?: boolean;
+  flaixVenueId?: string | null;
+  timezone?: string;
+}
+
+export async function apiGetVenues(orgId: string): Promise<Venue[]> {
+  return req<Venue[]>('GET', `/organizations/${orgId}/venues`);
+}
+
+export async function apiCreateVenue(
+  orgId: string,
+  data: VenueInput & { name: string; address: string },
+): Promise<Venue> {
+  return req<Venue>('POST', `/organizations/${orgId}/venues`, data);
+}
+
+export async function apiUpdateVenue(
+  orgId: string,
+  venueId: string,
+  data: VenueInput,
+): Promise<Venue> {
+  return req<Venue>('PATCH', `/organizations/${orgId}/venues/${venueId}`, data);
+}
+
 // ─── Groups (cross-tenant read) ────────────────────────────────────────────────
 
 export async function apiListGroups(): Promise<GroupListItem[]> {

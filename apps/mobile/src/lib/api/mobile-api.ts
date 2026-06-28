@@ -225,6 +225,10 @@ export interface PublicVenue {
   longitude: number | null;
   imageUrl: string | null;
   primaryColor: string | null;
+  /** Intégration Flaix : si true, la sélection du lieu passe le relais à Flaix. */
+  flaixEnabled: boolean;
+  /** Identifiant du lieu côté Flaix (pour les appels API Flaix). */
+  flaixVenueId: string | null;
   /** Événement actif sur ce lieu → cible de navigation (null si aucun). */
   currentEventId: string | null;
   /** Distance en km depuis l'utilisateur (null si pas de géoloc ou pas de coords). */
