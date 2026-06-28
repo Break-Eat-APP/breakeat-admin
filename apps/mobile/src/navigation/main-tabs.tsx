@@ -29,7 +29,7 @@ function CommandesFab({ onPress }: BottomTabBarButtonProps) {
   return (
     <Pressable onPress={onPress} style={styles.fabWrap}>
       <View style={styles.fab}>
-        <BreakEatLogo size={50} variant="white" />
+        <BreakEatLogo size={62} variant="white" />
       </View>
       <Text style={styles.fabLabel}>Mes commandes</Text>
     </Pressable>

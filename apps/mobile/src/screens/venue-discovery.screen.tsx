@@ -70,8 +70,8 @@ export function VenueDiscoveryScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Bandeau orange plein cadre (jusqu'en haut, derrière la status bar) */}
-      <View style={[styles.band, { paddingTop: insets.top + 8 }]}>
+      {/* Bandeau orange plein cadre — logo centré, panier + cloche à droite */}
+      <View style={[styles.band, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerRow}>
           <Image source={LOGO_FULL_WHITE} style={styles.lockup} resizeMode="contain" />
           <View style={styles.headerIcons}>
@@ -84,8 +84,10 @@ export function VenueDiscoveryScreen() {
             </Pressable>
           </View>
         </View>
+      </View>
 
-        {/* Recherche (pill blanche dans le bandeau, icône cible = géoloc) */}
+      {/* Recherche — pill blanche dans la zone blanche, sous le bandeau */}
+      <View style={styles.searchWrap}>
         <View style={[styles.searchBox, shadowCard]}>
           <TextInput
             style={[styles.searchInput, NO_OUTLINE]}
@@ -186,15 +188,22 @@ function formatDistance(km: number): string {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
 
-  band: { backgroundColor: THEME.orange, paddingBottom: 18, paddingHorizontal: 16 },
+  band: { backgroundColor: THEME.orange, paddingBottom: 16, paddingHorizontal: 16 },
   headerRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 6,
+  },
+  lockup: { width: 150, height: 150 * (212 / 760) },
+  headerIcons: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 16,
+    gap: 18,
   },
-  lockup: { width: 132, height: 132 * (212 / 760) },
-  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: 18 },
   bellWrap: {},
   notifDot: {
     position: 'absolute',
@@ -208,11 +217,14 @@ const styles = StyleSheet.create({
     borderColor: THEME.orange,
   },
 
+  searchWrap: { paddingHorizontal: 16, marginTop: 16 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: THEME.surface,
     borderRadius: THEME.radius.pill,
+    borderWidth: 1,
+    borderColor: THEME.border,
     paddingHorizontal: 20,
     paddingVertical: 4,
     gap: 10,
