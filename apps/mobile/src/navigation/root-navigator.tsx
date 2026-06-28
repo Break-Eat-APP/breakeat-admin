@@ -10,6 +10,7 @@ import { useAuthStore } from '@store/auth.store';
 import { LoginScreen } from '@screens/login.screen';
 import { QRScannerScreen } from '@screens/qr-scanner.screen';
 import { EventHomeScreen } from '@screens/event-home.screen';
+import { FlaixOrderScreen } from '@screens/flaix-order.screen';
 import { SupplierCatalogScreen } from '@screens/supplier-catalog.screen';
 import { CartScreen } from '@screens/cart.screen';
 import { SlotSelectorScreen } from '@screens/slot-selector.screen';
@@ -36,6 +37,7 @@ export type RootStackParamList = {
   // Flux de commande / deep links
   QRScanner: undefined;
   EventHome: { eventId: string };
+  FlaixOrder: { venueId: string; flaixVenueId: string | null };
   SupplierCatalog: { eventId: string; supplierId: string };
   Cart: undefined;
   SlotSelector: { eventId: string };
@@ -86,6 +88,7 @@ export function RootNavigator() {
         {/* Flux de commande / deep links */}
         <Stack.Screen name="QRScanner" component={QRScannerScreen} />
         <Stack.Screen name="EventHome" component={EventHomeScreen} />
+        <Stack.Screen name="FlaixOrder" component={FlaixOrderScreen} />
         <Stack.Screen name="SupplierCatalog" component={SupplierCatalogScreen} />
         <Stack.Screen name="Cart" component={CartScreen} />
         <Stack.Screen name="SlotSelector" component={SlotSelectorScreen} />

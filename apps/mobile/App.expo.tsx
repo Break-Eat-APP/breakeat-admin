@@ -28,6 +28,7 @@ import { useAuthStore } from '@store/auth.store';
 import { THEME, FONT } from '@lib/theme';
 import { MainTabs } from '@navigation/main-tabs';
 import { LoginScreen } from '@screens/login.screen';
+import { FlaixOrderScreen } from '@screens/flaix-order.screen';
 import type { RootStackParamList } from '@navigation/root-navigator';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -83,6 +84,7 @@ export default function AppPreview() {
             <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="EventHome" component={EventHomeStub} />
+            <Stack.Screen name="FlaixOrder" component={FlaixOrderScreen} />
             <Stack.Screen name="Cart" component={CartStub} />
             <Stack.Screen name="OrderTracking" component={OrderTrackingStub} />
           </Stack.Navigator>

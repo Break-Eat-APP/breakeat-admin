@@ -62,7 +62,18 @@ export function VenueDiscoveryScreen() {
     return () => clearTimeout(t);
   }, [load]);
 
+  // Demande la localisation au démarrage → lieux les plus proches en priorité.
+  useEffect(() => {
+    requestLocation();
+  }, [requestLocation]);
+
   const handleSelect = (venue: PublicVenue) => {
+    // Lieu Flaix → relais à Flaix (intégration API).
+    if (venue.flaixEnabled) {
+      navigation.navigate('FlaixOrder', { venueId: venue.id, flaixVenueId: venue.flaixVenueId });
+      return;
+    }
+    // Sinon : parcours Break Eat natif si un événement est actif.
     if (venue.currentEventId) {
       navigation.navigate('EventHome', { eventId: venue.currentEventId });
     }
@@ -112,6 +123,18 @@ export function VenueDiscoveryScreen() {
         </View>
       </View>
 
+      {/* Invite à activer la localisation (tant qu'elle n'est pas accordée) */}
+      {locStatus !== 'granted' && locStatus !== 'requesting' && (
+        <Pressable onPress={requestLocation} style={styles.geoCta}>
+          <Ionicons name="location-outline" size={18} color={THEME.orange} />
+          <Text style={styles.geoCtaText}>
+            {locStatus === 'denied'
+              ? 'Localisation refusée — activez-la pour voir les lieux proches, ou cherchez ci-dessus.'
+              : 'Activer ma localisation pour voir les lieux les plus proches'}
+          </Text>
+        </Pressable>
+      )}
+
       {/* Titre */}
       <View style={styles.titleBlock}>
         <Text style={styles.title}>LA BUVETTE EN LIGNE</Text>
@@ -153,7 +176,7 @@ export function VenueDiscoveryScreen() {
 }
 
 function VenueCard({ venue, onPress }: { venue: PublicVenue; onPress: () => void }) {
-  const closed = !venue.currentEventId;
+  const closed = !venue.flaixEnabled && !venue.currentEventId;
   return (
     <Pressable
       onPress={onPress}
@@ -230,6 +253,19 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   searchInput: { flex: 1, paddingVertical: 14, fontSize: 15, color: THEME.ink, fontFamily: FONT.regular },
+
+  geoCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: THEME.orangeTint,
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: THEME.radius.control,
+  },
+  geoCtaText: { flex: 1, color: THEME.orangeDark, fontSize: 13, fontFamily: FONT.medium, lineHeight: 18 },
 
   titleBlock: { alignItems: 'center', paddingTop: 26, paddingBottom: 18 },
   title: { color: THEME.orange, fontSize: 26, fontFamily: FONT.bold, letterSpacing: 0.5 },
