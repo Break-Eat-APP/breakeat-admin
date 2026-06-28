@@ -291,6 +291,46 @@ export async function apiSendNotification(
   return req<SendNotificationResult>('POST', '/backoffice/notifications/send', data);
 }
 
+// ─── Notifications programmées ────────────────────────────────────────────────
+
+export interface ScheduleNotificationInput {
+  title: string;
+  body?: string;
+  scheduledAt: string; // ISO 8601
+  orgId?: string;
+}
+
+export interface ScheduledPush {
+  id: string;
+  title: string;
+  body: string;
+  scheduledAt: string;
+  status: string;
+  sentCount: number;
+  sentAt: string | null;
+  organizationId: string | null;
+  organization: { id: string; name: string } | null;
+  createdAt: string;
+}
+
+export async function apiScheduleNotification(data: ScheduleNotificationInput): Promise<ScheduledPush> {
+  return req<ScheduledPush>('POST', '/backoffice/notifications/schedule', data);
+}
+
+export async function apiListScheduledNotifications(): Promise<ScheduledPush[]> {
+  return req<ScheduledPush[]>('GET', '/backoffice/notifications/scheduled');
+}
+
+export async function apiCancelScheduledNotification(id: string): Promise<ScheduledPush> {
+  return req<ScheduledPush>('DELETE', `/backoffice/notifications/scheduled/${id}`);
+}
+
+// ─── Suppression organisation ─────────────────────────────────────────────────
+
+export async function apiDeleteOrganization(id: string): Promise<{ deleted: boolean }> {
+  return req<{ deleted: boolean }>('DELETE', `/backoffice/organizations/${id}`);
+}
+
 // ─── Formatting helpers ────────────────────────────────────────────────────────
 
 /** Integer cents → "1 234,56 €" (French formatting). */

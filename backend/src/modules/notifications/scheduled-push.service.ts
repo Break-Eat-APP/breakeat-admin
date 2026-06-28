@@ -14,6 +14,7 @@ import { PushTokensService } from './push-tokens.service';
  *   checkout (invariant Stripe) — pièce de suivi ; ici on planifie + on annonce.
  *
  * Un cron (chaque minute) traite les entrées dont l'heure est passée.
+ * organizationId nullable (Phase 17) : null = broadcast plateforme tous utilisateurs.
  */
 
 export interface CreateScheduledPushInput {
@@ -41,7 +42,6 @@ export class ScheduledPushService {
     const when = new Date(dto.scheduledAt);
     if (isNaN(when.getTime())) throw new BadRequestException('Date invalide.');
 
-    // P2 — l'événement ciblé doit appartenir à l'organisation.
     if (dto.eventId) {
       const event = await this.prisma.event.findFirst({
         where: { id: dto.eventId, organizationId: orgId },
@@ -80,8 +80,17 @@ export class ScheduledPushService {
     return this.prisma.scheduledPush.update({ where: { id }, data: { status: 'CANCELLED' } });
   }
 
-  /** Jetons des clients ayant commandé dans l'org (et l'event si précisé). */
-  private async resolveAudience(orgId: string, eventId: string | null): Promise<string[]> {
+  /**
+   * Résout les jetons push cibles.
+   * - orgId null → tous les utilisateurs actifs de la plateforme (tokens enregistrés).
+   * - orgId défini → membres ayant commandé dans l'org (+ event si précisé).
+   */
+  async resolveAudience(orgId: string | null, eventId: string | null): Promise<string[]> {
+    if (orgId === null) {
+      // Broadcast plateforme : tous les push tokens enregistrés.
+      const rows = await this.prisma.pushToken.findMany({ select: { token: true } });
+      return rows.map((r) => r.token);
+    }
     const orders = await this.prisma.order.findMany({
       where: { organizationId: orgId, ...(eventId ? { eventId } : {}) },
       select: { userId: true },
@@ -93,13 +102,11 @@ export class ScheduledPushService {
 
   /** Traite une entrée due : envoie le push, met à jour le statut. */
   async process(id: string): Promise<void> {
-    // P2 — claim atomique PENDING → PROCESSING : empêche le double envoi
-    // si plusieurs instances/cron lisent la même entrée en même temps.
     const claim = await this.prisma.scheduledPush.updateMany({
       where: { id, status: 'PENDING' },
       data: { status: 'PROCESSING' },
     });
-    if (claim.count === 0) return; // déjà pris en charge par un autre worker
+    if (claim.count === 0) return;
     const sp = await this.prisma.scheduledPush.findUnique({ where: { id } });
     if (!sp) return;
     try {

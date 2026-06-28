@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   ParseUUIDPipe,
@@ -14,6 +15,7 @@ import { BackofficeService } from './backoffice.service';
 import { CreateBackofficeOrgDto } from './dto/create-backoffice-org.dto';
 import { UpdateBackofficeOrgDto } from './dto/update-backoffice-org.dto';
 import { SendNotificationDto } from './dto/send-notification.dto';
+import { ScheduleNotificationDto } from './dto/schedule-notification.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -82,6 +84,13 @@ export class BackofficeController {
     return this.backoffice.setOrganizationStatus(id, false);
   }
 
+  /** DELETE /organizations/:id — suppression définitive (cascade). */
+  @Delete('organizations/:id')
+  @HttpCode(HttpStatus.OK)
+  deleteOrganization(@Param('id', ParseUUIDPipe) id: string) {
+    return this.backoffice.deleteOrganization(id);
+  }
+
   // ─── Groups ───────────────────────────────────────────────────
 
   /** GET /groups — cross-tenant list of all groups. */
@@ -97,5 +106,25 @@ export class BackofficeController {
   @HttpCode(HttpStatus.OK)
   sendNotification(@Body() dto: SendNotificationDto) {
     return this.backoffice.sendNotification(dto);
+  }
+
+  /** POST /notifications/schedule — programme un push pour une date future. */
+  @Post('notifications/schedule')
+  @HttpCode(HttpStatus.CREATED)
+  scheduleNotification(@Body() dto: ScheduleNotificationDto) {
+    return this.backoffice.scheduleNotification(dto);
+  }
+
+  /** GET /notifications/scheduled — liste tous les pushs programmés (toutes orgs). */
+  @Get('notifications/scheduled')
+  listScheduledNotifications() {
+    return this.backoffice.listScheduledNotifications();
+  }
+
+  /** DELETE /notifications/scheduled/:id — annule un push PENDING. */
+  @Delete('notifications/scheduled/:id')
+  @HttpCode(HttpStatus.OK)
+  cancelScheduledNotification(@Param('id', ParseUUIDPipe) id: string) {
+    return this.backoffice.cancelScheduledNotification(id);
   }
 }

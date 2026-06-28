@@ -10,6 +10,7 @@ import {
   apiCreateVenue,
   apiActivateOrganization,
   apiDeactivateOrganization,
+  apiDeleteOrganization,
   type OrgListItem,
 } from '@/lib/api/backoffice-client';
 import { StatusBadge } from '@/components/status-badge';
@@ -100,6 +101,10 @@ export default function OrganizationsPage() {
   });
   const deactivateMut = useMutation({
     mutationFn: (id: string) => apiDeactivateOrganization(id),
+    onSuccess: invalidate,
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => apiDeleteOrganization(id),
     onSuccess: invalidate,
   });
 
@@ -230,7 +235,7 @@ export default function OrganizationsPage() {
 
           {data.map((org) => {
             const isActive = org.status === 'ACTIVE';
-            const busy = activateMut.isPending || deactivateMut.isPending;
+            const busy = activateMut.isPending || deactivateMut.isPending || deleteMut.isPending;
             return (
               <div key={org.id} style={{ ...rowStyle, borderTop: `1px solid ${BRAND.border}` }}>
                 <div style={{ flex: 2, minWidth: 0 }}>
@@ -245,13 +250,25 @@ export default function OrganizationsPage() {
                 <div style={{ flex: 2, fontSize: 13, color: BRAND.inkSoft }}>
                   {org._count.members} · {org._count.events} · {org._count.groups}
                 </div>
-                <div style={{ flex: 1, textAlign: 'right' }}>
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                   <button
                     disabled={busy}
                     onClick={() => isActive ? deactivateMut.mutate(org.id) : activateMut.mutate(org.id)}
                     style={isActive ? dangerBtnSmall : successBtnSmall}
                   >
                     {isActive ? 'Désactiver' : 'Activer'}
+                  </button>
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      if (window.confirm(`Supprimer définitivement "${org.name}" et toutes ses données ?`)) {
+                        deleteMut.mutate(org.id);
+                      }
+                    }}
+                    style={deleteBtnSmall}
+                    title="Supprimer définitivement"
+                  >
+                    ✕
                   </button>
                 </div>
               </div>
@@ -305,6 +322,12 @@ const primaryBtn: React.CSSProperties = {
   cursor: 'pointer',
   fontFamily: 'inherit',
   whiteSpace: 'nowrap',
+};
+
+const deleteBtnSmall: React.CSSProperties = {
+  background: '#fff', color: '#dc2626', border: '1px solid #fca5a5',
+  borderRadius: 8, padding: '7px 10px', fontWeight: 700, fontSize: 13,
+  cursor: 'pointer', fontFamily: 'inherit',
 };
 
 const dangerBtnSmall: React.CSSProperties = {

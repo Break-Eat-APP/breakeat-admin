@@ -1,5 +1,6 @@
 import {
   Injectable,
+  BadRequestException,
   ConflictException,
   NotFoundException,
   Logger,
@@ -9,9 +10,11 @@ import { PaymentStatus, OrgStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { ExpoPushService } from '../notifications/expo-push.service';
 import { PushTokensService } from '../notifications/push-tokens.service';
+import { ScheduledPushService } from '../notifications/scheduled-push.service';
 import type { CreateBackofficeOrgDto } from './dto/create-backoffice-org.dto';
 import type { UpdateBackofficeOrgDto } from './dto/update-backoffice-org.dto';
 import type { SendNotificationDto } from './dto/send-notification.dto';
+import type { ScheduleNotificationDto } from './dto/schedule-notification.dto';
 
 /**
  * Cross-tenant KPI snapshot for the back-office overview.
@@ -56,6 +59,7 @@ export class BackofficeService {
     private readonly config: ConfigService,
     private readonly expoPush: ExpoPushService,
     private readonly pushTokens: PushTokensService,
+    private readonly scheduledPush: ScheduledPushService,
   ) {
     const configured = this.config.get<number>('app.reporting.vatRate');
     // Guard against a missing / NaN env override; fall back to 10%.
@@ -275,6 +279,58 @@ export class BackofficeService {
     );
 
     return { sent: result.sent, failed: result.failed, recipients: tokens.length };
+  }
+
+  // ─── Suppression organisation ─────────────────────────────────
+
+  /** Supprime définitivement une organisation (cascade Prisma sur venues, events…). */
+  async deleteOrganization(id: string) {
+    const org = await this.prisma.organization.findUnique({ where: { id } });
+    if (!org) throw new NotFoundException('Organization not found');
+    await this.prisma.organization.delete({ where: { id } });
+    this.logger.log(`[backoffice] Organization deleted: ${id}`);
+    return { deleted: true };
+  }
+
+  // ─── Notifications programmées (SUPER_ADMIN cross-tenant) ─────
+
+  /** Crée un push programmé. orgId absent = broadcast plateforme. */
+  async scheduleNotification(dto: ScheduleNotificationDto) {
+    const when = new Date(dto.scheduledAt);
+    if (isNaN(when.getTime())) throw new BadRequestException('Date invalide.');
+    if (when <= new Date()) throw new BadRequestException('La date doit être dans le futur.');
+    if (dto.orgId) {
+      const org = await this.prisma.organization.findUnique({ where: { id: dto.orgId } });
+      if (!org) throw new NotFoundException('Organisation introuvable.');
+    }
+    const push = await this.prisma.scheduledPush.create({
+      data: {
+        ...(dto.orgId ? { organization: { connect: { id: dto.orgId } } } : {}),
+        kind: 'PUSH',
+        title: dto.title.trim(),
+        body: dto.body?.trim() ?? '',
+        scheduledAt: when,
+      },
+      include: { organization: { select: { id: true, name: true } } },
+    });
+    this.logger.log(`[backoffice] Notification programmée: ${push.id} à ${when.toISOString()}`);
+    return push;
+  }
+
+  /** Liste tous les pushs programmés (toutes orgs confondues). */
+  async listScheduledNotifications() {
+    return this.prisma.scheduledPush.findMany({
+      orderBy: { scheduledAt: 'asc' },
+      include: { organization: { select: { id: true, name: true } } },
+    });
+  }
+
+  /** Annule un push PENDING. */
+  async cancelScheduledNotification(id: string) {
+    const push = await this.prisma.scheduledPush.findUnique({ where: { id } });
+    if (!push) throw new NotFoundException('Notification introuvable.');
+    if (push.status !== 'PENDING') throw new BadRequestException('Seules les notifications en attente peuvent être annulées.');
+    return this.prisma.scheduledPush.update({ where: { id }, data: { status: 'CANCELLED' } });
   }
 
   // ─── Private helpers ──────────────────────────────────────────

@@ -201,7 +201,8 @@ model User {
 /// kind = 'PUSH' (simple notification) | 'DISCOUNT_CAMPAIGN' (remise + push).
 model ScheduledPush {
   id              String    @id @default(uuid())
-  organizationId  String    @map("organization_id")
+  /// Null = broadcast plateforme (tous les utilisateurs). Rempli = ciblage par org.
+  organizationId  String?   @map("organization_id")
   eventId         String?   @map("event_id")
   kind            String    @default("PUSH")
   title           String
@@ -216,8 +217,8 @@ model ScheduledPush {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  event        Event?       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  event        Event?        @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
   @@index([status, scheduledAt])
   @@index([organizationId])
