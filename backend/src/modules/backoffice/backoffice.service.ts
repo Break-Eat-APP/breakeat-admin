@@ -7,8 +7,11 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PaymentStatus, OrgStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { ExpoPushService } from '../notifications/expo-push.service';
+import { PushTokensService } from '../notifications/push-tokens.service';
 import type { CreateBackofficeOrgDto } from './dto/create-backoffice-org.dto';
 import type { UpdateBackofficeOrgDto } from './dto/update-backoffice-org.dto';
+import type { SendNotificationDto } from './dto/send-notification.dto';
 
 /**
  * Cross-tenant KPI snapshot for the back-office overview.
@@ -51,6 +54,8 @@ export class BackofficeService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly config: ConfigService,
+    private readonly expoPush: ExpoPushService,
+    private readonly pushTokens: PushTokensService,
   ) {
     const configured = this.config.get<number>('app.reporting.vatRate');
     // Guard against a missing / NaN env override; fall back to 10%.
@@ -219,6 +224,57 @@ export class BackofficeService {
         _count: { select: { members: true, events: true } },
       },
     });
+  }
+
+  // ─── Notifications push (SUPER_ADMIN broadcast) ───────────────
+
+  /**
+   * Envoie une notification push immédiate à tous les utilisateurs de la
+   * plateforme, ou uniquement aux membres d'une organisation si orgId est fourni.
+   * Purge automatiquement les jetons rejetés par Expo (DeviceNotRegistered).
+   */
+  async sendNotification(dto: SendNotificationDto) {
+    let userIds: string[];
+
+    if (dto.orgId) {
+      const members = await this.prisma.organizationMember.findMany({
+        where: { organizationId: dto.orgId },
+        select: { userId: true },
+      });
+      userIds = members.map((m) => m.userId);
+    } else {
+      const users = await this.prisma.user.findMany({
+        where: { isActive: true },
+        select: { id: true },
+      });
+      userIds = users.map((u) => u.id);
+    }
+
+    const tokens = await this.pushTokens.tokensForUsers(userIds);
+
+    if (tokens.length === 0) {
+      this.logger.log('[backoffice] sendNotification: aucun jeton enregistré pour la cible');
+      return { sent: 0, failed: 0, recipients: 0 };
+    }
+
+    const messages = tokens.map((token) => ({
+      to: token,
+      title: dto.title,
+      body: dto.body ?? '',
+      sound: 'default' as const,
+    }));
+
+    const result = await this.expoPush.send(messages);
+
+    if (result.invalidTokens.length > 0) {
+      await this.pushTokens.purgeInvalid(result.invalidTokens);
+    }
+
+    this.logger.log(
+      `[backoffice] Push envoyé — cible: ${dto.orgId ?? 'tous'}, tokens: ${tokens.length}, sent: ${result.sent}, failed: ${result.failed}`,
+    );
+
+    return { sent: result.sent, failed: result.failed, recipients: tokens.length };
   }
 
   // ─── Private helpers ──────────────────────────────────────────

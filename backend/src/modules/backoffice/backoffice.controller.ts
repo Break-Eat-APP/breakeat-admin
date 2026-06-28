@@ -13,6 +13,7 @@ import {
 import { BackofficeService } from './backoffice.service';
 import { CreateBackofficeOrgDto } from './dto/create-backoffice-org.dto';
 import { UpdateBackofficeOrgDto } from './dto/update-backoffice-org.dto';
+import { SendNotificationDto } from './dto/send-notification.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -87,5 +88,14 @@ export class BackofficeController {
   @Get('groups')
   listGroups() {
     return this.backoffice.listGroups();
+  }
+
+  // ─── Notifications push ───────────────────────────────────────
+
+  /** POST /notifications/send — envoie un push immédiat à tous ou à une org. */
+  @Post('notifications/send')
+  @HttpCode(HttpStatus.OK)
+  sendNotification(@Body() dto: SendNotificationDto) {
+    return this.backoffice.sendNotification(dto);
   }
 }

@@ -35,6 +35,7 @@ export default function OrganizationDetailPage({
   const [slug, setSlug] = useState('');
   const [description, setDescription] = useState('');
   const [primaryColor, setPrimaryColor] = useState('');
+  const [logoUrl, setLogoUrl] = useState('');
   const [saveError, setSaveError] = useState('');
   const [savedAt, setSavedAt] = useState(0);
 
@@ -44,6 +45,7 @@ export default function OrganizationDetailPage({
       setSlug(data.slug);
       setDescription(data.description ?? '');
       setPrimaryColor(data.primaryColor ?? '');
+      setLogoUrl(data.logoUrl ?? '');
     }
   }, [data]);
 
@@ -58,7 +60,8 @@ export default function OrganizationDetailPage({
         name: name.trim(),
         slug: slug.trim(),
         description: description.trim(),
-        primaryColor: primaryColor.trim(),
+        primaryColor: primaryColor.trim() || null,
+        logoUrl: logoUrl.trim() || null,
       }),
     onSuccess: () => {
       setSaveError('');
@@ -204,6 +207,24 @@ export default function OrganizationDetailPage({
                   style={inputStyle}
                   required
                 />
+              </Field>
+              <Field label="Logo du club (URL de l'image)">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <input
+                    value={logoUrl}
+                    onChange={(e) => setLogoUrl(e.target.value)}
+                    placeholder="https://exemple.com/logo-club.png"
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  {logoUrl.trim() && (
+                    <img
+                      src={logoUrl.trim()}
+                      alt="Aperçu logo"
+                      style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: '#f8f8f8', flexShrink: 0 }}
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  )}
+                </div>
               </Field>
               <Field label="Couleur principale (hex, ex : #FC4002)">
                 <input

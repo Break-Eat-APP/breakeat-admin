@@ -271,6 +271,26 @@ export async function apiListGroups(): Promise<GroupListItem[]> {
   return req<GroupListItem[]>('GET', '/backoffice/groups');
 }
 
+// ─── Notifications push ────────────────────────────────────────────────────────
+
+export interface SendNotificationInput {
+  title: string;
+  body?: string;
+  orgId?: string;
+}
+
+export interface SendNotificationResult {
+  sent: number;
+  failed: number;
+  recipients: number;
+}
+
+export async function apiSendNotification(
+  data: SendNotificationInput,
+): Promise<SendNotificationResult> {
+  return req<SendNotificationResult>('POST', '/backoffice/notifications/send', data);
+}
+
 // ─── Formatting helpers ────────────────────────────────────────────────────────
 
 /** Integer cents → "1 234,56 €" (French formatting). */
