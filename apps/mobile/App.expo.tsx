@@ -50,6 +50,9 @@ function StubScreen({ icon, title, sub }: { icon: string; title: string; sub: st
 const EventHomeStub = (_: NativeStackScreenProps<RootStackParamList, 'EventHome'>) => (
   <StubScreen icon="stadium-variant" title="Sélection du lieu" sub="Ici, l'app de production passe le relais à Flaix pour la commande." />
 );
+const CartStub = (_: NativeStackScreenProps<RootStackParamList, 'Cart'>) => (
+  <StubScreen icon="cart-outline" title="Votre panier est vide" sub="Choisissez un lieu pour démarrer une commande." />
+);
 const OrderTrackingStub = (_: NativeStackScreenProps<RootStackParamList, 'OrderTracking'>) => (
   <StubScreen icon="package-variant" title="Suivi de commande" sub="Aperçu non disponible dans la prévisualisation." />
 );
@@ -80,6 +83,7 @@ export default function AppPreview() {
             <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="EventHome" component={EventHomeStub} />
+            <Stack.Screen name="Cart" component={CartStub} />
             <Stack.Screen name="OrderTracking" component={OrderTrackingStub} />
           </Stack.Navigator>
         </NavigationContainer>

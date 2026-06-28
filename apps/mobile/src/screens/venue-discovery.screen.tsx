@@ -12,13 +12,14 @@ import {
   View,
   type TextStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiSearchVenues, type PublicVenue } from '@lib/api/mobile-api';
 import { useUserLocation } from '@lib/hooks/use-user-location';
+import { useNotifStore } from '@store/notif.store';
 import { THEME, shadowCard, FONT } from '@lib/theme';
 
 const LOGO_FULL_WHITE = require('../../assets/logo-full-white.png');
@@ -30,6 +31,8 @@ const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as 
 
 export function VenueDiscoveryScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
+  const { hasUnread, markRead } = useNotifStore();
   const { coords, status: locStatus, request: requestLocation } = useUserLocation();
 
   const [query, setQuery] = useState('');
@@ -67,15 +70,22 @@ export function VenueDiscoveryScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Bandeau orange + logo */}
-      <SafeAreaView edges={['top']} style={styles.band}>
-        <View style={styles.logoRow}>
+      {/* Bandeau orange plein cadre (jusqu'en haut, derrière la status bar) */}
+      <View style={[styles.band, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.headerRow}>
           <Image source={LOGO_FULL_WHITE} style={styles.lockup} resizeMode="contain" />
+          <View style={styles.headerIcons}>
+            <Pressable onPress={() => navigation.navigate('Cart')} hitSlop={8}>
+              <Ionicons name="cart-outline" size={26} color="#fff" />
+            </Pressable>
+            <Pressable onPress={markRead} hitSlop={8} style={styles.bellWrap}>
+              <Ionicons name="notifications-outline" size={26} color="#fff" />
+              {hasUnread && <View style={styles.notifDot} />}
+            </Pressable>
+          </View>
         </View>
-      </SafeAreaView>
 
-      {/* Recherche (pill, icône cible = géoloc) */}
-      <View style={styles.searchWrap}>
+        {/* Recherche (pill blanche dans le bandeau, icône cible = géoloc) */}
         <View style={[styles.searchBox, shadowCard]}>
           <TextInput
             style={[styles.searchInput, NO_OUTLINE]}
@@ -176,18 +186,28 @@ function formatDistance(km: number): string {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
 
-  band: { backgroundColor: THEME.orange, paddingBottom: 28 },
-  logoRow: {
+  band: { backgroundColor: THEME.orange, paddingBottom: 18, paddingHorizontal: 16 },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingTop: 18,
-    paddingBottom: 14,
+    justifyContent: 'space-between',
+    paddingBottom: 16,
   },
-  lockup: { height: 56, aspectRatio: 760 / 212 },
+  lockup: { width: 132, height: 132 * (212 / 760) },
+  headerIcons: { flexDirection: 'row', alignItems: 'center', gap: 18 },
+  bellWrap: {},
+  notifDot: {
+    position: 'absolute',
+    top: -1,
+    right: -1,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: '#22c55e',
+    borderWidth: 2,
+    borderColor: THEME.orange,
+  },
 
-  searchWrap: { paddingHorizontal: 16, marginTop: 18 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
