@@ -107,9 +107,7 @@ export function CheckoutScreen({ navigation }: Props) {
         {/* Customer info */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>👤 Commande pour</Text>
-          <Text style={styles.cardValue}>
-            {user.firstName} {user.lastName}
-          </Text>
+          <Text style={styles.cardValue}>{user.displayName}</Text>
           <Text style={styles.cardSub}>{user.email}</Text>
         </View>
 

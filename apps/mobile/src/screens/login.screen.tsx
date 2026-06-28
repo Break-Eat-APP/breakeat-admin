@@ -27,8 +27,7 @@ export function LoginScreen({ navigation, route }: Props) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -48,8 +47,8 @@ export function LoginScreen({ navigation, route }: Props) {
       Alert.alert('Champs requis', 'Email et mot de passe sont obligatoires.');
       return;
     }
-    if (mode === 'register' && (!firstName.trim() || !lastName.trim())) {
-      Alert.alert('Champs requis', 'Prénom et nom sont obligatoires.');
+    if (mode === 'register' && displayName.trim().length < 2) {
+      Alert.alert('Champ requis', 'Indiquez un nom (au moins 2 caractères).');
       return;
     }
     setLoading(true);
@@ -57,7 +56,7 @@ export function LoginScreen({ navigation, route }: Props) {
       const res =
         mode === 'login'
           ? await apiLogin(email.trim(), password)
-          : await apiRegister(email.trim(), password, firstName.trim(), lastName.trim());
+          : await apiRegister(email.trim(), password, displayName.trim());
       await setAuth(res.accessToken, res.user);
       proceed();
     } catch (e: unknown) {
@@ -127,24 +126,14 @@ export function LoginScreen({ navigation, route }: Props) {
 
         {/* Champs */}
         {mode === 'register' && (
-          <View style={styles.nameRow}>
-            <TextInput
-              style={[styles.input, styles.inputHalf]}
-              placeholder="Prénom*"
-              placeholderTextColor={THEME.grey}
-              value={firstName}
-              onChangeText={setFirstName}
-              autoCapitalize="words"
-            />
-            <TextInput
-              style={[styles.input, styles.inputHalf]}
-              placeholder="Nom*"
-              placeholderTextColor={THEME.grey}
-              value={lastName}
-              onChangeText={setLastName}
-              autoCapitalize="words"
-            />
-          </View>
+          <TextInput
+            style={styles.input}
+            placeholder="Nom ou pseudo*"
+            placeholderTextColor={THEME.grey}
+            value={displayName}
+            onChangeText={setDisplayName}
+            autoCapitalize="words"
+          />
         )}
 
         <TextInput

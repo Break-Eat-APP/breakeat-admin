@@ -29,12 +29,10 @@ export function ProfileScreen() {
         <View style={[styles.card, shadowCard]}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {(user.firstName?.charAt(0) ?? user.email.charAt(0)).toUpperCase()}
+              {(user.displayName?.charAt(0) || user.email.charAt(0)).toUpperCase()}
             </Text>
           </View>
-          <Text style={styles.name}>
-            {user.firstName} {user.lastName}
-          </Text>
+          <Text style={styles.name}>{user.displayName}</Text>
           <Text style={styles.email}>{user.email}</Text>
         </View>
       ) : (
