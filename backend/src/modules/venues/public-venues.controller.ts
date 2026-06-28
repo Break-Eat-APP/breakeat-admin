@@ -51,6 +51,7 @@ export class PublicVenuesController {
             OR: [
               { name: { contains: term, mode: 'insensitive' } },
               { address: { contains: term, mode: 'insensitive' } },
+              { searchTerms: { contains: term, mode: 'insensitive' } },
             ],
           }
         : {}),

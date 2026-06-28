@@ -82,6 +82,9 @@ export default function OrganizationDetailPage() {
   const [venueName, setVenueName] = useState('');
   const [venueAddress, setVenueAddress] = useState('');
   const [venueTimezone, setVenueTimezone] = useState('');
+  const [venueSearchTerms, setVenueSearchTerms] = useState('');
+  const [venueLat, setVenueLat] = useState('');
+  const [venueLng, setVenueLng] = useState('');
   const [savingVenue, setSavingVenue] = useState(false);
   const [venueError, setVenueError] = useState('');
   const [venueSuccess, setVenueSuccess] = useState('');
@@ -104,6 +107,9 @@ export default function OrganizationDetailPage() {
       setVenueName(primary?.name ?? '');
       setVenueAddress(primary?.address ?? '');
       setVenueTimezone(primary?.timezone ?? '');
+      setVenueSearchTerms(primary?.searchTerms ?? '');
+      setVenueLat(primary?.latitude != null ? String(primary.latitude) : '');
+      setVenueLng(primary?.longitude != null ? String(primary.longitude) : '');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de chargement');
     } finally {
@@ -156,6 +162,12 @@ export default function OrganizationDetailPage() {
       setVenueError('Le nom et l’adresse du lieu sont requis.');
       return;
     }
+    const lat = venueLat.trim() ? Number(venueLat.trim().replace(',', '.')) : null;
+    const lng = venueLng.trim() ? Number(venueLng.trim().replace(',', '.')) : null;
+    if ((lat !== null && Number.isNaN(lat)) || (lng !== null && Number.isNaN(lng))) {
+      setVenueError('Latitude / longitude invalides (ex. 43.296, 5.370).');
+      return;
+    }
     setSavingVenue(true);
     setVenueError('');
     setVenueSuccess('');
@@ -164,6 +176,9 @@ export default function OrganizationDetailPage() {
         name: venueName.trim(),
         address: venueAddress.trim(),
         timezone: venueTimezone.trim() || 'Europe/Paris',
+        searchTerms: venueSearchTerms.trim() || null,
+        latitude: lat,
+        longitude: lng,
       };
       if (venue) {
         await apiUpdateVenue(orgId, venue.id, payload);
@@ -264,6 +279,36 @@ export default function OrganizationDetailPage() {
                 value={venueAddress}
                 onChange={(e) => setVenueAddress(e.target.value)}
                 placeholder="1 Avenue du Sport, 75012 Paris"
+                style={venueFieldInput}
+              />
+            </div>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={venueFieldLabel}>Mots-clés de recherche</label>
+              <input
+                value={venueSearchTerms}
+                onChange={(e) => setVenueSearchTerms(e.target.value)}
+                placeholder="marseille, spartiates, patinoire"
+                style={venueFieldInput}
+              />
+              <span style={{ color: BRAND.grey, fontSize: 12 }}>
+                Termes que les clients peuvent taper pour trouver ton club (séparés par des virgules).
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={venueFieldLabel}>Latitude</label>
+              <input
+                value={venueLat}
+                onChange={(e) => setVenueLat(e.target.value)}
+                placeholder="43.296"
+                style={venueFieldInput}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={venueFieldLabel}>Longitude</label>
+              <input
+                value={venueLng}
+                onChange={(e) => setVenueLng(e.target.value)}
+                placeholder="5.370"
                 style={venueFieldInput}
               />
             </div>

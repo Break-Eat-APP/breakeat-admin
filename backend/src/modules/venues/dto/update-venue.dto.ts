@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsEnum, MinLength, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsNumber,
+  Min,
+  Max,
+  MinLength,
+  MaxLength,
+} from 'class-validator';
 import { VenueStatus } from '@prisma/client';
 
 export class UpdateVenueDto {
@@ -12,6 +21,23 @@ export class UpdateVenueDto {
   @IsOptional()
   @MaxLength(300)
   address?: string;
+
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  @IsOptional()
+  latitude?: number;
+
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  @IsOptional()
+  longitude?: number;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(300)
+  searchTerms?: string;
 
   @IsString()
   @IsOptional()

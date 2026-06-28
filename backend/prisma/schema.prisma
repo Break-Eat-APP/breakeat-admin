@@ -299,6 +299,9 @@ model Venue {
   /// PHASE 16 — coordonnées pour la découverte géolocalisée (app mobile). Nullable.
   latitude       Float?
   longitude      Float?
+  /// PHASE 16.2 — mots-clés libres saisis par le club pour la recherche (ex.
+  /// "marseille, spartiates, patinoire"). Matché en plus du nom/adresse.
+  searchTerms    String?     @map("search_terms")
   timezone       String      @default("Europe/Paris")
   status         VenueStatus @default(ACTIVE)
   createdAt      DateTime    @default(now()) @map("created_at")
