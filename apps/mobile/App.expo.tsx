@@ -50,6 +50,9 @@ function StubScreen({ icon, title, sub }: { icon: string; title: string; sub: st
 const EventHomeStub = (_: NativeStackScreenProps<RootStackParamList, 'EventHome'>) => (
   <StubScreen icon="stadium-variant" title="Sélection du lieu" sub="Ici, l'app de production passe le relais à Flaix pour la commande." />
 );
+const CartStub = (_: NativeStackScreenProps<RootStackParamList, 'Cart'>) => (
+  <StubScreen icon="cart-outline" title="Votre panier est vide" sub="Choisissez un lieu pour démarrer une commande." />
+);
 const OrderTrackingStub = (_: NativeStackScreenProps<RootStackParamList, 'OrderTracking'>) => (
   <StubScreen icon="package-variant" title="Suivi de commande" sub="Aperçu non disponible dans la prévisualisation." />
 );
@@ -57,7 +60,7 @@ const OrderTrackingStub = (_: NativeStackScreenProps<RootStackParamList, 'OrderT
 export default function AppPreview() {
   const setReady = useAppStore((s) => s.setReady);
   const rehydrate = useAuthStore((s) => s.rehydrate);
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Fredoka_400Regular,
     Fredoka_500Medium,
     Fredoka_600SemiBold,
@@ -69,7 +72,8 @@ export default function AppPreview() {
     void rehydrate();
   }, [setReady, rehydrate]);
 
-  if (!fontsLoaded) return null;
+  // Ne pas rester bloqué sur écran blanc si une police échoue à charger.
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <SafeAreaProvider>
@@ -79,6 +83,7 @@ export default function AppPreview() {
             <Stack.Screen name="MainTabs" component={MainTabs} />
             <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
             <Stack.Screen name="EventHome" component={EventHomeStub} />
+            <Stack.Screen name="Cart" component={CartStub} />
             <Stack.Screen name="OrderTracking" component={OrderTrackingStub} />
           </Stack.Navigator>
         </NavigationContainer>

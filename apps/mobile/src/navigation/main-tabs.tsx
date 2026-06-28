@@ -12,40 +12,27 @@ import { ProfileScreen } from '@screens/profile.screen';
 /**
  * Barre d'onglets de l'app (partagée prod + preview).
  *
- * 5 emplacements façon Burger King : Lieux · Mes commandes · [Commander FAB] ·
- * Panier · Autre. Le gros bouton central « Commander » renvoie vers « Mes commandes »
- * (le parcours de commande arrivera progressivement).
+ * 3 emplacements : Lieux · [Mes commandes = gros bouton central] · Menu.
+ * Le panier et les notifications sont accessibles via les icônes en haut à droite
+ * de l'écran Lieux (cf. venue-discovery).
  */
 export type MainTabParamList = {
   Lieux: undefined;
   Commandes: undefined;
-  Commander: undefined;
-  Panier: undefined;
-  Autre: undefined;
+  Menu: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-/** Gros bouton central « Commander » surélevé (logo B) — façon Burger King. */
-function CommanderFab({ onPress }: BottomTabBarButtonProps) {
+/** Gros bouton central « Mes commandes » surélevé (logo B) — façon Burger King. */
+function CommandesFab({ onPress }: BottomTabBarButtonProps) {
   return (
     <Pressable onPress={onPress} style={styles.fabWrap}>
       <View style={styles.fab}>
-        <BreakEatLogo size={30} variant="white" />
+        <BreakEatLogo size={62} variant="white" />
       </View>
-      <Text style={styles.fabLabel}>Commander</Text>
+      <Text style={styles.fabLabel}>Mes commandes</Text>
     </Pressable>
-  );
-}
-
-/** Onglet Panier — placeholder tant que le parcours de commande n'est pas branché. */
-function PanierTabScreen() {
-  return (
-    <View style={styles.stub}>
-      <Ionicons name="cart-outline" size={44} color={THEME.orange} />
-      <Text style={styles.stubTitle}>Votre panier est vide</Text>
-      <Text style={styles.stubSub}>Choisissez un lieu dans « Lieux » pour démarrer une commande.</Text>
-    </View>
   );
 }
 
@@ -72,30 +59,13 @@ export function MainTabs() {
         component={OrderHistoryScreen}
         options={{
           tabBarLabel: 'Mes commandes',
-          tabBarIcon: ({ color }) => <Ionicons name="receipt-outline" size={24} color={color} />,
+          tabBarButton: (props) => <CommandesFab {...props} />,
         }}
       />
       <Tab.Screen
-        name="Commander"
-        component={OrderHistoryScreen}
-        options={{ tabBarButton: (props) => <CommanderFab {...props} /> }}
-        listeners={({ navigation }) => ({
-          tabPress: (e) => {
-            // Raccourci « commander » → renvoie vers « Mes commandes » pour l'instant.
-            e.preventDefault();
-            navigation.navigate('Commandes');
-          },
-        })}
-      />
-      <Tab.Screen
-        name="Panier"
-        component={PanierTabScreen}
-        options={{ tabBarIcon: ({ color }) => <Ionicons name="cart-outline" size={24} color={color} /> }}
-      />
-      <Tab.Screen
-        name="Autre"
+        name="Menu"
         component={ProfileScreen}
-        options={{ tabBarIcon: ({ color }) => <Ionicons name="ellipsis-horizontal" size={24} color={color} /> }}
+        options={{ tabBarIcon: ({ color }) => <Ionicons name="menu" size={28} color={color} /> }}
       />
     </Tab.Navigator>
   );
@@ -120,27 +90,16 @@ const styles = StyleSheet.create({
 
   fabWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   fab: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
+    width: 76,
+    height: 76,
+    borderRadius: 38,
     backgroundColor: THEME.orange,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -34,
+    marginTop: -38,
     borderWidth: 5,
     borderColor: '#fff',
     ...shadowSoft,
   },
   fabLabel: { fontSize: 10, fontFamily: FONT.semibold, color: THEME.orange, marginTop: 2 },
-
-  stub: {
-    flex: 1,
-    backgroundColor: THEME.bg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-    gap: 10,
-  },
-  stubTitle: { color: THEME.ink, fontSize: 18, fontFamily: FONT.bold, marginTop: 6 },
-  stubSub: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center', lineHeight: 20, fontFamily: FONT.regular },
 });

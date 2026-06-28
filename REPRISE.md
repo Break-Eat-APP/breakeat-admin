@@ -56,7 +56,7 @@ Dépendance externe : **spec/clé API Flaix** nécessaire pour le point 4.
   - ⏳ **Étape restante (DB dev allumée)** : marquer la migration comme déjà appliquée pour ne pas la rejouer sur dev (objets créés jadis en SQL direct) :
     `corepack pnpm --filter @break-eat/backend exec prisma migrate resolve --applied 20260607_phase15_notifications_referral`
   - Le drift PK historique demeure (`gen_random_uuid()` en DB vs `@default(uuid())` au schéma) mais est bénin : `migrate deploy` ne vérifie pas le drift (seul `migrate dev` le ferait).
-- **Pipeline racine** : `turbo run` est vert (typecheck 5/5, lint 5/5) **à condition que pnpm soit sur le PATH** → `corepack enable` requis une fois (sinon « Unable to find package manager binary »). Fallback : `pnpm --filter <pkg> <script>`.
+- **Pipeline racine** : scripts repassés à **`pnpm -r --if-present run`** (au lieu de `turbo run`) — `corepack pnpm typecheck/lint/test` passent sans pré-requis (plus de « Unable to find package manager binary »). Résolu audit round 3 (2026-06-25).
 - Après tout changement de schéma : **arrêter le backend** (DLL Windows verrouillé) → `prisma generate` → relancer.
 
 ## 🚀 Lancer l'environnement (Windows)

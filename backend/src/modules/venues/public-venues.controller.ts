@@ -20,10 +20,12 @@ import type { JwtPayload } from '../auth/strategies/jwt.strategy';
  *   - radiusKm : rayon de filtrage (défaut 150 km).
  *
  * Lieux privés (Phase 16.1) : un lieu n'apparaît que s'il a au moins un événement
- * ACTIF accessible à l'appelant (PUBLIC, ou PRIVATE via appartenance à un groupe).
- * Un lieu dont tous les événements actifs sont privés-inaccessibles est masqué —
- * sans révéler son existence (même réponse que s'il n'existait pas). Les lieux sans
- * aucun événement actif restent listés (générique « Bientôt »).
+ * accessible à l'appelant (PUBLIC, ou PRIVATE via appartenance à un groupe), TOUTES
+ * visibilités/statuts confondus. Un lieu dont aucun événement n'est accessible est
+ * masqué — sans révéler son existence — même si son événement privé n'est pas encore
+ * actif (pas de fuite via « Bientôt »). `currentEventId` = premier événement accessible
+ * ET actif (cible de navigation), sinon null (générique « Bientôt »). Les lieux sans
+ * aucun événement restent listés (génériques, non confidentiels).
  */
 @UseGuards(OptionalJwtAuthGuard)
 @Controller('public/venues')
@@ -49,6 +51,7 @@ export class PublicVenuesController {
             OR: [
               { name: { contains: term, mode: 'insensitive' } },
               { address: { contains: term, mode: 'insensitive' } },
+              { searchTerms: { contains: term, mode: 'insensitive' } },
             ],
           }
         : {}),
@@ -64,11 +67,12 @@ export class PublicVenuesController {
         latitude: true,
         longitude: true,
         organization: { select: { name: true, logoUrl: true, primaryColor: true } },
-        // Événements actifs (cible de navigation) + leur visibilité pour le filtrage privé.
+        // TOUS les événements (id, statut, visibilité) : la confidentialité se décide
+        // sur l'ensemble, pas seulement les actifs — sinon un lieu privé dont
+        // l'événement privé n'est pas encore actif serait révélé en « Bientôt ».
         events: {
-          where: { status: EventStatus.ACTIVE },
           orderBy: { startAt: 'asc' },
-          select: { id: true, visibility: true },
+          select: { id: true, status: true, visibility: true },
         },
       },
     });
@@ -94,9 +98,12 @@ export class PublicVenuesController {
 
     let result = venues
       .map((v) => {
-        const accessibleActive = v.events.filter(canAccess);
-        // Lieu privé masqué : a des événements actifs, mais aucun accessible.
-        if (v.events.length > 0 && accessibleActive.length === 0) return null;
+        const accessible = v.events.filter(canAccess);
+        // Lieu privé masqué : a des événements, mais AUCUN accessible (toutes visibilités
+        // confondues) — on ne révèle pas son existence, même sans événement actif.
+        if (v.events.length > 0 && accessible.length === 0) return null;
+        // Cible de navigation : premier événement accessible ET actif.
+        const currentEvent = accessible.find((e) => e.status === EventStatus.ACTIVE);
 
         const distanceKm =
           hasLocation && v.latitude !== null && v.longitude !== null
@@ -110,7 +117,7 @@ export class PublicVenuesController {
           longitude: v.longitude,
           imageUrl: v.organization?.logoUrl ?? null,
           primaryColor: v.organization?.primaryColor ?? null,
-          currentEventId: accessibleActive[0]?.id ?? null,
+          currentEventId: currentEvent?.id ?? null,
           distanceKm: distanceKm === null ? null : Math.round(distanceKm * 10) / 10,
         };
       })

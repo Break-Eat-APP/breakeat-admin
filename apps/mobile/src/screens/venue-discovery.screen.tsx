@@ -12,15 +12,17 @@ import {
   View,
   type TextStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiSearchVenues, type PublicVenue } from '@lib/api/mobile-api';
 import { useUserLocation } from '@lib/hooks/use-user-location';
+import { useNotifStore } from '@store/notif.store';
 import { THEME, shadowCard, FONT } from '@lib/theme';
-import { BreakEatLogo } from '@components/break-eat-logo';
+
+const LOGO_FULL_WHITE = require('../../assets/logo-full-white.png');
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -29,6 +31,8 @@ const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as 
 
 export function VenueDiscoveryScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
+  const { hasUnread, markRead } = useNotifStore();
   const { coords, status: locStatus, request: requestLocation } = useUserLocation();
 
   const [query, setQuery] = useState('');
@@ -66,15 +70,23 @@ export function VenueDiscoveryScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Bandeau orange + logo */}
-      <SafeAreaView edges={['top']} style={styles.band}>
-        <View style={styles.logoRow}>
-          <BreakEatLogo size={30} variant="white" />
-          <Text style={styles.wordmark}>BREAKEAT</Text>
+      {/* Bandeau orange plein cadre — logo centré, panier + cloche à droite */}
+      <View style={[styles.band, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.headerRow}>
+          <Image source={LOGO_FULL_WHITE} style={styles.lockup} resizeMode="contain" />
+          <View style={styles.headerIcons}>
+            <Pressable onPress={() => navigation.navigate('Cart')} hitSlop={8}>
+              <Ionicons name="cart-outline" size={26} color="#fff" />
+            </Pressable>
+            <Pressable onPress={markRead} hitSlop={8} style={styles.bellWrap}>
+              <Ionicons name="notifications-outline" size={26} color="#fff" />
+              {hasUnread && <View style={styles.notifDot} />}
+            </Pressable>
+          </View>
         </View>
-      </SafeAreaView>
+      </View>
 
-      {/* Recherche (pill, icône cible = géoloc) */}
+      {/* Recherche — pill blanche dans la zone blanche, sous le bandeau */}
       <View style={styles.searchWrap}>
         <View style={[styles.searchBox, shadowCard]}>
           <TextInput
@@ -176,23 +188,43 @@ function formatDistance(km: number): string {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
 
-  band: { backgroundColor: THEME.orange, paddingBottom: 28 },
-  logoRow: {
-    flexDirection: 'row',
+  band: { backgroundColor: THEME.orange, paddingBottom: 16, paddingHorizontal: 16 },
+  headerRow: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingTop: 18,
-    paddingBottom: 14,
+    paddingBottom: 6,
   },
-  wordmark: { color: '#fff', fontSize: 24, fontFamily: FONT.bold, letterSpacing: 1 },
+  lockup: { width: 150, height: 150 * (212 / 760) },
+  headerIcons: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 18,
+  },
+  bellWrap: {},
+  notifDot: {
+    position: 'absolute',
+    top: -1,
+    right: -1,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: '#22c55e',
+    borderWidth: 2,
+    borderColor: THEME.orange,
+  },
 
-  searchWrap: { paddingHorizontal: 16, marginTop: 18 },
+  searchWrap: { paddingHorizontal: 16, marginTop: 16 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: THEME.surface,
     borderRadius: THEME.radius.pill,
+    borderWidth: 1,
+    borderColor: THEME.border,
     paddingHorizontal: 20,
     paddingVertical: 4,
     gap: 10,

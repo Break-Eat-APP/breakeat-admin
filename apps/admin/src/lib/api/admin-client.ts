@@ -675,11 +675,23 @@ export interface Venue {
   id: string;
   name: string;
   address: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  searchTerms?: string | null;
   timezone?: string | null;
   status: string;
   organizationId: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface VenueInput {
+  name?: string;
+  address?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  searchTerms?: string | null;
+  timezone?: string;
 }
 
 export async function apiGetVenues(orgId: string): Promise<Venue[]> {
@@ -688,7 +700,7 @@ export async function apiGetVenues(orgId: string): Promise<Venue[]> {
 
 export async function apiCreateVenue(
   orgId: string,
-  data: { name: string; address: string; timezone?: string },
+  data: VenueInput & { name: string; address: string },
 ): Promise<Venue> {
   return req<Venue>('POST', `/organizations/${orgId}/venues`, data);
 }
@@ -696,7 +708,7 @@ export async function apiCreateVenue(
 export async function apiUpdateVenue(
   orgId: string,
   venueId: string,
-  data: { name?: string; address?: string; timezone?: string },
+  data: VenueInput,
 ): Promise<Venue> {
   return req<Venue>('PATCH', `/organizations/${orgId}/venues/${venueId}`, data);
 }

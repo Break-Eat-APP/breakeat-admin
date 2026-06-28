@@ -1,4 +1,4 @@
-import { EventVisibility } from '@prisma/client';
+import { EventStatus, EventVisibility } from '@prisma/client';
 import { PublicVenuesController } from './public-venues.controller';
 import type { PrismaService } from '../../database/prisma.service';
 
@@ -19,7 +19,7 @@ const PUBLIC_VENUE = {
   latitude: null,
   longitude: null,
   organization: { name: 'Org', logoUrl: null, primaryColor: null },
-  events: [{ id: 'e-pub', visibility: EventVisibility.PUBLIC }],
+  events: [{ id: 'e-pub', status: EventStatus.ACTIVE, visibility: EventVisibility.PUBLIC }],
 };
 const PRIVATE_VENUE = {
   id: 'v-priv',
@@ -28,7 +28,17 @@ const PRIVATE_VENUE = {
   latitude: null,
   longitude: null,
   organization: { name: 'Org', logoUrl: null, primaryColor: null },
-  events: [{ id: 'e-priv', visibility: EventVisibility.PRIVATE }],
+  events: [{ id: 'e-priv', status: EventStatus.ACTIVE, visibility: EventVisibility.PRIVATE }],
+};
+// Lieu privé dont l'unique événement privé n'est PAS actif (ex. DRAFT) → doit rester masqué.
+const PRIVATE_VENUE_DRAFT = {
+  id: 'v-priv-draft',
+  name: 'Club Confidentiel',
+  address: 'Nice',
+  latitude: null,
+  longitude: null,
+  organization: { name: 'Org', logoUrl: null, primaryColor: null },
+  events: [{ id: 'e-priv-draft', status: EventStatus.DRAFT, visibility: EventVisibility.PRIVATE }],
 };
 const NO_EVENT_VENUE = {
   id: 'v-none',
@@ -46,17 +56,20 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
     (prisma.venue.findMany as jest.Mock).mockResolvedValue([
       PUBLIC_VENUE,
       PRIVATE_VENUE,
+      PRIVATE_VENUE_DRAFT,
       NO_EVENT_VENUE,
     ]);
   });
 
-  it('anonyme : masque le lieu privé, garde public + sans-événement', async () => {
+  it('anonyme : masque les lieux privés (même non-actifs), garde public + sans-événement', async () => {
     const res = await makeController().search(undefined);
 
     const ids = res.map((v) => v.id);
     expect(ids).toContain('v-pub');
     expect(ids).toContain('v-none');
     expect(ids).not.toContain('v-priv');
+    // Lieu privé dont l'événement privé n'est pas actif → reste masqué (pas de fuite « Bientôt »).
+    expect(ids).not.toContain('v-priv-draft');
     // Le lieu public pointe vers son événement actif.
     expect(res.find((v) => v.id === 'v-pub')?.currentEventId).toBe('e-pub');
     // Le lieu sans événement reste listé en « Bientôt » (currentEventId null).

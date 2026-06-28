@@ -2,6 +2,13 @@
 
 État : dépôt clean, `prisma validate` OK. Ne pas passer à l'étape suivante avant les P1.
 
+## ✅ Avancement correctifs — 3e tour (2026-06-25)
+- **P1 pipeline racine (Turbo « Unable to find package manager binary »)** : RÉSOLU. Scripts racine repassés de `turbo run` à **`pnpm -r --if-present run`** (aucun spawn de binaire externe). Vérifié : `corepack pnpm typecheck` (tous packages verts), `corepack pnpm test` (backend 336 ✓), `corepack pnpm lint` (0 erreur). Docs ENGINEERING_MANUAL alignées (décision finale = pnpm -r).
+- **P1 test mobile (Jest sort en erreur, aucun test)** : RÉSOLU. `apps/mobile` script test = `jest --passWithNoTests`.
+- **P2 lieux privés sans événement actif (fuite « Bientôt »)** : RÉSOLU. Le filtrage considère désormais **tous** les événements (toutes visibilités/statuts) : un lieu sans aucun événement accessible est masqué même si son événement privé n'est pas encore actif. `currentEventId` = 1er événement accessible ET actif. +1 test (lieu privé DRAFT masqué).
+- **P2 migration sur base avec objets existants** : confirmé OK pour Railway neuf ; le `prisma migrate resolve --applied` pour dev/staging est documenté (DEPLOY-BACKEND.md + REPRISE).
+- **P3 build backend EPERM (Prisma DLL / OneDrive)** : environnemental Windows (fichier `query_engine-windows.dll.node` verrouillé par OneDrive pendant `prisma generate`). Railway Linux non concerné. Contournement : sortir le repo de OneDrive, ou arrêter le backend avant `prisma generate`.
+
 ## ✅ Avancement correctifs — 2e tour (2026-06-24)
 - **P1 migration manquante** : FAIT. Migration versionnée `20260607_phase15_notifications_referral` (`scheduled_pushes`, `push_tokens`, `suppliers.is_external`/`referral_code`) **+ `migration_lock.toml` créé** (il était absent → bloquait aussi `migrate deploy`). Vérif : toutes les tables du schéma sont couvertes par l'historique. ⏳ Reste (DB dev allumée) : `prisma migrate resolve --applied 20260607_phase15_notifications_referral`.
 - **P1 pipeline** : VÉRIFIÉ VERT (typecheck 5/5, lint 5/5 en exécution réelle). Cause des échecs = (a) pnpm hors PATH sans `corepack enable` ; (b) install local cassé (symlink `@sentry/nextjs` orphelin) → réparé par `pnpm install`. **Aucun bug de code.** Docs corrigées (Turbo « réel » + mentions « SQL direct » marquées rattrapées).

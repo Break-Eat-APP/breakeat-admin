@@ -48,8 +48,7 @@ export interface LoginResponse {
   user: {
     id: string;
     email: string;
-    firstName: string;
-    lastName: string;
+    displayName: string;
   };
 }
 
@@ -210,10 +209,10 @@ export const apiLogin = (email: string, password: string) =>
     body: JSON.stringify({ email, password }),
   });
 
-export const apiRegister = (email: string, password: string, firstName: string, lastName: string) =>
+export const apiRegister = (email: string, password: string, displayName: string) =>
   req<LoginResponse>('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password, firstName, lastName }),
+    body: JSON.stringify({ email, password, displayName }),
   });
 
 // ─── Découverte des lieux (public, no auth required) ───────────

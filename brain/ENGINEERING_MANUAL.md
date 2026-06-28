@@ -1385,33 +1385,31 @@ pnpm build       # 4 packages ✅
 
 > ⚠️ **Cette section SUPERSÈDE toutes les décisions pipeline antérieures** (notamment le `pnpm -r run` de v0.8.0 / [0.10.2]). En cas de contradiction avec une section plus ancienne, c'est CELLE-CI qui fait foi.
 
-### Pipeline racine — décision FINALE : `turbo run`
+### Pipeline racine — décision FINALE (2026-06-25) : `pnpm -r`
 
 ```json
-"build":     "turbo run build",
-"dev":       "turbo run dev",
-"lint":      "turbo run lint",
-"typecheck": "turbo run typecheck",
-"test":      "turbo run test",
-"clean":     "turbo run clean && rimraf node_modules"
+"build":     "pnpm -r --if-present run build",
+"dev":       "pnpm -r --parallel --if-present run dev",
+"lint":      "pnpm -r --if-present run lint",
+"typecheck": "pnpm -r --if-present run typecheck",
+"test":      "pnpm -r --if-present run test",
+"clean":     "pnpm -r --if-present run clean && rimraf node_modules"
 ```
 
-**Pourquoi `turbo run` et pas `pnpm -r run` :**
-- Historique : v0.8.0 était passé de `turbo` à `pnpm -r run` pour contourner un souci de résolution du binaire pnpm par Turbo sur Windows.
-- Problème découvert par l'audit (2e passe) : `corepack pnpm typecheck` exécute le script `typecheck`, dont le corps `pnpm -r run typecheck` appelle un **`pnpm` imbriqué qui n'est PAS dans le PATH** (pnpm vit dans le cache corepack, pas dans `node_modules/.bin`) → échec.
-- **Fix racine :** `turbo` EST dans `node_modules/.bin` (donc ajouté au PATH par pnpm quand il lance un script). `turbo run typecheck` se résout donc toujours. Les tâches par-package (`tsc --noEmit`, `eslint`) sont des binaires locaux que Turbo lance directement — elles n'ont jamais besoin de `pnpm`.
-- **Vérifié :** `corepack pnpm typecheck` ET `corepack pnpm lint` → tous les packages verts, via les scripts (la commande exacte que l'audit disait cassée). *(NB : le « 4/4 » d'origine date d'avant l'ajout de `apps/backoffice` + `apps/mobile` ; le compte de packages a augmenté, le résultat reste vert.)*
-- ⚠️ **Prérequis d'environnement (voir la section [2026-06-07] « Root Turbo pipeline — mise au point », plus bas, qui fait foi) :** `turbo run` n'est vert QUE si `pnpm` est résoluble sur le PATH. Un sandbox sans pnpm (ex. l'auditeur Codex) renvoie « Unable to find package manager binary » — c'est un **manque d'environnement, PAS un bug du dépôt**. Remède : provisionner pnpm (`corepack enable && corepack prepare pnpm@11.3.0 --activate`). Fallback fiable : builds **package par package** (`pnpm --filter <pkg> build`). CI / Vercel / Railway provisionnent tous pnpm 11.3.0, donc le pipeline est vert partout en réel.
+**Pourquoi `pnpm -r` et PAS `turbo run` (tranché après l'audit Codex round 3) :**
+- `turbo run X` doit **spawner le package manager** par paquet ; dans un environnement où pnpm n'est accessible que via les shims corepack (sandbox Codex, CI minimale), Turbo renvoie **« Unable to find package manager binary »** → la commande racine demandée échoue.
+- `pnpm -r run X` n'a **aucune résolution de binaire externe** : c'est le processus pnpm courant qui exécute les scripts de chaque package, en ordre topologique (deps d'abord). `--if-present` ignore les packages sans le script.
+- **Vérifié (2026-06-25)** : `corepack pnpm typecheck` (tous packages verts), `corepack pnpm test` (backend 336 ✓, mobile `--passWithNoTests`), `corepack pnpm lint` (0 erreur) — exactement les commandes que l'audit disait cassées.
+- Compromis assumé : on perd le cache Turbo (`turbo.json` conservé pour usage ponctuel `corepack pnpm exec turbo …` si besoin), au profit d'une **robustesse d'environnement** totale.
 
-**Invocation correcte (dev, CI, et audit Codex) :**
+**Invocation (dev, CI, audit Codex) :**
 ```bash
 corepack pnpm install          # une fois
-corepack pnpm typecheck        # → turbo run typecheck → 4 packages
-corepack pnpm lint             # → turbo run lint
-corepack pnpm build            # → turbo run build (respecte ^build)
-corepack pnpm test             # → turbo run test
+corepack pnpm typecheck        # → pnpm -r run typecheck
+corepack pnpm lint             # → pnpm -r run lint
+corepack pnpm test             # → pnpm -r run test (mobile : --passWithNoTests)
+corepack pnpm build            # → pnpm -r run build (ordre topologique)
 ```
-Bénéfice bonus : le cache Turbo est de retour (un package non modifié = `FULL TURBO`, instantané).
 
 ### Tests déterministes (fin du flaky parallèle)
 
@@ -3446,9 +3444,11 @@ Trois correctifs issus de l'audit Codex (frontière d'audit : 2026-06-02) :
 - Backend : **25 suites / 306 tests** (303 → +3 du nouveau spec contrôleur). `typecheck` exit 0.
 - Opérateur : `typecheck` exit 0 · `lint` 0 · `build` ✓ (`/dashboard/[eventId]` 10.5 kB).
 
-### Root Turbo pipeline — mise au point (P1 audit, non-bug)
+### Root pipeline — RÉSOLU (audit round 3, 2026-06-25) : passage à `pnpm -r`
 
-L'audit signalait `turbo run build/typecheck/lint` cassé (« Unable to find package manager binary »). **Vérifié ici : sain** (exécution réelle — `typecheck` 5/5 et `lint` 5/5 exit 0 le 2026-06-24, pas seulement en dry-run ; pnpm 11.3.0 = `packageManager`). Tous les environnements réels provisionnent pnpm : CI (`.github/workflows/ci.yml` via `pnpm/action-setup@v4`), Vercel (`vercel.json` → `pnpm install` + `pnpm build`), Railway (`nixpacks.toml` → `corepack prepare pnpm@11.3.0`). L'échec Codex venait de son **sandbox** (pnpm absent du PATH là où Turbo le cherche), pas du dépôt. **Règle** : si `turbo` ne trouve pas le binaire, provisionner pnpm (`corepack enable` / `corepack prepare pnpm@11.3.0 --activate`) ; les builds **package par package** (`pnpm --filter <pkg> build`) sont le fallback fiable.
+> ⚠️ Section historique. La **décision qui fait foi** est désormais « Pipeline racine — décision FINALE (2026-06-25) : `pnpm -r` » (plus haut).
+
+Historique : on avait soutenu que `turbo run` était « sain » et que l'échec Codex (« Unable to find package manager binary ») était purement un manque d'environnement. **Round 3 a tranché** : la commande racine demandée doit passer telle quelle, sans pré-requis corepack. Les scripts racine sont donc repassés à `pnpm -r --if-present run …` (pas de spawn de binaire externe). Vérifié : `corepack pnpm typecheck/lint/test` verts. `turbo.json` est conservé pour un usage ponctuel optionnel (`corepack pnpm exec turbo …`).
 
 ### Risks and Safe Change Rules
 

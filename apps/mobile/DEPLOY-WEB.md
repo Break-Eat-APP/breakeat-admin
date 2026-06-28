@@ -6,9 +6,14 @@ L'app web (export Expo) est un site statique dans `dist/`. Elle vise le backend
 ## 1. Construire le bundle (vise la prod)
 ```
 cd apps/mobile
-EXPO_PUBLIC_API_URL="https://breakeat-admin-production.up.railway.app/api/v1" npx expo export -p web
+EXPO_PUBLIC_API_URL="https://breakeat-admin-production.up.railway.app/api/v1" npm run build:web
 ```
 → produit `apps/mobile/dist/`.
+
+⚠️ **Utiliser `build:web` (pas `expo export` seul)** : pnpm range les polices sous un
+dossier `.pnpm` (commençant par un point) que Netlify **ignore** → police cassée + icônes
+absentes. `build:web` lance l'export PUIS `scripts/fix-web-assets.cjs` qui renomme `.pnpm`
+→ `pnpm` et corrige les références. Indispensable pour Netlify/Vercel.
 
 ## 2. Déployer `dist/`
 **Option A — Netlify Drop (zéro config) :** va sur https://app.netlify.com/drop et

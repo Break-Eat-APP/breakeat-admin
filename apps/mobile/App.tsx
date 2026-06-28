@@ -29,18 +29,20 @@ RNTextWithDefaults.defaultProps.style = { fontFamily: FONT.regular };
  */
 export default function App() {
   const setReady = useAppStore((s) => s.setReady);
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Fredoka_400Regular,
     Fredoka_500Medium,
     Fredoka_600SemiBold,
     Fredoka_700Bold,
   });
+  const ready = fontsLoaded || !!fontError;
 
   useEffect(() => {
-    if (fontsLoaded) setReady(true);
-  }, [setReady, fontsLoaded]);
+    if (ready) setReady(true);
+  }, [setReady, ready]);
 
-  if (!fontsLoaded) return null;
+  // Ne pas rester bloqué sur écran blanc si une police échoue à charger.
+  if (!ready) return null;
 
   return (
     <SafeAreaProvider>

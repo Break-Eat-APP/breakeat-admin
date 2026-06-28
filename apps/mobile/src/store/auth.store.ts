@@ -7,8 +7,7 @@ const USER_KEY = 'break_eat_user';
 export interface AuthUser {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  displayName: string;
 }
 
 interface AuthState {
