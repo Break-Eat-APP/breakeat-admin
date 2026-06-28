@@ -47,6 +47,10 @@ export function LoginScreen({ navigation, route }: Props) {
       Alert.alert('Champs requis', 'Email et mot de passe sont obligatoires.');
       return;
     }
+    if (password.length < 8) {
+      Alert.alert('Mot de passe trop court', 'Le mot de passe doit contenir au moins 8 caractères.');
+      return;
+    }
     if (mode === 'register' && displayName.trim().length < 2) {
       Alert.alert('Champ requis', 'Indiquez un nom (au moins 2 caractères).');
       return;
@@ -60,8 +64,19 @@ export function LoginScreen({ navigation, route }: Props) {
       await setAuth(res.accessToken, res.user);
       proceed();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : 'Erreur inconnue';
-      Alert.alert('Erreur', msg.includes('401') ? 'Email ou mot de passe incorrect.' : msg);
+      const raw = e instanceof Error ? e.message : 'Erreur inconnue';
+      let msg = raw;
+      try {
+        const parsed = JSON.parse(raw) as { message?: string | string[] };
+        const m = parsed.message;
+        msg = Array.isArray(m) ? m[0] ?? raw : (m ?? raw);
+      } catch { /* raw n'est pas du JSON */ }
+      if (msg.includes('401') || msg.toLowerCase().includes('invalid credentials')) {
+        msg = 'Email ou mot de passe incorrect.';
+      } else if (msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('conflict')) {
+        msg = 'Un compte existe déjà avec cet email.';
+      }
+      Alert.alert('Erreur', msg);
     } finally {
       setLoading(false);
     }
