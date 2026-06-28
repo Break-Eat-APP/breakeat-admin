@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsEnum,
   IsNumber,
+  IsBoolean,
   Min,
   Max,
   MinLength,
@@ -38,6 +39,15 @@ export class UpdateVenueDto {
   @IsOptional()
   @MaxLength(300)
   searchTerms?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  flaixEnabled?: boolean;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(200)
+  flaixVenueId?: string;
 
   @IsString()
   @IsOptional()

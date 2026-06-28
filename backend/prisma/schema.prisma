@@ -302,6 +302,11 @@ model Venue {
   /// PHASE 16.2 — mots-clés libres saisis par le club pour la recherche (ex.
   /// "marseille, spartiates, patinoire"). Matché en plus du nom/adresse.
   searchTerms    String?     @map("search_terms")
+  /// PHASE 16.3 — intégration Flaix (API). Quand flaixEnabled, l'app passe le relais
+  /// à Flaix au lieu du parcours Break Eat natif ; flaixVenueId = identifiant du lieu
+  /// côté Flaix (utilisé par les appels API Flaix, à brancher au contrat Flaix).
+  flaixEnabled   Boolean     @default(false) @map("flaix_enabled")
+  flaixVenueId   String?     @map("flaix_venue_id")
   timezone       String      @default("Europe/Paris")
   status         VenueStatus @default(ACTIVE)
   createdAt      DateTime    @default(now()) @map("created_at")

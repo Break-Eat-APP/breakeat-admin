@@ -66,6 +66,8 @@ export class PublicVenuesController {
         address: true,
         latitude: true,
         longitude: true,
+        flaixEnabled: true,
+        flaixVenueId: true,
         organization: { select: { name: true, logoUrl: true, primaryColor: true } },
         // TOUS les événements (id, statut, visibilité) : la confidentialité se décide
         // sur l'ensemble, pas seulement les actifs — sinon un lieu privé dont
@@ -117,6 +119,8 @@ export class PublicVenuesController {
           longitude: v.longitude,
           imageUrl: v.organization?.logoUrl ?? null,
           primaryColor: v.organization?.primaryColor ?? null,
+          flaixEnabled: v.flaixEnabled,
+          flaixVenueId: v.flaixVenueId,
           currentEventId: currentEvent?.id ?? null,
           distanceKm: distanceKm === null ? null : Math.round(distanceKm * 10) / 10,
         };

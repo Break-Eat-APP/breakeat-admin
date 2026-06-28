@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsEnum,
   IsNumber,
+  IsBoolean,
   Min,
   Max,
   MinLength,
@@ -42,6 +43,17 @@ export class CreateVenueDto {
   @IsOptional()
   @MaxLength(300)
   searchTerms?: string;
+
+  /** Intégration Flaix : passe le relais à Flaix à la sélection du lieu. */
+  @IsBoolean()
+  @IsOptional()
+  flaixEnabled?: boolean;
+
+  /** Identifiant du lieu côté Flaix (pour les appels API Flaix). */
+  @IsString()
+  @IsOptional()
+  @MaxLength(200)
+  flaixVenueId?: string;
 
   @IsString()
   @IsOptional()
