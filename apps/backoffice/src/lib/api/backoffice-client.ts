@@ -265,10 +265,46 @@ export async function apiUpdateVenue(
   return req<Venue>('PATCH', `/organizations/${orgId}/venues/${venueId}`, data);
 }
 
-// ─── Groups (cross-tenant read) ────────────────────────────────────────────────
+// ─── Utilisateurs (cross-tenant) ──────────────────────────────────────────────
+
+export interface UserMembership {
+  orgRole: string;
+  organization: { id: string; name: string; slug: string };
+}
+
+export interface BackofficeUserListItem {
+  id: string;
+  email: string;
+  displayName: string;
+  globalRole: string;
+  isActive: boolean;
+  createdAt: string;
+  memberships: UserMembership[];
+}
+
+export async function apiListUsers(): Promise<BackofficeUserListItem[]> {
+  return req<BackofficeUserListItem[]>('GET', '/backoffice/users');
+}
+
+// ─── Groups (cross-tenant CRUD) ────────────────────────────────────────────────
+
+export interface CreateGroupInput {
+  orgId: string;
+  name: string;
+  description?: string;
+  emailDomain?: string;
+}
 
 export async function apiListGroups(): Promise<GroupListItem[]> {
   return req<GroupListItem[]>('GET', '/backoffice/groups');
+}
+
+export async function apiCreateGroup(data: CreateGroupInput): Promise<GroupListItem> {
+  return req<GroupListItem>('POST', '/backoffice/groups', data);
+}
+
+export async function apiDeleteGroup(id: string): Promise<{ deleted: boolean }> {
+  return req<{ deleted: boolean }>('DELETE', `/backoffice/groups/${id}`);
 }
 
 // ─── Notifications push ────────────────────────────────────────────────────────

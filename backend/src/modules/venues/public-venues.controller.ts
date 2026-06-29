@@ -31,7 +31,7 @@ import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 @Controller('public/venues')
 export class PublicVenuesController {
   /** Rayon par défaut au-delà duquel un lieu géolocalisé est écarté. */
-  private static readonly DEFAULT_RADIUS_KM = 150;
+  private static readonly DEFAULT_RADIUS_KM = 10;
 
   constructor(private readonly prisma: PrismaService) {}
 

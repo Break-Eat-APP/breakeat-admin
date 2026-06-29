@@ -91,12 +91,34 @@ export class BackofficeController {
     return this.backoffice.deleteOrganization(id);
   }
 
+  // ─── Utilisateurs ─────────────────────────────────────────────
+
+  /** GET /users — liste tous les comptes inscrits (cross-tenant). */
+  @Get('users')
+  listUsers() {
+    return this.backoffice.listUsers();
+  }
+
   // ─── Groups ───────────────────────────────────────────────────
 
   /** GET /groups — cross-tenant list of all groups. */
   @Get('groups')
   listGroups() {
     return this.backoffice.listGroups();
+  }
+
+  /** POST /groups — crée un groupe dans une organisation. */
+  @Post('groups')
+  @HttpCode(HttpStatus.CREATED)
+  createGroup(@Body() body: { orgId: string; name: string; description?: string; emailDomain?: string }) {
+    return this.backoffice.createGroup(body);
+  }
+
+  /** DELETE /groups/:id — supprime définitivement un groupe. */
+  @Delete('groups/:id')
+  @HttpCode(HttpStatus.OK)
+  deleteGroup(@Param('id', ParseUUIDPipe) id: string) {
+    return this.backoffice.deleteGroup(id);
   }
 
   // ─── Notifications push ───────────────────────────────────────

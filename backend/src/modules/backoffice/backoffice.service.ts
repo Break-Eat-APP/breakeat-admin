@@ -209,11 +209,34 @@ export class BackofficeService {
     return updated;
   }
 
-  // ─── Groups (cross-tenant read) ───────────────────────────────
+  // ─── Utilisateurs (cross-tenant read) ────────────────────────
+
+  /** Liste tous les comptes inscrits avec leurs appartenances d'org. */
+  async listUsers() {
+    return this.prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        globalRole: true,
+        isActive: true,
+        createdAt: true,
+        memberships: {
+          select: {
+            orgRole: true,
+            organization: { select: { id: true, name: true, slug: true } },
+          },
+        },
+      },
+    });
+  }
+
+  // ─── Groups (cross-tenant CRUD) ───────────────────────────────
 
   /**
    * Lists every group across all organisations, with their owning org and
-   * member / event counts. Read-only supervision view for the back office.
+   * member / event counts.
    */
   async listGroups() {
     return this.prisma.group.findMany({
@@ -228,6 +251,38 @@ export class BackofficeService {
         _count: { select: { members: true, events: true } },
       },
     });
+  }
+
+  /** Crée un groupe dans l'organisation indiquée. */
+  async createGroup(dto: { orgId: string; name: string; description?: string; emailDomain?: string }) {
+    const org = await this.prisma.organization.findUnique({ where: { id: dto.orgId } });
+    if (!org) throw new NotFoundException('Organisation introuvable.');
+
+    const existing = await this.prisma.group.findFirst({
+      where: { organizationId: dto.orgId, name: dto.name.trim() },
+    });
+    if (existing) throw new ConflictException(`Un groupe "${dto.name}" existe déjà dans cette organisation.`);
+
+    const group = await this.prisma.group.create({
+      data: {
+        organizationId: dto.orgId,
+        name: dto.name.trim(),
+        description: dto.description?.trim() || null,
+        emailDomain: dto.emailDomain?.trim().toLowerCase().replace(/^@/, '') || null,
+      },
+      include: { organization: { select: { id: true, name: true, slug: true } }, _count: { select: { members: true, events: true } } },
+    });
+    this.logger.log(`[backoffice] Group created: ${group.id} in org ${dto.orgId}`);
+    return group;
+  }
+
+  /** Supprime définitivement un groupe (cascade sur groupMembers + eventGroups). */
+  async deleteGroup(id: string) {
+    const group = await this.prisma.group.findUnique({ where: { id } });
+    if (!group) throw new NotFoundException('Groupe introuvable.');
+    await this.prisma.group.delete({ where: { id } });
+    this.logger.log(`[backoffice] Group deleted: ${id}`);
+    return { deleted: true };
   }
 
   // ─── Notifications push (SUPER_ADMIN broadcast) ───────────────
