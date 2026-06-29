@@ -7,19 +7,15 @@ import { THEME, shadowSoft, FONT } from '@lib/theme';
 import { BreakEatLogo } from '@components/break-eat-logo';
 import { VenueDiscoveryScreen } from '@screens/venue-discovery.screen';
 import { OrderHistoryScreen } from '@screens/order-history.screen';
-import { ProfileScreen } from '@screens/profile.screen';
 
 /**
- * Barre d'onglets de l'app (partagée prod + preview).
- *
- * 3 emplacements : Lieux · [Mes commandes = gros bouton central] · Menu.
- * Le panier et les notifications sont accessibles via les icônes en haut à droite
- * de l'écran Lieux (cf. venue-discovery).
+ * Barre d'onglets : Lieux · [Mes commandes = gros bouton central] · Panier.
+ * Le profil (Menu) est accessible depuis l'icône hamburger dans le bandeau orange.
  */
 export type MainTabParamList = {
   Lieux: undefined;
   Commandes: undefined;
-  Menu: undefined;
+  Panier: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -63,9 +59,18 @@ export function MainTabs() {
         }}
       />
       <Tab.Screen
-        name="Menu"
-        component={ProfileScreen}
-        options={{ tabBarIcon: ({ color }) => <Ionicons name="menu" size={28} color={color} /> }}
+        name="Panier"
+        component={OrderHistoryScreen}
+        listeners={({ navigation }) => ({
+          tabPress: (e) => {
+            e.preventDefault();
+            navigation.navigate('Cart' as never);
+          },
+        })}
+        options={{
+          tabBarLabel: 'Panier',
+          tabBarIcon: ({ color }) => <Ionicons name="cart-outline" size={26} color={color} />,
+        }}
       />
     </Tab.Navigator>
   );

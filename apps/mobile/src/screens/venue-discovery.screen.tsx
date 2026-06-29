@@ -88,17 +88,17 @@ export function VenueDiscoveryScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Bandeau orange plein cadre — logo centré, panier + cloche à droite */}
+      {/* Bandeau orange — logo à gauche, cloche + menu à droite */}
       <View style={[styles.band, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerRow}>
           <Image source={LOGO_FULL_WHITE} style={styles.lockup} resizeMode="contain" />
           <View style={styles.headerIcons}>
-            <Pressable onPress={() => navigation.navigate('Cart')} hitSlop={8}>
-              <Ionicons name="cart-outline" size={26} color="#fff" />
-            </Pressable>
             <Pressable onPress={markRead} hitSlop={8} style={styles.bellWrap}>
               <Ionicons name="notifications-outline" size={26} color="#fff" />
               {hasUnread && <View style={styles.notifDot} />}
+            </Pressable>
+            <Pressable onPress={() => navigation.navigate('Profile')} hitSlop={8}>
+              <Ionicons name="menu" size={28} color="#fff" />
             </Pressable>
           </View>
         </View>
@@ -273,9 +273,9 @@ const styles = StyleSheet.create({
   },
   geoCtaText: { flex: 1, color: THEME.orangeDark, fontSize: 13, fontFamily: FONT.medium, lineHeight: 18 },
 
-  titleBlock: { alignItems: 'center', paddingTop: 14, paddingBottom: 10 },
-  title: { color: THEME.orange, fontSize: 13, fontFamily: FONT.bold, letterSpacing: 0.5 },
-  subtitle: { color: THEME.inkSoft, fontSize: 11, marginTop: 2, fontFamily: FONT.medium },
+  titleBlock: { alignItems: 'center', paddingTop: 20, paddingBottom: 14 },
+  title: { color: THEME.orange, fontSize: 19, fontFamily: FONT.bold, letterSpacing: 0.5 },
+  subtitle: { color: THEME.inkSoft, fontSize: 13, marginTop: 4, fontFamily: FONT.medium },
 
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
   errorText: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center', fontFamily: FONT.regular },

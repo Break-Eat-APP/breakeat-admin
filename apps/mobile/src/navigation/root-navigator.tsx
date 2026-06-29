@@ -17,6 +17,7 @@ import { SlotSelectorScreen } from '@screens/slot-selector.screen';
 import { CheckoutScreen } from '@screens/checkout.screen';
 import { OrderConfirmationScreen } from '@screens/order-confirmation.screen';
 import { OrderTrackingScreen } from '@screens/order-tracking.screen';
+import { ProfileScreen } from '@screens/profile.screen';
 import { MainTabs, type MainTabParamList } from '@navigation/main-tabs';
 import { THEME } from '@lib/theme';
 
@@ -30,6 +31,9 @@ import { THEME } from '@lib/theme';
  */
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
+
+  // Profil / Menu
+  Profile: undefined;
 
   // Auth (optionnelle, non bloquante)
   Login: { pendingEventId?: string; defaultTab?: 'login' | 'register' } | undefined;
@@ -82,6 +86,7 @@ export function RootNavigator() {
         }}
       >
         <Stack.Screen name="MainTabs" component={MainTabs} />
+        <Stack.Screen name="Profile" component={ProfileScreen} />
 
         {/* Auth — plein écran au premier lancement, modale depuis l'intérieur */}
         <Stack.Screen name="Login" component={LoginScreen} />
