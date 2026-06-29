@@ -128,14 +128,12 @@ export class PublicVenuesController {
       .filter((v): v is NonNullable<typeof v> => v !== null);
 
     if (hasLocation) {
-      // Écarte les lieux géolocalisés hors rayon ; conserve ceux sans coordonnées.
-      result = result.filter((v) => v.distanceKm === null || v.distanceKm <= radius);
-      // Trie par distance croissante ; les lieux sans coordonnées en dernier.
-      result.sort((a, b) => {
-        if (a.distanceKm === null) return b.distanceKm === null ? 0 : 1;
-        if (b.distanceKm === null) return -1;
-        return a.distanceKm - b.distanceKm;
-      });
+      // Quand la position est connue : on n'affiche que les lieux géolocalisés dans
+      // le rayon. Les lieux sans coordonnées sont masqués (ils n'ont pas de position
+      // exploitable pour un tri de proximité).
+      result = result.filter((v) => v.distanceKm !== null && v.distanceKm <= radius);
+      // Trie par distance croissante.
+      result.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
     }
 
     return result;

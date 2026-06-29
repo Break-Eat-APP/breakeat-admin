@@ -210,6 +210,7 @@ const styles = StyleSheet.create({
 
   band: { backgroundColor: THEME.orange, paddingBottom: 16, paddingHorizontal: 16 },
   headerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingBottom: 6,
