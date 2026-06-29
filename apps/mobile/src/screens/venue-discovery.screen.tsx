@@ -41,13 +41,20 @@ export function VenueDiscoveryScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    const hasQuery = query.trim().length > 0;
+    // Sans localisation ET sans recherche textuelle : on ne charge rien.
+    if (locStatus !== 'granted' && !hasQuery) {
+      setVenues([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const data = await apiSearchVenues({
         q: query.trim() || undefined,
-        lat: coords?.lat,
-        lng: coords?.lng,
+        lat: locStatus === 'granted' ? coords?.lat : undefined,
+        lng: locStatus === 'granted' ? coords?.lng : undefined,
       });
       setVenues(data);
     } catch (e: unknown) {
@@ -55,7 +62,7 @@ export function VenueDiscoveryScreen() {
     } finally {
       setLoading(false);
     }
-  }, [query, coords]);
+  }, [query, coords, locStatus]);
 
   useEffect(() => {
     const t = setTimeout(() => void load(), 300);
@@ -141,36 +148,37 @@ export function VenueDiscoveryScreen() {
         <Text style={styles.subtitle}>File prioritaire &amp; sans file d'attente</Text>
       </View>
 
-      {/* Liste des lieux (1 colonne) */}
-      {loading && venues.length === 0 ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={THEME.orange} />
-        </View>
-      ) : error ? (
-        <View style={styles.centered}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Pressable style={styles.retryBtn} onPress={() => void load()}>
-            <Text style={styles.retryText}>Réessayer</Text>
-          </Pressable>
-        </View>
-      ) : venues.length === 0 ? (
-        <View style={styles.centered}>
-          <Text style={styles.emptyText}>
-            {query.trim() ? 'Aucun lieu pour cette recherche.' : 'Aucun lieu disponible.'}
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={venues}
-          keyExtractor={(v) => v.id}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={THEME.orange} />
-          }
-          renderItem={({ item }) => <VenueCard venue={item} onPress={() => handleSelect(item)} />}
-        />
-      )}
+      {/* Liste des lieux — masquée sans localisation et sans recherche */}
+      {locStatus !== 'granted' && !query.trim() ? null
+        : loading && venues.length === 0 ? (
+          <View style={styles.centered}>
+            <ActivityIndicator size="large" color={THEME.orange} />
+          </View>
+        ) : error ? (
+          <View style={styles.centered}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable style={styles.retryBtn} onPress={() => void load()}>
+              <Text style={styles.retryText}>Réessayer</Text>
+            </Pressable>
+          </View>
+        ) : venues.length === 0 ? (
+          <View style={styles.centered}>
+            <Text style={styles.emptyText}>
+              {query.trim() ? 'Aucun lieu pour cette recherche.' : 'Aucun lieu disponible près de vous.'}
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={venues}
+            keyExtractor={(v) => v.id}
+            contentContainerStyle={styles.list}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={THEME.orange} />
+            }
+            renderItem={({ item }) => <VenueCard venue={item} onPress={() => handleSelect(item)} />}
+          />
+        )}
     </View>
   );
 }

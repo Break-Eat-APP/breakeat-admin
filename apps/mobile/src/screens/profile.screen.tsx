@@ -95,15 +95,27 @@ type LocStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable';
 function LocationMenuItem({ locStatus, onPress }: { locStatus: LocStatus; onPress: () => void }) {
   const granted = locStatus === 'granted';
   const label =
-    locStatus === 'granted'  ? 'Localisation activée' :
-    locStatus === 'denied'   ? 'Localisation refusée — réactiver' :
+    locStatus === 'granted'    ? 'Localisation activée' :
+    locStatus === 'denied'     ? 'Localisation refusée' :
     locStatus === 'requesting' ? 'Localisation en cours…' :
     'Activer ma localisation';
+
+  const handlePress = () => {
+    if (locStatus === 'denied') {
+      Alert.alert(
+        'Localisation bloquée',
+        'Votre navigateur a refusé l\'accès à la localisation.\n\nPour l\'activer : cliquez sur l\'icône de localisation dans la barre d\'adresse de votre navigateur et sélectionnez « Autoriser ».',
+        [{ text: 'OK' }],
+      );
+      return;
+    }
+    if (!granted) onPress();
+  };
 
   return (
     <Pressable
       style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
-      onPress={!granted ? onPress : undefined}
+      onPress={handlePress}
     >
       <View style={styles.menuRow}>
         <Ionicons
