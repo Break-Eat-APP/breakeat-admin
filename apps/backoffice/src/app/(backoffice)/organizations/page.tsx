@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { parseCoordsString, fmtCoord } from '@/lib/coords';
 import { BRAND } from '@break-eat/brand';
 import {
   apiListOrganizations,
@@ -43,9 +44,24 @@ export default function OrganizationsPage() {
   const [vAddress, setVAddress] = useState('');
   const [vLat, setVLat] = useState('');
   const [vLng, setVLng] = useState('');
+  const [vCoordsRaw, setVCoordsRaw] = useState('');
+  const [vCoordsError, setVCoordsError] = useState('');
   const [vTerms, setVTerms] = useState('');
   const [vFlaixOn, setVFlaixOn] = useState(false);
   const [vFlaixId, setVFlaixId] = useState('');
+
+  const handleCoordsRaw = useCallback((value: string) => {
+    setVCoordsRaw(value);
+    if (!value.trim()) { setVCoordsError(''); return; }
+    const parsed = parseCoordsString(value);
+    if (parsed) {
+      setVLat(fmtCoord(parsed.lat));
+      setVLng(fmtCoord(parsed.lng));
+      setVCoordsError('');
+    } else {
+      setVCoordsError('Format non reconnu. Essayez « 43° 17\' 45.6" N, 5° 24\' 17.2" E » ou « 43.296, 5.404 »');
+    }
+  }, []);
 
   const [formError, setFormError] = useState('');
   const [step, setStep] = useState<'idle' | 'org' | 'venue'>('idle');
@@ -55,6 +71,7 @@ export default function OrganizationsPage() {
   const resetForm = () => {
     setName(''); setSlug(''); setSlugTouched(false);
     setVName(''); setVAddress(''); setVLat(''); setVLng('');
+    setVCoordsRaw(''); setVCoordsError('');
     setVTerms(''); setVFlaixOn(false); setVFlaixId('');
     setFormError(''); setStep('idle');
   };
@@ -178,15 +195,28 @@ export default function OrganizationsPage() {
             </Field>
           </div>
 
+          <div style={{ marginBottom: 12 }}>
+            <Field label="Coordonnées GPS — coller ici depuis Google Maps ou n'importe quelle source">
+              <input
+                value={vCoordsRaw}
+                onChange={(e) => handleCoordsRaw(e.target.value)}
+                placeholder='ex. 43° 17′ 45.6" N, 5° 24′ 17.2" E   ou   43.296, 5.404'
+                style={inputStyle}
+              />
+              {vCoordsError && <span style={{ fontSize: 12, color: '#dc2626', marginTop: 2, display: 'block' }}>{vCoordsError}</span>}
+              {vLat && vLng && !vCoordsError && <span style={{ fontSize: 12, color: '#059669', marginTop: 2, display: 'block' }}>→ Lat {vLat} · Lng {vLng}</span>}
+            </Field>
+          </div>
+
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 12 }}>
             <Field label="Mots-clés de recherche" style={{ flex: 3, minWidth: 240 }}>
               <input value={vTerms} onChange={(e) => setVTerms(e.target.value)} placeholder="marseille, spartiates, patinoire, hockey" style={inputStyle} />
             </Field>
-            <Field label="Latitude" style={{ flex: 1, minWidth: 120 }}>
-              <input value={vLat} onChange={(e) => setVLat(e.target.value)} placeholder="43.296" style={inputStyle} />
+            <Field label="Latitude (décimal)" style={{ flex: 1, minWidth: 120 }}>
+              <input value={vLat} onChange={(e) => setVLat(e.target.value)} placeholder="43.296482" style={inputStyle} />
             </Field>
-            <Field label="Longitude" style={{ flex: 1, minWidth: 120 }}>
-              <input value={vLng} onChange={(e) => setVLng(e.target.value)} placeholder="5.370" style={inputStyle} />
+            <Field label="Longitude (décimal)" style={{ flex: 1, minWidth: 120 }}>
+              <input value={vLng} onChange={(e) => setVLng(e.target.value)} placeholder="5.404222" style={inputStyle} />
             </Field>
           </div>
 
