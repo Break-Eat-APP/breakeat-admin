@@ -15,6 +15,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiLogin, apiRegister } from '@lib/api/mobile-api';
 import { useAuthStore } from '@store/auth.store';
+import { useUserLocation } from '@lib/hooks/use-user-location';
 import { THEME, shadowCard, FONT } from '@lib/theme';
 import { BreakEatLogo } from '@components/break-eat-logo';
 
@@ -22,9 +23,12 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 export function LoginScreen({ navigation, route }: Props) {
   const { setAuth } = useAuthStore();
+  const { request: requestLocation } = useUserLocation();
   const pendingEventId = route.params?.pendingEventId;
 
-  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [mode, setMode] = useState<'login' | 'register'>(
+    route.params?.defaultTab ?? 'register',
+  );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -62,6 +66,14 @@ export function LoginScreen({ navigation, route }: Props) {
           ? await apiLogin(email.trim(), password)
           : await apiRegister(email.trim(), password, displayName.trim());
       await setAuth(res.accessToken, res.user);
+      if (mode === 'register') {
+        // Demande localisation + notifications juste après l'inscription
+        requestLocation();
+        const NotifAPI = (globalThis as { Notification?: { permission: string; requestPermission: () => Promise<string> } }).Notification;
+        if (NotifAPI && NotifAPI.permission === 'default') {
+          void NotifAPI.requestPermission();
+        }
+      }
       proceed();
     } catch (e: unknown) {
       const raw = e instanceof Error ? e.message : 'Erreur inconnue';

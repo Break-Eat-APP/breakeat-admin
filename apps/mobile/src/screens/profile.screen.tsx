@@ -1,10 +1,12 @@
 import React from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { useAuthStore } from '@store/auth.store';
+import { useUserLocation } from '@lib/hooks/use-user-location';
 import { THEME, shadowCard, FONT } from '@lib/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -12,6 +14,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export function ProfileScreen() {
   const navigation = useNavigation<Nav>();
   const { user, token, clearAuth } = useAuthStore();
+  const { status: locStatus, request: requestLocation } = useUserLocation();
 
   const handleLogout = () => {
     Alert.alert('Déconnexion', 'Voulez-vous vraiment vous déconnecter ?', [
@@ -47,8 +50,10 @@ export function ProfileScreen() {
         </View>
       )}
 
-      {/* Liens secondaires (placeholders — à brancher plus tard) */}
+      {/* Liens secondaires */}
       <View style={[styles.menu, shadowCard]}>
+        <LocationMenuItem locStatus={locStatus} onPress={requestLocation} />
+        <View style={styles.divider} />
         <MenuItem label="Aide & contact" onPress={() => Alert.alert('Bientôt', 'Disponible prochainement.')} />
         <View style={styles.divider} />
         <MenuItem label="Mentions légales" onPress={() => Alert.alert('Bientôt', 'Disponible prochainement.')} />
@@ -74,6 +79,36 @@ function MenuItem({ label, onPress }: { label: string; onPress: () => void }) {
     >
       <Text style={styles.menuLabel}>{label}</Text>
       <Text style={styles.chevron}>›</Text>
+    </Pressable>
+  );
+}
+
+type LocStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable';
+
+function LocationMenuItem({ locStatus, onPress }: { locStatus: LocStatus; onPress: () => void }) {
+  const granted = locStatus === 'granted';
+  const label =
+    locStatus === 'granted'  ? 'Localisation activée' :
+    locStatus === 'denied'   ? 'Localisation refusée — réactiver' :
+    locStatus === 'requesting' ? 'Localisation en cours…' :
+    'Activer ma localisation';
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
+      onPress={!granted ? onPress : undefined}
+    >
+      <View style={styles.menuRow}>
+        <Ionicons
+          name={granted ? 'location' : 'location-outline'}
+          size={18}
+          color={granted ? THEME.orange : THEME.ink}
+          style={styles.menuIcon}
+        />
+        <Text style={[styles.menuLabel, granted && styles.menuLabelActive]}>{label}</Text>
+      </View>
+      {!granted && <Text style={styles.chevron}>›</Text>}
+      {granted && <Ionicons name="checkmark-circle" size={18} color={THEME.orange} />}
     </Pressable>
   );
 }
@@ -130,6 +165,9 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.6 },
   menuLabel: { color: THEME.ink, fontSize: 15 },
+  menuLabelActive: { color: THEME.orange },
+  menuRow: { flexDirection: 'row', alignItems: 'center' },
+  menuIcon: { marginRight: 10 },
   chevron: { color: THEME.grey, fontSize: 22 },
   divider: { height: 1, backgroundColor: THEME.border, marginLeft: 18 },
 

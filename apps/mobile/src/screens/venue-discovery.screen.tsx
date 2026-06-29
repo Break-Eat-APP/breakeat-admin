@@ -188,15 +188,12 @@ function VenueCard({ venue, onPress }: { venue: PublicVenue; onPress: () => void
         <Text style={styles.cardName}>{venue.name}</Text>
       )}
 
-      {(venue.distanceKm !== null || closed) && (
+      {venue.distanceKm !== null && (
         <View style={styles.cardMeta}>
-          {venue.distanceKm !== null && (
-            <View style={styles.distancePill}>
-              <Ionicons name="navigate" size={12} color={THEME.orange} />
-              <Text style={styles.distanceText}>{formatDistance(venue.distanceKm)}</Text>
-            </View>
-          )}
-          {closed && <Text style={styles.soonText}>Bientôt</Text>}
+          <View style={styles.distancePill}>
+            <Ionicons name="navigate" size={12} color={THEME.orange} />
+            <Text style={styles.distanceText}>{formatDistance(venue.distanceKm)}</Text>
+          </View>
         </View>
       )}
     </Pressable>
@@ -214,7 +211,7 @@ const styles = StyleSheet.create({
   band: { backgroundColor: THEME.orange, paddingBottom: 16, paddingHorizontal: 16 },
   headerRow: {
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingBottom: 6,
   },
   lockup: { width: 150, height: 150 * (212 / 760) },
@@ -305,14 +302,4 @@ const styles = StyleSheet.create({
     borderRadius: THEME.radius.pill,
   },
   distanceText: { color: THEME.orange, fontSize: 12, fontFamily: FONT.bold },
-  soonText: {
-    color: THEME.grey,
-    fontSize: 11,
-    fontFamily: FONT.bold,
-    backgroundColor: THEME.bgSubtle,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: THEME.radius.pill,
-    overflow: 'hidden',
-  },
 });

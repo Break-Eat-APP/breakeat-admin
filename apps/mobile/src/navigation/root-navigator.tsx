@@ -32,7 +32,7 @@ export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
 
   // Auth (optionnelle, non bloquante)
-  Login: { pendingEventId?: string } | undefined;
+  Login: { pendingEventId?: string; defaultTab?: 'login' | 'register' } | undefined;
 
   // Flux de commande / deep links
   QRScanner: undefined;
@@ -59,7 +59,7 @@ const linking: LinkingOptions<RootStackParamList> = {
 };
 
 export function RootNavigator() {
-  const { isLoading, rehydrate } = useAuthStore();
+  const { isLoading, rehydrate, token } = useAuthStore();
 
   // Réhydrate la session depuis AsyncStorage au premier montage.
   useEffect(() => {
@@ -74,6 +74,7 @@ export function RootNavigator() {
   return (
     <NavigationContainer linking={linking}>
       <Stack.Navigator
+        initialRouteName={token ? 'MainTabs' : 'Login'}
         screenOptions={{
           headerShown: false,
           animation: 'slide_from_right',
@@ -82,8 +83,8 @@ export function RootNavigator() {
       >
         <Stack.Screen name="MainTabs" component={MainTabs} />
 
-        {/* Auth — présentée en modale, jamais bloquante */}
-        <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
+        {/* Auth — plein écran au premier lancement, modale depuis l'intérieur */}
+        <Stack.Screen name="Login" component={LoginScreen} />
 
         {/* Flux de commande / deep links */}
         <Stack.Screen name="QRScanner" component={QRScannerScreen} />
