@@ -10,6 +10,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { formatPrice } from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
+import { PageHeader } from '@components/page-header';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Cart'>;
 
@@ -20,7 +21,6 @@ export function CartScreen({ navigation }: Props) {
     decrementItem,
     removeItem,
     totalCents,
-    totalItems,
     eventId,
     supplierId,
     selectedSlotLabel,
@@ -38,29 +38,17 @@ export function CartScreen({ navigation }: Props) {
     navigation.navigate('SlotSelector', { eventId });
   };
 
-  if (items.length === 0) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.emptyIcon}>🛒</Text>
-        <Text style={styles.emptyTitle}>Votre panier est vide</Text>
-        <Text style={styles.emptyText}>Ajoutez des articles depuis le catalogue.</Text>
-        <Pressable style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnText}>← Retour au catalogue</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.root}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.back}>
-          <Text style={styles.backArrow}>←</Text>
-        </Pressable>
-        <Text style={styles.headerTitle}>Mon panier</Text>
-        <Text style={styles.headerCount}>{totalItems()} article(s)</Text>
-      </View>
+      <PageHeader title="Mon panier" />
+
+      {items.length === 0 ? (
+        <View style={styles.centered}>
+          <Text style={styles.emptyIcon}>🛒</Text>
+          <Text style={styles.emptyTitle}>Votre panier est vide</Text>
+          <Text style={styles.emptyText}>Ajoutez des articles depuis le catalogue.</Text>
+        </View>
+      ) : (<>
 
       <FlatList
         data={items}
@@ -150,6 +138,7 @@ export function CartScreen({ navigation }: Props) {
           </Text>
         </Pressable>
       </View>
+      </>)}
     </View>
   );
 }

@@ -11,6 +11,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiGetPublicSlots, formatTime, type PublicSlot } from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
+import { PageHeader } from '@components/page-header';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SlotSelector'>;
 
@@ -62,33 +63,33 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={styles.loadingText}>Chargement des créneaux…</Text>
+      <View style={styles.root}>
+        <PageHeader title="Choisir un créneau" />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={styles.loadingText}>Chargement des créneaux…</Text>
+        </View>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
-        <Pressable style={styles.retryBtn} onPress={() => void load()}>
-          <Text style={styles.retryText}>Réessayer</Text>
-        </Pressable>
+      <View style={styles.root}>
+        <PageHeader title="Choisir un créneau" />
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable style={styles.retryBtn} onPress={() => void load()}>
+            <Text style={styles.retryText}>Réessayer</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.root}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.back}>
-          <Text style={styles.backArrow}>←</Text>
-        </Pressable>
-        <Text style={styles.headerTitle}>Choisir un créneau</Text>
-      </View>
+      <PageHeader title="Choisir un créneau" />
 
       <Text style={styles.subtitle}>
         Sélectionnez l'heure à laquelle vous récupérerez votre commande.

@@ -22,15 +22,9 @@ import {
 } from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
 import { useAuthStore } from '@store/auth.store';
+import { PageHeader } from '@components/page-header';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EventHome'>;
-
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  ACTIVE: { label: 'En cours', color: '#16a34a' },
-  DRAFT: { label: 'Brouillon', color: '#d97706' },
-  CANCELLED: { label: 'Annulé', color: '#dc2626' },
-  ENDED: { label: 'Terminé', color: '#6b7280' },
-};
 
 export function EventHomeScreen({ route, navigation }: Props) {
   const { eventId } = route.params;
@@ -82,45 +76,48 @@ export function EventHomeScreen({ route, navigation }: Props) {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={styles.loadingText}>Chargement de l'événement…</Text>
+      <View style={styles.root}>
+        <PageHeader />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={styles.loadingText}>Chargement de l'événement…</Text>
+        </View>
       </View>
     );
   }
 
   if (error || !event) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorTitle}>Événement introuvable</Text>
-        <Text style={styles.errorText}>{error ?? 'Aucune donnée disponible.'}</Text>
-        <Pressable style={styles.retryBtn} onPress={() => void load()}>
-          <Text style={styles.retryText}>Réessayer</Text>
-        </Pressable>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Retour</Text>
-        </Pressable>
+      <View style={styles.root}>
+        <PageHeader />
+        <View style={styles.centered}>
+          <Text style={styles.errorTitle}>Événement introuvable</Text>
+          <Text style={styles.errorText}>{error ?? 'Aucune donnée disponible.'}</Text>
+          <Pressable style={styles.retryBtn} onPress={() => void load()}>
+            <Text style={styles.retryText}>Réessayer</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
-  const status = STATUS_LABELS[event.status] ?? { label: event.status, color: '#6b7280' };
-
   // Mode Flaix : l'interface du lieu est désactivée, Flaix gère la suite.
-  // (intégration Phase 11.5 — affiche un placeholder jusqu'à l'arrivée du SDK Flaix)
   if (event.appearance?.flaixTakeover) {
     return (
-      <View style={styles.centered}>
-        <Text style={{ fontSize: 48, marginBottom: 16 }}>🏟️</Text>
-        <Text style={{ fontSize: 20, fontWeight: '700', color: '#1c1917', textAlign: 'center', marginBottom: 8 }}>
-          Plan du lieu
-        </Text>
-        <Text style={{ fontSize: 14, color: '#78716c', textAlign: 'center', maxWidth: 260, lineHeight: 20 }}>
-          L'intégration Flaix est active. Sélectionne ton emplacement sur le plan du stade pour commander.
-        </Text>
-        <Text style={{ fontSize: 11, color: '#a8a29e', marginTop: 24 }}>
-          Intégration Flaix — à venir (Phase 11.5)
-        </Text>
+      <View style={styles.root}>
+        <PageHeader />
+        <View style={styles.centered}>
+          <Text style={{ fontSize: 48, marginBottom: 16 }}>🏟️</Text>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: '#1c1917', textAlign: 'center', marginBottom: 8 }}>
+            Plan du lieu
+          </Text>
+          <Text style={{ fontSize: 14, color: '#78716c', textAlign: 'center', maxWidth: 260, lineHeight: 20 }}>
+            L'intégration Flaix est active. Sélectionne ton emplacement sur le plan du stade pour commander.
+          </Text>
+          <Text style={{ fontSize: 11, color: '#a8a29e', marginTop: 24 }}>
+            Intégration Flaix — à venir (Phase 11.5)
+          </Text>
+        </View>
       </View>
     );
   }
@@ -138,21 +135,10 @@ export function EventHomeScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.root}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.navigate('QRScanner')} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
-        </Pressable>
-        <View style={styles.headerInfo}>
-          <Text style={styles.eventName} numberOfLines={2}>
-            {event.name}
-          </Text>
-          <View style={styles.statusRow}>
-            <View style={[styles.statusDot, { backgroundColor: status.color }]} />
-            <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
-          </View>
-        </View>
-      </View>
+      <PageHeader
+        title={event.name}
+        onBack={() => navigation.navigate('QRScanner')}
+      />
 
       {/* Venue info */}
       {event.venue && (

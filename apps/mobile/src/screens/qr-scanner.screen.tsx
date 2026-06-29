@@ -15,6 +15,8 @@ import {
   useCameraPermission,
   useCodeScanner,
 } from 'react-native-vision-camera';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 
@@ -29,6 +31,7 @@ function parseDeepLink(url: string): string | null {
 export function QRScannerScreen({ navigation }: Props) {
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('back');
+  const insets = useSafeAreaInsets();
   const [scanned, setScanned] = useState(false);
   const [manualId, setManualId] = useState('');
   const [showManual, setShowManual] = useState(false);
@@ -87,24 +90,33 @@ export function QRScannerScreen({ navigation }: Props) {
   // ── Permission denied ──────────────────────────────────────
   if (!hasPermission) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.permTitle}>Accès caméra requis</Text>
-        <Text style={styles.permText}>
-          Break Eat a besoin de la caméra pour scanner les QR codes.
-        </Text>
-        {Platform.OS === 'ios' ? (
-          <Pressable style={styles.btn} onPress={openSettings}>
-            <Text style={styles.btnText}>Ouvrir les réglages</Text>
-          </Pressable>
-        ) : (
-          <Pressable style={styles.btn} onPress={() => void requestPermission()}>
-            <Text style={styles.btnText}>Autoriser la caméra</Text>
-          </Pressable>
-        )}
-        <Pressable onPress={() => setShowManual(true)} style={styles.altBtn}>
-          <Text style={styles.altText}>Saisir un ID manuellement</Text>
+      <View style={styles.root}>
+        <Pressable
+          onPress={() => navigation.canGoBack() ? navigation.goBack() : undefined}
+          hitSlop={14}
+          style={[styles.floatBack, { top: insets.top + 6 }]}
+        >
+          <Ionicons name="chevron-back" size={26} color="#fff" />
         </Pressable>
-        {showManual && renderManualInput()}
+        <View style={styles.centered}>
+          <Text style={styles.permTitle}>Accès caméra requis</Text>
+          <Text style={styles.permText}>
+            Break Eat a besoin de la caméra pour scanner les QR codes.
+          </Text>
+          {Platform.OS === 'ios' ? (
+            <Pressable style={styles.btn} onPress={openSettings}>
+              <Text style={styles.btnText}>Ouvrir les réglages</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={styles.btn} onPress={() => void requestPermission()}>
+              <Text style={styles.btnText}>Autoriser la caméra</Text>
+            </Pressable>
+          )}
+          <Pressable onPress={() => setShowManual(true)} style={styles.altBtn}>
+            <Text style={styles.altText}>Saisir un ID manuellement</Text>
+          </Pressable>
+          {showManual && renderManualInput()}
+        </View>
       </View>
     );
   }
@@ -112,8 +124,17 @@ export function QRScannerScreen({ navigation }: Props) {
   // ── No camera device ────────────────────────────────────────
   if (!device) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.permText}>Aucune caméra arrière disponible.</Text>
+      <View style={styles.root}>
+        <Pressable
+          onPress={() => navigation.canGoBack() ? navigation.goBack() : undefined}
+          hitSlop={14}
+          style={[styles.floatBack, { top: insets.top + 6 }]}
+        >
+          <Ionicons name="chevron-back" size={26} color="#fff" />
+        </Pressable>
+        <View style={styles.centered}>
+          <Text style={styles.permText}>Aucune caméra arrière disponible.</Text>
+        </View>
       </View>
     );
   }
@@ -147,6 +168,15 @@ export function QRScannerScreen({ navigation }: Props) {
         isActive={!scanned}
         codeScanner={codeScanner}
       />
+
+      {/* Back button flottant */}
+      <Pressable
+        onPress={() => navigation.canGoBack() ? navigation.goBack() : undefined}
+        hitSlop={14}
+        style={[styles.floatBack, { top: insets.top + 6 }]}
+      >
+        <Ionicons name="chevron-back" size={26} color="#fff" />
+      </Pressable>
 
       {/* Overlay */}
       <View style={styles.overlay}>
@@ -185,6 +215,15 @@ const BLUE = '#2563eb';
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
+
+  floatBack: {
+    position: 'absolute',
+    left: 12,
+    zIndex: 10,
+    padding: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
 
   centered: {
     flex: 1,

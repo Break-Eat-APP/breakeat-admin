@@ -16,6 +16,7 @@ import {
   type PublicProduct,
 } from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
+import { PageHeader } from '@components/page-header';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SupplierCatalog'>;
 
@@ -60,33 +61,33 @@ export function SupplierCatalogScreen({ route, navigation }: Props) {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={styles.loadingText}>Chargement du catalogue…</Text>
+      <View style={styles.root}>
+        <PageHeader title="Catalogue" />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={styles.loadingText}>Chargement du catalogue…</Text>
+        </View>
       </View>
     );
   }
 
   if (error) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
-        <Pressable style={styles.retryBtn} onPress={() => void load()}>
-          <Text style={styles.retryText}>Réessayer</Text>
-        </Pressable>
+      <View style={styles.root}>
+        <PageHeader title="Catalogue" />
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable style={styles.retryBtn} onPress={() => void load()}>
+            <Text style={styles.retryText}>Réessayer</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
 
   return (
     <View style={styles.root}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backArrow}>←</Text>
-        </Pressable>
-        <Text style={styles.headerTitle}>Catalogue</Text>
-      </View>
+      <PageHeader title="Catalogue" />
 
       <SectionList
         sections={sections}

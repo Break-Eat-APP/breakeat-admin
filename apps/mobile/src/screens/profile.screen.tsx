@@ -19,7 +19,14 @@ export function ProfileScreen() {
   const handleLogout = () => {
     Alert.alert('Déconnexion', 'Voulez-vous vraiment vous déconnecter ?', [
       { text: 'Annuler', style: 'cancel' },
-      { text: 'Se déconnecter', style: 'destructive', onPress: () => void clearAuth() },
+      {
+        text: 'Se déconnecter',
+        style: 'destructive',
+        onPress: () => {
+          void clearAuth();
+          navigation.reset({ index: 0, routes: [{ name: 'Login', params: { defaultTab: 'login' } }] });
+        },
+      },
     ]);
   };
 

@@ -11,6 +11,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiGetOrder, formatPrice, type Order } from '@lib/api/mobile-api';
+import { PageHeader } from '@components/page-header';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderTracking'>;
 
@@ -134,20 +135,26 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#2563eb" />
-        <Text style={styles.loadingText}>Chargement de la commande…</Text>
+      <View style={styles.root}>
+        <PageHeader title="Suivi de commande" />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#2563eb" />
+          <Text style={styles.loadingText}>Chargement de la commande…</Text>
+        </View>
       </View>
     );
   }
 
   if (error || !order) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>{error ?? 'Commande introuvable'}</Text>
-        <Pressable style={styles.retryBtn} onPress={() => void fetchOrder()}>
-          <Text style={styles.retryText}>Réessayer</Text>
-        </Pressable>
+      <View style={styles.root}>
+        <PageHeader title="Suivi de commande" />
+        <View style={styles.centered}>
+          <Text style={styles.errorText}>{error ?? 'Commande introuvable'}</Text>
+          <Pressable style={styles.retryBtn} onPress={() => void fetchOrder()}>
+            <Text style={styles.retryText}>Réessayer</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -165,22 +172,18 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.root}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.navigate('QRScanner')} style={styles.back}>
-          <Text style={styles.backArrow}>←</Text>
-        </Pressable>
-        <View>
-          <Text style={styles.headerTitle}>Suivi de commande</Text>
-          <Text style={styles.headerSub}>#{order.publicOrderNumber}</Text>
-        </View>
-        {!STATUS_MAP[order.status]?.isFinal && (
-          <View style={styles.liveBadge}>
-            <Animated.View style={[styles.liveDot, { transform: [{ scale: pulseAnim }] }]} />
-            <Text style={styles.liveText}>LIVE</Text>
-          </View>
-        )}
-      </View>
+      <PageHeader
+        title={`Suivi #${order.publicOrderNumber}`}
+        onBack={() => navigation.navigate('QRScanner')}
+        right={
+          !STATUS_MAP[order.status]?.isFinal ? (
+            <View style={styles.liveBadge}>
+              <Animated.View style={[styles.liveDot, { transform: [{ scale: pulseAnim }] }]} />
+              <Text style={styles.liveText}>LIVE</Text>
+            </View>
+          ) : undefined
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* Status hero */}

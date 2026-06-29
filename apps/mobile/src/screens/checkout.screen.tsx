@@ -18,6 +18,7 @@ import {
 } from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
 import { useAuthStore } from '@store/auth.store';
+import { PageHeader } from '@components/page-header';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Checkout'>;
 
@@ -39,15 +40,18 @@ export function CheckoutScreen({ navigation }: Props) {
   // Redirect if not logged in
   if (!token || !user) {
     return (
-      <View style={styles.centered}>
-        <Text style={styles.authTitle}>Connexion requise</Text>
-        <Text style={styles.authText}>Vous devez être connecté pour commander.</Text>
-        <Pressable
-          style={styles.authBtn}
-          onPress={() => navigation.navigate('Login', { pendingEventId: eventId ?? undefined })}
-        >
-          <Text style={styles.authBtnText}>Se connecter</Text>
-        </Pressable>
+      <View style={styles.root}>
+        <PageHeader title="Récapitulatif" />
+        <View style={styles.centered}>
+          <Text style={styles.authTitle}>Connexion requise</Text>
+          <Text style={styles.authText}>Vous devez être connecté pour commander.</Text>
+          <Pressable
+            style={styles.authBtn}
+            onPress={() => navigation.navigate('Login', { pendingEventId: eventId ?? undefined })}
+          >
+            <Text style={styles.authBtnText}>Se connecter</Text>
+          </Pressable>
+        </View>
       </View>
     );
   }
@@ -95,13 +99,7 @@ export function CheckoutScreen({ navigation }: Props) {
 
   return (
     <View style={styles.root}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.back}>
-          <Text style={styles.backArrow}>←</Text>
-        </Pressable>
-        <Text style={styles.headerTitle}>Récapitulatif</Text>
-      </View>
+      <PageHeader title="Récapitulatif" />
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* Customer info */}

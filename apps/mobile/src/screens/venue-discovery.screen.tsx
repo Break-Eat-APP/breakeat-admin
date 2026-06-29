@@ -265,9 +265,9 @@ const styles = StyleSheet.create({
   },
   geoCtaText: { flex: 1, color: THEME.orangeDark, fontSize: 13, fontFamily: FONT.medium, lineHeight: 18 },
 
-  titleBlock: { alignItems: 'center', paddingTop: 26, paddingBottom: 18 },
-  title: { color: THEME.orange, fontSize: 26, fontFamily: FONT.bold, letterSpacing: 0.5 },
-  subtitle: { color: THEME.inkSoft, fontSize: 14, marginTop: 4, fontFamily: FONT.medium },
+  titleBlock: { alignItems: 'center', paddingTop: 14, paddingBottom: 10 },
+  title: { color: THEME.orange, fontSize: 13, fontFamily: FONT.bold, letterSpacing: 0.5 },
+  subtitle: { color: THEME.inkSoft, fontSize: 11, marginTop: 2, fontFamily: FONT.medium },
 
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
   errorText: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center', fontFamily: FONT.regular },
