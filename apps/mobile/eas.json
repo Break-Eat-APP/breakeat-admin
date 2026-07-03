@@ -46,9 +46,9 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "breakeat.app@gmail.com",
+        "appleId": "reminotta@breakeatapp.com",
         "ascAppId": "FILL_IN_APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "FILL_IN_APPLE_TEAM_ID"
+        "appleTeamId": "2A5L298Q4C"
       },
       "android": {
         "serviceAccountKeyPath": "./google-play-service-account.json",
