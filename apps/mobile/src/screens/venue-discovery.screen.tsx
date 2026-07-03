@@ -136,6 +136,7 @@ export function VenueDiscoveryScreen() {
               <View style={styles.nearbyMeta}>
                 <Ionicons name="calendar-outline" size={13} color={THEME.inkSoft} />
                 <Text style={styles.nearbyMetaText}>{v.events} événements</Text>
+                <Ionicons name="heart-outline" size={16} color={THEME.orange} style={styles.nearbyHeart} />
               </View>
             </View>
           ))}
@@ -297,7 +298,8 @@ const styles = StyleSheet.create({
   logoImg: { width: '92%', height: '92%' },
   nearbyName: { color: THEME.ink, fontSize: 13.5, fontFamily: HEAD.bold, lineHeight: 17 },
   nearbyMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  nearbyMetaText: { color: THEME.inkSoft, fontSize: 12, fontFamily: HEAD.medium },
+  nearbyMetaText: { flex: 1, color: THEME.inkSoft, fontSize: 12, fontFamily: HEAD.medium },
+  nearbyHeart: { marginLeft: 'auto' as unknown as number },
   badge: {
     flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
     backgroundColor: THEME.orangeTint, paddingHorizontal: 8, paddingVertical: 4, borderRadius: THEME.radius.pill,
