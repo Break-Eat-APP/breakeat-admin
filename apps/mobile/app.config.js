@@ -11,7 +11,7 @@
 module.exports = {
   name: 'BREAK EAT',
   slug: 'break-eat',
-  owner: 'breakeat',
+  owner: 'break-eat-app-spe',
   version: '1.0.0',
   orientation: 'portrait',
   scheme: 'breakeat',
@@ -54,12 +54,11 @@ module.exports = {
   ],
   extra: {
     eas: {
-      // Set via `eas init` — fill in after running `eas init` in apps/mobile
-      projectId: 'FILL_IN_EAS_PROJECT_ID',
+      projectId: 'a6f65999-68f3-4f33-a8de-449d568ab0b5',
     },
   },
   updates: {
-    url: 'https://u.expo.dev/FILL_IN_EAS_PROJECT_ID',
+    url: 'https://u.expo.dev/a6f65999-68f3-4f33-a8de-449d568ab0b5',
   },
   runtimeVersion: {
     policy: 'appVersion',
