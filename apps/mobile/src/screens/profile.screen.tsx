@@ -1,12 +1,14 @@
-import React from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { useAuthStore } from '@store/auth.store';
 import { useUserLocation } from '@lib/hooks/use-user-location';
+import { PageHeader } from '@components/page-header';
+import { BOTTOM_BAR_SPACE } from '@components/app-bottom-bar';
+import { showAlert, confirmAction } from '@lib/alert';
 import { THEME, shadowCard, FONT } from '@lib/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -14,26 +16,24 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 export function ProfileScreen() {
   const navigation = useNavigation<Nav>();
   const { user, token, clearAuth } = useAuthStore();
-  const { status: locStatus, request: requestLocation } = useUserLocation();
+  const { status: locStatus, optedOut, request: requestLocation, disable: disableLocation } = useUserLocation();
 
   const handleLogout = () => {
-    Alert.alert('Déconnexion', 'Voulez-vous vraiment vous déconnecter ?', [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Se déconnecter',
-        style: 'destructive',
-        onPress: () => {
-          void clearAuth();
-          navigation.reset({ index: 0, routes: [{ name: 'Login', params: { defaultTab: 'login' } }] });
-        },
+    confirmAction(
+      'Déconnexion',
+      'Voulez-vous vraiment vous déconnecter ?',
+      () => {
+        void clearAuth();
+        navigation.reset({ index: 0, routes: [{ name: 'Login', params: { defaultTab: 'login' } }] });
       },
-    ]);
+      { confirmLabel: 'Se déconnecter', destructive: true },
+    );
   };
 
   return (
-    <SafeAreaView style={styles.root} edges={['top']}>
+    <View style={styles.root}>
+      <PageHeader title="Profil" />
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.screenTitle}>Profil</Text>
 
       {token && user ? (
         <View style={[styles.card, shadowCard]}>
@@ -59,13 +59,26 @@ export function ProfileScreen() {
 
       {/* Liens secondaires */}
       <View style={[styles.menu, shadowCard]}>
-        <LocationMenuItem locStatus={locStatus} onPress={requestLocation} />
+        <MenuItem
+          icon="storefront-outline"
+          label="Nos lieux"
+          onPress={() => navigation.navigate('Partners')}
+        />
         <View style={styles.divider} />
-        <MenuItem label="Aide & contact" onPress={() => Alert.alert('Bientôt', 'Disponible prochainement.')} />
+        <LocationMenuItem
+          locStatus={locStatus}
+          optedOut={optedOut}
+          onEnable={requestLocation}
+          onDisable={disableLocation}
+        />
         <View style={styles.divider} />
-        <MenuItem label="Mentions légales" onPress={() => Alert.alert('Bientôt', 'Disponible prochainement.')} />
+        <NotificationsMenuItem />
         <View style={styles.divider} />
-        <MenuItem label="Confidentialité" onPress={() => Alert.alert('Bientôt', 'Disponible prochainement.')} />
+        <MenuItem label="Aide & contact" onPress={() => showAlert('Bientôt', 'Disponible prochainement.')} />
+        <View style={styles.divider} />
+        <MenuItem label="Mentions légales" onPress={() => showAlert('Bientôt', 'Disponible prochainement.')} />
+        <View style={styles.divider} />
+        <MenuItem label="Confidentialité" onPress={() => showAlert('Bientôt', 'Disponible prochainement.')} />
       </View>
 
         {token && (
@@ -74,42 +87,72 @@ export function ProfileScreen() {
           </Pressable>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-function MenuItem({ label, onPress }: { label: string; onPress: () => void }) {
+function MenuItem({
+  label,
+  onPress,
+  icon,
+}: {
+  label: string;
+  onPress: () => void;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+}) {
   return (
     <Pressable
       style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
       onPress={onPress}
     >
-      <Text style={styles.menuLabel}>{label}</Text>
+      {icon ? (
+        <View style={styles.menuRow}>
+          <Ionicons name={icon} size={18} color={THEME.ink} style={styles.menuIcon} />
+          <Text style={styles.menuLabel}>{label}</Text>
+        </View>
+      ) : (
+        <Text style={styles.menuLabel}>{label}</Text>
+      )}
       <Text style={styles.chevron}>›</Text>
     </Pressable>
   );
 }
 
-type LocStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable';
+type NotifPerm = 'default' | 'granted' | 'denied' | 'unsupported';
 
-function LocationMenuItem({ locStatus, onPress }: { locStatus: LocStatus; onPress: () => void }) {
-  const granted = locStatus === 'granted';
+function getNotifPerm(): NotifPerm {
+  const N = (globalThis as { Notification?: { permission: string } }).Notification;
+  if (!N) return 'unsupported';
+  return (N.permission as NotifPerm) ?? 'default';
+}
+
+function NotificationsMenuItem() {
+  const [perm, setPerm] = useState<NotifPerm>(() => getNotifPerm());
+  const granted = perm === 'granted';
+
   const label =
-    locStatus === 'granted'    ? 'Localisation activée' :
-    locStatus === 'denied'     ? 'Localisation refusée' :
-    locStatus === 'requesting' ? 'Localisation en cours…' :
-    'Activer ma localisation';
+    granted               ? 'Notifications activées' :
+    perm === 'denied'     ? 'Notifications bloquées' :
+    perm === 'unsupported' ? 'Notifications indisponibles' :
+    'Activer les notifications';
 
   const handlePress = () => {
-    if (locStatus === 'denied') {
-      Alert.alert(
-        'Localisation bloquée',
-        'Votre navigateur a refusé l\'accès à la localisation.\n\nPour l\'activer : cliquez sur l\'icône de localisation dans la barre d\'adresse de votre navigateur et sélectionnez « Autoriser ».',
-        [{ text: 'OK' }],
+    if (granted) return;
+    if (perm === 'unsupported') {
+      showAlert('Notifications', 'Les notifications ne sont pas disponibles sur cet appareil.');
+      return;
+    }
+    if (perm === 'denied') {
+      showAlert(
+        'Notifications bloquées',
+        "Votre navigateur a bloqué les notifications.\n\nPour les réactiver : icône cadenas à gauche de la barre d'adresse → Notifications → Autoriser, puis rechargez la page.",
       );
       return;
     }
-    if (!granted) onPress();
+    const N = (globalThis as { Notification?: { requestPermission: () => Promise<string> } }).Notification;
+    if (N?.requestPermission) {
+      void N.requestPermission().then((p) => setPerm((p as NotifPerm) ?? 'default'));
+    }
   };
 
   return (
@@ -119,30 +162,82 @@ function LocationMenuItem({ locStatus, onPress }: { locStatus: LocStatus; onPres
     >
       <View style={styles.menuRow}>
         <Ionicons
-          name={granted ? 'location' : 'location-outline'}
+          name={granted ? 'notifications' : 'notifications-outline'}
           size={18}
           color={granted ? THEME.orange : THEME.ink}
           style={styles.menuIcon}
         />
         <Text style={[styles.menuLabel, granted && styles.menuLabelActive]}>{label}</Text>
       </View>
-      {!granted && <Text style={styles.chevron}>›</Text>}
-      {granted && <Ionicons name="checkmark-circle" size={18} color={THEME.orange} />}
+      {granted ? (
+        <Ionicons name="checkmark-circle" size={18} color={THEME.orange} />
+      ) : (
+        <Text style={styles.chevron}>›</Text>
+      )}
+    </Pressable>
+  );
+}
+
+type LocStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'unavailable';
+
+function LocationMenuItem({
+  locStatus,
+  optedOut,
+  onEnable,
+  onDisable,
+}: {
+  locStatus: LocStatus;
+  optedOut: boolean;
+  onEnable: () => void;
+  onDisable: () => void;
+}) {
+  // « Active » = position obtenue ET non coupée par l'utilisateur.
+  const active = locStatus === 'granted' && !optedOut;
+  const label =
+    active                     ? 'Localisation activée' :
+    locStatus === 'requesting' ? 'Localisation en cours…' :
+    locStatus === 'denied'     ? 'Localisation bloquée' :
+    optedOut                   ? 'Localisation désactivée' :
+    'Gestion de ma géolocalisation';
+
+  const handlePress = () => {
+    if (active) {
+      // Bascule OFF (côté app).
+      onDisable();
+      return;
+    }
+    // OFF → ON : demande la position (affiche l'aide si le navigateur bloque).
+    onEnable();
+  };
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.menuItem, pressed && styles.pressed]}
+      onPress={handlePress}
+    >
+      <View style={styles.menuRow}>
+        <Ionicons
+          name={active ? 'location' : 'location-outline'}
+          size={18}
+          color={active ? THEME.orange : THEME.ink}
+          style={styles.menuIcon}
+        />
+        <Text style={[styles.menuLabel, active && styles.menuLabelActive]}>{label}</Text>
+      </View>
+      {active ? (
+        <View style={styles.toggleOn}>
+          <Text style={styles.toggleOnText}>Désactiver</Text>
+        </View>
+      ) : (
+        <Text style={styles.chevron}>›</Text>
+      )}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
-  content: { padding: 16, paddingBottom: 40 },
-  screenTitle: {
-    color: THEME.ink,
-    fontSize: 22,
-    fontFamily: FONT.bold,
-    textAlign: 'center',
-    paddingTop: 0,
-    paddingBottom: 16,
-  },
+  content: { padding: 16, paddingBottom: BOTTOM_BAR_SPACE + 24 },
 
   card: {
     backgroundColor: THEME.surface,
@@ -185,6 +280,13 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.6 },
   menuLabel: { color: THEME.ink, fontSize: 15 },
   menuLabelActive: { color: THEME.orange },
+  toggleOn: {
+    backgroundColor: THEME.orangeTint,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: THEME.radius.pill,
+  },
+  toggleOnText: { color: THEME.orange, fontSize: 13, fontFamily: FONT.semibold },
   menuRow: { flexDirection: 'row', alignItems: 'center' },
   menuIcon: { marginRight: 10 },
   chevron: { color: THEME.grey, fontSize: 22 },

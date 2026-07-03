@@ -1,16 +1,13 @@
 import React from 'react';
-import {
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { formatPrice } from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
 import { PageHeader } from '@components/page-header';
+import { BOTTOM_BAR_SPACE } from '@components/app-bottom-bar';
+import { THEME, shadowCard, FONT } from '@lib/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Cart'>;
 
@@ -48,225 +45,178 @@ export function CartScreen({ navigation }: Props) {
           <Text style={styles.emptyTitle}>Votre panier est vide</Text>
           <Text style={styles.emptyText}>Ajoutez des articles depuis le catalogue.</Text>
         </View>
-      ) : (<>
+      ) : (
+        <>
+          <FlatList
+            data={items}
+            keyExtractor={(i) => i.productId}
+            contentContainerStyle={styles.list}
+            renderItem={({ item }) => (
+              <View style={styles.itemRow}>
+                <View style={styles.itemInfo}>
+                  <Text style={styles.itemName}>{item.productName}</Text>
+                  <Text style={styles.itemUnit}>{formatPrice(item.unitPriceCents)} / u</Text>
+                </View>
 
-      <FlatList
-        data={items}
-        keyExtractor={(i) => i.productId}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => (
-          <View style={styles.itemRow}>
-            <View style={styles.itemInfo}>
-              <Text style={styles.itemName}>{item.productName}</Text>
-              <Text style={styles.itemUnit}>{formatPrice(item.unitPriceCents)} / u</Text>
-            </View>
-
-            <View style={styles.qtyControls}>
-              <Pressable
-                style={styles.qtyBtn}
-                onPress={() => decrementItem(item.productId)}
-              >
-                <Text style={styles.qtyBtnText}>−</Text>
-              </Pressable>
-              <Text style={styles.qtyValue}>{item.quantity}</Text>
-              <Pressable
-                style={styles.qtyBtn}
-                onPress={() => incrementItem(item.productId)}
-              >
-                <Text style={styles.qtyBtnText}>+</Text>
-              </Pressable>
-            </View>
-
-            <Text style={styles.itemTotal}>
-              {formatPrice(item.unitPriceCents * item.quantity)}
-            </Text>
-
-            <Pressable
-              onPress={() => removeItem(item.productId)}
-              style={styles.removeBtn}
-            >
-              <Text style={styles.removeText}>✕</Text>
-            </Pressable>
-          </View>
-        )}
-        ListFooterComponent={
-          <View style={styles.footer}>
-            {/* Slot info */}
-            {selectedSlotLabel ? (
-              <View style={styles.slotBox}>
-                <View style={styles.slotRow}>
-                  <Text style={styles.slotIcon}>⏰</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.slotLabel}>Créneau sélectionné</Text>
-                    <Text style={styles.slotValue}>{selectedSlotLabel}</Text>
-                  </View>
-                  <Pressable onPress={handleChangeSlot}>
-                    <Text style={styles.changeSlot}>Changer</Text>
+                <View style={styles.qtyControls}>
+                  <Pressable style={styles.qtyBtn} onPress={() => decrementItem(item.productId)}>
+                    <Text style={styles.qtyBtnText}>−</Text>
+                  </Pressable>
+                  <Text style={styles.qtyValue}>{item.quantity}</Text>
+                  <Pressable style={styles.qtyBtn} onPress={() => incrementItem(item.productId)}>
+                    <Text style={styles.qtyBtnText}>+</Text>
                   </Pressable>
                 </View>
-              </View>
-            ) : (
-              <View style={styles.noSlotBox}>
-                <Text style={styles.noSlotText}>⏰  Aucun créneau sélectionné</Text>
+
+                <Text style={styles.itemTotal}>
+                  {formatPrice(item.unitPriceCents * item.quantity)}
+                </Text>
+
+                <Pressable onPress={() => removeItem(item.productId)} style={styles.removeBtn} hitSlop={8}>
+                  <Ionicons name="close" size={18} color={THEME.grey} />
+                </Pressable>
               </View>
             )}
+            ListFooterComponent={
+              <View style={styles.footer}>
+                {/* Créneau */}
+                {selectedSlotLabel ? (
+                  <View style={[styles.slotBox, styles.slotBoxActive]}>
+                    <Ionicons name="time-outline" size={20} color={THEME.orange} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.slotLabel}>Créneau sélectionné</Text>
+                      <Text style={styles.slotValue}>{selectedSlotLabel}</Text>
+                    </View>
+                    <Pressable onPress={handleChangeSlot}>
+                      <Text style={styles.changeSlot}>Changer</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={styles.slotBox}>
+                    <Ionicons name="time-outline" size={20} color={THEME.grey} />
+                    <Text style={styles.noSlotText}>Aucun créneau sélectionné</Text>
+                  </View>
+                )}
 
-            {/* Summary */}
-            <View style={styles.summary}>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Sous-total</Text>
-                <Text style={styles.summaryValue}>{formatPrice(totalCents())}</Text>
+                {/* Récapitulatif */}
+                <View style={styles.summary}>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Sous-total</Text>
+                    <Text style={styles.summaryValue}>{formatPrice(totalCents())}</Text>
+                  </View>
+                  <View style={[styles.summaryRow, styles.totalRow]}>
+                    <Text style={styles.totalLabel}>Total</Text>
+                    <Text style={styles.totalValue}>{formatPrice(totalCents())}</Text>
+                  </View>
+                </View>
               </View>
-              <View style={[styles.summaryRow, styles.totalRow]}>
-                <Text style={styles.totalLabel}>Total</Text>
-                <Text style={styles.totalValue}>{formatPrice(totalCents())}</Text>
-              </View>
-            </View>
+            }
+          />
+
+          {/* CTA */}
+          <View style={styles.cta}>
+            <Pressable
+              style={[styles.ctaBtn, !supplierId && styles.ctaBtnDisabled]}
+              onPress={handleContinue}
+              disabled={!supplierId}
+            >
+              <Text style={styles.ctaBtnText}>
+                {selectedSlotLabel ? 'Commander →' : 'Choisir un créneau →'}
+              </Text>
+            </Pressable>
           </View>
-        }
-      />
-
-      {/* CTA */}
-      <View style={styles.cta}>
-        <Pressable
-          style={[styles.ctaBtn, !supplierId && styles.ctaBtnDisabled]}
-          onPress={handleContinue}
-          disabled={!supplierId}
-        >
-          <Text style={styles.ctaBtnText}>
-            {selectedSlotLabel ? 'Commander →' : 'Choisir un créneau →'}
-          </Text>
-        </Pressable>
-      </View>
-      </>)}
+        </>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0f172a' },
+  root: { flex: 1, backgroundColor: THEME.bg },
 
-  centered: {
-    flex: 1,
-    backgroundColor: '#0f172a',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-    gap: 12,
-  },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 10 },
   emptyIcon: { fontSize: 48 },
-  emptyTitle: { color: '#f1f5f9', fontSize: 20, fontWeight: '700' },
-  emptyText: { color: '#9ca3af', fontSize: 14, textAlign: 'center' },
-  backBtn: {
-    backgroundColor: '#1e293b',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 10,
-    marginTop: 8,
-  },
-  backBtnText: { color: '#2563eb', fontWeight: '600' },
+  emptyTitle: { color: THEME.ink, fontSize: 19, fontFamily: FONT.bold },
+  emptyText: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center', fontFamily: FONT.regular },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 16,
-    backgroundColor: '#1e293b',
-    gap: 12,
-  },
-  back: { padding: 4 },
-  backArrow: { color: '#94a3b8', fontSize: 20 },
-  headerTitle: { color: '#f1f5f9', fontSize: 18, fontWeight: '700', flex: 1 },
-  headerCount: { color: '#64748b', fontSize: 13 },
-
-  list: { paddingBottom: 24 },
+  list: { paddingBottom: 16 },
 
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: 18,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: THEME.border,
     gap: 10,
   },
   itemInfo: { flex: 1 },
-  itemName: { color: '#f1f5f9', fontSize: 14, fontWeight: '600' },
-  itemUnit: { color: '#64748b', fontSize: 12, marginTop: 2 },
+  itemName: { color: THEME.ink, fontSize: 14, fontFamily: FONT.semibold },
+  itemUnit: { color: THEME.inkSoft, fontSize: 12, marginTop: 2, fontFamily: FONT.regular },
 
   qtyControls: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   qtyBtn: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#334155',
+    backgroundColor: THEME.orangeTint,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  qtyBtnText: { color: '#f1f5f9', fontSize: 16, fontWeight: '700' },
-  qtyValue: { color: '#f1f5f9', fontSize: 14, fontWeight: '700', minWidth: 20, textAlign: 'center' },
+  qtyBtnText: { color: THEME.orange, fontSize: 17, fontFamily: FONT.bold, lineHeight: 20 },
+  qtyValue: { color: THEME.ink, fontSize: 14, fontFamily: FONT.bold, minWidth: 20, textAlign: 'center' },
 
-  itemTotal: { color: '#f1f5f9', fontSize: 14, fontWeight: '700', minWidth: 60, textAlign: 'right' },
-  removeBtn: { padding: 4 },
-  removeText: { color: '#4b5563', fontSize: 14 },
+  itemTotal: { color: THEME.ink, fontSize: 14, fontFamily: FONT.bold, minWidth: 58, textAlign: 'right' },
+  removeBtn: { padding: 2 },
 
-  footer: { paddingHorizontal: 20, paddingTop: 16, gap: 12 },
+  footer: { paddingHorizontal: 18, paddingTop: 16, gap: 12 },
 
   slotBox: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: THEME.bgSubtle,
+    borderRadius: THEME.radius.control,
     borderWidth: 1,
-    borderColor: '#2563eb44',
-  },
-  slotRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  slotIcon: { fontSize: 18 },
-  slotLabel: { color: '#64748b', fontSize: 12 },
-  slotValue: { color: '#f1f5f9', fontSize: 14, fontWeight: '600' },
-  changeSlot: { color: '#2563eb', fontSize: 13, fontWeight: '600' },
-
-  noSlotBox: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
+    borderColor: THEME.border,
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
   },
-  noSlotText: { color: '#6b7280', fontSize: 13 },
+  slotBoxActive: { backgroundColor: THEME.orangeTint, borderColor: THEME.orangeSoft },
+  slotLabel: { color: THEME.inkSoft, fontSize: 12, fontFamily: FONT.regular },
+  slotValue: { color: THEME.ink, fontSize: 14, fontFamily: FONT.semibold },
+  changeSlot: { color: THEME.orange, fontSize: 13, fontFamily: FONT.bold },
+  noSlotText: { color: THEME.inkSoft, fontSize: 13, fontFamily: FONT.regular },
 
   summary: {
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
+    backgroundColor: THEME.surface,
+    borderRadius: THEME.radius.card,
+    borderWidth: 1,
+    borderColor: THEME.border,
     padding: 16,
     gap: 10,
+    ...shadowCard,
   },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  summaryLabel: { color: '#94a3b8', fontSize: 14 },
-  summaryValue: { color: '#f1f5f9', fontSize: 14 },
-  totalRow: {
-    borderTopWidth: 1,
-    borderTopColor: '#334155',
-    paddingTop: 10,
-    marginTop: 2,
-  },
-  totalLabel: { color: '#f1f5f9', fontSize: 16, fontWeight: '700' },
-  totalValue: { color: '#2563eb', fontSize: 18, fontWeight: '800' },
+  summaryLabel: { color: THEME.inkSoft, fontSize: 14, fontFamily: FONT.regular },
+  summaryValue: { color: THEME.ink, fontSize: 14, fontFamily: FONT.semibold },
+  totalRow: { borderTopWidth: 1, borderTopColor: THEME.border, paddingTop: 10, marginTop: 2 },
+  totalLabel: { color: THEME.ink, fontSize: 16, fontFamily: FONT.bold },
+  totalValue: { color: THEME.orange, fontSize: 18, fontFamily: FONT.bold },
 
   cta: {
-    padding: 20,
-    backgroundColor: '#0f172a',
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: BOTTOM_BAR_SPACE,
+    backgroundColor: THEME.bg,
     borderTopWidth: 1,
-    borderTopColor: '#1e293b',
+    borderTopColor: THEME.border,
   },
   ctaBtn: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.orange,
     paddingVertical: 16,
-    borderRadius: 14,
+    borderRadius: THEME.radius.pill,
     alignItems: 'center',
   },
   ctaBtnDisabled: { opacity: 0.5 },
-  ctaBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  ctaBtnText: { color: '#fff', fontSize: 16, fontFamily: FONT.bold },
 });

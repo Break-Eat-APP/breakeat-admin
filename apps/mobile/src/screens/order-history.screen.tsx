@@ -15,6 +15,7 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiGetMyOrders, formatPrice, type Order } from '@lib/api/mobile-api';
 import { useAuthStore } from '@store/auth.store';
 import { THEME, shadowCard, FONT } from '@lib/theme';
+import { BOTTOM_BAR_SPACE } from '@components/app-bottom-bar';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -147,7 +148,7 @@ const styles = StyleSheet.create({
   },
   ctaText: { color: '#fff', fontFamily: FONT.bold, fontSize: 15 },
 
-  list: { padding: 16, gap: 12 },
+  list: { padding: 16, gap: 12, paddingBottom: BOTTOM_BAR_SPACE + 16 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

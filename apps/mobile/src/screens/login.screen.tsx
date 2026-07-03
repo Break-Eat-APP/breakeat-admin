@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiLogin, apiRegister } from '@lib/api/mobile-api';
@@ -42,7 +43,7 @@ export function LoginScreen({ navigation, route }: Props) {
     } else if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      navigation.replace('MainTabs');
+      navigation.replace('Lieux');
     }
   };
 
@@ -120,8 +121,8 @@ export function LoginScreen({ navigation, route }: Props) {
 
         {/* Bandeau fidélité */}
         <View style={[styles.banner, shadowCard]}>
-          <Text style={styles.bannerTitle}>Chez nous, être fidèle ça régale vraiment.</Text>
-          <Text style={styles.bannerSub}>Commandez, gagnez des récompenses.</Text>
+          <Text style={styles.bannerTitle}>Profitez de l'événement, on s'occupe de la file d'attente.</Text>
+          <Text style={styles.bannerSub}>Déstresse, commande &amp; déguste.</Text>
         </View>
 
         {/* Onglets */}
@@ -141,9 +142,24 @@ export function LoginScreen({ navigation, route }: Props) {
         </View>
 
         {/* Boutons sociaux (placeholders) */}
-        <SocialButton label="Continuer avec Facebook" onPress={() => social('Facebook')} />
-        <SocialButton label="Continuer avec Google" onPress={() => social('Google')} />
-        <SocialButton label="Continuer avec Apple" onPress={() => social('Apple')} />
+        <SocialButton
+          icon="logo-apple"
+          iconColor={THEME.ink}
+          label="Continuer avec Apple"
+          onPress={() => social('Apple')}
+        />
+        <SocialButton
+          icon="logo-google"
+          iconColor="#EA4335"
+          label="Continuer avec Google"
+          onPress={() => social('Google')}
+        />
+        <SocialButton
+          icon="logo-facebook"
+          iconColor="#1877F2"
+          label="Continuer avec Facebook"
+          onPress={() => social('Facebook')}
+        />
 
         <View style={styles.orRow}>
           <View style={styles.orLine} />
@@ -218,12 +234,23 @@ export function LoginScreen({ navigation, route }: Props) {
   );
 }
 
-function SocialButton({ label, onPress }: { label: string; onPress: () => void }) {
+function SocialButton({
+  icon,
+  iconColor,
+  label,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  iconColor: string;
+  label: string;
+  onPress: () => void;
+}) {
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.social, pressed && styles.pressed]}
     >
+      <Ionicons name={icon} size={20} color={iconColor} style={styles.socialIcon} />
       <Text style={styles.socialText}>{label}</Text>
     </Pressable>
   );
@@ -273,6 +300,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   pressed: { opacity: 0.7 },
+  socialIcon: { marginRight: 10 },
   socialText: { color: THEME.ink, fontSize: 15, fontFamily: FONT.semibold },
 
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 12 },

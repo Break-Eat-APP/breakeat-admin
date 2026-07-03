@@ -10,15 +10,21 @@ import {
   Fredoka_600SemiBold,
   Fredoka_700Bold,
 } from '@expo-google-fonts/fredoka';
+import {
+  Raleway_500Medium,
+  Raleway_600SemiBold,
+  Raleway_700Bold,
+  Raleway_800ExtraBold,
+} from '@expo-google-fonts/raleway';
+import { Oswald_400Regular, Oswald_500Medium, Oswald_600SemiBold } from '@expo-google-fonts/oswald';
 import { queryClient } from '@lib/query/query-client';
 import { RootNavigator } from '@navigation/root-navigator';
 import { useAppStore } from '@store/app.store';
-import { FONT } from '@lib/theme';
 
-// Police de marque (Fredoka) par défaut sur tout le texte — styles explicites priment.
+// Raleway Medium par défaut sur tout le texte.
 const RNTextWithDefaults = Text as unknown as { defaultProps?: { style?: unknown } };
 RNTextWithDefaults.defaultProps = RNTextWithDefaults.defaultProps ?? {};
-RNTextWithDefaults.defaultProps.style = { fontFamily: FONT.regular };
+RNTextWithDefaults.defaultProps.style = { fontFamily: 'Raleway_500Medium' };
 
 /**
  * Point d'entrée de production. Enveloppe l'app de :
@@ -34,6 +40,13 @@ export default function App() {
     Fredoka_500Medium,
     Fredoka_600SemiBold,
     Fredoka_700Bold,
+    Raleway_500Medium,
+    Raleway_600SemiBold,
+    Raleway_700Bold,
+    Raleway_800ExtraBold,
+    Oswald_400Regular,
+    Oswald_500Medium,
+    Oswald_600SemiBold,
   });
   const ready = fontsLoaded || !!fontError;
 

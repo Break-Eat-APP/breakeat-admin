@@ -1,12 +1,15 @@
 /**
- * App.expo — entrée de PRÉVISUALISATION Expo Go / web (voir le visuel sur iPhone/iPad
- * via un lien, sans build natif). Réutilise la barre d'onglets de production
- * (main-tabs) et les vrais écrans, mais remplace les cibles à dépendances natives
- * (EventHome/Flaix avec caméra, suivi) par des stubs.
+ * App.expo — entrée de PRÉVISUALISATION Expo Go / web (Netlify) : voir le visuel
+ * sur navigateur / iPhone / iPad sans build natif.
  *
- * Entrée native de production = index.js / App.tsx (inchangés).
+ * Reproduit l'architecture de production (cf. root-navigator) : un SEUL Stack
+ * surmonté de la barre du bas PERSISTANTE (AppBottomBar). Tous les écrans réels
+ * sont utilisés SAUF ceux à dépendance native (caméra) ou nécessitant un backend
+ * d'événement live, remplacés par des stubs.
+ *
+ * Entrée native de production = index.js / App.tsx (root-navigator complet).
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
@@ -21,22 +24,40 @@ import {
   Fredoka_600SemiBold,
   Fredoka_700Bold,
 } from '@expo-google-fonts/fredoka';
+import {
+  Raleway_500Medium,
+  Raleway_600SemiBold,
+  Raleway_700Bold,
+  Raleway_800ExtraBold,
+} from '@expo-google-fonts/raleway';
+import { Oswald_400Regular, Oswald_500Medium, Oswald_600SemiBold } from '@expo-google-fonts/oswald';
 
 import { queryClient } from '@lib/query/query-client';
 import { useAppStore } from '@store/app.store';
 import { useAuthStore } from '@store/auth.store';
 import { THEME, FONT } from '@lib/theme';
-import { MainTabs } from '@navigation/main-tabs';
+import { navigationRef } from '@navigation/nav-ref';
+import { AppBottomBar } from '@components/app-bottom-bar';
+import type { RootStackParamList } from '@navigation/root-navigator';
+
+import { VenueDiscoveryScreen } from '@screens/venue-discovery.screen';
+import { OrderHistoryScreen } from '@screens/order-history.screen';
+import { CartScreen } from '@screens/cart.screen';
+import { ProfileScreen } from '@screens/profile.screen';
+import { PartnersScreen } from '@screens/partners.screen';
 import { LoginScreen } from '@screens/login.screen';
 import { FlaixOrderScreen } from '@screens/flaix-order.screen';
-import type { RootStackParamList } from '@navigation/root-navigator';
+import { SupplierCatalogScreen } from '@screens/supplier-catalog.screen';
+import { SlotSelectorScreen } from '@screens/slot-selector.screen';
+import { CheckoutScreen } from '@screens/checkout.screen';
+import { OrderConfirmationScreen } from '@screens/order-confirmation.screen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 // Police de marque (Fredoka) par défaut sur tout le texte.
 const RNTextWithDefaults = Text as unknown as { defaultProps?: { style?: unknown } };
 RNTextWithDefaults.defaultProps = RNTextWithDefaults.defaultProps ?? {};
-RNTextWithDefaults.defaultProps.style = { fontFamily: FONT.regular };
+RNTextWithDefaults.defaultProps.style = { fontFamily: 'Raleway_500Medium' };
 
 function StubScreen({ icon, title, sub }: { icon: string; title: string; sub: string }) {
   return (
@@ -48,24 +69,33 @@ function StubScreen({ icon, title, sub }: { icon: string; title: string; sub: st
   );
 }
 
+// Écrans indisponibles en prévisualisation web (caméra / événement live).
 const EventHomeStub = (_: NativeStackScreenProps<RootStackParamList, 'EventHome'>) => (
-  <StubScreen icon="stadium-variant" title="Sélection du lieu" sub="Ici, l'app de production passe le relais à Flaix pour la commande." />
-);
-const CartStub = (_: NativeStackScreenProps<RootStackParamList, 'Cart'>) => (
-  <StubScreen icon="cart-outline" title="Votre panier est vide" sub="Choisissez un lieu pour démarrer une commande." />
+  <StubScreen icon="stadium-variant" title="Sélection du lieu" sub="Ici, l'app de production ouvre l'événement (catalogue & commande)." />
 );
 const OrderTrackingStub = (_: NativeStackScreenProps<RootStackParamList, 'OrderTracking'>) => (
   <StubScreen icon="package-variant" title="Suivi de commande" sub="Aperçu non disponible dans la prévisualisation." />
 );
+const QRScannerStub = (_: NativeStackScreenProps<RootStackParamList, 'QRScanner'>) => (
+  <StubScreen icon="qrcode-scan" title="Scanner un QR code" sub="La caméra n'est pas disponible dans la prévisualisation web." />
+);
 
 export default function AppPreview() {
   const setReady = useAppStore((s) => s.setReady);
-  const rehydrate = useAuthStore((s) => s.rehydrate);
+  const { rehydrate, isLoading, token } = useAuthStore();
+  const [routeName, setRouteName] = useState<string | undefined>(undefined);
   const [fontsLoaded, fontError] = useFonts({
     Fredoka_400Regular,
     Fredoka_500Medium,
     Fredoka_600SemiBold,
     Fredoka_700Bold,
+    Raleway_500Medium,
+    Raleway_600SemiBold,
+    Raleway_700Bold,
+    Raleway_800ExtraBold,
+    Oswald_400Regular,
+    Oswald_500Medium,
+    Oswald_600SemiBold,
   });
 
   useEffect(() => {
@@ -75,19 +105,47 @@ export default function AppPreview() {
 
   // Ne pas rester bloqué sur écran blanc si une police échoue à charger.
   if (!fontsLoaded && !fontError) return null;
+  if (isLoading) return null;
 
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
-        <NavigationContainer>
-          <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: THEME.bg } }}>
-            <Stack.Screen name="MainTabs" component={MainTabs} />
-            <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
-            <Stack.Screen name="EventHome" component={EventHomeStub} />
-            <Stack.Screen name="FlaixOrder" component={FlaixOrderScreen} />
-            <Stack.Screen name="Cart" component={CartStub} />
-            <Stack.Screen name="OrderTracking" component={OrderTrackingStub} />
-          </Stack.Navigator>
+        <NavigationContainer
+          ref={navigationRef}
+          onReady={() => setRouteName(navigationRef.getCurrentRoute()?.name)}
+          onStateChange={() => setRouteName(navigationRef.getCurrentRoute()?.name)}
+        >
+          <View style={{ flex: 1, backgroundColor: THEME.bg }}>
+            <Stack.Navigator
+              initialRouteName={token ? 'Lieux' : 'Login'}
+              screenOptions={{ headerShown: false, contentStyle: { backgroundColor: THEME.bg } }}
+            >
+              {/* Destinations principales (barre du bas) */}
+              <Stack.Screen name="Lieux" component={VenueDiscoveryScreen} />
+              <Stack.Screen name="Commandes" component={OrderHistoryScreen} />
+              <Stack.Screen name="Cart" component={CartScreen} />
+              <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="Partners" component={PartnersScreen} />
+
+              {/* Auth */}
+              <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
+
+              {/* Flux de commande (réels, web-safe) */}
+              <Stack.Screen name="FlaixOrder" component={FlaixOrderScreen} />
+              <Stack.Screen name="SupplierCatalog" component={SupplierCatalogScreen} />
+              <Stack.Screen name="SlotSelector" component={SlotSelectorScreen} />
+              <Stack.Screen name="Checkout" component={CheckoutScreen} />
+              <Stack.Screen name="OrderConfirmation" component={OrderConfirmationScreen} />
+
+              {/* Stubs (caméra / événement live) */}
+              <Stack.Screen name="EventHome" component={EventHomeStub} />
+              <Stack.Screen name="OrderTracking" component={OrderTrackingStub} />
+              <Stack.Screen name="QRScanner" component={QRScannerStub} />
+            </Stack.Navigator>
+
+            {/* Barre du bas persistante — au-dessus de tous les écrans */}
+            <AppBottomBar currentRoute={routeName} />
+          </View>
         </NavigationContainer>
       </QueryClientProvider>
     </SafeAreaProvider>

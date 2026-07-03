@@ -37,6 +37,21 @@ export const FONT = {
   bold: 'Fredoka_700Bold',
 } as const;
 
+/** Raleway — police de titres (élégante, contraste avec Fredoka). Titres & noms. */
+export const HEAD = {
+  medium: 'Raleway_500Medium',
+  semibold: 'Raleway_600SemiBold',
+  bold: 'Raleway_700Bold',
+  extrabold: 'Raleway_800ExtraBold',
+} as const;
+
+/** Oswald — condensé, gras, sport, avec minuscules. Titres de section (style "Bloc" Canva). */
+export const BLOC = {
+  medium: 'Oswald_400Regular',
+  semibold: 'Oswald_500Medium',
+  bold: 'Oswald_600SemiBold',
+} as const;
+
 /** Ombre douce et neutre d'une carte au repos (équiv. BRAND.shadowCard). */
 export const shadowCard: ViewStyle = Platform.select({
   ios: {

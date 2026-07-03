@@ -1,11 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  FlatList,
   Image,
   Platform,
   Pressable,
-  RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -17,78 +15,65 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
-import { apiSearchVenues, type PublicVenue } from '@lib/api/mobile-api';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { useNotifStore } from '@store/notif.store';
-import { THEME, shadowCard, FONT } from '@lib/theme';
+import { BOTTOM_BAR_SPACE } from '@components/app-bottom-bar';
+import { THEME, shadowCard, HEAD } from '@lib/theme';
 
 const LOGO_FULL_WHITE = require('../../assets/logo-full-white.png');
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
-// Supprime le contour bleu de focus du navigateur (react-native-web uniquement).
 const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null;
+
+// ─── DONNÉES D'EXEMPLE (placeholder) ────────────────────────────────
+// TODO: remplacer par les vraies données Flaix + favoris (cf. mémoire home-final-spec).
+// Logos réels des lieux/clubs.
+const LOGO = {
+  arena: require('../../assets/logos/arena-aix.png'),
+  dome: require('../../assets/logos/le-dome.png'),
+  spartiates: require('../../assets/logos/spartiates.png'),
+  pauc: require('../../assets/logos/pauc.png'),
+};
+// Images d'événements thématisées (loremflickr) — remplacées plus tard par Flaix.
+const PHOTO = (tags: string, lock: number, w = 200, h = 200) =>
+  `https://loremflickr.com/${w}/${h}/${tags}?lock=${lock}`;
+
+const NEARBY = [
+  { id: 'n1', name: 'Arena Aix en Provence', events: 2, logo: LOGO.arena },
+  { id: 'n2', name: 'Le Dôme Marseille', events: 3, logo: LOGO.dome },
+  { id: 'n3', name: 'Palais Omnisports Marseille', events: 3, logo: LOGO.spartiates },
+];
+type Fav = { id: string; name: string; logo: number };
+type Up = { id: string; title: string; date: string; venue: string; image: string };
+
+const FAVORITES: Fav[] = [
+  { id: 'f1', name: 'Arena Aix en Provence', logo: LOGO.arena },
+  { id: 'f2', name: 'PAUC Handball', logo: LOGO.pauc },
+];
+
+const UPCOMING: Up[] = [
+  { id: 'u1', title: 'Spartiates vs Nîmes Gard Roussillon', date: 'Sam. 5 juil. · 20h00', venue: 'Palais Omnisports Marseille', image: PHOTO('handball,sport,match', 10, 120, 120) },
+  { id: 'u2', title: 'PAUC vs Montpellier HB', date: 'Dim. 6 juil. · 18h30', venue: 'Arena Aix en Provence', image: PHOTO('handball,arena,sport', 22, 120, 120) },
+  { id: 'u3', title: 'Soirée Rock Live', date: 'Ven. 11 juil. · 21h00', venue: 'Le Dôme Marseille', image: PHOTO('concert,rock,stage', 33, 120, 120) },
+];
 
 export function VenueDiscoveryScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { hasUnread, markRead } = useNotifStore();
-  const { coords, status: locStatus, request: requestLocation } = useUserLocation();
-
+  const { status: locStatus, request: requestLocation } = useUserLocation();
   const [query, setQuery] = useState('');
-  const [venues, setVenues] = useState<PublicVenue[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    const hasQuery = query.trim().length > 0;
-    // Sans localisation ET sans recherche textuelle : on ne charge rien.
-    if (locStatus !== 'granted' && !hasQuery) {
-      setVenues([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await apiSearchVenues({
-        q: query.trim() || undefined,
-        lat: locStatus === 'granted' ? coords?.lat : undefined,
-        lng: locStatus === 'granted' ? coords?.lng : undefined,
-      });
-      setVenues(data);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erreur de chargement');
-    } finally {
-      setLoading(false);
-    }
-  }, [query, coords, locStatus]);
+  const granted = locStatus === 'granted';
 
   useEffect(() => {
-    const t = setTimeout(() => void load(), 300);
-    return () => clearTimeout(t);
-  }, [load]);
-
-  // Demande la localisation au démarrage → lieux les plus proches en priorité.
-  useEffect(() => {
-    requestLocation();
+    requestLocation({ silent: true });
   }, [requestLocation]);
-
-  const handleSelect = (venue: PublicVenue) => {
-    // Lieu Flaix → relais à Flaix (intégration API).
-    if (venue.flaixEnabled) {
-      navigation.navigate('FlaixOrder', { venueId: venue.id, flaixVenueId: venue.flaixVenueId });
-      return;
-    }
-    // Sinon : parcours Break Eat natif si un événement est actif.
-    if (venue.currentEventId) {
-      navigation.navigate('EventHome', { eventId: venue.currentEventId });
-    }
-  };
 
   return (
     <View style={styles.root}>
-      {/* Bandeau orange — logo à gauche, cloche + menu à droite */}
+      {/* Bandeau orange */}
       <View style={[styles.band, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerRow}>
           <Image source={LOGO_FULL_WHITE} style={styles.lockup} resizeMode="contain" />
@@ -104,211 +89,243 @@ export function VenueDiscoveryScreen() {
         </View>
       </View>
 
-      {/* Recherche — pill blanche dans la zone blanche, sous le bandeau */}
-      <View style={styles.searchWrap}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Recherche */}
         <View style={[styles.searchBox, shadowCard]}>
+          <Ionicons name="search" size={18} color={THEME.grey} />
           <TextInput
             style={[styles.searchInput, NO_OUTLINE]}
-            placeholder="Entrez une ville, une adresse, un lieu"
+            placeholder="Rechercher une ville, un lieu ou un club"
             placeholderTextColor={THEME.grey}
             value={query}
             onChangeText={setQuery}
             autoCapitalize="none"
             returnKeyType="search"
           />
-          <Pressable onPress={requestLocation} hitSlop={10}>
-            {locStatus === 'requesting' ? (
-              <ActivityIndicator color={THEME.orange} size="small" />
-            ) : (
-              <Ionicons
-                name="locate"
-                size={22}
-                color={locStatus === 'granted' ? THEME.orange : THEME.ink}
-              />
-            )}
+          <Pressable onPress={() => requestLocation()} hitSlop={10}>
+            <Ionicons name="locate" size={20} color={granted ? THEME.orange : THEME.ink} />
           </Pressable>
         </View>
-      </View>
 
-      {/* Invite à activer la localisation (tant qu'elle n'est pas accordée) */}
-      {locStatus !== 'granted' && locStatus !== 'requesting' && (
-        <Pressable onPress={requestLocation} style={styles.geoCta}>
-          <Ionicons name="location-outline" size={18} color={THEME.orange} />
-          <Text style={styles.geoCtaText}>
-            {locStatus === 'denied'
-              ? 'Localisation refusée — activez-la pour voir les lieux proches, ou cherchez ci-dessus.'
-              : 'Activer ma localisation pour voir les lieux les plus proches'}
-          </Text>
-        </Pressable>
-      )}
-
-      {/* Titre */}
-      <View style={styles.titleBlock}>
-        <Text style={styles.title}>LA BUVETTE EN LIGNE</Text>
-        <Text style={styles.subtitle}>File prioritaire &amp; sans file d'attente</Text>
-      </View>
-
-      {/* Liste des lieux — masquée sans localisation et sans recherche */}
-      {locStatus !== 'granted' && !query.trim() ? null
-        : loading && venues.length === 0 ? (
-          <View style={styles.centered}>
-            <ActivityIndicator size="large" color={THEME.orange} />
-          </View>
-        ) : error ? (
-          <View style={styles.centered}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Pressable style={styles.retryBtn} onPress={() => void load()}>
-              <Text style={styles.retryText}>Réessayer</Text>
+        {/* Invite géolocalisation (si désactivée) */}
+        {!granted && (
+          <View style={[styles.geoBanner, shadowCard]}>
+            <View style={styles.geoIcon}>
+              <Ionicons name="location" size={22} color={THEME.orange} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.geoTitle}>Active ta position</Text>
+              <Text style={styles.geoSub}>Pour découvrir les événements près de chez toi.</Text>
+            </View>
+            <Pressable style={styles.geoBtn} onPress={() => requestLocation()}>
+              <Ionicons name="navigate" size={14} color="#fff" />
+              <Text style={styles.geoBtnText}>Activer</Text>
             </Pressable>
           </View>
-        ) : venues.length === 0 ? (
-          <View style={styles.centered}>
-            <Text style={styles.emptyText}>
-              {query.trim() ? 'Aucun lieu pour cette recherche.' : 'Aucun lieu disponible près de vous.'}
-            </Text>
-          </View>
-        ) : (
-          <FlatList
-            data={venues}
-            keyExtractor={(v) => v.id}
-            contentContainerStyle={styles.list}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={THEME.orange} />
-            }
-            renderItem={({ item }) => <VenueCard venue={item} onPress={() => handleSelect(item)} />}
-          />
         )}
+
+        {/* 1. Événements près de chez vous */}
+        <SectionHeader icon="location" title="Événements près de toi" action="Voir tout" />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+          {NEARBY.map((v) => (
+            <View key={v.id} style={[styles.nearbyCard, shadowCard]}>
+              <View style={styles.nearbyPhoto}>
+                <Image source={v.logo} style={styles.logoImg} resizeMode="contain" />
+              </View>
+              <Text style={styles.nearbyName} numberOfLines={2}>{v.name}</Text>
+              <View style={styles.nearbyMeta}>
+                <Ionicons name="calendar-outline" size={13} color={THEME.inkSoft} />
+                <Text style={styles.nearbyMetaText}>{v.events} événements</Text>
+              </View>
+            </View>
+          ))}
+        </ScrollView>
+
+        {/* 2. Vos lieux favoris */}
+        <SectionHeader icon="star" title="Tes lieux favoris" action="Gérer" />
+        {FAVORITES.length === 0 ? (
+          <EmptyHint icon="heart-outline" text="Ajoute tes favoris pour les voir apparaître ici." />
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+            {FAVORITES.map((v) => (
+              <View key={v.id} style={[styles.favCard, shadowCard]}>
+                <View style={styles.favLogo}>
+                  <Image source={v.logo} style={styles.logoImg} resizeMode="contain" />
+                </View>
+                <Text style={styles.favName} numberOfLines={2}>{v.name}</Text>
+                <Ionicons name="heart" size={18} color={THEME.orange} />
+              </View>
+            ))}
+          </ScrollView>
+        )}
+
+        {/* 3. Vos prochains événements */}
+        <SectionHeader icon="calendar" title="À venir" action="Voir tout" />
+        {UPCOMING.length === 0 ? (
+          <EmptyHint icon="calendar-outline" text="Ajoute des lieux en favoris pour voir leurs événements à venir." />
+        ) : (
+        <View style={[styles.upcomingCard, shadowCard]}>
+          {UPCOMING.map((e, i) => (
+            <View key={e.id}>
+              {i > 0 && <View style={styles.divider} />}
+              <View style={styles.upRow}>
+                <View style={styles.upLogo}>
+                  <Image source={{ uri: e.image }} style={styles.fillImg} resizeMode="cover" />
+                </View>
+                <View style={styles.upInfo}>
+                  <Text style={styles.upTitle} numberOfLines={1}>{e.title}</Text>
+                  <View style={styles.upMetaRow}>
+                    <Ionicons name="calendar-outline" size={12} color={THEME.inkSoft} />
+                    <Text style={styles.upMeta} numberOfLines={1}>{e.date}</Text>
+                  </View>
+                  <View style={styles.upMetaRow}>
+                    <Ionicons name="location-outline" size={12} color={THEME.inkSoft} />
+                    <Text style={styles.upMeta} numberOfLines={1}>{e.venue}</Text>
+                  </View>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={THEME.grey} />
+              </View>
+            </View>
+          ))}
+        </View>
+        )}
+      </ScrollView>
     </View>
   );
 }
 
-function VenueCard({ venue, onPress }: { venue: PublicVenue; onPress: () => void }) {
-  const closed = !venue.flaixEnabled && !venue.currentEventId;
+function EmptyHint({
+  icon,
+  text,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  text: string;
+}) {
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.card, shadowCard, pressed && !closed && styles.cardPressed]}
-    >
-      {venue.imageUrl ? (
-        <Image source={{ uri: venue.imageUrl }} style={styles.cardImg} resizeMode="contain" />
-      ) : (
-        <Text style={styles.cardName}>{venue.name}</Text>
-      )}
-
-      {venue.distanceKm !== null && (
-        <View style={styles.cardMeta}>
-          <View style={styles.distancePill}>
-            <Ionicons name="navigate" size={12} color={THEME.orange} />
-            <Text style={styles.distanceText}>{formatDistance(venue.distanceKm)}</Text>
-          </View>
-        </View>
-      )}
-    </Pressable>
+    <View style={styles.emptyHint}>
+      <Ionicons name={icon} size={18} color={THEME.grey} />
+      <Text style={styles.emptyHintText}>{text}</Text>
+    </View>
   );
 }
 
-function formatDistance(km: number): string {
-  if (km < 1) return `${Math.round(km * 1000)} m`;
-  return `${km.toFixed(km < 10 ? 1 : 0)} km`;
+function SectionHeader({
+  icon,
+  title,
+  action,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  title: string;
+  action: string;
+}) {
+  return (
+    <View style={styles.sectionHeader}>
+      <View style={styles.sectionTitleRow}>
+        <Ionicons name={icon} size={18} color={THEME.orange} />
+        <Text style={styles.sectionTitle}>{title}</Text>
+      </View>
+      <Text style={styles.sectionAction}>{action} ›</Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
+  scroll: { paddingBottom: BOTTOM_BAR_SPACE + 16 },
 
   band: { backgroundColor: THEME.orange, paddingBottom: 16, paddingHorizontal: 16 },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingBottom: 6,
-  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 6 },
   lockup: { width: 150, height: 150 * (212 / 760) },
-  headerIcons: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 18,
-  },
+  headerIcons: { position: 'absolute', right: 0, top: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: 18 },
   bellWrap: {},
   notifDot: {
-    position: 'absolute',
-    top: -1,
-    right: -1,
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    backgroundColor: '#22c55e',
-    borderWidth: 2,
-    borderColor: THEME.orange,
+    position: 'absolute', top: -1, right: -1, width: 11, height: 11, borderRadius: 6,
+    backgroundColor: '#22c55e', borderWidth: 2, borderColor: THEME.orange,
   },
 
-  searchWrap: { paddingHorizontal: 16, marginTop: 16 },
   searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: THEME.surface,
-    borderRadius: THEME.radius.pill,
-    borderWidth: 1,
-    borderColor: THEME.border,
-    paddingHorizontal: 20,
-    paddingVertical: 4,
-    gap: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: THEME.surface, borderRadius: THEME.radius.pill,
+    borderWidth: 1, borderColor: THEME.border,
+    paddingHorizontal: 18, marginHorizontal: 16, marginTop: 16,
   },
-  searchInput: { flex: 1, paddingVertical: 14, fontSize: 15, color: THEME.ink, fontFamily: FONT.regular },
+  searchInput: { flex: 1, paddingVertical: 14, fontSize: 15, color: THEME.ink, fontFamily: HEAD.medium },
 
-  geoCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: THEME.orangeTint,
-    marginHorizontal: 16,
-    marginTop: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: THEME.radius.control,
+  geoBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    backgroundColor: THEME.surface, borderRadius: THEME.radius.card,
+    padding: 14, marginHorizontal: 16, marginTop: 14,
   },
-  geoCtaText: { flex: 1, color: THEME.orangeDark, fontSize: 13, fontFamily: FONT.medium, lineHeight: 18 },
+  geoIcon: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: THEME.orangeTint,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  geoTitle: { color: THEME.ink, fontSize: 15, fontFamily: HEAD.bold },
+  geoSub: { color: THEME.inkSoft, fontSize: 12.5, fontFamily: HEAD.medium, marginTop: 1, lineHeight: 16 },
+  geoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: THEME.orange, borderRadius: THEME.radius.pill,
+    paddingHorizontal: 16, paddingVertical: 10,
+  },
+  geoBtnText: { color: '#fff', fontSize: 14, fontFamily: HEAD.bold },
 
-  titleBlock: { alignItems: 'center', paddingTop: 20, paddingBottom: 14 },
-  title: { color: THEME.orange, fontSize: 19, fontFamily: FONT.bold, letterSpacing: 0.5 },
-  subtitle: { color: THEME.inkSoft, fontSize: 13, marginTop: 4, fontFamily: FONT.medium },
+  sectionHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, marginTop: 34, marginBottom: 12,
+  },
+  sectionTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  sectionTitle: { color: THEME.ink, fontSize: 17, fontFamily: HEAD.bold, letterSpacing: 0.3 },
+  sectionAction: { color: THEME.orange, fontSize: 13, fontFamily: HEAD.semibold },
 
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
-  errorText: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center', fontFamily: FONT.regular },
-  emptyText: { color: THEME.grey, fontSize: 14, textAlign: 'center', fontFamily: FONT.regular },
-  retryBtn: {
-    backgroundColor: THEME.orange,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: THEME.radius.pill,
-  },
-  retryText: { color: '#fff', fontFamily: FONT.bold, fontSize: 15 },
+  hScroll: { paddingHorizontal: 16, gap: 12 },
 
-  list: { paddingHorizontal: 20, paddingBottom: 120, gap: 18 },
-  card: {
-    backgroundColor: THEME.surface,
-    borderRadius: 20,
-    height: 150,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 20,
+  emptyHint: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    marginHorizontal: 16, backgroundColor: THEME.bgSubtle,
+    borderRadius: THEME.radius.card, paddingVertical: 18, paddingHorizontal: 16,
   },
-  cardPressed: { opacity: 0.85, transform: [{ scale: 0.99 }] },
-  cardImg: { width: '70%', height: '70%' },
-  cardName: { color: THEME.ink, fontSize: 20, fontFamily: FONT.bold, textAlign: 'center' },
-  cardMeta: { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  distancePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: THEME.orangeTint,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: THEME.radius.pill,
+  emptyHintText: { flex: 1, color: THEME.grey, fontSize: 13, fontFamily: HEAD.medium, lineHeight: 18 },
+
+  nearbyCard: {
+    width: 150, backgroundColor: THEME.surface, borderRadius: 16, padding: 10, gap: 6,
   },
-  distanceText: { color: THEME.orange, fontSize: 12, fontFamily: FONT.bold },
+  nearbyPhoto: {
+    height: 84, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: THEME.border,
+    overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: 8,
+  },
+  fillImg: { width: '100%', height: '100%' },
+  logoImg: { width: '92%', height: '92%' },
+  nearbyName: { color: THEME.ink, fontSize: 13.5, fontFamily: HEAD.bold, lineHeight: 17 },
+  nearbyMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  nearbyMetaText: { color: THEME.inkSoft, fontSize: 12, fontFamily: HEAD.medium },
+  badge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
+    backgroundColor: THEME.orangeTint, paddingHorizontal: 8, paddingVertical: 4, borderRadius: THEME.radius.pill,
+  },
+  badgeText: { color: THEME.orange, fontSize: 11, fontFamily: HEAD.semibold },
+
+  favCard: {
+    width: 176, flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: THEME.surface, borderRadius: 14, padding: 10,
+  },
+  favLogo: {
+    width: 42, height: 42, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: THEME.border,
+    overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: 3,
+  },
+  favName: { flex: 1, color: THEME.ink, fontSize: 12.5, fontFamily: HEAD.semibold, lineHeight: 16 },
+
+  upcomingCard: { backgroundColor: THEME.surface, borderRadius: 16, marginHorizontal: 16, paddingHorizontal: 14 },
+  divider: { height: 1, backgroundColor: THEME.border },
+  upRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  upLogo: {
+    width: 52, height: 52, borderRadius: 12, backgroundColor: THEME.bgSubtle, overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  upInfo: { flex: 1, gap: 2 },
+  upTitle: { color: THEME.ink, fontSize: 15, fontFamily: HEAD.bold },
+  upMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  upMeta: { flex: 1, color: THEME.inkSoft, fontSize: 12, fontFamily: HEAD.medium },
+  upActions: { alignItems: 'center', gap: 8 },
+  cmdBtn: { backgroundColor: THEME.orange, paddingHorizontal: 14, paddingVertical: 8, borderRadius: THEME.radius.pill },
+  cmdText: { color: '#fff', fontSize: 13, fontFamily: HEAD.bold },
 });
