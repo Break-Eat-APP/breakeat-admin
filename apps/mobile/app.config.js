@@ -25,6 +25,7 @@ module.exports = {
     bundleIdentifier: 'app.breakeat.mobile',
     supportsTablet: false,
     buildNumber: '1',
+    deploymentTarget: '16.0',
   },
   android: {
     package: 'app.breakeat.mobile',
@@ -36,13 +37,14 @@ module.exports = {
     permissions: ['android.permission.CAMERA'],
   },
   plugins: [
-    [
-      '@sentry/react-native/expo',
-      {
-        organization: 'breakeat',
-        project: 'break-eat-mobile',
-      },
-    ],
+    ...(process.env.APP_ENV === 'production'
+      ? [
+          [
+            '@sentry/react-native/expo',
+            { organization: 'breakeat', project: 'break-eat-mobile' },
+          ],
+        ]
+      : []),
     [
       'react-native-vision-camera',
       {
