@@ -17,7 +17,7 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiLogin, apiRegister } from '@lib/api/mobile-api';
 import { useAuthStore } from '@store/auth.store';
 import { useUserLocation } from '@lib/hooks/use-user-location';
-import { THEME, shadowCard, FONT } from '@lib/theme';
+import { THEME, shadowCard, HEAD } from '@lib/theme';
 import { BreakEatLogo } from '@components/break-eat-logo';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   back: { paddingRight: 8 },
   backIcon: { color: THEME.ink, fontSize: 30, lineHeight: 30, fontWeight: '700' },
-  title: { flex: 1, color: THEME.ink, fontSize: 22, fontFamily: FONT.bold, textAlign: 'center' },
+  title: { flex: 1, color: THEME.ink, fontSize: 22, fontFamily: HEAD.bold, textAlign: 'center' },
 
   logoWrap: { alignItems: 'center', marginBottom: 18 },
 
@@ -273,8 +273,8 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 24,
   },
-  bannerTitle: { color: '#fff', fontSize: 17, fontFamily: FONT.bold, lineHeight: 23 },
-  bannerSub: { color: '#fff', fontSize: 13, marginTop: 6, opacity: 0.92, fontFamily: FONT.regular },
+  bannerTitle: { color: '#fff', fontSize: 17, fontFamily: HEAD.bold, lineHeight: 23 },
+  bannerSub: { color: '#fff', fontSize: 13, marginTop: 6, opacity: 0.92, fontFamily: HEAD.medium },
 
   tabs: {
     flexDirection: 'row',
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
   },
   tab: { flex: 1, paddingVertical: 11, alignItems: 'center', borderRadius: THEME.radius.control - 4 },
   tabActive: { backgroundColor: THEME.surface, ...shadowCard },
-  tabText: { color: THEME.inkSoft, fontSize: 15, fontFamily: FONT.semibold },
+  tabText: { color: THEME.inkSoft, fontSize: 15, fontFamily: HEAD.semibold },
   tabTextActive: { color: THEME.orange },
 
   social: {
@@ -301,11 +301,11 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.7 },
   socialIcon: { marginRight: 10 },
-  socialText: { color: THEME.ink, fontSize: 15, fontFamily: FONT.semibold },
+  socialText: { color: THEME.ink, fontSize: 15, fontFamily: HEAD.semibold },
 
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 12 },
   orLine: { flex: 1, height: 1, backgroundColor: THEME.border },
-  orText: { color: THEME.inkSoft, fontSize: 14, fontFamily: FONT.medium },
+  orText: { color: THEME.inkSoft, fontSize: 14, fontFamily: HEAD.medium },
 
   nameRow: { flexDirection: 'row', gap: 12 },
   input: {
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: THEME.ink,
     marginBottom: 12,
-    fontFamily: FONT.regular,
+    fontFamily: HEAD.medium,
   },
   inputHalf: { flex: 1 },
   passwordRow: {
@@ -331,11 +331,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 8,
   },
-  passwordInput: { flex: 1, paddingVertical: 15, fontSize: 15, color: THEME.ink, fontFamily: FONT.regular },
+  passwordInput: { flex: 1, paddingVertical: 15, fontSize: 15, color: THEME.ink, fontFamily: HEAD.medium },
   eye: { fontSize: 18, paddingLeft: 8 },
 
   forgot: { alignSelf: 'flex-end', paddingVertical: 8 },
-  forgotText: { color: THEME.orange, fontSize: 13, fontFamily: FONT.semibold },
+  forgotText: { color: THEME.orange, fontSize: 13, fontFamily: HEAD.semibold },
 
   submit: {
     backgroundColor: THEME.orange,
@@ -345,10 +345,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   submitDisabled: { opacity: 0.6 },
-  submitText: { color: '#fff', fontSize: 16, fontFamily: FONT.bold },
+  submitText: { color: '#fff', fontSize: 16, fontFamily: HEAD.bold },
 
   skip: { alignItems: 'center', paddingVertical: 16 },
-  skipText: { color: THEME.orange, fontSize: 15, fontFamily: FONT.semibold },
+  skipText: { color: THEME.orange, fontSize: 15, fontFamily: HEAD.semibold },
 
-  mentions: { color: THEME.grey, fontSize: 12, textAlign: 'center', marginTop: 4, fontFamily: FONT.regular },
+  mentions: { color: THEME.grey, fontSize: 12, textAlign: 'center', marginTop: 4, fontFamily: HEAD.medium },
 });
