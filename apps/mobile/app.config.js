@@ -15,9 +15,9 @@ module.exports = {
   version: '1.0.0',
   orientation: 'portrait',
   scheme: 'breakeat',
-  icon: './assets/icon.png',
+  icon: './assets/logo-mark-orange.png',
   splash: {
-    image: './assets/splash.png',
+    image: './assets/logo-mark-orange.png',
     resizeMode: 'contain',
     backgroundColor: '#ffffff',
   },
@@ -30,7 +30,7 @@ module.exports = {
     package: 'app.breakeat.mobile',
     versionCode: 1,
     adaptiveIcon: {
-      foregroundImage: './assets/adaptive-icon.png',
+      foregroundImage: './assets/logo-mark-orange.png',
       backgroundColor: '#ffffff',
     },
     permissions: ['android.permission.CAMERA'],
