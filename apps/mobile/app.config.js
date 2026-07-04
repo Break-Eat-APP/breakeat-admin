@@ -37,6 +37,7 @@ module.exports = {
     permissions: ['android.permission.CAMERA'],
   },
   plugins: [
+    ['expo-build-properties', { ios: { useFrameworks: 'static' } }],
     ...(process.env.APP_ENV === 'production'
       ? [
           [
