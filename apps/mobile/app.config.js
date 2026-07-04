@@ -25,7 +25,6 @@ module.exports = {
     bundleIdentifier: 'app.breakeat.mobile',
     supportsTablet: false,
     buildNumber: '1',
-    deploymentTarget: '16.0',
   },
   android: {
     package: 'app.breakeat.mobile',
@@ -37,7 +36,6 @@ module.exports = {
     permissions: ['android.permission.CAMERA'],
   },
   plugins: [
-    ['expo-build-properties', { ios: { useFrameworks: 'static' } }],
     ...(process.env.APP_ENV === 'production'
       ? [
           [
