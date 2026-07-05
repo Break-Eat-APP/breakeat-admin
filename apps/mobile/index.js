@@ -1,9 +1,19 @@
+// Entrée alternative (React Native CLI). Le build EAS bundle index.expo.js
+// (package.json "main") — ce fichier reste aligné avec la même protection.
 import { registerRootComponent } from 'expo';
-import App from './App';
+import React from 'react';
+import { CrashGuard, StartupErrorScreen } from './src/components/crash-guard';
 
-// Expo's generated native AppDelegate (iOS/Android) always looks for the
-// component registered as "main" — registerRootComponent guarantees that,
-// unlike AppRegistry.registerComponent(appName, ...) which used app.json's
-// "name" ("BratEat") and left "main" unregistered, crashing the app right
-// after the native splash screen.
-registerRootComponent(App);
+let Root;
+try {
+  const App = require('./App').default;
+  Root = function RootWithGuard() {
+    return React.createElement(CrashGuard, null, React.createElement(App));
+  };
+} catch (error) {
+  Root = function StartupError() {
+    return React.createElement(StartupErrorScreen, { error });
+  };
+}
+
+registerRootComponent(Root);
