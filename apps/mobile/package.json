@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "main": "index.expo.js",
+  "expo": {
+    "install": {
+      "exclude": ["@types/react"]
+    }
+  },
   "scripts": {
     "start": "react-native start",
     "android": "react-native run-android",
