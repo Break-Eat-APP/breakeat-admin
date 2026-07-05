@@ -10,7 +10,6 @@ import { useAuthStore } from '@store/auth.store';
 import { LoginScreen } from '@screens/login.screen';
 import { VenueDiscoveryScreen } from '@screens/venue-discovery.screen';
 import { OrderHistoryScreen } from '@screens/order-history.screen';
-import { QRScannerScreen } from '@screens/qr-scanner.screen';
 import { EventHomeScreen } from '@screens/event-home.screen';
 import { FlaixOrderScreen } from '@screens/flaix-order.screen';
 import { SupplierCatalogScreen } from '@screens/supplier-catalog.screen';
@@ -110,7 +109,10 @@ export function RootNavigator() {
           <Stack.Screen name="Login" component={LoginScreen} />
 
           {/* Flux de commande / deep links */}
-          <Stack.Screen name="QRScanner" component={QRScannerScreen} />
+          <Stack.Screen
+            name="QRScanner"
+            getComponent={() => require('@screens/qr-scanner.screen').QRScannerScreen}
+          />
           <Stack.Screen name="EventHome" component={EventHomeScreen} />
           <Stack.Screen name="FlaixOrder" component={FlaixOrderScreen} />
           <Stack.Screen name="SupplierCatalog" component={SupplierCatalogScreen} />
