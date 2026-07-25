@@ -49,7 +49,7 @@ type Near = { id: string; name: string; events: number; logo: number; buvettePla
 const NEARBY: Near[] = [
   { id: 'n1', name: 'Arena Aix en Provence', events: 2, logo: LOGO.arena, buvettePlanUrl: DEMO_PLAN('Arena Aix') },
   { id: 'n2', name: 'Le Dôme Marseille', events: 3, logo: LOGO.dome, buvettePlanUrl: DEMO_PLAN('Le Dôme') },
-  { id: 'n3', name: 'Palais Omnisports Marseille', events: 3, logo: LOGO.spartiates, buvettePlanUrl: null },
+  { id: 'n3', name: 'Palais Omnisports Marseille', events: 3, logo: LOGO.spartiates, buvettePlanUrl: DEMO_PLAN('Palais Omnisports') },
 ];
 type Fav = { id: string; name: string; logo: number };
 type Up = { id: string; title: string; date: string; venue: string; image: string };
@@ -73,6 +73,17 @@ export function VenueDiscoveryScreen() {
   const [query, setQuery] = useState('');
   const [planUrl, setPlanUrl] = useState<string | null>(null);
   const [planTitle, setPlanTitle] = useState('Plan des buvettes');
+  // Favoris pilotés par le cœur (CTA). Local pour l'instant — persistance backend à venir.
+  const [favorites, setFavorites] = useState<Fav[]>(FAVORITES);
+  const isFav = (id: string) => favorites.some((f) => f.id === id);
+  const toggleFav = (fav: Fav) =>
+    setFavorites((cur) =>
+      cur.some((f) => f.id === fav.id) ? cur.filter((f) => f.id !== fav.id) : [...cur, fav],
+    );
+  const openPlan = (name: string, url: string) => {
+    setPlanTitle(`Buvettes · ${name}`);
+    setPlanUrl(url);
+  };
 
   const granted = locStatus === 'granted';
 
@@ -133,47 +144,55 @@ export function VenueDiscoveryScreen() {
           </View>
         )}
 
-        {/* 1. Événements près de chez vous */}
-        <SectionHeader icon="location" title="Événements près de toi" action="Voir tout" />
+        {/* 1. Lieux près de chez vous */}
+        <SectionHeader icon="location" title="Lieux près de toi" action="Voir tout" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
           {NEARBY.map((v) => (
             <View key={v.id} style={[styles.nearbyCard, shadowCard]}>
               <View style={styles.nearbyPhoto}>
                 <Image source={v.logo} style={styles.logoImg} resizeMode="contain" />
-                {v.buvettePlanUrl && (
-                  <Pressable
-                    onPress={() => { setPlanTitle(`Buvettes · ${v.name}`); setPlanUrl(v.buvettePlanUrl); }}
-                    style={styles.planPill}
-                    hitSlop={6}
-                  >
-                    <Ionicons name="map" size={11} color={THEME.orange} />
-                    <Text style={styles.planPillText} numberOfLines={1}>Plan buvettes</Text>
-                  </Pressable>
-                )}
               </View>
               <Text style={styles.nearbyName} numberOfLines={2}>{v.name}</Text>
               <View style={styles.nearbyMeta}>
                 <Ionicons name="calendar-outline" size={13} color={THEME.inkSoft} />
                 <Text style={styles.nearbyMetaText}>{v.events} événements</Text>
-                <Ionicons name="heart-outline" size={16} color={THEME.orange} style={styles.nearbyHeart} />
+                <Pressable onPress={() => toggleFav({ id: v.id, name: v.name, logo: v.logo })} hitSlop={8}>
+                  <Ionicons
+                    name={isFav(v.id) ? 'heart' : 'heart-outline'}
+                    size={17}
+                    color={THEME.orange}
+                  />
+                </Pressable>
               </View>
+              {v.buvettePlanUrl && (
+                <Pressable
+                  onPress={() => openPlan(v.name, v.buvettePlanUrl!)}
+                  style={styles.planBtn}
+                  hitSlop={4}
+                >
+                  <Ionicons name="map-outline" size={13} color={THEME.orange} />
+                  <Text style={styles.planBtnText} numberOfLines={1}>Plan des buvettes</Text>
+                </Pressable>
+              )}
             </View>
           ))}
         </ScrollView>
 
         {/* 2. Vos lieux favoris */}
-        <SectionHeader icon="star" title="Tes lieux favoris" action="Gérer" />
-        {FAVORITES.length === 0 ? (
-          <EmptyHint icon="heart-outline" text="Ajoute tes favoris pour les voir apparaître ici." />
+        <SectionHeader icon="star" title="Tes lieux favoris" />
+        {favorites.length === 0 ? (
+          <EmptyHint icon="heart-outline" text="Touche le cœur d'un lieu pour l'ajouter à tes favoris." />
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
-            {FAVORITES.map((v) => (
+            {favorites.map((v) => (
               <View key={v.id} style={[styles.favCard, shadowCard]}>
                 <View style={styles.favLogo}>
                   <Image source={v.logo} style={styles.logoImg} resizeMode="contain" />
                 </View>
                 <Text style={styles.favName} numberOfLines={2}>{v.name}</Text>
-                <Ionicons name="heart" size={18} color={THEME.orange} />
+                <Pressable onPress={() => toggleFav(v)} hitSlop={8}>
+                  <Ionicons name="heart" size={18} color={THEME.orange} />
+                </Pressable>
               </View>
             ))}
           </ScrollView>
@@ -243,7 +262,7 @@ function SectionHeader({
 }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
-  action: string;
+  action?: string;
 }) {
   return (
     <View style={styles.sectionHeader}>
@@ -251,7 +270,7 @@ function SectionHeader({
         <Ionicons name={icon} size={18} color={THEME.orange} />
         <Text style={styles.sectionTitle}>{title}</Text>
       </View>
-      <Text style={styles.sectionAction}>{action} ›</Text>
+      {action ? <Text style={styles.sectionAction}>{action} ›</Text> : null}
     </View>
   );
 }
@@ -320,18 +339,16 @@ const styles = StyleSheet.create({
     height: 84, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: THEME.border,
     overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: 8,
   },
-  planPill: {
-    position: 'absolute', left: 6, bottom: 6, flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.94)', borderWidth: 1, borderColor: THEME.orangeSoft,
-    borderRadius: THEME.radius.pill, paddingHorizontal: 8, paddingVertical: 4, maxWidth: '90%',
+  planBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+    backgroundColor: THEME.orangeTint, borderRadius: 8, paddingVertical: 7, marginTop: 2,
   },
-  planPillText: { color: THEME.orange, fontSize: 10.5, fontFamily: HEAD.bold },
+  planBtnText: { color: THEME.orange, fontSize: 11.5, fontFamily: HEAD.bold },
   fillImg: { width: '100%', height: '100%' },
   logoImg: { width: '92%', height: '92%' },
   nearbyName: { color: THEME.ink, fontSize: 13.5, fontFamily: HEAD.bold, lineHeight: 17 },
   nearbyMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   nearbyMetaText: { flex: 1, color: THEME.inkSoft, fontSize: 12, fontFamily: HEAD.medium },
-  nearbyHeart: { marginLeft: 'auto' as unknown as number },
   badge: {
     flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
     backgroundColor: THEME.orangeTint, paddingHorizontal: 8, paddingVertical: 4, borderRadius: THEME.radius.pill,
