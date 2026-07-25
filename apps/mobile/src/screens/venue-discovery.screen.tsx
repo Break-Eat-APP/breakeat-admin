@@ -333,20 +333,20 @@ const styles = StyleSheet.create({
   emptyHintText: { flex: 1, color: THEME.grey, fontSize: 13, fontFamily: HEAD.medium, lineHeight: 18 },
 
   nearbyCard: {
-    width: 150, backgroundColor: THEME.surface, borderRadius: 16, padding: 10, gap: 6,
+    width: 158, height: 210, backgroundColor: THEME.surface, borderRadius: 16, padding: 10, gap: 6,
   },
   nearbyPhoto: {
-    height: 84, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: THEME.border,
+    height: 92, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: THEME.border,
     overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: 8,
   },
   planBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    backgroundColor: THEME.orangeTint, borderRadius: 8, paddingVertical: 7, marginTop: 2,
+    backgroundColor: THEME.orangeTint, borderRadius: 8, paddingVertical: 8, marginTop: 'auto',
   },
   planBtnText: { color: THEME.orange, fontSize: 11.5, fontFamily: HEAD.bold },
   fillImg: { width: '100%', height: '100%' },
   logoImg: { width: '92%', height: '92%' },
-  nearbyName: { color: THEME.ink, fontSize: 13.5, fontFamily: HEAD.bold, lineHeight: 17 },
+  nearbyName: { color: THEME.ink, fontSize: 13.5, fontFamily: HEAD.bold, lineHeight: 17, height: 34 },
   nearbyMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   nearbyMetaText: { flex: 1, color: THEME.inkSoft, fontSize: 12, fontFamily: HEAD.medium },
   badge: {
