@@ -5,6 +5,84 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.41.0] — 2026-07-25 — Phase 18 : Plan des buvettes par lieu
+
+### Objectif
+Associer à chaque lieu un **plan des buvettes** (image créée sur Canva puis hébergée), affiché dans l'app pour aider le client à localiser la/les buvette(s). Deux emplacements : pastille sur la carte du lieu (découverte) + bouton sur la confirmation de commande. Viewer plein écran zoomable.
+
+### Backend
+- `~` backend/prisma/schema.prisma (`Venue.buvettePlanUrl`)
+- `+` backend/prisma/migrations/20260725_phase18_venue_buvette_plan/migration.sql (`ALTER TABLE venues ADD COLUMN buvette_plan_url`)
+- `~` backend/src/modules/venues/dto/create-venue.dto.ts, update-venue.dto.ts (`buvettePlanUrl?`)
+- `~` backend/src/modules/venues/venues.service.ts (create + update)
+- `~` backend/src/modules/venues/public-venues.controller.ts (select + sortie `buvettePlanUrl`)
+- `~` backend/src/modules/events/public-events.controller.ts (`venue.buvettePlanUrl`)
+
+### Admin
+- `~` apps/admin/src/lib/api/admin-client.ts (`Venue`/`VenueInput` + `buvettePlanUrl`)
+- `~` apps/admin/src/app/(admin)/organizations/[id]/page.tsx (champ « Plan des buvettes (URL) »)
+
+### Mobile
+- `+` apps/mobile/src/components/buvette-plan-viewer.tsx (Modal plein écran, ScrollView pinch-zoom iOS, web-safe)
+- `~` apps/mobile/src/lib/api/mobile-api.ts (`PublicVenue.buvettePlanUrl` + `PublicEvent.venue.buvettePlanUrl`)
+- `~` apps/mobile/src/screens/venue-discovery.screen.tsx (renommage « Lieux près de toi », CTA plan sous la carte, cartes de taille égale, cœur = CTA favori, « Gérer » retiré)
+- `~` apps/mobile/src/screens/order-confirmation.screen.tsx (bouton « Voir le plan des buvettes »)
+- `~` apps/mobile/src/store/cart.store.ts (`venueBuvettePlanUrl`, `initCart` 3ᵉ arg)
+- `~` apps/mobile/src/screens/checkout.screen.tsx, event-home.screen.tsx, navigation/root-navigator.tsx (transport du plan jusqu'à la confirmation)
+
+### Vérifs
+- tsc backend/admin/mobile **0**, `expo export -p web` ✓, rendu web du CTA + viewer validé (pastille, ouverture plein écran, alignement des cartes 210px).
+- ⚠️ **Démo** : les lieux de l'accueil sont encore des placeholders → le plan affiché vient de `placehold.co`. La plomberie backend/admin est réelle (le vrai plan remontera quand l'accueil sera câblé sur `/public/venues`).
+
+---
+
+## [0.40.0] — 2026-07-04 — Build iOS interne (EAS) + résolution de la saga des crashs
+
+### Objectif
+Livrer une **app iOS de test** installable via QR code (distribution interne, sans Mac, sans App Store) et faire qu'elle **s'ouvre** (série de crashs au démarrage).
+
+### Cause racine des crashs (documentée dans REPRISE.md)
+1. **Install pods KO** : `react-native-screens` résolvait en 4.25.2 (plage ouverte) → codegen incompatible RN 0.79 → versions alignées sur Expo SDK 53.
+2. **Crash après splash #1** : composant racine enregistré sous `appName` (« BratEat ») au lieu de « main » attendu par l'AppDelegate → `registerRootComponent`.
+3. **Crash après splash #2 (le vrai)** : **2 copies de React** dans le bundle (hoist pnpm) → `useState of null` dans `useFonts` → **singletons forcés dans `metro.config.js`**.
+
+### Fichiers
+- `~` apps/mobile/metro.config.js (`resolveRequest` : react/react-dom/react-native forcés depuis apps/mobile) — **fix principal**
+- `~` apps/mobile/index.expo.js, index.js (`registerRootComponent` + garde-fou try/catch)
+- `+` apps/mobile/src/components/crash-guard.tsx (ErrorBoundary + handler global `ErrorUtils` → écran d'erreur au lieu de crash)
+- `~` apps/mobile/src/instrument.ts (`Sentry.init` en try/catch)
+- `~` apps/mobile/src/navigation/root-navigator.tsx (QRScanner lazy via `getComponent`)
+- `~` apps/mobile/package.json (deps alignées SDK 53 : react 19.0.0, react-native 0.79.6, screens ~4.11.1, safe-area ~5.4.0, async-storage ~2.1.2, @sentry/react-native ~6.14.0 ; `expo.install.exclude` = @types/react)
+- `~` apps/mobile/app.config.js (icône/splash = logo-mark-orange, Sentry plugin prod-only, EAS projectId + owner break-eat-app-spe)
+- `~` apps/mobile/eas.json (profil preview interne, appleTeamId 2A5L298Q4C)
+
+---
+
+## [0.39.0] — 2026-07 — Hébergement Vercel + typographie Raleway + refonte nav mobile
+
+- **Migration Netlify → Vercel** (app web + admin) : `+` apps/mobile/vercel.json (SPA rewrites, region cdg1), `~` scripts/fix-web-assets.cjs (assets `.pnpm` → `/vendor` pour hôte statique), CORS backend + URL Vercel.
+- **Typographie Raleway** : `~` apps/mobile/src/lib/theme.ts (`HEAD` Raleway, `BLOC` Oswald), `~` App.expo.tsx + App.tsx (chargement polices + défaut Raleway_500Medium), tous les écrans `FONT.*` → `HEAD.*`. `~` login.screen.tsx (Fredoka → Raleway).
+- **Refonte nav mobile** : Panier en bas, Menu dans le bandeau orange, cœur favori sur les cartes, données d'accueil (favoris + à venir), flèche retour partout.
+
+---
+
+## [0.38.0] — 2026-06/07 — Phases 16-17 : découverte des lieux (géoloc) + back office SUPER_ADMIN
+
+### Phase 16 — Découverte des lieux (mobile)
+- `~` backend/prisma/schema.prisma + migrations `20260624_phase16_venue_geo`, `20260628_phase16_2_venue_search_terms`, `20260628_phase16_3_venue_flaix` (`latitude`/`longitude`, `searchTerms`, `flaixEnabled`/`flaixVenueId`).
+- `+` backend/src/modules/venues/public-venues.controller.ts (`GET /public/venues?q=&lat=&lng=&radiusKm=`, Haversine, tri proximité, **lieux privés masqués côté serveur**).
+- `~` apps/mobile/src/screens/venue-discovery.screen.tsx (recherche + géoloc), `src/lib/hooks/use-user-location.ts`, `src/lib/api/mobile-api.ts` (`apiSearchVenues`, `PublicVenue`).
+- Handoff Flaix stubbé + demande de localisation au démarrage.
+
+### Phase 17 — Back office SUPER_ADMIN (`apps/backoffice`, port 3003)
+- Création club + lieu en un formulaire, logo club, **notifications push** (composer + programmées : `ScheduledNotification`), **suppression d'org**, **utilisateurs + groupes** CRUD, parser coordonnées GPS (DMS + décimal), rayon 10 km.
+- Migration `20260628_phase17_scheduled_push_backoffice`.
+
+### Note
+Détail fichier par fichier de 16-17 non reconstitué ici (voir git : commits `d70c463` → `984218a`). Les phases 18, iOS et Vercel ci-dessus sont, elles, exhaustives.
+
+---
+
 ## [0.37.0] — 2026-06-15 — Bloc B (pages, retraits, créneaux) + C4 (parrainage exploitant)
 
 ### Bloc B — Configuration enrichie

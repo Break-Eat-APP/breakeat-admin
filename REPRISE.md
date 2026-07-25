@@ -2,65 +2,57 @@
 
 > Ouvre ce fichier en premier dans une nouvelle session. Tout l'état utile est ici + dans les 4 docs (`CHANGELOG.md`, `DEVELOPMENT_LOG.md`, `brain/ENGINEERING_MANUAL.md`, `brain/TASK_SUMMARY.md`) + le git.
 
-_Dernière mise à jour : 2026-06-23_
+_Dernière mise à jour : 2026-07-25_
 
-## 🚨 NOUVELLE DIRECTION (2026-06-23) — pivot app mobile
-L'app Break Eat devient la **porte d'entrée du click-and-collect Flaix** (Flaix gère la config + le parcours commande). Rôle de l'app Break Eat :
-1. Téléchargement + inscription (peut-être différée au paiement).
-2. **Découverte des lieux** : recherche + géolocalisation.
-3. Choix du lieu → **Flaix prend le dessus**.
-4. **Profil classique** (compte, historique).
+## 🚨 BLOQUEUR ACTUEL (2026-07-25) — backend hors ligne
+L'essai **Railway a expiré** → le backend NestJS est **suspendu**. `https://breakeat-admin-production.up.railway.app` renvoie 404 « Application not found » (404 de l'edge Railway, PAS une erreur applicative). **Décision utilisateur : backend en pause** (ni paiement Railway, ni migration d'hébergeur pour l'instant).
 
-Dashboards manager / back office **en pause** (on y reviendra). Priorité = app mobile.
+Conséquences tant que non relancé : connexion admin + saisie de données (dont le plan buvettes) KO ; parcours de commande + notifs KO ; login/données réelles dans l'app KO. Ce qui marche sans backend : site web de l'app (Vercel) et la pastille « Plan des buvettes » en démo (image placehold.co).
 
-### Décisions d'archi (confirmées 2026-06-23)
-- **Flaix = intégration API**. Le client reste dans l'app Break Eat (ne voit rien) ; Flaix « prend le dessus » au moment de **choisir son emplacement** (appels API en arrière-plan, l'UI reste Break Eat).
-- **Lieux = backend Break Eat** (table `venues` existante). Flaix ne sert qu'à la commande/emplacement.
-- **Auth = optionnelle**. Navigation libre des lieux ; profil/historique seulement si connecté ; connexion jamais bloquante avant Flaix.
+Pour relancer : réactiver Railway (plan Hobby ~5 $/mois, zéro migration — `startCommand` applique `prisma migrate deploy` au démarrage) **ou** migrer Postgres + Redis + API ailleurs. Le code déployé est à jour : la migration `20260725_phase18_venue_buvette_plan` s'appliquera au prochain démarrage.
 
-### Plan de build app mobile
-1. **Découverte des lieux** : écran liste + recherche (nom/ville) + tri par géolocalisation. ⚠️ Backend : ajouter `latitude`/`longitude` à `venues` + endpoint public de recherche (`GET /public/venues?q=&lat=&lng=`).
-2. **Auth optionnelle** : navigation libre ; écran login/signup atteignable mais non bloquant (auth.store existe déjà).
-3. **Profil classique** : compte + historique de commandes (si connecté).
-4. **Handoff Flaix** : à la sélection d'un lieu/emplacement → appel API Flaix. ⚠️ **Bloqué** sur le contrat d'API Flaix (FLAIX_CONTRACT.md non écrit, Phase 11.5). En attendant : écran placeholder « emplacement / Flaix » câblé mais stubbé.
+## 🎯 Direction (pivot app mobile, confirmée 2026-06-23)
+L'app Break Eat = **porte d'entrée du click-and-collect Flaix**. Rôle : (1) téléchargement + inscription (différable), (2) **découverte des lieux** (recherche + géoloc), (3) choix du lieu → **Flaix prend le dessus** (API en arrière-plan, UI reste Break Eat), (4) profil (compte, historique). Dashboards manager / back office **en pause** (priorité = mobile). Auth **optionnelle** (navigation libre, jamais bloquante).
 
-Dépendance externe : **spec/clé API Flaix** nécessaire pour le point 4.
+Dépendance externe : **spec/clé API Flaix** toujours nécessaire pour le handoff (Phase 11.5, `FLAIX_CONTRACT.md` non écrit) → écran/handoff câblé mais **stubbé**.
 
-## Où on en est (dashboards — état figé)
-- **Branche git** : `feat/dashboard-config-blocs-abc` (poussée sur `origin`). PR à créer :
-  https://github.com/Break-Eat-APP/breakeat-admin/pull/new/feat/dashboard-config-blocs-abc
-- **9 commits** propres par domaine (deps, design, operator, backend, admin, mobile, docs, cors).
-- Working tree **clean** au moment de l'écriture.
+## 🧱 Entrées de build — À SAVOIR ABSOLUMENT
+- **Tous les builds livrés (web Vercel ET natif iOS EAS) bundlent `apps/mobile/index.expo.js` → `App.expo.tsx`** (champ `package.json` `"main"`). Confirmé dans les logs EAS (`iOS Bundled … index.expo.js`).
+- **`App.tsx` / `root-navigator.tsx` ne sont JAMAIS livrés** (code mort). Toute modif UI/nav doit se faire dans `App.expo.tsx` pour être visible.
+- Dans `App.expo.tsx`, `EventHome`/`OrderTracking`/`QRScanner` sont des **stubs** (le vrai parcours caméra/live n'est pas dans le build preview).
+- Garde-fou : `src/components/crash-guard.tsx` intercepte erreur au require / au rendu / JS fatale → écran d'erreur lisible au lieu d'un crash après le splash. Présent dans les 2 entrées.
 
-## ✅ Livré
-- **Refonte v3** « chaleureux premium » (Inter + Jost, Lucide, tokens `packages/brand`).
-- **Comptabilité** (`/accounting`) : CA TTC/HT, TVA 10 %, détail par événement.
-- **Buvettes** (`/suppliers` + détail) : images produits, zone de prépa retirée de l'UI.
-- **Exploitant externe / parrainage** : `Supplier.isExternal` + `referralCode` (`BE-XXXXXX`).
-- **Apparence de l'app** (`/appearance`) : cartes (texte/icône/image), **pages multiples**, liens externes (Instagram/YouTube), action `page`, toggle Flaix, aperçu live. Rendu mobile + navigation multi-pages.
-- **Points de retrait** : 1–4 par buvette (cap backend + suppression).
-- **Créneaux** : générateur en lot + ajout unitaire (illimité).
-- **Opérateur** : résumé des produits à préparer par colonne.
-- **Notifications C1** (`/notifications`) : modèle push par étape de commande, hook dans `OrdersService.transition`.
-- **Campagnes & push C2/C3** (`/campaigns`) : push programmés (cron `@nestjs/schedule`) + campagne `DISCOUNT_CAMPAIGN` (annonce auto).
-- **Fondation push Expo** : `backend/src/modules/notifications/` (`ExpoPushService`, `PushTokensService`, registre tokens, `ScheduledPush`).
-- **Fix CORS** : `.env` + `main.ts` autorisent 3001/3002/3003 (réglait le « Failed to fetch » du back office).
+## ✅ Livré depuis le pivot mobile (Phases 16 → 18)
+- **Phase 16 — Découverte des lieux (mobile)** : écran `venue-discovery` (recherche + géoloc, tri proximité, rayon 10 km), backend `GET /public/venues` (Haversine, `q`/`lat`/`lng`/`radiusKm`), coords `latitude`/`longitude` + `searchTerms` sur `venues`. **Lieux privés** masqués côté serveur (Codex P2). Handoff Flaix + champ Flaix (`flaixEnabled`/`flaixVenueId`) sur le lieu.
+- **Phase 17 — Back office SUPER_ADMIN** : création club + lieu en un formulaire, logo club, **notifications push** (composer + programmées, phase 17), **suppression d'org**, **utilisateurs + groupes** CRUD, parser coordonnées GPS (DMS + décimal), rayon 10 km.
+- **Hébergement Vercel** : migration Netlify → **Vercel** (app web + admin). `vercel.json` (SPA rewrites, root `apps/mobile`), script `fix-web-assets.cjs` (déplace les assets `.pnpm` → `/vendor` pour l'hébergement statique). CORS backend élargi à l'URL Vercel.
+- **Typographie Raleway** : tout le texte en **Raleway** (`HEAD.*`), Oswald installé (titres sport), Fredoka = legacy. Défaut RN Text = Raleway_500Medium dans les 2 entrées.
+- **Build iOS interne (EAS)** : profil `preview`, distribution **interne (QR code)**, sans Mac. Owner `break-eat-app-spe`, projet `break-eat`, Apple Team `2A5L298Q4C`. **L'app s'ouvre et tourne** sur iPhone après la résolution de la saga des crashs (voir dette ci-dessous).
+- **Phase 18 — Plan des buvettes par lieu** : `Venue.buvettePlanUrl` (+ migration), champ admin, CTA app (pastille sur la carte du lieu + bouton sur la confirmation de commande), viewer plein écran zoomable (`buvette-plan-viewer.tsx`). Exposé dans `/public/venues` et `PublicEvent.venue`.
+- **Favoris (cœur)** : toggle local via le cœur (CTA), synchronisé Lieux ↔ Favoris. **Persistance backend = à faire.**
 
-## ⏳ Reste à faire
-1. **Remise C3 au checkout** : appliquer le `discountPercent` au panier. ⚠️ Sensible — le prix est figé au checkout (`cartItem.priceSnapshotCents` == montant Stripe) ; la remise doit se brancher dans `cart.service` (création du PaymentIntent), pas à la création de commande.
-2. **Setup natif Expo mobile** (côté user) : app = bare RN. Installer modules Expo + `expo-notifications` + FCM/APNs + rebuild, puis créer `apps/mobile/src/lib/push.ts` (`registerForPush`) et l'appeler post-login. Les méthodes API (`apiRegisterPushToken`) existent déjà.
-3. **Audit Codex** de la branche.
+## ⏳ Reste à faire (backlog priorisé)
+1. **Relancer le backend** (Railway ou autre) — débloque tout le reste (voir bloqueur en tête).
+2. **Brancher l'accueil sur les vrais lieux** : la section « Lieux près de toi » utilise encore des **placeholders** ; `apiSearchVenues` + `/public/venues` existent, à câbler (le plan buvettes remontera alors depuis l'admin au lieu de la démo).
+3. **Persistance des favoris** : endpoint backend (save/read par utilisateur) + store mobile.
+4. **Handoff Flaix** : bloqué sur le contrat/clé API Flaix (Phase 11.5).
+5. **Setup natif push Expo** : modules Expo + FCM/APNs + rebuild, puis `apiRegisterPushToken` post-login (méthodes API déjà prêtes).
+6. **Remise C3 au checkout** : appliquer `discountPercent` au panier (sensible — prix figé au checkout).
+7. **Audit Codex** de la phase mobile 16→18.
 
-## ⚠️ Dette technique connue (à signaler à Codex)
-- ~~Migrations en SQL direct manquantes pour `push_tokens`, `scheduled_pushes`, `suppliers.referral_code/is_external`.~~ **Résolu (2026-06-24)** : migration versionnée `backend/prisma/migrations/20260607_phase15_notifications_referral` créée + `migration_lock.toml` ajouté (était absent → bloquait `migrate deploy`). Une base neuve (Railway) crée désormais ces objets via `prisma migrate deploy`.
-  - ⏳ **Étape restante (DB dev allumée)** : marquer la migration comme déjà appliquée pour ne pas la rejouer sur dev (objets créés jadis en SQL direct) :
-    `corepack pnpm --filter @break-eat/backend exec prisma migrate resolve --applied 20260607_phase15_notifications_referral`
-  - Le drift PK historique demeure (`gen_random_uuid()` en DB vs `@default(uuid())` au schéma) mais est bénin : `migrate deploy` ne vérifie pas le drift (seul `migrate dev` le ferait).
-- **Pipeline racine** : scripts repassés à **`pnpm -r --if-present run`** (au lieu de `turbo run`) — `corepack pnpm typecheck/lint/test` passent sans pré-requis (plus de « Unable to find package manager binary »). Résolu audit round 3 (2026-06-25).
-- Après tout changement de schéma : **arrêter le backend** (DLL Windows verrouillé) → `prisma generate` → relancer.
+## ⚠️ Dette technique / pièges connus (à signaler à Codex)
+- **Double React (pnpm)** : l'app épingle `react@19.0.0` (RN 0.79/SDK 53) mais le monorepo hoiste `react@19.2.x` ; les paquets `@expo-google-fonts/*` importent `react` sans le déclarer → 2 copies dans le bundle → crash `TypeError: Cannot read property 'useState' of null` dans `useFonts`. **Fix en place : singletons forcés dans `apps/mobile/metro.config.js` (`resolveRequest` → react/react-dom/react-native depuis apps/mobile). NE PAS RETIRER.**
+- **Composant racine** : `index.expo.js`/`index.js` enregistrent via `registerRootComponent` (Expo) → module « main » attendu par l'AppDelegate natif. Ne pas revenir à `AppRegistry.registerComponent(appName, …)` (crash après splash).
+- **Modules natifs eager** : `react-native-vision-camera` (QRScanner) et `@sentry/react-native` jettent au chargement si le module natif manque → QRScanner lazy-loadé (`getComponent`), `Sentry.init` protégé par try/catch, plugin Sentry en prod uniquement.
+- **`Alert.alert` = no-op sur react-native-web** → utiliser `src/lib/alert.ts` (`showAlert`/`confirmAction`).
+- **@types/react** volontairement `^19.1.0` (exclu du check `expo doctor` via `package.json` > `expo.install.exclude`) : le monorepo résout 19.2.x et 19.0.x casse `tsc`. Aucun impact runtime.
+- Après tout changement de schéma Prisma : **arrêter le backend** (DLL Windows verrouillé) → `prisma generate` → relancer.
+
+## 🔎 Vérifier un bundle iOS sans build EAS (utile pour debug crash)
+`cd apps/mobile` puis `npx expo export:embed --platform ios --dev false --entry-file <ABSOLU>/index.expo.js --bundle-output out.jsbundle --assets-dest out-assets` — l'entry DOIT être un chemin absolu. Compter les occurrences de la version React parasite dans `out.jsbundle` (doit être 0).
 
 ## 🚀 Lancer l'environnement (Windows)
-`pnpm` n'est pas dans le PATH → utiliser **corepack** (Node est OK) :
+`pnpm` via **corepack** (Node OK) :
 ```
 corepack pnpm --filter @break-eat/backend start:dev    # port 3000
 corepack pnpm --filter @break-eat/admin dev            # port 3001
@@ -68,6 +60,7 @@ corepack pnpm --filter @break-eat/backoffice dev       # port 3003
 corepack pnpm --filter @break-eat/operator dev         # port 3002
 ```
 Docker (Postgres/Redis) doit tourner. DB = `breakeat_dev`.
+Build iOS interne : `cd apps/mobile && eas build -p ios --profile preview` (installer via le NOUVEAU QR code du build).
 
 ## 🔑 Connexion (dev)
 - URL : http://localhost:3001 (manager) · http://localhost:3003 (back office)

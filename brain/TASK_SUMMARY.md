@@ -4,6 +4,44 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-07-25] Phase mobile 16→18 — découverte lieux, back office, Vercel, build iOS interne, plan buvettes
+
+> Audit de rattrapage : rien n'avait été loggé ici depuis le 2026-06-15 alors que tout le **pivot app mobile** a été livré. Vérité terrain = git (`d70c463` → `a508387`). Voir `CHANGELOG.md` [0.38.0]→[0.41.0] pour le détail fichiers et `REPRISE.md` pour l'état complet + les pièges.
+
+### 🚨 Bloqueur en cours
+Essai **Railway expiré** → backend hors ligne (404). Décision : **backend en pause**. Login/commande/admin/données réelles KO jusqu'à relance (Railway ou autre hébergeur). Code déployé à jour ; migration buvettes s'appliquera au prochain `migrate deploy`.
+
+### Livré
+- **Phase 16 — Découverte des lieux** : écran `venue-discovery` (recherche + géoloc, tri proximité, rayon 10 km) ; `GET /public/venues` (Haversine, `q`/`lat`/`lng`/`radiusKm`) ; `venues.latitude/longitude/searchTerms` ; **lieux privés masqués serveur** (Codex P2) ; champ Flaix (`flaixEnabled`/`flaixVenueId`) + handoff stubbé.
+- **Phase 17 — Back office SUPER_ADMIN** : club + lieu en un formulaire, logo club, notifications push (composer + **programmées**), suppression d'org, **utilisateurs + groupes** CRUD, parser GPS (DMS + décimal), rayon 10 km.
+- **Hébergement Vercel** (migration Netlify) : `vercel.json` (SPA), `fix-web-assets.cjs` (assets `.pnpm` → `/vendor`), CORS + URL Vercel.
+- **Typographie Raleway** partout (`HEAD.*`), Oswald installé, Fredoka legacy.
+- **Build iOS interne EAS** (profil `preview`, QR code, sans Mac) : **l'app s'ouvre et tourne** après résolution des crashs.
+- **Phase 18 — Plan des buvettes** : `Venue.buvettePlanUrl` + migration + champ admin + CTA app (carte du lieu + confirmation) + viewer plein écran zoomable.
+- **Favoris (cœur)** : toggle local, sync Lieux ↔ Favoris (persistance backend à faire).
+
+### Décisions techniques majeures (à connaître de Codex)
+- **Entrée de build** : web ET natif bundlent `index.expo.js` → `App.expo.tsx` (`package.json main`). `App.tsx`/`root-navigator.tsx` = **code mort non livré**. `EventHome`/`OrderTracking`/`QRScanner` sont des **stubs** dans `App.expo.tsx`.
+- **Crash iOS = double React** : app épingle `react@19.0.0` (RN 0.79/SDK 53), monorepo hoiste `19.2.x`, `@expo-google-fonts/*` importent react sans le déclarer → 2 copies → `useState of null` dans `useFonts`. **Fix : singletons forcés dans `metro.config.js` (`resolveRequest`). NE PAS RETIRER.**
+- **Composant racine** enregistré via `registerRootComponent` (module « main »), pas `AppRegistry.registerComponent(appName)`.
+- **Modules natifs eager** (vision-camera, Sentry) jettent au chargement → QRScanner lazy (`getComponent`), `Sentry.init` en try/catch + plugin prod-only.
+- **`crash-guard.tsx`** : erreur require/rendu/JS fatale → écran d'erreur lisible (plus de fermeture sèche après splash).
+- **`@types/react`** gardé `^19.1.0` (exclu du check expo doctor) — sinon `tsc` casse.
+
+### Reste (backlog priorisé)
+1. **Relancer le backend** (Railway ou autre) — débloque tout.
+2. **Câbler l'accueil sur les vrais lieux** (section « Lieux près de toi » encore en placeholder ; `apiSearchVenues` prêt) → le plan buvettes remontera depuis l'admin au lieu de la démo `placehold.co`.
+3. **Persistance favoris** (endpoint backend + store).
+4. **Handoff Flaix** (bloqué sur contrat/clé API Flaix).
+5. **Setup natif push Expo** (modules + FCM/APNs + rebuild) puis `apiRegisterPushToken`.
+6. **Remise C3 au checkout**.
+7. **Audit Codex** de la phase 16→18.
+
+### Vérifs
+- tsc backend/admin/mobile **0** ; `expo export -p web` ✓ ; build iOS EAS ✓ (s'ouvre sur iPhone) ; rendu web CTA plan + viewer validé.
+
+---
+
 ## [2026-06-15] Bloc B (pages/retraits/créneaux) + C4 (parrainage)
 
 ### Livré
