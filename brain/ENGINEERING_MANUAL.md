@@ -3761,4 +3761,74 @@ Un **constructeur d'écran d'accueil** pour l'app cliente, piloté depuis le das
 - Endpoint public sans `branding`/`appearance` : backend pas relancé (NestJS doit recompiler) — vérifier `curl /public/events/:id`.
 - Backend DOWN après arrêt de Docker : le process Node crashe (perte connexion Postgres) ; relancer `pnpm --filter @break-eat/backend start:dev` (les conteneurs Docker et le process Node sont distincts).
 
+---
+
+## [2026-07-25] Phase mobile 16→18 — Découverte lieux, Backoffice, Vercel, EAS, Plan buvettes
+
+### What Was Built
+Le pivot app mobile, en trois blocs :
+1. **Découverte des lieux géolocalisée** (Phase 16) : écran `venue-discovery` branché sur `GET /public/venues` (recherche texte + tri par proximité, rayon 10 km, lieux privés masqués côté serveur).
+2. **Build livrable** (Vercel web + iOS EAS interne) : migration Netlify→Vercel, typographie Raleway, et surtout la résolution d'une série de crashs iOS au démarrage.
+3. **Plan des buvettes par lieu** (Phase 18) : champ `Venue.buvettePlanUrl` (validé URL http(s)), exposé à l'app, affiché via un viewer plein écran zoomable, sur la carte du lieu et sur la confirmation de commande.
+
+### Why It Was Built
+- L'app devient la **porte d'entrée du click-and-collect** : il fallait de vraies données de lieux (pas des placeholders) et un chemin de navigation réel (Flaix ou événement).
+- Le **plan des buvettes** répond à un besoin terrain : le client doit localiser où récupérer sa commande dans un stade.
+- Les **crashs iOS** venaient de contraintes de packaging (double React via le hoist pnpm, modules natifs eager) qui devaient être neutralisées sans quoi l'app se fermait après le splash.
+
+### How It Works
+1. **Écran Lieux** : au montage, `requestLocation({ silent: true })` demande la position ; un `useEffect` débouncé (300 ms) sur `[query, coords]` appelle `apiSearchVenues({ q, lat, lng, radiusKm: 10 })`. États `loading`/`error`/`vide` gérés. Chaque lieu → `openVenue` : `flaixEnabled` ⇒ `FlaixOrder`, sinon `currentEventId` ⇒ `EventHome`, sinon alerte « Bientôt ».
+2. **Backend `/public/venues`** : filtre `status=ACTIVE` + recherche `q` (nom/adresse/searchTerms), calcule la distance Haversine si `lat`/`lng`, écarte hors rayon, masque les lieux dont aucun événement n'est accessible, renvoie `buvettePlanUrl`.
+3. **Plan des buvettes** : `BuvettePlanViewer` ouvre l'image dans un `Modal` plein écran ; le zoom natif iOS passe par une `ScrollView` (`maximumZoomScale`+`pinchGestureEnabled`).
+4. **Packaging** : l'entrée livrée est `index.expo.js` → `App.expo.tsx` ; `metro.config.js` force une copie unique de React ; le `crash-guard` transforme toute erreur de démarrage en écran lisible.
+
+### Code References
+- apps/mobile/src/screens/venue-discovery.screen.tsx:76 — `loadVenues` (appel `apiSearchVenues`, gestion loading/error).
+- apps/mobile/src/screens/venue-discovery.screen.tsx:97 — `useEffect` débouncé (recherche + rechargement quand la position arrive).
+- apps/mobile/src/screens/venue-discovery.screen.tsx:104 — `openVenue` (routage Flaix > événement > « Bientôt »).
+- apps/mobile/src/screens/venue-discovery.screen.tsx:167 — rendu de la section « Lieux près de toi » (loading/erreur/vide/liste).
+- apps/mobile/src/lib/api/mobile-api.ts:220 — interface `PublicVenue` (dont `buvettePlanUrl`, `currentEventId`, `distanceKm`).
+- apps/mobile/src/lib/api/mobile-api.ts:240 — `apiSearchVenues` (construction de la query).
+- apps/mobile/src/lib/api/mobile-api.ts:119 — `PublicEvent.venue.buvettePlanUrl` (chemin « après commande »).
+- apps/mobile/src/components/buvette-plan-viewer.tsx:27 — composant `BuvettePlanViewer`.
+- apps/mobile/src/components/buvette-plan-viewer.tsx:49 — `maximumZoomScale` (pinch-zoom iOS).
+- backend/src/modules/venues/public-venues.controller.ts:71 — `buvettePlanUrl: true` dans le `select`.
+- backend/src/modules/venues/public-venues.controller.ts:125 — `buvettePlanUrl` dans la sortie API.
+- backend/src/modules/venues/public-venues.controller.ts:159 — `haversineKm` (distance).
+- backend/src/modules/venues/dto/create-venue.dto.ts:63 — `@IsUrl({ protocols: ['http','https'], require_protocol: true })` ; ligne 68 le champ `buvettePlanUrl?`.
+- backend/src/modules/venues/dto/update-venue.dto.ts:59 — même validation URL (update).
+- backend/prisma/schema.prisma:314 — `buvettePlanUrl String? @map("buvette_plan_url")`.
+- backend/prisma/migrations/20260725_phase18_venue_buvette_plan/migration.sql:1 — `ALTER TABLE venues ADD COLUMN buvette_plan_url`.
+- backend/src/modules/backoffice/backoffice.controller.ts:35 — `@Roles(GlobalRole.SUPER_ADMIN)` (garde du back office).
+- apps/mobile/index.expo.js:25 — `registerRootComponent(Root)` (module « main » attendu par l'AppDelegate).
+- apps/mobile/App.expo.tsx:87 — `useFonts` (les 2 copies de React faisaient planter ici : `useState of null`).
+- apps/mobile/App.expo.tsx:141 — `EventHomeStub` (les écrans caméra/live sont stubbés dans l'entrée livrée).
+- apps/mobile/metro.config.js:17 — `FORCED_SINGLETONS` ; ligne 26 le `resolveRequest` qui force react/react-dom/react-native depuis apps/mobile.
+- apps/mobile/vercel.json:7 — `rewrites` SPA (fallback index.html).
+- apps/mobile/scripts/fix-web-assets.cjs:62 — déplacement des assets `.pnpm` → `/vendor` (hôte statique).
+
+### Data Flow
+`venue-discovery` (query + coords) → `apiSearchVenues` → `GET /public/venues?q=&lat=&lng=&radiusKm=` → `PublicVenuesController.search` (Prisma `venue.findMany` + filtrage accès + Haversine) → `PublicVenue[]` (dont `buvettePlanUrl`) → rendu des cartes. Tap carte → `FlaixOrder`/`EventHome`. Tap « Plan des buvettes » → `BuvettePlanViewer` (image `buvettePlanUrl`). Parcours de commande : `event.venue.buvettePlanUrl` → `initCart` → `cart.store.venueBuvettePlanUrl` → params `OrderConfirmation` → bouton plan.
+
+### Dependencies
+- Interne : `@lib/api/mobile-api`, `@lib/hooks/use-user-location`, `@lib/alert`, `@components/buvette-plan-viewer`, module backend `venues`, `backoffice`, `notifications`.
+- Externe : `@react-navigation/*`, `react-native` (Modal/ScrollView/ActivityIndicator), `class-validator`/`class-transformer` (`IsUrl`/`Transform`), Prisma.
+
+### Tests and Verification
+- `backend` : `jest public-venues backoffice --runInBand` → **16/16** (backoffice spec corrigé : mocks `ExpoPushService`/`PushTokensService`/`ScheduledPushService`).
+- `pnpm typecheck` backend/admin/mobile → **0**. `pnpm lint` mobile + fichiers admin ciblés → **0 warning** (non-null assertions + eslint-disable inutile retirés).
+- `npx prisma validate` → OK. `pnpm --filter @break-eat/mobile build:web` → OK.
+- Vérif preview web : l'écran Lieux affiche loading → état d'erreur propre quand le backend est hors ligne (pas de crash, favoris OK).
+
+### Risks and Safe Change Rules
+- **NE PAS retirer** `metro.config.js` `resolveRequest` (singletons React) : réintroduit le crash `useState of null`.
+- Modifier l'UI/nav **dans `App.expo.tsx`** (c'est l'entrée livrée) ; `App.tsx`/`root-navigator.tsx` ne sont pas packagés.
+- `buvettePlanUrl` accepte uniquement http(s) : une image locale/`data:` sera rejetée (400). Vide → `null` (via `@Transform`), nécessite `transform: true` sur le `ValidationPipe` (actif dans `main.ts`).
+- « À venir » (`UPCOMING`) reste un placeholder : pas d'endpoint « événements à venir ». Les favoris sont locaux (pas de persistance backend).
+
+### Debugging Notes
+- Écran Lieux vide alors que des lieux existent : géoloc active mais lieux **sans coordonnées** → masqués quand la position est connue (filtre rayon). Vérifier `latitude`/`longitude` en base.
+- « Impossible de charger les lieux » : backend hors ligne (cf. Railway en pause) — détail réel dans `console.warn('apiSearchVenues a échoué', …)`.
+- Crash après splash en natif : suspecter une 2ᵉ copie de React (grep de la version parasite dans le bundle `expo export:embed`) ou un module natif eager ; le `crash-guard` affiche la stack à l'écran.
+
 

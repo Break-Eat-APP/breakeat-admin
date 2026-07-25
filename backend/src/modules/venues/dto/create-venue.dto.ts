@@ -5,11 +5,13 @@ import {
   IsEnum,
   IsNumber,
   IsBoolean,
+  IsUrl,
   Min,
   Max,
   MinLength,
   MaxLength,
 } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { VenueStatus } from '@prisma/client';
 
 export class CreateVenueDto {
@@ -55,11 +57,15 @@ export class CreateVenueDto {
   @MaxLength(200)
   flaixVenueId?: string;
 
-  /** URL de l'image du plan des buvettes (affichée dans l'app). */
-  @IsString()
+  /** URL de l'image du plan des buvettes (affichée dans l'app). Vide → null. */
   @IsOptional()
+  @Transform(({ value }) => (value === '' ? null : value))
+  @IsUrl(
+    { protocols: ['http', 'https'], require_protocol: true },
+    { message: 'buvettePlanUrl doit être une URL http(s) valide' },
+  )
   @MaxLength(1000)
-  buvettePlanUrl?: string;
+  buvettePlanUrl?: string | null;
 
   @IsString()
   @IsOptional()

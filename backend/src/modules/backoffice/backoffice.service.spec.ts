@@ -4,6 +4,9 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { PaymentStatus, OrgStatus } from '@prisma/client';
 import { BackofficeService } from './backoffice.service';
 import { PrismaService } from '../../database/prisma.service';
+import { ExpoPushService } from '../notifications/expo-push.service';
+import { PushTokensService } from '../notifications/push-tokens.service';
+import { ScheduledPushService } from '../notifications/scheduled-push.service';
 
 /**
  * Unit tests for BackofficeService.
@@ -49,6 +52,11 @@ describe('BackofficeService', () => {
         { provide: PrismaService, useValue: prisma },
         // Configured reporting VAT rate = 10% (resto sur place).
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(0.1) } },
+        // Notifications push : injectées par le service mais non sollicitées par
+        // les cas testés ici (KPIs + CRUD org) → mocks vides suffisants pour la DI.
+        { provide: ExpoPushService, useValue: { send: jest.fn() } },
+        { provide: PushTokensService, useValue: { tokensForUsers: jest.fn(), purgeInvalid: jest.fn() } },
+        { provide: ScheduledPushService, useValue: { schedule: jest.fn(), list: jest.fn(), cancel: jest.fn() } },
       ],
     }).compile();
 

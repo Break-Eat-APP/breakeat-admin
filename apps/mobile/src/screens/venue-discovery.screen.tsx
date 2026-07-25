@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Image,
   Platform,
   Pressable,
@@ -17,6 +18,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { useNotifStore } from '@store/notif.store';
+import { apiSearchVenues, type PublicVenue } from '@lib/api/mobile-api';
+import { showAlert } from '@lib/alert';
 import { BOTTOM_BAR_SPACE } from '@components/app-bottom-bar';
 import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
@@ -27,37 +30,13 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null;
 
-// ─── DONNÉES D'EXEMPLE (placeholder) ────────────────────────────────
-// TODO: remplacer par les vraies données Flaix + favoris (cf. mémoire home-final-spec).
-// Logos réels des lieux/clubs.
-const LOGO = {
-  arena: require('../../assets/logos/arena-aix.png'),
-  dome: require('../../assets/logos/le-dome.png'),
-  spartiates: require('../../assets/logos/spartiates.png'),
-  pauc: require('../../assets/logos/pauc.png'),
-};
-// Images d'événements thématisées (loremflickr) — remplacées plus tard par Flaix.
-const PHOTO = (tags: string, lock: number, w = 200, h = 200) =>
-  `https://loremflickr.com/${w}/${h}/${tags}?lock=${lock}`;
-
-// Plan des buvettes : URL de démonstration (placehold.co renvoie un vrai PNG).
-// En production, ce champ vient de l'API (Venue.buvettePlanUrl saisi au back-office).
-const DEMO_PLAN = (label: string) =>
-  `https://placehold.co/1200x1600/FC4002/FFFFFF/png?text=${encodeURIComponent(`Plan des buvettes\n${label}`)}`;
-
-type Near = { id: string; name: string; events: number; logo: number; buvettePlanUrl: string | null };
-const NEARBY: Near[] = [
-  { id: 'n1', name: 'Arena Aix en Provence', events: 2, logo: LOGO.arena, buvettePlanUrl: DEMO_PLAN('Arena Aix') },
-  { id: 'n2', name: 'Le Dôme Marseille', events: 3, logo: LOGO.dome, buvettePlanUrl: DEMO_PLAN('Le Dôme') },
-  { id: 'n3', name: 'Palais Omnisports Marseille', events: 3, logo: LOGO.spartiates, buvettePlanUrl: DEMO_PLAN('Palais Omnisports') },
-];
-type Fav = { id: string; name: string; logo: number };
+type Fav = { id: string; name: string; imageUrl: string | null };
 type Up = { id: string; title: string; date: string; venue: string; image: string };
 
-const FAVORITES: Fav[] = [
-  { id: 'f1', name: 'Arena Aix en Provence', logo: LOGO.arena },
-  { id: 'f2', name: 'PAUC Handball', logo: LOGO.pauc },
-];
+// ─── « À venir » : placeholder en attendant un endpoint « événements à venir »
+// (loremflickr = images thématisées). Les lieux et favoris, eux, sont réels.
+const PHOTO = (tags: string, lock: number, w = 200, h = 200) =>
+  `https://loremflickr.com/${w}/${h}/${tags}?lock=${lock}`;
 
 const UPCOMING: Up[] = [
   { id: 'u1', title: 'Spartiates vs Nîmes Gard Roussillon', date: 'Sam. 5 juil. · 20h00', venue: 'Palais Omnisports Marseille', image: PHOTO('handball,sport,match', 10, 120, 120) },
@@ -69,17 +48,24 @@ export function VenueDiscoveryScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { hasUnread, markRead } = useNotifStore();
-  const { status: locStatus, request: requestLocation } = useUserLocation();
+  const { coords, status: locStatus, request: requestLocation } = useUserLocation();
   const [query, setQuery] = useState('');
   const [planUrl, setPlanUrl] = useState<string | null>(null);
   const [planTitle, setPlanTitle] = useState('Plan des buvettes');
+
+  // Lieux réels (API), rechargés quand la recherche ou la position changent.
+  const [venues, setVenues] = useState<PublicVenue[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   // Favoris pilotés par le cœur (CTA). Local pour l'instant — persistance backend à venir.
-  const [favorites, setFavorites] = useState<Fav[]>(FAVORITES);
+  const [favorites, setFavorites] = useState<Fav[]>([]);
   const isFav = (id: string) => favorites.some((f) => f.id === id);
   const toggleFav = (fav: Fav) =>
     setFavorites((cur) =>
       cur.some((f) => f.id === fav.id) ? cur.filter((f) => f.id !== fav.id) : [...cur, fav],
     );
+
   const openPlan = (name: string, url: string) => {
     setPlanTitle(`Buvettes · ${name}`);
     setPlanUrl(url);
@@ -87,9 +73,43 @@ export function VenueDiscoveryScreen() {
 
   const granted = locStatus === 'granted';
 
+  const loadVenues = useCallback(async (q: string, lat?: number, lng?: number) => {
+    setLoading(true);
+    setError(null);
+    try {
+      setVenues(await apiSearchVenues({ q: q || undefined, lat, lng, radiusKm: 10 }));
+    } catch (e: unknown) {
+      // Détail en console pour le debug ; message clair et neutre à l'écran.
+      console.warn('apiSearchVenues a échoué:', e);
+      setError('Impossible de charger les lieux pour le moment. Réessaie plus tard.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Position demandée au montage (silencieux).
   useEffect(() => {
     requestLocation({ silent: true });
   }, [requestLocation]);
+
+  // Recherche débouncée + rechargement quand la position arrive.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      void loadVenues(query.trim(), coords?.lat, coords?.lng);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [query, coords, loadVenues]);
+
+  // Ouvre un lieu : Flaix > événement actif > « Bientôt ».
+  const openVenue = (v: PublicVenue) => {
+    if (v.flaixEnabled) {
+      navigation.navigate('FlaixOrder', { venueId: v.id, flaixVenueId: v.flaixVenueId });
+    } else if (v.currentEventId) {
+      navigation.navigate('EventHome', { eventId: v.currentEventId });
+    } else {
+      showAlert('Bientôt', `${v.name} n'a pas encore d'événement ouvert à la commande.`);
+    }
+  };
 
   return (
     <View style={styles.root}>
@@ -144,39 +164,62 @@ export function VenueDiscoveryScreen() {
           </View>
         )}
 
-        {/* 1. Lieux près de chez vous */}
-        <SectionHeader icon="location" title="Lieux près de toi" action="Voir tout" />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
-          {NEARBY.map((v) => (
-            <View key={v.id} style={[styles.nearbyCard, shadowCard]}>
-              <View style={styles.nearbyPhoto}>
-                <Image source={v.logo} style={styles.logoImg} resizeMode="contain" />
-              </View>
-              <Text style={styles.nearbyName} numberOfLines={2}>{v.name}</Text>
-              <View style={styles.nearbyMeta}>
-                <Ionicons name="calendar-outline" size={13} color={THEME.inkSoft} />
-                <Text style={styles.nearbyMetaText}>{v.events} événements</Text>
-                <Pressable onPress={() => toggleFav({ id: v.id, name: v.name, logo: v.logo })} hitSlop={8}>
-                  <Ionicons
-                    name={isFav(v.id) ? 'heart' : 'heart-outline'}
-                    size={17}
-                    color={THEME.orange}
-                  />
+        {/* 1. Lieux près de chez vous (données réelles — GET /public/venues) */}
+        <SectionHeader icon="location" title="Lieux près de toi" />
+        {loading ? (
+          <View style={styles.sectionLoading}>
+            <ActivityIndicator color={THEME.orange} />
+          </View>
+        ) : error ? (
+          <EmptyHint icon="cloud-offline-outline" text={error} />
+        ) : venues.length === 0 ? (
+          <EmptyHint
+            icon="location-outline"
+            text={query.trim() ? 'Aucun lieu ne correspond à ta recherche.' : 'Aucun lieu près de toi pour le moment.'}
+          />
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
+            {venues.map((v) => {
+              const plan = v.buvettePlanUrl;
+              const open = v.flaixEnabled || v.currentEventId != null;
+              const status =
+                v.distanceKm != null
+                  ? `${v.distanceKm.toFixed(1).replace('.', ',')} km`
+                  : open
+                    ? 'Ouvert'
+                    : 'Bientôt';
+              return (
+                <Pressable key={v.id} style={[styles.nearbyCard, shadowCard]} onPress={() => openVenue(v)}>
+                  <View style={styles.nearbyPhoto}>
+                    {v.imageUrl ? (
+                      <Image source={{ uri: v.imageUrl }} style={styles.logoImg} resizeMode="contain" />
+                    ) : (
+                      <Text style={styles.logoFallback}>{v.name.charAt(0).toUpperCase()}</Text>
+                    )}
+                  </View>
+                  <Text style={styles.nearbyName} numberOfLines={2}>{v.name}</Text>
+                  <View style={styles.nearbyMeta}>
+                    <Ionicons
+                      name={v.distanceKm != null ? 'navigate-outline' : 'time-outline'}
+                      size={12}
+                      color={THEME.inkSoft}
+                    />
+                    <Text style={styles.nearbyMetaText} numberOfLines={1}>{status}</Text>
+                    <Pressable onPress={() => toggleFav({ id: v.id, name: v.name, imageUrl: v.imageUrl })} hitSlop={8}>
+                      <Ionicons name={isFav(v.id) ? 'heart' : 'heart-outline'} size={17} color={THEME.orange} />
+                    </Pressable>
+                  </View>
+                  {plan ? (
+                    <Pressable onPress={() => openPlan(v.name, plan)} style={styles.planBtn} hitSlop={4}>
+                      <Ionicons name="map-outline" size={13} color={THEME.orange} />
+                      <Text style={styles.planBtnText} numberOfLines={1}>Plan des buvettes</Text>
+                    </Pressable>
+                  ) : null}
                 </Pressable>
-              </View>
-              {v.buvettePlanUrl && (
-                <Pressable
-                  onPress={() => openPlan(v.name, v.buvettePlanUrl!)}
-                  style={styles.planBtn}
-                  hitSlop={4}
-                >
-                  <Ionicons name="map-outline" size={13} color={THEME.orange} />
-                  <Text style={styles.planBtnText} numberOfLines={1}>Plan des buvettes</Text>
-                </Pressable>
-              )}
-            </View>
-          ))}
-        </ScrollView>
+              );
+            })}
+          </ScrollView>
+        )}
 
         {/* 2. Vos lieux favoris */}
         <SectionHeader icon="star" title="Tes lieux favoris" />
@@ -187,7 +230,11 @@ export function VenueDiscoveryScreen() {
             {favorites.map((v) => (
               <View key={v.id} style={[styles.favCard, shadowCard]}>
                 <View style={styles.favLogo}>
-                  <Image source={v.logo} style={styles.logoImg} resizeMode="contain" />
+                  {v.imageUrl ? (
+                    <Image source={{ uri: v.imageUrl }} style={styles.logoImg} resizeMode="contain" />
+                  ) : (
+                    <Text style={styles.favLogoFallback}>{v.name.charAt(0).toUpperCase()}</Text>
+                  )}
                 </View>
                 <Text style={styles.favName} numberOfLines={2}>{v.name}</Text>
                 <Pressable onPress={() => toggleFav(v)} hitSlop={8}>
@@ -324,6 +371,7 @@ const styles = StyleSheet.create({
   sectionAction: { color: THEME.orange, fontSize: 13, fontFamily: HEAD.semibold },
 
   hScroll: { paddingHorizontal: 16, gap: 12 },
+  sectionLoading: { paddingVertical: 26, alignItems: 'center' },
 
   emptyHint: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -346,6 +394,7 @@ const styles = StyleSheet.create({
   planBtnText: { color: THEME.orange, fontSize: 11.5, fontFamily: HEAD.bold },
   fillImg: { width: '100%', height: '100%' },
   logoImg: { width: '92%', height: '92%' },
+  logoFallback: { fontSize: 30, fontFamily: HEAD.bold, color: THEME.orange },
   nearbyName: { color: THEME.ink, fontSize: 13.5, fontFamily: HEAD.bold, lineHeight: 17, height: 34 },
   nearbyMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   nearbyMetaText: { flex: 1, color: THEME.inkSoft, fontSize: 12, fontFamily: HEAD.medium },
@@ -363,6 +412,7 @@ const styles = StyleSheet.create({
     width: 42, height: 42, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: THEME.border,
     overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: 3,
   },
+  favLogoFallback: { fontSize: 18, fontFamily: HEAD.bold, color: THEME.orange },
   favName: { flex: 1, color: THEME.ink, fontSize: 12.5, fontFamily: HEAD.semibold, lineHeight: 16 },
 
   upcomingCard: { backgroundColor: THEME.surface, borderRadius: 16, marginHorizontal: 16, paddingHorizontal: 14 },

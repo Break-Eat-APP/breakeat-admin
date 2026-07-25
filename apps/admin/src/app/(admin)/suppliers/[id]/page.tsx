@@ -370,7 +370,7 @@ export default function SupplierDetailPage() {
               <span style={{ fontSize: 12, color: '#6d28d9', fontWeight: 600 }}>Code</span>
               <code style={{ fontSize: 18, fontWeight: 800, color: '#5b21b6', letterSpacing: 1 }}>{supplier.referralCode}</code>
               <button
-                onClick={() => void navigator.clipboard?.writeText(supplier.referralCode!)}
+                onClick={() => void navigator.clipboard?.writeText(supplier.referralCode ?? '')}
                 title="Copier"
                 style={{ background: '#fff', border: '1px solid #ddd6fe', borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, color: '#6d28d9', cursor: 'pointer', fontFamily: 'inherit' }}
               >

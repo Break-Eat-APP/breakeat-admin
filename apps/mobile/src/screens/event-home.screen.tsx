@@ -242,8 +242,9 @@ function AppearanceHome({
 
   // Une carte « page » navigue en interne ; sinon on délègue (buvette, lien, scan…).
   const handlePress = (c: AppCard) => {
-    if (c.action?.type === 'page' && c.action.pageId && pages.some((p) => p.id === c.action!.pageId)) {
-      setCurrentPageId(c.action.pageId);
+    const action = c.action;
+    if (action?.type === 'page' && action.pageId && pages.some((p) => p.id === action.pageId)) {
+      setCurrentPageId(action.pageId);
       return;
     }
     onCard(c);

@@ -33,7 +33,7 @@ Dépendance externe : **spec/clé API Flaix** toujours nécessaire pour le hando
 
 ## ⏳ Reste à faire (backlog priorisé)
 1. **Relancer le backend** (Railway ou autre) — débloque tout le reste (voir bloqueur en tête).
-2. **Brancher l'accueil sur les vrais lieux** : la section « Lieux près de toi » utilise encore des **placeholders** ; `apiSearchVenues` + `/public/venues` existent, à câbler (le plan buvettes remontera alors depuis l'admin au lieu de la démo).
+2. ~~Brancher l'accueil sur les vrais lieux~~ **FAIT (audit Codex 16→18)** : « Lieux près de toi » est câblé sur `apiSearchVenues`/`GET /public/venues` (recherche + géoloc, navigation Flaix/événement/« Bientôt »). Restent en placeholder : la section « À venir » (pas d'endpoint) et les favoris (locaux, pas de persistance).
 3. **Persistance des favoris** : endpoint backend (save/read par utilisateur) + store mobile.
 4. **Handoff Flaix** : bloqué sur le contrat/clé API Flaix (Phase 11.5).
 5. **Setup natif push Expo** : modules Expo + FCM/APNs + rebuild, puis `apiRegisterPushToken` post-login (méthodes API déjà prêtes).

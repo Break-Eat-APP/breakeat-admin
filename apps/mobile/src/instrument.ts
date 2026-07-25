@@ -4,7 +4,6 @@ import { ENV } from '@lib/config/env';
 // if the native module isn't registered — this must never take the whole
 // app down before it even renders, so failure here is swallowed.
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const Sentry = require('@sentry/react-native') as typeof import('@sentry/react-native');
   Sentry.init({
     dsn: ENV.SENTRY_DSN,

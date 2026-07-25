@@ -222,7 +222,11 @@ export default function AppearancePage() {
       const next = idx + dir;
       if (next < 0 || next >= cards.length) return cards;
       const copy = [...cards];
-      [copy[idx], copy[next]] = [copy[next]!, copy[idx]!];
+      const a = copy[idx];
+      const b = copy[next];
+      if (!a || !b) return cards;
+      copy[idx] = b;
+      copy[next] = a;
       return copy;
     });
   }
