@@ -30,6 +30,7 @@ export function CheckoutScreen({ navigation }: Props) {
     supplierId,
     selectedSlotLabel,
     totalCents,
+    venueBuvettePlanUrl,
     setBackendCartId,
     resetCart,
   } = useCartStore();
@@ -79,12 +80,14 @@ export function CheckoutScreen({ navigation }: Props) {
       setStep('Validation de la commande…');
       const result = await apiDemoCheckout(cart.id);
 
-      // 4. Reset cart + navigate to confirmation
+      // 4. Reset cart + navigate to confirmation (on garde le plan avant reset)
+      const planUrl = venueBuvettePlanUrl;
       resetCart();
       navigation.replace('OrderConfirmation', {
         orderId: result.orderId,
         publicOrderNumber: result.publicOrderNumber,
         totalCents: result.totalCents,
+        buvettePlanUrl: planUrl,
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erreur inconnue';

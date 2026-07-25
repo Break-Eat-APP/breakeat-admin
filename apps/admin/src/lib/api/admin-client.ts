@@ -678,6 +678,8 @@ export interface Venue {
   latitude?: number | null;
   longitude?: number | null;
   searchTerms?: string | null;
+  /** URL de l'image du plan des buvettes (affichée dans l'app mobile). */
+  buvettePlanUrl?: string | null;
   timezone?: string | null;
   status: string;
   organizationId: string;
@@ -691,6 +693,7 @@ export interface VenueInput {
   latitude?: number | null;
   longitude?: number | null;
   searchTerms?: string | null;
+  buvettePlanUrl?: string | null;
   timezone?: string;
 }
 

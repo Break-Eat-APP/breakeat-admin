@@ -308,6 +308,10 @@ model Venue {
   /// côté Flaix (utilisé par les appels API Flaix, à brancher au contrat Flaix).
   flaixEnabled   Boolean     @default(false) @map("flaix_enabled")
   flaixVenueId   String?     @map("flaix_venue_id")
+  /// PHASE 18 — plan des buvettes (image uploadée via Canva puis hébergée). URL
+  /// affichée dans l'app (carte du lieu + confirmation de commande) pour aider le
+  /// client à localiser la/les buvette(s). Nullable : tous les lieux n'en ont pas.
+  buvettePlanUrl String?     @map("buvette_plan_url")
   timezone       String      @default("Europe/Paris")
   status         VenueStatus @default(ACTIVE)
   createdAt      DateTime    @default(now()) @map("created_at")

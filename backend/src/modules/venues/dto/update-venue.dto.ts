@@ -49,6 +49,12 @@ export class UpdateVenueDto {
   @MaxLength(200)
   flaixVenueId?: string;
 
+  /** URL de l'image du plan des buvettes (affichée dans l'app). */
+  @IsString()
+  @IsOptional()
+  @MaxLength(1000)
+  buvettePlanUrl?: string;
+
   @IsString()
   @IsOptional()
   @MaxLength(50)

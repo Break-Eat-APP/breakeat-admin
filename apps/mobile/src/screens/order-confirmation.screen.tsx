@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Pressable,
@@ -6,14 +6,17 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { formatPrice } from '@lib/api/mobile-api';
+import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderConfirmation'>;
 
 export function OrderConfirmationScreen({ route, navigation }: Props) {
-  const { orderId, publicOrderNumber, totalCents } = route.params;
+  const { orderId, publicOrderNumber, totalCents, buvettePlanUrl } = route.params;
+  const [planOpen, setPlanOpen] = useState(false);
 
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -75,6 +78,13 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
 
       {/* Actions */}
       <Animated.View style={[styles.actions, { opacity: fadeAnim }]}>
+        {buvettePlanUrl ? (
+          <Pressable style={styles.planBtn} onPress={() => setPlanOpen(true)}>
+            <Ionicons name="map" size={18} color="#fff" />
+            <Text style={styles.planBtnText}>Voir le plan des buvettes</Text>
+          </Pressable>
+        ) : null}
+
         <Pressable
           style={styles.primaryBtn}
           onPress={() => navigation.navigate('OrderTracking', { orderId })}
@@ -89,6 +99,12 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
           <Text style={styles.secondaryBtnText}>Scanner un autre événement</Text>
         </Pressable>
       </Animated.View>
+
+      <BuvettePlanViewer
+        visible={planOpen}
+        url={buvettePlanUrl}
+        onClose={() => setPlanOpen(false)}
+      />
     </View>
   );
 }
@@ -159,6 +175,16 @@ const styles = StyleSheet.create({
   infoText: { color: '#94a3b8', fontSize: 13, flex: 1, lineHeight: 18 },
 
   actions: { width: '100%', gap: 12 },
+  planBtn: {
+    backgroundColor: '#FC4002',
+    paddingVertical: 16,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  planBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   primaryBtn: {
     backgroundColor: '#2563eb',
     paddingVertical: 16,

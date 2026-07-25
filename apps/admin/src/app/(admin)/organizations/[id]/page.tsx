@@ -83,6 +83,7 @@ export default function OrganizationDetailPage() {
   const [venueAddress, setVenueAddress] = useState('');
   const [venueTimezone, setVenueTimezone] = useState('');
   const [venueSearchTerms, setVenueSearchTerms] = useState('');
+  const [venueBuvettePlanUrl, setVenueBuvettePlanUrl] = useState('');
   const [venueLat, setVenueLat] = useState('');
   const [venueLng, setVenueLng] = useState('');
   const [savingVenue, setSavingVenue] = useState(false);
@@ -108,6 +109,7 @@ export default function OrganizationDetailPage() {
       setVenueAddress(primary?.address ?? '');
       setVenueTimezone(primary?.timezone ?? '');
       setVenueSearchTerms(primary?.searchTerms ?? '');
+      setVenueBuvettePlanUrl(primary?.buvettePlanUrl ?? '');
       setVenueLat(primary?.latitude != null ? String(primary.latitude) : '');
       setVenueLng(primary?.longitude != null ? String(primary.longitude) : '');
     } catch (err) {
@@ -177,6 +179,7 @@ export default function OrganizationDetailPage() {
         address: venueAddress.trim(),
         timezone: venueTimezone.trim() || 'Europe/Paris',
         searchTerms: venueSearchTerms.trim() || null,
+        buvettePlanUrl: venueBuvettePlanUrl.trim() || null,
         latitude: lat,
         longitude: lng,
       };
@@ -292,6 +295,18 @@ export default function OrganizationDetailPage() {
               />
               <span style={{ color: BRAND.grey, fontSize: 12 }}>
                 Termes que les clients peuvent taper pour trouver ton club (séparés par des virgules).
+              </span>
+            </div>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={venueFieldLabel}>Plan des buvettes (URL de l’image)</label>
+              <input
+                value={venueBuvettePlanUrl}
+                onChange={(e) => setVenueBuvettePlanUrl(e.target.value)}
+                placeholder="https://…/plan-buvettes.png"
+                style={venueFieldInput}
+              />
+              <span style={{ color: BRAND.grey, fontSize: 12 }}>
+                Image (créée sur Canva puis hébergée) montrant où se situent les buvettes. Affichée dans l’app sur la carte du lieu et après la commande.
               </span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

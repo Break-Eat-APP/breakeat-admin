@@ -116,7 +116,7 @@ export interface PublicEvent {
   status: string;
   startAt: string;
   endAt: string;
-  venue: { id: string; name: string; address: string } | null;
+  venue: { id: string; name: string; address: string; buvettePlanUrl?: string | null } | null;
   branding?: { primaryColor: string | null; logoUrl: string | null } | null;
   appearance?: HomeAppearance | null;
   suppliers: Array<{
@@ -229,6 +229,8 @@ export interface PublicVenue {
   flaixEnabled: boolean;
   /** Identifiant du lieu côté Flaix (pour les appels API Flaix). */
   flaixVenueId: string | null;
+  /** URL de l'image du plan des buvettes (null si le lieu n'en a pas). */
+  buvettePlanUrl: string | null;
   /** Événement actif sur ce lieu → cible de navigation (null si aucun). */
   currentEventId: string | null;
   /** Distance en km depuis l'utilisateur (null si pas de géoloc ou pas de coords). */

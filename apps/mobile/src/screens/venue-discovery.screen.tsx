@@ -18,6 +18,7 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { useNotifStore } from '@store/notif.store';
 import { BOTTOM_BAR_SPACE } from '@components/app-bottom-bar';
+import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
 
 const LOGO_FULL_WHITE = require('../../assets/logo-full-white.png');
@@ -39,10 +40,16 @@ const LOGO = {
 const PHOTO = (tags: string, lock: number, w = 200, h = 200) =>
   `https://loremflickr.com/${w}/${h}/${tags}?lock=${lock}`;
 
-const NEARBY = [
-  { id: 'n1', name: 'Arena Aix en Provence', events: 2, logo: LOGO.arena },
-  { id: 'n2', name: 'Le Dôme Marseille', events: 3, logo: LOGO.dome },
-  { id: 'n3', name: 'Palais Omnisports Marseille', events: 3, logo: LOGO.spartiates },
+// Plan des buvettes : URL de démonstration (placehold.co renvoie un vrai PNG).
+// En production, ce champ vient de l'API (Venue.buvettePlanUrl saisi au back-office).
+const DEMO_PLAN = (label: string) =>
+  `https://placehold.co/1200x1600/FC4002/FFFFFF/png?text=${encodeURIComponent(`Plan des buvettes\n${label}`)}`;
+
+type Near = { id: string; name: string; events: number; logo: number; buvettePlanUrl: string | null };
+const NEARBY: Near[] = [
+  { id: 'n1', name: 'Arena Aix en Provence', events: 2, logo: LOGO.arena, buvettePlanUrl: DEMO_PLAN('Arena Aix') },
+  { id: 'n2', name: 'Le Dôme Marseille', events: 3, logo: LOGO.dome, buvettePlanUrl: DEMO_PLAN('Le Dôme') },
+  { id: 'n3', name: 'Palais Omnisports Marseille', events: 3, logo: LOGO.spartiates, buvettePlanUrl: null },
 ];
 type Fav = { id: string; name: string; logo: number };
 type Up = { id: string; title: string; date: string; venue: string; image: string };
@@ -64,6 +71,8 @@ export function VenueDiscoveryScreen() {
   const { hasUnread, markRead } = useNotifStore();
   const { status: locStatus, request: requestLocation } = useUserLocation();
   const [query, setQuery] = useState('');
+  const [planUrl, setPlanUrl] = useState<string | null>(null);
+  const [planTitle, setPlanTitle] = useState('Plan des buvettes');
 
   const granted = locStatus === 'granted';
 
@@ -131,6 +140,16 @@ export function VenueDiscoveryScreen() {
             <View key={v.id} style={[styles.nearbyCard, shadowCard]}>
               <View style={styles.nearbyPhoto}>
                 <Image source={v.logo} style={styles.logoImg} resizeMode="contain" />
+                {v.buvettePlanUrl && (
+                  <Pressable
+                    onPress={() => { setPlanTitle(`Buvettes · ${v.name}`); setPlanUrl(v.buvettePlanUrl); }}
+                    style={styles.planPill}
+                    hitSlop={6}
+                  >
+                    <Ionicons name="map" size={11} color={THEME.orange} />
+                    <Text style={styles.planPillText} numberOfLines={1}>Plan buvettes</Text>
+                  </Pressable>
+                )}
               </View>
               <Text style={styles.nearbyName} numberOfLines={2}>{v.name}</Text>
               <View style={styles.nearbyMeta}>
@@ -191,6 +210,13 @@ export function VenueDiscoveryScreen() {
         </View>
         )}
       </ScrollView>
+
+      <BuvettePlanViewer
+        visible={planUrl !== null}
+        url={planUrl}
+        title={planTitle}
+        onClose={() => setPlanUrl(null)}
+      />
     </View>
   );
 }
@@ -294,6 +320,12 @@ const styles = StyleSheet.create({
     height: 84, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: THEME.border,
     overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: 8,
   },
+  planPill: {
+    position: 'absolute', left: 6, bottom: 6, flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.94)', borderWidth: 1, borderColor: THEME.orangeSoft,
+    borderRadius: THEME.radius.pill, paddingHorizontal: 8, paddingVertical: 4, maxWidth: '90%',
+  },
+  planPillText: { color: THEME.orange, fontSize: 10.5, fontFamily: HEAD.bold },
   fillImg: { width: '100%', height: '100%' },
   logoImg: { width: '92%', height: '92%' },
   nearbyName: { color: THEME.ink, fontSize: 13.5, fontFamily: HEAD.bold, lineHeight: 17 },

@@ -52,7 +52,7 @@ export type RootStackParamList = {
   SupplierCatalog: { eventId: string; supplierId: string };
   SlotSelector: { eventId: string };
   Checkout: undefined;
-  OrderConfirmation: { orderId: string; publicOrderNumber: string; totalCents: number };
+  OrderConfirmation: { orderId: string; publicOrderNumber: string; totalCents: number; buvettePlanUrl?: string | null };
   OrderTracking: { orderId: string };
 };
 

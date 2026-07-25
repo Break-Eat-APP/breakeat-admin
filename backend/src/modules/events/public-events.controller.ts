@@ -61,7 +61,7 @@ export class PublicEventsController {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       include: {
-        venue: { select: { id: true, name: true, address: true } },
+        venue: { select: { id: true, name: true, address: true, buvettePlanUrl: true } },
         organization: { select: { primaryColor: true, logoUrl: true } },
         eventSuppliers: {
           include: {
