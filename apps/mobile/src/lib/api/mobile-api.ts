@@ -176,6 +176,14 @@ export interface BackendCart {
   subtotalCents: number;
   totalCents: number;
   currency: string;
+  /** Fidélité appliquée à ce panier (phase 20). */
+  loyalty?: {
+    enabled: boolean;
+    balance: number;
+    pointsUsed: number;
+    discountCents: number;
+    pointValueCents: number;
+  };
 }
 
 export interface DemoCheckoutResponse {
@@ -297,6 +305,33 @@ export const apiRemoveCartItem = (cartId: string, itemId: string) =>
 
 export const apiDemoCheckout = (cartId: string) =>
   req<DemoCheckoutResponse>(`/carts/${cartId}/demo-checkout`, { method: 'POST' });
+
+// ─── Fidélité (points) ─────────────────────────────────────────
+
+/** Programme du lieu + solde du client connecté, en un appel. */
+export interface LoyaltyStatus {
+  /** Le club a-t-il activé les points sur ce lieu ? */
+  enabled: boolean;
+  /** Solde du client chez ce club. */
+  balance: number;
+  /** Points gagnés par euro dépensé. */
+  pointsPerEuro: number;
+  /** Valeur d'un point en centimes (100 pts × 1 = 1 €). */
+  pointValueCents: number;
+}
+
+export const apiGetLoyaltyStatus = (venueId: string) =>
+  req<LoyaltyStatus>(`/loyalty/venues/${venueId}/me`);
+
+/**
+ * Choisit combien de points utiliser sur un panier. Renvoie le panier recalculé
+ * (le serveur plafonne au solde réel et au montant du panier).
+ */
+export const apiSetCartPoints = (cartId: string, points: number) =>
+  req<BackendCart>(`/carts/${cartId}/loyalty-points`, {
+    method: 'PATCH',
+    body: JSON.stringify({ points }),
+  });
 
 // ─── Orders (authenticated) ────────────────────────────────────
 

@@ -7,9 +7,10 @@ import { RealtimeModule } from '../realtime/realtime.module';
 import { SlotsModule } from '../slots/slots.module';
 import { GroupsModule } from '../groups/groups.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { LoyaltyModule } from '../loyalty/loyalty.module';
 
 @Module({
-  imports: [RealtimeModule, SlotsModule, GroupsModule, NotificationsModule],
+  imports: [RealtimeModule, SlotsModule, GroupsModule, NotificationsModule, LoyaltyModule],
   controllers: [OrdersController, PublicOrdersController],
   providers: [OrdersService, OrderStateMachineService],
   exports: [OrdersService, OrderStateMachineService],

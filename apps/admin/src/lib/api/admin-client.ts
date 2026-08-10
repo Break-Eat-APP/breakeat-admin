@@ -680,6 +680,12 @@ export interface Venue {
   searchTerms?: string | null;
   /** URL de l'image du plan des buvettes (affichée dans l'app mobile). */
   buvettePlanUrl?: string | null;
+  /** Phase 20 — programme de fidélité activé par le club sur ce lieu. */
+  loyaltyEnabled?: boolean;
+  /** Points gagnés par euro dépensé. */
+  loyaltyPointsPerEuro?: number;
+  /** Valeur d'un point en centimes à l'utilisation. */
+  loyaltyPointValueCents?: number;
   timezone?: string | null;
   status: string;
   organizationId: string;
@@ -694,6 +700,9 @@ export interface VenueInput {
   longitude?: number | null;
   searchTerms?: string | null;
   buvettePlanUrl?: string | null;
+  loyaltyEnabled?: boolean;
+  loyaltyPointsPerEuro?: number;
+  loyaltyPointValueCents?: number;
   timezone?: string;
 }
 

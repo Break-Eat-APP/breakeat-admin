@@ -60,7 +60,12 @@ export function EventHomeScreen({ route, navigation }: Props) {
       navigation.navigate('Login', { pendingEventId: eventId });
       return;
     }
-    initCart(eventId, supplierId, event?.venue?.buvettePlanUrl ?? null);
+    initCart(
+      eventId,
+      supplierId,
+      event?.venue?.buvettePlanUrl ?? null,
+      event?.venue?.id ?? null,
+    );
     navigation.navigate('SupplierCatalog', { eventId, supplierId });
   };
 

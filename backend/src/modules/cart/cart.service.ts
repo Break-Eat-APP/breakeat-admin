@@ -18,6 +18,7 @@ import {
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
 import { GroupsService } from '../groups/groups.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 import type { CreateCartDto } from './dto/create-cart.dto';
 import type { UpdateCartDto } from './dto/update-cart.dto';
 import type { AddCartItemDto } from './dto/add-cart-item.dto';
@@ -46,6 +47,19 @@ export interface CartWithTotals {
   subtotalCents: number;
   totalCents: number;
   currency: string;
+  /** PHASE 20 — fidélité appliquée à ce panier. */
+  loyalty: {
+    /** Le club a-t-il activé le programme sur ce lieu ? */
+    enabled: boolean;
+    /** Solde du client chez ce club (0 si programme désactivé). */
+    balance: number;
+    /** Points effectivement appliqués (peut être < demandé si plafonné). */
+    pointsUsed: number;
+    /** Réduction correspondante, déjà déduite de `totalCents`. */
+    discountCents: number;
+    /** Valeur d'un point en centimes — permet à l'app de simuler un montant. */
+    pointValueCents: number;
+  };
 }
 
 /**
@@ -78,6 +92,7 @@ export class CartService {
     private readonly prisma: PrismaService,
     private readonly stripe: StripeService,
     private readonly groups: GroupsService,
+    private readonly loyaltyService: LoyaltyService,
   ) {}
 
   // ─── Create / Read ───────────────────────────────────────────
@@ -471,6 +486,10 @@ export class CartService {
 
     // Snapshot prices and compute total
     const subtotalCents = view.items.reduce((sum, it) => sum + it.lineTotalCents, 0);
+    // PHASE 20 — remise fidélité, figée ici comme les prix : le montant payé et
+    // les points débités ne doivent plus bouger après la création de la commande.
+    const { pointsUsed, discountCents } = view.loyalty;
+    const totalCents = subtotalCents - discountCents;
     const itemSnapshots = view.items.map((it) => ({
       productId: it.productId,
       productNameSnapshot: it.productName,
@@ -509,10 +528,22 @@ export class CartService {
           status: OrderStatus.PAID,
           paymentStatus: PaymentStatus.SUCCEEDED,
           subtotalCents,
-          totalCents: subtotalCents,
+          discountCents,
+          totalCents,
+          pointsRedeemed: pointsUsed,
           currency: 'eur',
           items: { create: itemSnapshots },
         },
+      });
+
+      // 3bis. PHASE 20 — débit des points DANS la même transaction que la
+      // commande : jamais de points perdus sans commande, ni de remise accordée
+      // sans débit. Revérifie le solde (le panier a pu être préparé bien avant).
+      await this.loyaltyService.redeemForOrderTx(tx, {
+        userId: cart.userId,
+        organizationId: event.organizationId,
+        orderId: createdOrder.id,
+        points: pointsUsed,
       });
 
       // 4. Fake payment row (no Stripe, demo only)
@@ -521,7 +552,7 @@ export class CartService {
           orderId: createdOrder.id,
           stripePaymentIntentId: `demo_${createdOrder.id}`,
           status: PaymentStatus.SUCCEEDED,
-          amountCents: subtotalCents,
+          amountCents: totalCents,
           currency: 'eur',
           rawStripeEvent: { demo: true },
         },
@@ -546,9 +577,49 @@ export class CartService {
     return {
       orderId: order.id,
       publicOrderNumber: order.publicOrderNumber,
-      totalCents: subtotalCents,
+      // Montant réellement payé (remise fidélité déduite), pas le sous-total.
+      totalCents,
       status: OrderStatus.PAID,
     };
+  }
+
+  /**
+   * PHASE 20 — le client choisit combien de points utiliser sur son panier.
+   *
+   * On enregistre une INTENTION (nombre de points), pas un montant : la valeur
+   * du point peut changer côté club, et le plafonnement dépend du sous-total.
+   * Le calcul réel est refait à chaque lecture du panier, puis figé à la commande.
+   */
+  async setRedeemedPoints(cartId: string, userId: string, points: number): Promise<CartWithTotals> {
+    if (!Number.isInteger(points) || points < 0) {
+      throw new BadRequestException('points doit être un entier positif ou nul');
+    }
+    const cart = await this.requireOwnership(cartId, userId);
+    if (cart.status !== CartStatus.OPEN) {
+      throw new BadRequestException('Ce panier n’est plus modifiable');
+    }
+
+    const event = await this.prisma.event.findUnique({
+      where: { id: cart.eventId },
+      select: { venueId: true, organizationId: true },
+    });
+    if (!event) throw new NotFoundException('Event not found');
+
+    const config = await this.loyaltyService.getConfigForVenue(event.venueId);
+    if (!config.enabled && points > 0) {
+      throw new BadRequestException("Le programme de fidélité n'est pas actif sur ce lieu");
+    }
+    if (points > 0) {
+      const balance = await this.loyaltyService.getBalance(userId, event.organizationId);
+      if (points > balance) {
+        throw new BadRequestException(
+          `Solde insuffisant : ${balance} point(s) disponible(s)`,
+        );
+      }
+    }
+
+    await this.prisma.cart.update({ where: { id: cartId }, data: { redeemedPoints: points } });
+    return this.computeView(cartId);
   }
 
   // ─── Internals ───────────────────────────────────────────────
@@ -565,6 +636,9 @@ export class CartService {
           include: { product: true },
           orderBy: { createdAt: 'asc' },
         },
+        // PHASE 20 — le programme de fidélité est configuré sur le LIEU, le
+        // solde est porté par l'ORGANISATION : on remonte les deux via l'événement.
+        event: { select: { venueId: true, organizationId: true } },
       },
     });
     if (!cart) throw new NotFoundException('Cart not found');
@@ -592,6 +666,22 @@ export class CartService {
       };
     });
 
+    // PHASE 20 — remise fidélité. Recalculée à chaque lecture (et non figée sur
+    // le panier) : le club peut changer la valeur du point, et le plafonnement
+    // dépend du sous-total, qui bouge quand le client modifie son panier.
+    const config = await this.loyaltyService.getConfigForVenue(cart.event.venueId);
+    const balance = config.enabled
+      ? await this.loyaltyService.getBalance(cart.userId, cart.event.organizationId)
+      : 0;
+    // On ne peut pas dépenser plus que le solde réel, même si le panier porte
+    // une intention plus ancienne (points déjà utilisés ailleurs entre-temps).
+    const requested = Math.min(cart.redeemedPoints, balance);
+    const { pointsUsed, discountCents } = this.loyaltyService.discountForPoints(
+      requested,
+      subtotal,
+      config,
+    );
+
     return {
       id: cart.id,
       userId: cart.userId,
@@ -602,8 +692,15 @@ export class CartService {
       expiresAt: cart.expiresAt,
       items,
       subtotalCents: subtotal,
-      totalCents: subtotal, // V1: no tax/fee/discount
+      totalCents: subtotal - discountCents, // V1: pas de taxe/frais, remise fidélité seulement
       currency: 'eur',
+      loyalty: {
+        enabled: config.enabled,
+        balance,
+        pointsUsed,
+        discountCents,
+        pointValueCents: config.pointValueCents,
+      },
     };
   }
 

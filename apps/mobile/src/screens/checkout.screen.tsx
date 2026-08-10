@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
 } from 'react-native';
@@ -14,7 +15,10 @@ import {
   apiCreateCart,
   apiAddCartItem,
   apiDemoCheckout,
+  apiGetLoyaltyStatus,
+  apiSetCartPoints,
   formatPrice,
+  type LoyaltyStatus,
 } from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
 import { useAuthStore } from '@store/auth.store';
@@ -31,12 +35,45 @@ export function CheckoutScreen({ navigation }: Props) {
     selectedSlotLabel,
     totalCents,
     venueBuvettePlanUrl,
+    venueId,
     setBackendCartId,
     resetCart,
   } = useCartStore();
 
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState('');
+
+  // ─── Fidélité (phase 20) ─────────────────────────────────────
+  const [loyalty, setLoyalty] = useState<LoyaltyStatus | null>(null);
+  const [usePoints, setUsePoints] = useState(false);
+
+  const subtotal = totalCents();
+  // Points réellement utilisables : bornés par le solde ET par la note (on ne
+  // brûle jamais plus de points que nécessaire pour couvrir le panier).
+  const maxUsablePoints =
+    loyalty?.enabled && loyalty.pointValueCents > 0
+      ? Math.min(loyalty.balance, Math.ceil(subtotal / loyalty.pointValueCents))
+      : 0;
+  const pointsToUse = usePoints ? maxUsablePoints : 0;
+  const discountCents = Math.min(pointsToUse * (loyalty?.pointValueCents ?? 0), subtotal);
+  const dueCents = subtotal - discountCents;
+  const pointsToEarn = loyalty?.enabled
+    ? Math.floor((dueCents / 100) * loyalty.pointsPerEuro)
+    : 0;
+
+  const loadLoyalty = useCallback(async () => {
+    if (!venueId || !token) return;
+    try {
+      setLoyalty(await apiGetLoyaltyStatus(venueId));
+    } catch (e: unknown) {
+      // La fidélité est un bonus : son indisponibilité ne bloque pas l'achat.
+      console.warn('apiGetLoyaltyStatus a échoué:', e);
+    }
+  }, [venueId, token]);
+
+  useEffect(() => {
+    void loadLoyalty();
+  }, [loadLoyalty]);
 
   // Redirect if not logged in
   if (!token || !user) {
@@ -74,6 +111,13 @@ export function CheckoutScreen({ navigation }: Props) {
       setStep('Ajout des articles…');
       for (const item of items) {
         await apiAddCartItem(cart.id, item.productId, item.quantity);
+      }
+
+      // 2bis. Fidélité — applique les points APRÈS les articles (la remise est
+      // plafonnée au montant du panier, qui doit donc être complet).
+      if (pointsToUse > 0) {
+        setStep('Application de tes points…');
+        await apiSetCartPoints(cart.id, pointsToUse);
       }
 
       // 3. Demo checkout (bypasses Stripe)
@@ -136,11 +180,64 @@ export function CheckoutScreen({ navigation }: Props) {
           ))}
         </View>
 
+        {/* Fidélité — visible seulement si le club a activé le programme */}
+        {loyalty?.enabled && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>⭐ Mes points</Text>
+            <Text style={styles.cardValue}>
+              {loyalty.balance} point{loyalty.balance > 1 ? 's' : ''} disponible
+              {loyalty.balance > 1 ? 's' : ''}
+            </Text>
+
+            {maxUsablePoints > 0 ? (
+              <View style={styles.loyaltyRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.loyaltyLabel}>Utiliser mes points</Text>
+                  <Text style={styles.loyaltyHint}>
+                    {maxUsablePoints} point{maxUsablePoints > 1 ? 's' : ''} ={' '}
+                    {formatPrice(Math.min(maxUsablePoints * loyalty.pointValueCents, subtotal))} de
+                    réduction
+                  </Text>
+                </View>
+                <Switch
+                  value={usePoints}
+                  onValueChange={setUsePoints}
+                  trackColor={{ false: '#334155', true: '#FC4002' }}
+                  thumbColor="#fff"
+                />
+              </View>
+            ) : (
+              <Text style={styles.loyaltyHint}>
+                Pas encore assez de points pour obtenir une réduction.
+              </Text>
+            )}
+
+            {pointsToEarn > 0 && (
+              <Text style={styles.loyaltyEarn}>
+                Cette commande te rapportera {pointsToEarn} point{pointsToEarn > 1 ? 's' : ''}.
+              </Text>
+            )}
+          </View>
+        )}
+
         {/* Total */}
         <View style={[styles.card, styles.totalCard]}>
+          {discountCents > 0 && (
+            <>
+              <View style={styles.totalRow}>
+                <Text style={styles.subLine}>Sous-total</Text>
+                <Text style={styles.subLine}>{formatPrice(subtotal)}</Text>
+              </View>
+              <View style={styles.totalRow}>
+                <Text style={styles.discountLine}>Réduction fidélité</Text>
+                <Text style={styles.discountLine}>−{formatPrice(discountCents)}</Text>
+              </View>
+              <View style={styles.totalDivider} />
+            </>
+          )}
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total à payer</Text>
-            <Text style={styles.totalValue}>{formatPrice(totalCents())}</Text>
+            <Text style={styles.totalValue}>{formatPrice(dueCents)}</Text>
           </View>
         </View>
 
@@ -232,6 +329,14 @@ const styles = StyleSheet.create({
 
   totalCard: { borderColor: '#2563eb44' },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  subLine: { color: '#94a3b8', fontSize: 14 },
+  discountLine: { color: '#22c55e', fontSize: 14, fontWeight: '600' },
+  totalDivider: { height: 1, backgroundColor: '#334155', marginVertical: 4 },
+
+  loyaltyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
+  loyaltyLabel: { color: '#f1f5f9', fontSize: 14, fontWeight: '600' },
+  loyaltyHint: { color: '#94a3b8', fontSize: 12.5, marginTop: 2, lineHeight: 17 },
+  loyaltyEarn: { color: '#FC4002', fontSize: 12.5, marginTop: 8, fontWeight: '600' },
   totalLabel: { color: '#f1f5f9', fontSize: 16, fontWeight: '700' },
   totalValue: { color: '#2563eb', fontSize: 22, fontWeight: '800' },
 

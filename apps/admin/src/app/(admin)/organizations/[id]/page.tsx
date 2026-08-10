@@ -84,6 +84,10 @@ export default function OrganizationDetailPage() {
   const [venueTimezone, setVenueTimezone] = useState('');
   const [venueSearchTerms, setVenueSearchTerms] = useState('');
   const [venueBuvettePlanUrl, setVenueBuvettePlanUrl] = useState('');
+  // Phase 20 — fidélité (activation + taux), pilotée par le club sur son lieu.
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);
+  const [loyaltyPointsPerEuro, setLoyaltyPointsPerEuro] = useState('1');
+  const [loyaltyPointValueCents, setLoyaltyPointValueCents] = useState('1');
   const [venueLat, setVenueLat] = useState('');
   const [venueLng, setVenueLng] = useState('');
   const [savingVenue, setSavingVenue] = useState(false);
@@ -110,6 +114,9 @@ export default function OrganizationDetailPage() {
       setVenueTimezone(primary?.timezone ?? '');
       setVenueSearchTerms(primary?.searchTerms ?? '');
       setVenueBuvettePlanUrl(primary?.buvettePlanUrl ?? '');
+      setLoyaltyEnabled(primary?.loyaltyEnabled ?? false);
+      setLoyaltyPointsPerEuro(String(primary?.loyaltyPointsPerEuro ?? 1));
+      setLoyaltyPointValueCents(String(primary?.loyaltyPointValueCents ?? 1));
       setVenueLat(primary?.latitude != null ? String(primary.latitude) : '');
       setVenueLng(primary?.longitude != null ? String(primary.longitude) : '');
     } catch (err) {
@@ -180,6 +187,11 @@ export default function OrganizationDetailPage() {
         timezone: venueTimezone.trim() || 'Europe/Paris',
         searchTerms: venueSearchTerms.trim() || null,
         buvettePlanUrl: venueBuvettePlanUrl.trim() || null,
+        loyaltyEnabled,
+        // Bornes basses à 1 : un taux à 0 rendrait le programme inopérant sans
+        // que le club comprenne pourquoi (mieux vaut le désactiver franchement).
+        loyaltyPointsPerEuro: Math.max(1, Number(loyaltyPointsPerEuro) || 1),
+        loyaltyPointValueCents: Math.max(1, Number(loyaltyPointValueCents) || 1),
         latitude: lat,
         longitude: lng,
       };
@@ -309,6 +321,55 @@ export default function OrganizationDetailPage() {
                 Image (créée sur Canva puis hébergée) montrant où se situent les buvettes. Affichée dans l’app sur la carte du lieu et après la commande.
               </span>
             </div>
+
+            {/* Phase 20 — programme de fidélité */}
+            <div style={{ gridColumn: '1 / -1', borderTop: `1px solid ${BRAND.border}`, paddingTop: 14, marginTop: 4 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={loyaltyEnabled}
+                  onChange={(e) => setLoyaltyEnabled(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: BRAND.orange, cursor: 'pointer' }}
+                />
+                <span style={{ ...venueFieldLabel, marginBottom: 0 }}>
+                  Activer le programme de fidélité
+                </span>
+              </label>
+              <span style={{ color: BRAND.grey, fontSize: 12, display: 'block', marginTop: 4 }}>
+                Tes clients cumulent des points sur leurs commandes et peuvent les convertir en réduction.
+              </span>
+            </div>
+
+            {loyaltyEnabled && (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={venueFieldLabel}>Points gagnés par euro dépensé</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={loyaltyPointsPerEuro}
+                    onChange={(e) => setLoyaltyPointsPerEuro(e.target.value)}
+                    style={venueFieldInput}
+                  />
+                  <span style={{ color: BRAND.grey, fontSize: 12 }}>
+                    Ex. 1 → une commande de 20 € rapporte 20 points.
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={venueFieldLabel}>Valeur d’un point (en centimes)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={loyaltyPointValueCents}
+                    onChange={(e) => setLoyaltyPointValueCents(e.target.value)}
+                    style={venueFieldInput}
+                  />
+                  <span style={{ color: BRAND.grey, fontSize: 12 }}>
+                    Ex. 1 → 100 points = 1 € de réduction.
+                  </span>
+                </div>
+              </>
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label style={venueFieldLabel}>Latitude</label>
               <input

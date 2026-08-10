@@ -20,6 +20,7 @@ import { OrderStateMachineService } from './order-state-machine.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { SlotsService } from '../slots/slots.service';
 import { OrderNotificationsService } from '../notifications/order-notifications.service';
+import { LoyaltyService } from '../loyalty/loyalty.service';
 
 /**
  * OrdersService — owns the Order lifecycle from PaymentIntent.succeeded onward.
@@ -43,6 +44,7 @@ export class OrdersService {
     private readonly realtimeService: RealtimeService,
     private readonly slotsService: SlotsService,
     private readonly orderNotifications: OrderNotificationsService,
+    private readonly loyaltyService: LoyaltyService,
   ) {}
 
   /**
@@ -131,12 +133,26 @@ export class OrdersService {
       };
     });
 
+    // PHASE 20 — remise fidélité. Le PaymentIntent a été créé sur le total DÉJÀ
+    // remisé : on recalcule la remise pour la refiger ici. Si la configuration
+    // du club a changé entre le checkout et le webhook, le contrôle défensif
+    // ci-dessous le détecte et refuse la commande (échec sûr) plutôt que de
+    // créer un écart financier.
+    const loyaltyConfig = await this.loyaltyService.getConfigForVenue(cart.event.venueId);
+    const { pointsUsed, discountCents } = this.loyaltyService.discountForPoints(
+      cart.redeemedPoints,
+      subtotalCents,
+      loyaltyConfig,
+    );
+    const totalCents = subtotalCents - discountCents;
+
     // Defensive check: the frozen total MUST match what Stripe charged.
-    // If they differ, something is wrong (snapshot tampering, currency mismatch, ...)
-    // We refuse to create the Order rather than risk a financial discrepancy.
-    if (subtotalCents !== intent.amount) {
+    // If they differ, something is wrong (snapshot tampering, currency mismatch,
+    // loyalty config changed mid-flight, ...) — we refuse to create the Order
+    // rather than risk a financial discrepancy.
+    if (totalCents !== intent.amount) {
       throw new ConflictException(
-        `Order total (${subtotalCents}) does not match PaymentIntent amount (${intent.amount}) — refusing to create Order`,
+        `Order total (${totalCents}) does not match PaymentIntent amount (${intent.amount}) — refusing to create Order`,
       );
     }
 
@@ -163,10 +179,21 @@ export class OrdersService {
           status: OrderStatus.PAID,
           paymentStatus: PaymentStatus.SUCCEEDED,
           subtotalCents,
-          totalCents: subtotalCents,
+          discountCents,
+          totalCents,
+          pointsRedeemed: pointsUsed,
           currency: intent.currency,
           items: { create: itemSnapshots },
         },
+      });
+
+      // 2bis. PHASE 20 — débit des points dans la MÊME transaction que la
+      // commande : pas de remise accordée sans débit correspondant.
+      await this.loyaltyService.redeemForOrderTx(tx, {
+        userId: cart.userId,
+        organizationId: cart.event.organizationId,
+        orderId: createdOrder.id,
+        points: pointsUsed,
       });
 
       // 3. Upsert Payment — a FAILED row may already exist if the customer
@@ -370,6 +397,15 @@ export class OrdersService {
       });
     }
 
+    // PHASE 20 — fidélité : les points sont crédités à la RÉCUPÉRATION, pas au
+    // paiement. Une commande annulée avant retrait ne doit rien rapporter.
+    // Fire-and-forget : un incident sur les points ne doit jamais bloquer la
+    // remise de la commande au client (le registre reste idempotent, un rejeu
+    // ultérieur ne double pas le crédit).
+    if (updated.status === OrderStatus.PICKED_UP) {
+      void this.awardLoyaltyPoints(updated);
+    }
+
     // C1 — notification push au client selon le modèle configuré pour ce statut.
     // Fire-and-forget : un échec d'envoi ne doit pas impacter la transition.
     void this.orderNotifications.notifyStatusChange({
@@ -398,6 +434,32 @@ export class OrdersService {
       include: { items: true },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  /**
+   * PHASE 20 — crédite les points de fidélité d'une commande récupérée.
+   *
+   * Les points portent sur `totalCents` (montant réellement payé, remise
+   * fidélité déduite) : on ne re-gagne pas de points sur des points dépensés.
+   */
+  private async awardLoyaltyPoints(order: Order): Promise<void> {
+    try {
+      const config = await this.loyaltyService.getConfigForEvent(order.eventId);
+      if (!config.enabled) return;
+      await this.loyaltyService.earnForOrder({
+        userId: order.userId,
+        organizationId: order.organizationId,
+        orderId: order.id,
+        totalCents: order.totalCents,
+        config,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Attribution des points échouée (non bloquant) pour ${order.publicOrderNumber}: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
   }
 
   /**

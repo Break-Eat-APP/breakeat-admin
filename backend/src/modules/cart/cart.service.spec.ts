@@ -15,6 +15,7 @@ import { CartService } from './cart.service';
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
 import { GroupsService } from '../groups/groups.service';
+import { loyaltyDisabledProvider } from '../loyalty/loyalty.mock';
 
 const USER_ID = 'user-1';
 const EVENT_ID = 'event-1';
@@ -51,6 +52,10 @@ function mockCart(overrides: Partial<{ status: CartStatus; pickupPointId: string
     expiresAt: new Date(Date.now() + 60_000),
     createdAt: new Date(),
     updatedAt: new Date(),
+    // Phase 20 — computeView lit le lieu (config fidélité) et l'org (solde)
+    // via la relation `event`, obligatoire côté Prisma.
+    redeemedPoints: 0,
+    event: { venueId: VENUE_ID, organizationId: 'org-1' },
     ...overrides,
   };
 }
@@ -78,6 +83,7 @@ describe('CartService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CartService,
+        loyaltyDisabledProvider,
         {
           provide: PrismaService,
           useValue: {

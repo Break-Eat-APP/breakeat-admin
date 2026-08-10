@@ -18,6 +18,9 @@ interface CartState {
   /** Plan des buvettes du lieu (repris à l'init) → affiché sur la confirmation. */
   venueBuvettePlanUrl: string | null;
 
+  /** Lieu de la commande — sert à interroger le programme de fidélité du club. */
+  venueId: string | null;
+
   /** Local items (before submitting to backend) */
   items: CartItem[];
 
@@ -27,7 +30,12 @@ interface CartState {
 
   // ─── Actions ─────────────────────────────────────────────────
 
-  initCart: (eventId: string, supplierId: string, buvettePlanUrl?: string | null) => void;
+  initCart: (
+    eventId: string,
+    supplierId: string,
+    buvettePlanUrl?: string | null,
+    venueId?: string | null,
+  ) => void;
   setBackendCartId: (id: string) => void;
 
   addItem: (item: Omit<CartItem, 'quantity'>) => void;
@@ -51,6 +59,7 @@ const INITIAL_STATE = {
   eventId: null,
   supplierId: null,
   venueBuvettePlanUrl: null,
+  venueId: null,
   items: [] as CartItem[],
   selectedSlotId: null,
   selectedSlotLabel: null,
@@ -59,8 +68,14 @@ const INITIAL_STATE = {
 export const useCartStore = create<CartState>((set, get) => ({
   ...INITIAL_STATE,
 
-  initCart: (eventId, supplierId, buvettePlanUrl) =>
-    set({ ...INITIAL_STATE, eventId, supplierId, venueBuvettePlanUrl: buvettePlanUrl ?? null }),
+  initCart: (eventId, supplierId, buvettePlanUrl, venueId) =>
+    set({
+      ...INITIAL_STATE,
+      eventId,
+      supplierId,
+      venueBuvettePlanUrl: buvettePlanUrl ?? null,
+      venueId: venueId ?? null,
+    }),
 
   setBackendCartId: (id) => set({ backendCartId: id }),
 

@@ -16,6 +16,7 @@ import { CreateCartDto } from './dto/create-cart.dto';
 import { UpdateCartDto } from './dto/update-cart.dto';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
+import { RedeemPointsDto } from './dto/redeem-points.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { DemoGuard } from '../../common/guards/demo.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -92,6 +93,21 @@ export class CartController {
   @HttpCode(HttpStatus.OK)
   checkout(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
     return this.cartService.checkout(id, user.sub);
+  }
+
+  /**
+   * PATCH /api/v1/carts/:id/loyalty-points
+   *
+   * PHASE 20 — le client choisit combien de points de fidélité utiliser.
+   * Renvoie le panier recalculé (remise + nouveau total).
+   */
+  @Patch(':id/loyalty-points')
+  redeemPoints(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RedeemPointsDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.cartService.setRedeemedPoints(id, user.sub, dto.points);
   }
 
   /**

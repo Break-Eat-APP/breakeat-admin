@@ -40,6 +40,9 @@ export class VenuesService {
         flaixEnabled: dto.flaixEnabled,
         flaixVenueId: dto.flaixVenueId,
         buvettePlanUrl: dto.buvettePlanUrl,
+        loyaltyEnabled: dto.loyaltyEnabled,
+        loyaltyPointsPerEuro: dto.loyaltyPointsPerEuro,
+        loyaltyPointValueCents: dto.loyaltyPointValueCents,
         timezone: dto.timezone ?? 'Europe/Paris',
         status: dto.status,
       },
@@ -93,6 +96,13 @@ export class VenuesService {
         ...(dto.flaixEnabled !== undefined && { flaixEnabled: dto.flaixEnabled }),
         ...(dto.flaixVenueId !== undefined && { flaixVenueId: dto.flaixVenueId }),
         ...(dto.buvettePlanUrl !== undefined && { buvettePlanUrl: dto.buvettePlanUrl }),
+        ...(dto.loyaltyEnabled !== undefined && { loyaltyEnabled: dto.loyaltyEnabled }),
+        ...(dto.loyaltyPointsPerEuro !== undefined && {
+          loyaltyPointsPerEuro: dto.loyaltyPointsPerEuro,
+        }),
+        ...(dto.loyaltyPointValueCents !== undefined && {
+          loyaltyPointValueCents: dto.loyaltyPointValueCents,
+        }),
         ...(dto.timezone !== undefined && { timezone: dto.timezone }),
         ...(dto.status !== undefined && { status: dto.status }),
       },

@@ -193,6 +193,7 @@ model User {
   orders           Order[]
   groupMemberships GroupMember[]
   pushTokens       PushToken[]
+  loyaltyAccounts  LoyaltyAccount[]
 
   @@map("users")
 }
@@ -264,6 +265,7 @@ model Organization {
   /// PHASE 11 — reusable operator-dashboard screen definitions
   operatorScreenTemplates OperatorScreenTemplate[]
   scheduledPushes         ScheduledPush[]
+  loyaltyAccounts         LoyaltyAccount[]
 
   @@map("organizations")
 }
@@ -312,6 +314,15 @@ model Venue {
   /// affichée dans l'app (carte du lieu + confirmation de commande) pour aider le
   /// client à localiser la/les buvette(s). Nullable : tous les lieux n'en ont pas.
   buvettePlanUrl String?     @map("buvette_plan_url")
+  /// PHASE 20 — programme de fidélité, activé (ou non) par le club lui-même.
+  /// Désactivé par défaut : aucun lieu existant ne se met à distribuer des points
+  /// sans décision explicite.
+  loyaltyEnabled Boolean     @default(false) @map("loyalty_enabled")
+  /// Points gagnés par euro dépensé (entier : évite toute dérive de virgule
+  /// flottante sur une contrepartie monétaire).
+  loyaltyPointsPerEuro   Int  @default(1) @map("loyalty_points_per_euro")
+  /// Valeur d'UN point en centimes lors de l'utilisation (1 = 1 centime).
+  loyaltyPointValueCents Int  @default(1) @map("loyalty_point_value_cents")
   timezone       String      @default("Europe/Paris")
   status         VenueStatus @default(ACTIVE)
   createdAt      DateTime    @default(now()) @map("created_at")
@@ -546,6 +557,10 @@ model Cart {
   /// Phase 7 — customer-selected slot before checkout.
   selectedSlotId String?    @map("selected_slot_id")
   status         CartStatus @default(OPEN)
+  /// PHASE 20 — points que le client a choisi d'utiliser sur ce panier.
+  /// Stocké en points (et non en centimes) : la valeur d'un point peut changer
+  /// côté club, le montant de la remise est recalculé au moment du paiement.
+  redeemedPoints Int        @default(0) @map("redeemed_points")
   /// Idempotency safeguard for /checkout — same key returns the same PaymentIntent.
   paymentIntentId String?   @map("payment_intent_id")
   expiresAt      DateTime   @map("expires_at")
@@ -611,7 +626,13 @@ model Order {
   customerArrivedAt DateTime?     @map("customer_arrived_at")
   /// Frozen totals at order creation. Never recomputed.
   subtotalCents     Int           @map("subtotal_cents")
+  /// PHASE 20 — remise fidélité figée au paiement. totalCents = subtotal - discount.
+  discountCents     Int           @default(0) @map("discount_cents")
   totalCents        Int           @map("total_cents")
+  /// Points débités pour obtenir `discountCents` (figés eux aussi).
+  pointsRedeemed    Int           @default(0) @map("points_redeemed")
+  /// Points crédités à la récupération de la commande (0 tant que non récupérée).
+  pointsEarned      Int           @default(0) @map("points_earned")
   currency          String        @default("eur")
   /// Phase 9 — analytics tags.
   metadata          Json          @default("{}")
@@ -1021,4 +1042,70 @@ model RefreshToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
+}
+
+// ─── PHASE 20 — FIDÉLITÉ ──────────────────────────────────────
+
+/// Nature d'un mouvement de points.
+enum LoyaltyEntryKind {
+  /// Points gagnés à la récupération d'une commande.
+  EARN
+  /// Points dépensés en réduction sur une commande.
+  REDEEM
+  /// Correction manuelle (geste commercial, litige).
+  ADJUST
+
+  @@map("loyalty_entry_kind")
+}
+
+/// Solde de fidélité d'un client CHEZ UN CLUB donné.
+///
+/// Portée organisation (et non lieu) : les points suivent le club, pas un
+/// bâtiment — un client garde son solde d'un événement à l'autre. La
+/// configuration du programme, elle, vit sur le lieu (`Venue.loyalty*`), comme
+/// demandé : c'est le club qui décide d'activer ou non les points.
+///
+/// `balance` est un cache dénormalisé du registre `transactions` : il permet de
+/// lire un solde sans agréger tout l'historique. Les deux sont écrits dans la
+/// MÊME transaction, jamais séparément.
+model LoyaltyAccount {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+  /// Solde courant en points. Ne doit jamais devenir négatif.
+  balance        Int      @default(0)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  transactions LoyaltyTransaction[]
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+  @@map("loyalty_accounts")
+}
+
+/// Registre immuable des mouvements de points (source de vérité auditable).
+///
+/// `@@unique([orderId, kind])` = garde-fou d'idempotence : une commande ne peut
+/// créditer qu'UNE fois (EARN) ni débiter qu'UNE fois (REDEEM), même si la
+/// transition de statut est rejouée.
+model LoyaltyTransaction {
+  id           String           @id @default(uuid())
+  accountId    String           @map("account_id")
+  /// Commande à l'origine du mouvement (null pour un ajustement manuel).
+  orderId      String?          @map("order_id")
+  kind         LoyaltyEntryKind
+  /// Signé : positif pour un gain, négatif pour une utilisation.
+  points       Int
+  /// Solde du compte APRÈS ce mouvement (facilite l'audit sans re-agrégation).
+  balanceAfter Int              @map("balance_after")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  account LoyaltyAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, kind])
+  @@index([accountId, createdAt])
+  @@map("loyalty_transactions")
 }

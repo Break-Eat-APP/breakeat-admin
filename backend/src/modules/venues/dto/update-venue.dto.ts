@@ -2,6 +2,7 @@ import {
   IsString,
   IsOptional,
   IsEnum,
+  IsInt,
   IsNumber,
   IsBoolean,
   IsUrl,
@@ -60,6 +61,25 @@ export class UpdateVenueDto {
   )
   @MaxLength(1000)
   buvettePlanUrl?: string | null;
+
+  /** PHASE 20 — programme de fidélité activé par le club sur ce lieu. */
+  @IsBoolean()
+  @IsOptional()
+  loyaltyEnabled?: boolean;
+
+  /** Points gagnés par euro dépensé (>= 1 : un taux nul rendrait le programme inopérant). */
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  @IsOptional()
+  loyaltyPointsPerEuro?: number;
+
+  /** Valeur d'un point en centimes à l'utilisation (>= 1). */
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  @IsOptional()
+  loyaltyPointValueCents?: number;
 
   @IsString()
   @IsOptional()
