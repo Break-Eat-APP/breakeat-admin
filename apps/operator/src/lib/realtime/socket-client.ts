@@ -80,7 +80,7 @@ export class SocketClient {
     });
 
     // Listen to all realtime event types defined in REALTIME_CONTRACTS.md
-    for (const eventName of ['new_order', 'order_updated', 'order_ready'] as const) {
+    for (const eventName of ['new_order', 'order_updated', 'order_ready', 'customer_arrived'] as const) {
       this.socket.on(eventName, (data: RealtimeEvent) => {
         if (!data.eventId) return;
 

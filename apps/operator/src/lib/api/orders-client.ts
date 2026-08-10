@@ -53,6 +53,11 @@ export interface Order {
   slotKind?: SlotKind;
   /** Phase 11.4 — customer display name (for pickup callouts + name search). */
   customerName?: string | null;
+  /**
+   * Phase 19 — le client a appuyé sur « Je suis arrivé » dans l'app.
+   * Non nul ⇒ il attend au point de retrait, la carte est mise en évidence.
+   */
+  customerArrivedAt?: string | null;
   items: OrderItem[];
 }
 

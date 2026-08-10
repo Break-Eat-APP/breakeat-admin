@@ -24,6 +24,7 @@ type DashboardAction =
   | { type: 'NEW_ORDER'; order: Order }
   | { type: 'ORDER_UPDATED'; orderId: string; nextStatus: string }
   | { type: 'ORDER_READY'; orderId: string; orderNumber: string; pickupPointId: string }
+  | { type: 'CUSTOMER_ARRIVED'; orderId: string; arrivedAt: string }
   | { type: 'SET_NOTIFICATION'; notification: NotificationData | null }
   | { type: 'ORDER_LOADING'; orderId: string }
   | { type: 'ORDER_LOADED'; orderId: string };
@@ -99,6 +100,20 @@ function dashboardReducer(state: DashboardState, action: DashboardAction): Dashb
           pickupPointId: action.pickupPointId,
         },
       };
+    }
+
+    case 'CUSTOMER_ARRIVED': {
+      // Phase 19 — le client attend au retrait. Le statut ne bouge pas : on
+      // horodate seulement la commande, où qu'elle soit dans le board, et la
+      // carte se met à clignoter.
+      if (!state.data) return state;
+      const orders: Record<string, Order[]> = {};
+      for (const [status, list] of Object.entries(state.data.orders)) {
+        orders[status] = list.map((o) =>
+          o.id === action.orderId ? { ...o, customerArrivedAt: action.arrivedAt } : o,
+        );
+      }
+      return { ...state, data: { ...state.data, orders } };
     }
 
     case 'SET_NOTIFICATION':
@@ -201,6 +216,15 @@ export function useDashboard({
           orderId: event.orderId as string,
           orderNumber: event.publicOrderNumber as string ?? '',
           pickupPointId: event.pickupPointId as string ?? '',
+        });
+        break;
+      }
+
+      case 'customer_arrived': {
+        dispatch({
+          type: 'CUSTOMER_ARRIVED',
+          orderId: event.orderId as string,
+          arrivedAt: (event.arrivedAt as string) ?? new Date().toISOString(),
         });
         break;
       }

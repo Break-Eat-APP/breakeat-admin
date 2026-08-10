@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -396,6 +398,58 @@ export class OrdersService {
       include: { items: true },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  /**
+   * PHASE 19 — « Je suis arrivé » : le client signale sa présence au retrait.
+   *
+   * Ne change PAS le statut de la commande (c'est la buvette qui pilote le cycle
+   * de vie) : on horodate seulement la présence, et le board opérateur met la
+   * carte en évidence. Idempotent — un double appui ne réémet rien, pour éviter
+   * de faire clignoter deux fois la même commande.
+   *
+   * Autorisé uniquement sur une commande en cours : une commande déjà récupérée,
+   * annulée ou clôturée n'est plus sur le board, l'annonce n'aurait aucun effet.
+   */
+  async markCustomerArrived(orderId: string, userId: string) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new NotFoundException('Order not found');
+    if (order.userId !== userId) {
+      throw new ForbiddenException('You do not own this order');
+    }
+
+    const ANNOUNCEABLE: OrderStatus[] = [
+      OrderStatus.PAID,
+      OrderStatus.ACCEPTED,
+      OrderStatus.PREPARING,
+      OrderStatus.READY,
+    ];
+    if (!ANNOUNCEABLE.includes(order.status)) {
+      throw new BadRequestException(
+        `Cannot announce arrival for an order in status ${order.status}`,
+      );
+    }
+
+    // Déjà annoncé : on renvoie l'état courant sans réémettre.
+    if (order.customerArrivedAt) return order;
+
+    const updated = await this.prisma.order.update({
+      where: { id: orderId },
+      data: { customerArrivedAt: new Date() },
+    });
+
+    this.realtimeService.emitCustomerArrived({
+      orderId: updated.id,
+      publicOrderNumber: updated.publicOrderNumber,
+      organizationId: updated.organizationId,
+      eventId: updated.eventId,
+      supplierId: updated.supplierId,
+      pickupPointId: updated.pickupPointId,
+      arrivedAt: (updated.customerArrivedAt ?? new Date()).toISOString(),
+    });
+
+    this.logger.log(`Client présent pour la commande ${updated.publicOrderNumber}`);
+    return updated;
   }
 
   /**

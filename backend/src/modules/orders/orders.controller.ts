@@ -7,6 +7,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -37,6 +38,15 @@ import { AssignSlotDto } from './dto/assign-slot.dto';
  * Dashboard (operator):
  *   GET  /orders/event/:eventId/active — active orders snapshot
  */
+/**
+ * Champs du créneau exposés au CLIENT (app mobile) : uniquement de quoi afficher
+ * « quand venir récupérer ». `capacity`/`currentLoad`/`source` restent internes
+ * (données d'exploitation, non pertinentes — et non divulguées — côté client).
+ */
+const CUSTOMER_SLOT_SELECT = {
+  select: { id: true, startAt: true, endAt: true, label: true, status: true },
+} as const;
+
 @UseGuards(JwtAuthGuard)
 @Controller('orders')
 export class OrdersController {
@@ -56,7 +66,9 @@ export class OrdersController {
     return this.prisma.order.findMany({
       where: { userId: user.sub },
       orderBy: { createdAt: 'desc' },
-      include: { items: true },
+      // `slot` : l'app affiche le créneau de retrait à côté du statut, et il doit
+      // refléter une éventuelle réassignation (cf. PATCH /orders/:id/slot).
+      include: { items: true, slot: CUSTOMER_SLOT_SELECT },
     });
   }
 
@@ -65,13 +77,23 @@ export class OrdersController {
   async findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
     const order = await this.prisma.order.findUnique({
       where: { id },
-      include: { items: true, payments: true },
+      include: { items: true, payments: true, slot: CUSTOMER_SLOT_SELECT },
     });
     if (!order) throw new NotFoundException('Order not found');
     if (order.userId !== user.sub) {
       throw new ForbiddenException('You do not own this order');
     }
     return order;
+  }
+
+  /**
+   * POST /api/v1/orders/:id/arrived — « Je suis arrivé » (client au point de retrait).
+   * Ne change pas le statut : signale la présence, le board opérateur met la
+   * commande en évidence. Idempotent.
+   */
+  @Post(':id/arrived')
+  async markArrived(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.ordersService.markCustomerArrived(id, user.sub);
   }
 
   /** GET /api/v1/orders/:id/audit — audit trail (own order). */

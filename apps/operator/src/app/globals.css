@@ -15,3 +15,23 @@ body {
 /* Inputs inherit the brand font and show a warm-grey placeholder. */
 input, button, textarea, select { font-family: inherit; }
 input::placeholder { color: #b8ada6; }
+
+/* Phase 19 — « Je suis arrivé » : la carte de la commande dont le client attend
+   au retrait pulse en orange pour attirer l'œil de la buvette en plein rush.
+   `prefers-reduced-motion` : on garde un halo fixe (l'info reste visible sans
+   animation) pour les personnes sensibles au mouvement. */
+@keyframes breakeat-arrived-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(252, 64, 2, 0.55); }
+  50%      { box-shadow: 0 0 0 7px rgba(252, 64, 2, 0); }
+}
+
+.breakeat-arrived {
+  animation: breakeat-arrived-pulse 1.35s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breakeat-arrived {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(252, 64, 2, 0.45);
+  }
+}

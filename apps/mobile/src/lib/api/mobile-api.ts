@@ -185,6 +185,15 @@ export interface DemoCheckoutResponse {
   status: string;
 }
 
+/** Créneau de retrait tel qu'exposé au client (peut être réassigné en cours de service). */
+export interface OrderSlot {
+  id: string;
+  startAt: string;
+  endAt: string;
+  label: string | null;
+  status: string;
+}
+
 export interface Order {
   id: string;
   publicOrderNumber: string;
@@ -192,6 +201,12 @@ export interface Order {
   totalCents: number;
   currency: string;
   createdAt: string;
+  /** Dernière transition de statut — sert d'horodatage « mis à jour à ». */
+  updatedAt?: string;
+  /** Créneau de retrait (null si retrait immédiat / pas de créneau). */
+  slot?: OrderSlot | null;
+  /** Horodatage du « Je suis arrivé » (null tant que le client n'a rien signalé). */
+  customerArrivedAt?: string | null;
   items: Array<{
     productId: string;
     productNameSnapshot: string;
@@ -291,6 +306,14 @@ export const apiGetOrder = (orderId: string) =>
 /** Historique des commandes de l'utilisateur connecté (plus récentes d'abord). */
 export const apiGetMyOrders = () =>
   req<Order[]>('/orders');
+
+/**
+ * « Je suis arrivé » — signale au stand que le client attend au point de retrait.
+ * Ne change pas le statut de la commande ; met la carte en évidence sur le board
+ * opérateur. Idempotent côté serveur (un second appel ne réalerte pas la buvette).
+ */
+export const apiMarkArrived = (orderId: string) =>
+  req<Order>(`/orders/${orderId}/arrived`, { method: 'POST' });
 
 // ─── Helpers ──────────────────────────────────────────────────
 

@@ -23,6 +23,11 @@ export interface OrderCardProps {
   status: StatusVariant;
   items: OrderItem[];
   createdAt: string;
+  /**
+   * Phase 19 — horodatage du « Je suis arrivé » côté client. Non nul ⇒ le client
+   * attend au point de retrait : la carte pulse et affiche depuis combien de temps.
+   */
+  customerArrivedAt?: string | null;
   isLoading?: boolean;
   onAccept?: () => void;
   onPrepare?: () => void;
@@ -49,6 +54,7 @@ export function OrderCard({
   status,
   items,
   createdAt,
+  customerArrivedAt = null,
   isLoading = false,
   onAccept,
   onPrepare,
@@ -58,12 +64,14 @@ export function OrderCard({
   onCancel,
 }: OrderCardProps) {
   const color = STATUS_COLORS[status] ?? '#6b7280';
+  const arrived = Boolean(customerArrivedAt);
 
   return (
     <div
+      className={arrived ? 'breakeat-arrived' : undefined}
       style={{
-        border: `1px solid ${BRAND.border}`,
-        borderLeft: `4px solid ${color}`,
+        border: `1px solid ${arrived ? BRAND.orange : BRAND.border}`,
+        borderLeft: `4px solid ${arrived ? BRAND.orange : color}`,
         borderRadius: 12,
         padding: 14,
         width: '100%',
@@ -83,9 +91,31 @@ export function OrderCard({
       </div>
 
       {/* Elapsed time */}
-      <div style={{ fontSize: 11, color: BRAND.grey, marginBottom: 10 }}>
+      <div style={{ fontSize: 11, color: BRAND.grey, marginBottom: arrived ? 6 : 10 }}>
         Il y a {elapsed(createdAt)}
       </div>
+
+      {/* Phase 19 — le client est au comptoir */}
+      {arrived && customerArrivedAt && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'rgba(252, 64, 2, 0.10)',
+            color: BRAND.orangeDark,
+            border: `1px solid ${BRAND.orange}`,
+            borderRadius: 8,
+            padding: '5px 8px',
+            fontSize: 11.5,
+            fontWeight: 700,
+            marginBottom: 10,
+          }}
+        >
+          <span aria-hidden="true">🙋</span>
+          Client présent · {elapsed(customerArrivedAt)}
+        </div>
+      )}
 
       {/* Items */}
       <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 12px 0' }}>

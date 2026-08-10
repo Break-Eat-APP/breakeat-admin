@@ -32,6 +32,17 @@ export interface OrderReadyPayload {
   pickupPointId: string;
 }
 
+/** PHASE 19 — le client signale sa présence au point de retrait. */
+export interface CustomerArrivedPayload {
+  orderId: string;
+  publicOrderNumber: string;
+  organizationId: string;
+  eventId: string;
+  supplierId: string;
+  pickupPointId: string;
+  arrivedAt: string;
+}
+
 /**
  * RealtimeService — business-level emit helper.
  *
@@ -93,6 +104,33 @@ export class RealtimeService {
     this.logger.debug(
       `Emitted order_updated [${payload.orderId}] ${payload.previousStatus} → ${payload.nextStatus}`,
     );
+  }
+
+  /**
+   * PHASE 19 — le client a appuyé sur « Je suis arrivé ».
+   *
+   * Événement DÉDIÉ (et non `order_updated`) car le statut de la commande ne
+   * change pas : le board opérateur applique une mise à jour optimiste basée sur
+   * `nextStatus` et ignorerait donc un `order_updated` sans transition.
+   * Ciblage identique à `new_order` : la buvette concernée doit voir l'appel.
+   */
+  emitCustomerArrived(payload: CustomerArrivedPayload): void {
+    const envelope = {
+      eventName: 'customer_arrived',
+      eventId: randomUUID(),
+      occurredAt: new Date().toISOString(),
+      orderId: payload.orderId,
+      publicOrderNumber: payload.publicOrderNumber,
+      pickupPointId: payload.pickupPointId,
+      arrivedAt: payload.arrivedAt,
+    };
+
+    const { server } = this.gateway;
+    server.to(`organization:${payload.organizationId}`).emit('customer_arrived', envelope);
+    server.to(`event:${payload.eventId}`).emit('customer_arrived', envelope);
+    server.to(`supplier:${payload.supplierId}`).emit('customer_arrived', envelope);
+
+    this.logger.debug(`Emitted customer_arrived [${payload.orderId}] to 3 rooms`);
   }
 
   /**

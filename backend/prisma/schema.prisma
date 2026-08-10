@@ -604,6 +604,11 @@ model Order {
   slotId            String?       @map("slot_id")
   status            OrderStatus   @default(PAID)
   paymentStatus     PaymentStatus @default(SUCCEEDED) @map("payment_status")
+  /// PHASE 19 — le client a signalé « je suis arrivé » au point de retrait.
+  /// Horodatage (et non booléen) : le board opérateur trie/priorise par ancienneté
+  /// d'attente. null = pas encore annoncé. Remis à null n'est jamais nécessaire :
+  /// la commande quitte le board une fois récupérée.
+  customerArrivedAt DateTime?     @map("customer_arrived_at")
   /// Frozen totals at order creation. Never recomputed.
   subtotalCents     Int           @map("subtotal_cents")
   totalCents        Int           @map("total_cents")

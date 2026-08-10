@@ -312,6 +312,8 @@ export default function DashboardPage() {
     status: order.status as StatusVariant,
     items: order.items,
     createdAt: order.createdAt,
+    // Phase 19 — fait pulser la carte quand le client s'est annoncé au retrait.
+    customerArrivedAt: order.customerArrivedAt ?? null,
     isLoading: isOrderLoading(order.id),
     ...makeActions(order.id, token),
   });
