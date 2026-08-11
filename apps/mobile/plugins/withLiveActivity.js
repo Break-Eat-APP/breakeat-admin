@@ -67,16 +67,25 @@ const withDeploymentTarget = (config) =>
  * n'attribue aucun token d'activité et la Live Activity reste figée sur son
  * état initial — sans erreur explicite.
  *
- * `development` en debug, `production` en release : EAS bascule la valeur selon
- * le profil de build, et le backend doit viser l'hôte APNs correspondant
- * (variable APNS_ENV côté serveur).
+ * ⚠️ La valeur doit correspondre au PROFIL DE PROVISIONNEMENT du build, sinon
+ * la signature de code échoue :
+ *   - profil `development` (dev client) ................ development
+ *   - profil `preview` (Ad Hoc, distribution interne) ... production
+ *   - profil `production` (App Store) .................. production
+ *
+ * On se cale sur `APP_ENV`, déjà défini par profil dans `eas.json` (development
+ * / staging / production) : seul le build « dev client » est en environnement
+ * de développement. `modRequest` n'expose PAS le mode de build — s'y fier
+ * laisserait la valeur bloquée sur `development` et casserait les builds Ad Hoc.
+ *
+ * Le backend doit viser l'hôte APNs correspondant (`APNS_ENV` = sandbox pour
+ * development, production sinon). Un décalage se traduit par un
+ * `BadDeviceToken` renvoyé par Apple.
  */
 const withPushCapability = (config) =>
   withEntitlementsPlist(config, (cfg) => {
-    if (!cfg.modResults['aps-environment']) {
-      cfg.modResults['aps-environment'] =
-        cfg.modRequest?.mode === 'production' ? 'production' : 'development';
-    }
+    const isDevClient = process.env.APP_ENV === 'development';
+    cfg.modResults['aps-environment'] = isDevClient ? 'development' : 'production';
     return cfg;
   });
 
