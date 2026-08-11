@@ -333,6 +333,31 @@ export const apiSetCartPoints = (cartId: string, points: number) =>
     body: JSON.stringify({ points }),
   });
 
+// ─── Live Activity iOS (phase 21) ──────────────────────────────
+
+/**
+ * Déclare une Live Activity au backend et lui confie son token push.
+ *
+ * C'est le SEUL rôle de l'app dans la chaîne : les mises à jour partent ensuite
+ * du serveur via APNs (l'activité continue donc de vivre app fermée). Le même
+ * appel sert à la rotation du token.
+ */
+export const apiRegisterLiveActivity = (params: {
+  orderId: string;
+  activityId: string;
+  pushToken: string;
+}) =>
+  req<{ id: string; orderId: string; status: string }>('/live-activities', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+
+/** Signale que l'activité est terminée côté iOS : le serveur cesse d'émettre. */
+export const apiUnregisterLiveActivity = (activityId: string) =>
+  req<{ id: string; status: string }>(`/live-activities/${activityId}`, {
+    method: 'DELETE',
+  });
+
 // ─── Orders (authenticated) ────────────────────────────────────
 
 export const apiGetOrder = (orderId: string) =>

@@ -181,6 +181,9 @@ importers:
       expo-font:
         specifier: ~13.3.2
         version: 13.3.2(expo@53.0.27(@babel/core@7.29.0)(@expo/metro-runtime@5.0.5(react-native@0.79.6(@babel/core@7.29.0)(@types/react@19.2.15)(react@19.0.0)))(react-native@0.79.6(@babel/core@7.29.0)(@types/react@19.2.15)(react@19.0.0))(react@19.0.0))(react@19.0.0)
+      expo-modules-core:
+        specifier: ~2.5.0
+        version: 2.5.0
       react:
         specifier: 19.0.0
         version: 19.0.0
@@ -215,6 +218,9 @@ importers:
       '@babel/runtime':
         specifier: ^7.26.0
         version: 7.29.2
+      '@expo/config-plugins':
+        specifier: ~10.1.2
+        version: 10.1.2
       '@react-native/babel-preset':
         specifier: 0.79.2
         version: 0.79.2(@babel/core@7.29.0)

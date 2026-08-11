@@ -10,6 +10,10 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { formatPrice } from '@lib/api/mobile-api';
+import {
+  initLiveActivityTokenSync,
+  startOrderTracking,
+} from '@lib/live-activity-tracking';
 import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderConfirmation'>;
@@ -20,6 +24,14 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
 
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // PHASE 21 — démarre le suivi sur écran verrouillé dès la confirmation.
+  // L'écoute des tokens est installée AVANT le démarrage : iOS peut émettre le
+  // premier token immédiatement, et il ne doit pas se perdre.
+  useEffect(() => {
+    initLiveActivityTokenSync();
+    void startOrderTracking({ orderId, orderNumber: publicOrderNumber });
+  }, [orderId, publicOrderNumber]);
 
   useEffect(() => {
     Animated.sequence([

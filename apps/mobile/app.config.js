@@ -36,6 +36,10 @@ module.exports = {
     permissions: ['android.permission.CAMERA'],
   },
   plugins: [
+    // PHASE 21 — prérequis Live Activity : NSSupportsLiveActivities + cible iOS
+    // 16.2. Le dossier ios/ étant régénéré à chaque build, ces réglages ne
+    // peuvent pas vivre ailleurs que dans un plugin.
+    './plugins/withLiveActivity',
     ...(process.env.APP_ENV === 'production'
       ? [
           [
