@@ -24,6 +24,9 @@ async function bootstrap(): Promise<void> {
   // Stripe webhook MUST receive raw bytes for signature verification.
   // Must be registered BEFORE the generic JSON parser.
   app.use('/webhooks/stripe', raw({ type: 'application/json' }));
+  // Phase 21 — même contrainte pour Flaix : la signature HMAC porte sur les
+  // octets bruts, un JSON re-sérialisé ne correspondrait plus.
+  app.use('/webhooks/flaix', raw({ type: 'application/json' }));
   app.use(json({ limit: '1mb' }));
 
   // Global validation pipe — active for all routes

@@ -194,6 +194,7 @@ model User {
   groupMemberships GroupMember[]
   pushTokens       PushToken[]
   loyaltyAccounts  LoyaltyAccount[]
+  liveActivities   LiveActivity[]
 
   @@map("users")
 }
@@ -619,6 +620,10 @@ model Order {
   slotId            String?       @map("slot_id")
   status            OrderStatus   @default(PAID)
   paymentStatus     PaymentStatus @default(SUCCEEDED) @map("payment_status")
+  /// PHASE 21 — heure de disponibilité estimée, telle que calculée par Flaix
+  /// (ou laissée nulle si aucune estimation). Affichée dans la Live Activity
+  /// (« Retrait prévu à 19:42 ») et réévaluable en cours de préparation.
+  estimatedReadyAt  DateTime?     @map("estimated_ready_at")
   /// PHASE 19 — le client a signalé « je suis arrivé » au point de retrait.
   /// Horodatage (et non booléen) : le board opérateur trie/priorise par ancienneté
   /// d'attente. null = pas encore annoncé. Remis à null n'est jamais nécessaire :
@@ -641,9 +646,10 @@ model Order {
 
   user        User             @relation(fields: [userId], references: [id])
   slot        Slot?            @relation(fields: [slotId], references: [id], onDelete: SetNull)
-  items       OrderItem[]
-  payments    Payment[]
-  auditTrail  OrderAuditTrail[]
+  items          OrderItem[]
+  payments       Payment[]
+  auditTrail     OrderAuditTrail[]
+  liveActivities LiveActivity[]
 
   @@index([userId])
   @@index([eventId, status])
@@ -1042,6 +1048,78 @@ model RefreshToken {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
+}
+
+// ─── PHASE 21 — LIVE ACTIVITY iOS ─────────────────────────────
+
+/// Cycle de vie d'une Live Activity côté serveur.
+enum LiveActivityStatus {
+  /// En cours : les mises à jour APNs sont envoyées.
+  ACTIVE
+  /// Terminée proprement (commande récupérée, annulée, expirée).
+  ENDED
+  /// Token rejeté par APNs (410 / BadDeviceToken) — on n'émet plus.
+  STALE
+
+  @@map("live_activity_status")
+}
+
+/// Une Live Activity iOS suivant UNE commande, pour UN client.
+///
+/// À ne pas confondre avec `PushToken` : celui-ci identifie un APPAREIL et vit
+/// longtemps, alors qu'ici le token est propre à UNE activité, tourne pendant
+/// sa vie et meurt avec elle. Les deux coexistent (notifications classiques vs
+/// mises à jour de Live Activity, qui passent par des topics APNs différents).
+///
+/// Isolation stricte : chaque écriture vérifie le triplet (activité, commande,
+/// utilisateur). C'est ce qui empêche la commande A de mettre à jour l'activité
+/// de la commande B.
+model LiveActivity {
+  id         String             @id @default(uuid())
+  userId     String             @map("user_id")
+  orderId    String             @map("order_id")
+  /// Identifiant ActivityKit renvoyé par iOS (permet à l'app de retrouver
+  /// l'activité correspondante localement).
+  activityId String             @map("activity_id")
+  /// Token push propre à cette activité. Unique : APNs n'en attribue jamais
+  /// deux identiques, et une rotation remplace la valeur précédente.
+  pushToken  String             @unique @map("push_token")
+  status     LiveActivityStatus @default(ACTIVE)
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+  endedAt    DateTime?          @map("ended_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, activityId])
+  @@index([orderId, status])
+  @@index([userId])
+  @@map("live_activities")
+}
+
+/// Journal des webhooks reçus de Flaix — sert à l'idempotence ET à l'audit.
+///
+/// Flaix peut réémettre un même événement (retry, doublon réseau). L'unicité de
+/// `eventId` garantit qu'un événement déjà traité est reconnu et ignoré au lieu
+/// de produire une seconde mise à jour incorrecte.
+model FlaixWebhookEvent {
+  id          String    @id @default(uuid())
+  /// Identifiant fourni par Flaix — clé d'idempotence.
+  eventId     String    @unique @map("event_id")
+  eventType   String    @map("event_type")
+  /// Commande visée (null si l'événement ne cible pas une commande connue).
+  orderId     String?   @map("order_id")
+  /// Charge utile brute, conservée telle que reçue (audit / rejeu manuel).
+  payload     Json
+  receivedAt  DateTime  @default(now()) @map("received_at")
+  /// Non nul = traité avec succès. Null + `error` renseigné = échec.
+  processedAt DateTime? @map("processed_at")
+  error       String?
+
+  @@index([eventType, receivedAt])
+  @@index([orderId])
+  @@map("flaix_webhook_events")
 }
 
 // ─── PHASE 20 — FIDÉLITÉ ──────────────────────────────────────

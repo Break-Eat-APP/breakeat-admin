@@ -92,5 +92,29 @@ export default registerAs('app', () => ({
   flaix: {
     apiUrl: process.env.FLAIX_API_URL ?? '',
     apiKey: process.env.FLAIX_API_KEY ?? '',
+    /**
+     * Secret partagé signant les webhooks Flaix → Break Eat (HMAC-SHA256 du
+     * corps brut). Vide = webhook refusé : un événement non signé ne doit
+     * jamais être accepté « par défaut » faute de configuration.
+     */
+    webhookSecret: process.env.FLAIX_WEBHOOK_SECRET ?? '',
+  },
+
+  /**
+   * APNs — mises à jour des Live Activities (phase 21).
+   *
+   * Canal DISTINCT d'Expo Push : Apple exige un appel direct avec le topic
+   * `<bundleId>.push-type.liveactivity`. La clé privée reste strictement
+   * serveur ; elle n'est jamais exposée à l'application.
+   * Non renseigné ⇒ aucun envoi n'est tenté (pas de crash en local).
+   */
+  apns: {
+    keyId: process.env.APNS_KEY_ID ?? '',
+    teamId: process.env.APNS_TEAM_ID ?? '',
+    bundleId: process.env.APNS_BUNDLE_ID ?? '',
+    /** Contenu du .p8 ; les sauts de ligne échappés `\n` sont restaurés. */
+    privateKey: (process.env.APNS_PRIVATE_KEY ?? '').replace(/\\n/g, '\n'),
+    /** 'production' ou 'sandbox' (build de développement). */
+    env: process.env.APNS_ENV ?? 'sandbox',
   },
 }));

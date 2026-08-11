@@ -29,6 +29,7 @@ import { OperatorScreensModule } from './modules/operator-screens/operator-scree
 import { StatsModule } from './modules/stats/stats.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
+import { LiveActivityModule } from './modules/live-activity/live-activity.module';
 import appConfig from './config/app.config';
 
 @Module({
@@ -81,6 +82,7 @@ import appConfig from './config/app.config';
     // Phase 18 — Notifications push (fondation Expo : C1/C2/C3)
     NotificationsModule,
     LoyaltyModule,
+    LiveActivityModule,
   ],
 })
 export class AppModule {}

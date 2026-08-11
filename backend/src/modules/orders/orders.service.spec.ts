@@ -8,6 +8,7 @@ import { SlotsService } from '../slots/slots.service';
 import { OrderNotificationsService } from '../notifications/order-notifications.service';
 import { PrismaService } from '../../database/prisma.service';
 import { loyaltyDisabledProvider } from '../loyalty/loyalty.mock';
+import { liveActivityNoopProvider } from '../live-activity/live-activity.mock';
 
 const USER_ID = 'user-1';
 const ORG_ID = 'org-1';
@@ -86,6 +87,7 @@ describe('OrdersService', () => {
         OrdersService,
         OrderStateMachineService,
         loyaltyDisabledProvider,
+        liveActivityNoopProvider,
         {
           provide: RealtimeService,
           useValue: {

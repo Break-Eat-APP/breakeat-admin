@@ -8,9 +8,17 @@ import { SlotsModule } from '../slots/slots.module';
 import { GroupsModule } from '../groups/groups.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
+import { LiveActivityModule } from '../live-activity/live-activity.module';
 
 @Module({
-  imports: [RealtimeModule, SlotsModule, GroupsModule, NotificationsModule, LoyaltyModule],
+  imports: [
+    RealtimeModule,
+    SlotsModule,
+    GroupsModule,
+    NotificationsModule,
+    LoyaltyModule,
+    LiveActivityModule,
+  ],
   controllers: [OrdersController, PublicOrdersController],
   providers: [OrdersService, OrderStateMachineService],
   exports: [OrdersService, OrderStateMachineService],

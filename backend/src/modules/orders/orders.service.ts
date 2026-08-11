@@ -21,6 +21,7 @@ import { RealtimeService } from '../realtime/realtime.service';
 import { SlotsService } from '../slots/slots.service';
 import { OrderNotificationsService } from '../notifications/order-notifications.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
+import { LiveActivityService } from '../live-activity/live-activity.service';
 
 /**
  * OrdersService — owns the Order lifecycle from PaymentIntent.succeeded onward.
@@ -45,6 +46,7 @@ export class OrdersService {
     private readonly slotsService: SlotsService,
     private readonly orderNotifications: OrderNotificationsService,
     private readonly loyaltyService: LoyaltyService,
+    private readonly liveActivityService: LiveActivityService,
   ) {}
 
   /**
@@ -396,6 +398,12 @@ export class OrdersService {
         pickupPointId: updated.pickupPointId,
       });
     }
+
+    // PHASE 21 — Live Activity, SOURCE 1 : le board opérateur fait avancer la
+    // commande. Fire-and-forget : un incident d'affichage ne doit jamais
+    // empêcher une commande d'avancer. Quand Flaix sera branché, ses webhooks
+    // alimenteront le MÊME pipeline (cf. FlaixWebhookService).
+    void this.liveActivityService.onOrderStatusChanged(updated.id, updated.status);
 
     // PHASE 20 — fidélité : les points sont crédités à la RÉCUPÉRATION, pas au
     // paiement. Une commande annulée avant retrait ne doit rien rapporter.

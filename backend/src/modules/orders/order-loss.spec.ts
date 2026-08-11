@@ -21,6 +21,7 @@ import { RealtimeService } from '../realtime/realtime.service';
 import { SlotsService } from '../slots/slots.service';
 import { OrderNotificationsService } from '../notifications/order-notifications.service';
 import { loyaltyDisabledProvider } from '../loyalty/loyalty.mock';
+import { liveActivityNoopProvider } from '../live-activity/live-activity.mock';
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
@@ -121,6 +122,7 @@ describe('OrdersService — Order Loss & Concurrent Transition Tests (BLOC 10.2)
         { provide: SlotsService,    useValue: slotsMock     },
         { provide: OrderNotificationsService, useValue: { notifyStatusChange: jest.fn() } },
         loyaltyDisabledProvider,
+        liveActivityNoopProvider,
       ],
     }).compile();
 
