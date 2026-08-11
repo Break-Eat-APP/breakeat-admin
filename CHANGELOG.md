@@ -5,6 +5,82 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.43.0] — 2026-08-11 — Phase 20 : Programme de fidélité (gain + utilisation)
+
+### Objectif
+Permettre à un club d'activer un programme de points : le client en gagne sur ses commandes et peut les convertir en réduction. Implémentation **réelle** (pas de mode démo) — seul le branchement Stripe reste à faire.
+
+### Modèle
+- `+` backend/prisma/migrations/20260728_phase20_loyalty/migration.sql (UUID/`gen_random_uuid()` — convention des tables existantes ; du TEXT rendait les FK impossibles)
+- `~` backend/prisma/schema.prisma — `Venue.loyaltyEnabled` / `loyaltyPointsPerEuro` / `loyaltyPointValueCents` (config **par lieu**) ; `LoyaltyAccount` (solde **par organisation**) ; `LoyaltyTransaction` + enum `LoyaltyEntryKind` (registre immuable, `@@unique([orderId, kind])`) ; `Cart.redeemedPoints` ; `Order.discountCents` / `pointsRedeemed` / `pointsEarned`
+
+### Backend
+- `+` backend/src/modules/loyalty/{loyalty.service.ts, loyalty.controller.ts, loyalty.module.ts, loyalty.mock.ts}
+- `+` backend/src/modules/cart/dto/redeem-points.dto.ts
+- `~` backend/src/modules/cart/cart.service.ts — totaux remisés dans `computeView`, `setRedeemedPoints`, débit dans la transaction de `demoCheckout`
+- `~` backend/src/modules/cart/cart.controller.ts — `PATCH /carts/:id/loyalty-points`
+- `~` backend/src/modules/orders/orders.service.ts — gain à `PICKED_UP` (`awardLoyaltyPoints`) ; **contrôle défensif Stripe recalculé sur le total remisé** + débit dans la transaction de `createFromPaymentIntent`
+- `~` backend/src/modules/venues/{dto/create-venue.dto.ts, dto/update-venue.dto.ts, venues.service.ts} — champs de config
+- `~` backend/src/app.module.ts, modules/{cart,orders}/*.module.ts — câblage `LoyaltyModule`
+- `~` 3 specs (`cart.service`, `orders.service`, `order-loss`) — `loyaltyDisabledProvider` partagé
+
+### Admin
+- `~` apps/admin/src/app/(admin)/organizations/[id]/page.tsx — bloc « Activer le programme de fidélité » + taux (points/euro, valeur du point), bornes ≥ 1
+- `~` apps/admin/src/lib/api/admin-client.ts — champs `loyalty*` sur `Venue`/`VenueInput`
+
+### Mobile
+- `~` apps/mobile/src/screens/checkout.screen.tsx — section « Mes points » (solde, interrupteur, réduction, points à gagner) + total détaillé sous-total/remise/dû
+- `~` apps/mobile/src/lib/api/mobile-api.ts — `apiGetLoyaltyStatus`, `apiSetCartPoints`, `LoyaltyStatus`, `BackendCart.loyalty`
+- `~` apps/mobile/src/store/cart.store.ts (+`venueId`), src/screens/event-home.screen.tsx
+
+### Invariants tenus (à vérifier en audit)
+- Solde jamais négatif — contrôlé **au débit**, pas seulement à la saisie.
+- Une commande ne crédite qu'une fois et ne débite qu'une fois (`@@unique([orderId, kind])`) → rejeu sans effet.
+- Remise plafonnée au montant du panier ; ne consomme que les points nécessaires.
+- Points gagnés sur le montant **réellement payé** (remise déduite).
+- Gain à la **récupération** (PICKED_UP), pas au paiement : une commande annulée avant retrait ne rapporte rien.
+- `balance` (cache) et le registre écrits dans la **même** transaction.
+
+### Vérifs
+- Bout en bout sur backend local : activation via API admin (2 pts/€, 1 c/point) ; commande 250 c récupérée → +5 pts (`Order.pointsEarned = 5`) ; panier 500 c avec 5 pts → remise 5 c → payé 495 c, solde 5 → 0 ; 9999 pts avec solde 0 → 400 ; points négatifs → 400 ; **solde en cache == somme du registre**.
+- typecheck backend/admin/mobile **0** · lint **0** · jest **336/336** · `expo export -p web` OK.
+
+### Reste
+- Branchement Stripe réel (le contrôle défensif et le débit transactionnel sont déjà en place).
+- ⚠️ L'écran de paiement n'a **pas** été vérifié visuellement : `EventHome` est stubbé dans `App.expo.tsx`, le parcours d'achat n'est donc pas atteignable en preview web.
+
+---
+
+## [0.42.0] — 2026-08-10 — Phase 19 : état live des commandes + « Je suis arrivé »
+
+### Module C — état live dans « Mes commandes »
+- `~` apps/mobile/src/screens/order-history.screen.tsx — 3 étapes visibles (Reçue → Préparation **orange** → Prête **vert**), barre de progression, pastille de statut, créneau de retrait affiché, rafraîchissement auto 10 s **uniquement s'il reste une commande en cours**, badge « en direct ». Passage à la typo Raleway (`HEAD.*`).
+- `~` backend/src/modules/orders/orders.controller.ts — `GET /orders` et `/orders/:id` exposent le créneau (`CUSTOMER_SLOT_SELECT` : id/startAt/endAt/label/status seulement — `capacity`/`currentLoad` restent internes)
+- `~` apps/mobile/App.expo.tsx — `OrderTracking` n'est plus stubbé (aucune dépendance native ; taper une commande menait à « Aperçu non disponible »)
+
+### Module A — « Je suis arrivé »
+- `+` backend/prisma/migrations/20260728_phase19_order_customer_arrived/migration.sql
+- `~` backend/prisma/schema.prisma — `Order.customerArrivedAt` (horodatage et non booléen : la buvette peut trier par ancienneté d'attente)
+- `~` backend/src/modules/orders/orders.service.ts — `markCustomerArrived` : propriétaire uniquement, refuse une commande terminée (400), **idempotent**, **ne change pas le statut**
+- `~` backend/src/modules/orders/orders.controller.ts — `POST /orders/:id/arrived`
+- `~` backend/src/modules/realtime/realtime.service.ts — événement **dédié** `customer_arrived` (et non `order_updated` : le board applique une maj optimiste sur `nextStatus` et ignorerait une transition vide)
+- `~` apps/operator/{src/components/OrderCard.tsx, src/hooks/useDashboard.ts, src/lib/realtime/socket-client.ts, src/app/globals.css, src/app/dashboard/[eventId]/page.tsx} — carte qui pulse en orange (`.breakeat-arrived`, neutralisée sous `prefers-reduced-motion`) + encart « Client présent · X min »
+- `~` apps/mobile/src/screens/order-history.screen.tsx — bouton orange tant que la commande est en cours, maj optimiste + rollback si échec
+
+### Note Flaix
+`FLAIX_CONTRACT.md` attribue les dashboards opérateur à Break Eat et ne définit **aucune** décision « client arrivé » ; l'API Flaix n'est pas branchée. La fonctionnalité est donc 100 % Break Eat ; prévenir Flaix en plus pourra se greffer sur `markCustomerArrived`.
+
+### Vérifs
+- Bout en bout (backend local + preview web) : statut PAID → PREPARING → READY **sans action utilisateur** (poll 10 s), couleurs mesurées `rgb(252,64,2)` / `rgb(22,163,74)`, créneau « Retrait 16:34 – 16:54 », clic « Je suis arrivé » → badge + `customer_arrived_at` persisté, 2ᵉ POST = même horodatage, 400 sur commande récupérée.
+- typecheck backend/mobile/operator **0** · lint **0** · jest orders+realtime **107/107**.
+
+---
+
+## [0.41.1] — 2026-07-25 — Outillage : lancement local en un double-clic
+- `+` demarrer-local.bat — démarre Docker (Postgres/Redis) + backend (3000) + manager (3001) + back-office (3003) dans des fenêtres indépendantes. Contexte : l'essai Railway a expiré, le développement se fait en local (cf. `REPRISE.md`).
+
+---
+
 ## [0.41.0] — 2026-07-25 — Phase 18 : Plan des buvettes par lieu
 
 ### Objectif

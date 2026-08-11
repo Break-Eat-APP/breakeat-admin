@@ -62,8 +62,13 @@ Ce sont des choses non évidentes qui ont coûté du temps. Détail complet dans
 
 - **Par phases** (Phase 1 → 18). Chaque phase = une spec (`phases de DEV/*.docx`), une implémentation, une entrée `CHANGELOG.md` + `brain/TASK_SUMMARY.md`, puis un **audit Codex** (prompt dans `brain/CODEX_AUDIT_PROMPT.md`, rapports archivés dans `brain/audits/`).
 - **Phases 1→15** : construction du back-office et du back-end (auth, événements, buvettes, commandes temps réel, dashboards, notifications push).
-- **Phases 16→18** (pivot mobile, l'actuel) : l'app mobile devient la priorité — découverte géolocalisée des lieux, hébergement Vercel, build iOS interne, plan des buvettes. Voir l'entrée du 2026-07-25 dans `brain/TASK_SUMMARY.md`.
+- **Phases 16→18** (pivot mobile) : l'app devient la priorité — découverte géolocalisée des lieux, hébergement Vercel, build iOS interne, plan des buvettes.
+- **Phases 19→20** (actuel) : état live des commandes (couleurs + créneau), bouton « Je suis arrivé » (la carte pulse côté buvette), et **programme de fidélité** (points gagnés/utilisés, activable par club). Voir l'entrée du 2026-08-11 dans `brain/TASK_SUMMARY.md`.
 
 ## 7. État actuel en une phrase
 
-App mobile iOS fonctionnelle en test interne ; **backend en pause** (essai Railway expiré) → connexion/commandes/admin KO tant qu'il n'est pas relancé. Détail et prochaines étapes : `../REPRISE.md`.
+App mobile iOS fonctionnelle en test interne ; **le backend hébergé est en pause** (essai Railway expiré) → tout se développe et se teste **en local** via `demarrer-local.bat`. Détail et prochaines étapes : `../REPRISE.md`.
+
+## 8. Lancer le projet en local — le raccourci
+
+Double-clic sur **`../demarrer-local.bat`** (Docker Desktop doit être ouvert). Il démarre la base + les 3 services dans des fenêtres séparées. Pour tout arrêter : ferme ces fenêtres.

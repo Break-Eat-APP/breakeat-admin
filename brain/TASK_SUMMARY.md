@@ -4,6 +4,41 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-08-11] Phases 19 & 20 — état live des commandes, « Je suis arrivé », fidélité
+
+> Trois modules demandés par le client, livrés dans l'ordre choisi : état live → « Je suis arrivé » → fidélité. Détail fichiers dans `CHANGELOG.md` [0.42.0] et [0.43.0] ; références de code exactes dans `ENGINEERING_MANUAL.md`.
+
+### Livré
+- **État live (Mes commandes)** : 3 étapes visibles Reçue → Préparation (orange) → Prête (vert), barre de progression, **créneau de retrait** affiché à côté (reflète une réassignation), rafraîchissement auto 10 s **seulement s'il reste une commande en cours**, badge « en direct ». Backend : `GET /orders` expose le créneau (champs client uniquement).
+- **« Je suis arrivé »** : `Order.customerArrivedAt` + `POST /orders/:id/arrived` (propriétaire, refuse une commande terminée, **idempotent**, **ne change pas le statut**) + événement realtime **dédié** `customer_arrived` → la carte pulse sur le board buvette avec « Client présent · X min ».
+- **Fidélité (réelle, pas démo)** : activation **par lieu** (le club décide) + taux ; solde **par organisation** (les points suivent le club) ; registre immuable auditable ; gain à la **récupération** ; utilisation en réduction au paiement ; UI admin (activation + taux) et app (section « Mes points » + total détaillé).
+- **Outillage** : `demarrer-local.bat` (backend + manager + back-office en local, Railway étant expiré).
+
+### Décisions techniques (à connaître de Codex)
+- **Flaix non impliqué dans « Je suis arrivé »** : `FLAIX_CONTRACT.md` attribue les dashboards opérateur à Break Eat et ne définit aucune décision « client arrivé » ; l'API n'est pas branchée. Fonctionnalité 100 % Break Eat, hook possible plus tard sur `markCustomerArrived`.
+- **Événement realtime dédié** (`customer_arrived`) plutôt que `order_updated` : le board applique une maj **optimiste** basée sur `nextStatus` et ignorerait une transition sans changement de statut.
+- **Horodatage plutôt que booléen** pour l'arrivée : permet de trier par ancienneté d'attente côté buvette.
+- **Fidélité — portées volontairement distinctes** : configuration sur le **lieu** (`Venue.loyalty*`), solde sur l'**organisation** (`LoyaltyAccount`). Les points suivent le club, pas un bâtiment.
+- **Registre = source de vérité**, `balance` n'est qu'un cache ; les deux sont écrits dans la **même** transaction.
+- **Gain à `PICKED_UP`**, pas au paiement : une commande annulée avant retrait ne doit rien rapporter.
+- **Migration en UUID/`gen_random_uuid()`** : les PK existantes sont des `uuid` en base (dérive historique) — du `TEXT` rendait les clés étrangères impossibles à créer.
+
+### ⚠️ Point sensible corrigé (paiement)
+`createFromPaymentIntent` vérifie que le total de la commande == le montant encaissé par Stripe. Avec une remise fidélité, **toute commande utilisant des points aurait été refusée par le webhook**. Le contrôle porte désormais sur le **total remisé** ; si la config du club change entre le checkout et le webhook, l'écart est détecté et la commande refusée (échec sûr, pas d'écart financier). Le débit des points se fait **dans la transaction** de création de commande.
+
+### Reste
+1. **Brancher Stripe réel** (décision client : « on branchera le paiement plus tard »). Le contrôle défensif et le débit transactionnel sont déjà en place.
+2. **`EventHome` est stubbé dans `App.expo.tsx`** → le parcours d'achat n'est pas atteignable en preview web, donc **l'écran de paiement (section fidélité) n'a pas été vérifié visuellement**. La logique argent, elle, est vérifiée côté API.
+3. Persistance des favoris ; section « À venir » encore en placeholder (pas d'endpoint).
+4. Relancer un backend hébergé (Railway expiré — cf. `REPRISE.md`).
+5. Restyler `order-tracking.screen.tsx` (réactivé mais encore en thème sombre, incohérent avec le blanc/orange).
+
+### Vérifs
+- Bout en bout sur backend local : statut live sans action utilisateur (couleurs mesurées) ; « Je suis arrivé » persisté + idempotent + 400 sur commande terminée ; fidélité — +5 pts sur commande 250 c, remise 5 c sur panier 500 c → payé 495 c, solde 5 → 0, garde-fous 400, **solde en cache == somme du registre**.
+- typecheck backend/admin/mobile/operator **0** · lint **0** · **jest 336/336** · `expo export -p web` OK.
+
+---
+
 ## [2026-07-25] Phase mobile 16→18 — découverte lieux, back office, Vercel, build iOS interne, plan buvettes
 
 > Audit de rattrapage : rien n'avait été loggé ici depuis le 2026-06-15 alors que tout le **pivot app mobile** a été livré. Vérité terrain = git (`d70c463` → `a508387`). Voir `CHANGELOG.md` [0.38.0]→[0.41.0] pour le détail fichiers et `REPRISE.md` pour l'état complet + les pièges.

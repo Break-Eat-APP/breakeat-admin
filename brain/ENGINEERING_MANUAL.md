@@ -3831,4 +3831,114 @@ Le pivot app mobile, en trois blocs :
 - « Impossible de charger les lieux » : backend hors ligne (cf. Railway en pause) — détail réel dans `console.warn('apiSearchVenues a échoué', …)`.
 - Crash après splash en natif : suspecter une 2ᵉ copie de React (grep de la version parasite dans le bundle `expo export:embed`) ou un module natif eager ; le `crash-guard` affiche la stack à l'écran.
 
+---
+
+## [2026-08-10] Phase 19 — État live des commandes + « Je suis arrivé »
+
+### What Was Built
+Deux blocs côté parcours client :
+1. **État live** dans « Mes commandes » : le statut de chaque commande est résumé en 3 étapes visibles (Reçue → Préparation → Prête), coloré (orange en préparation, vert quand prête), avec le **créneau de retrait** affiché à côté et un rafraîchissement automatique.
+2. **« Je suis arrivé »** : le client signale sa présence au point de retrait depuis l'app ; la carte de sa commande se met à pulser sur le board de la buvette.
+
+### Why It Was Built
+- Le client ne savait pas où en était sa commande sans ouvrir un écran de suivi séparé (lui-même stubbé dans le build livré).
+- En rush, la buvette ne sait pas qui est physiquement devant le comptoir : préparer en priorité une commande dont le client attend évite les plats qui refroidissent et la file qui s'allonge.
+
+### How It Works
+1. `OrderHistoryScreen` charge `GET /orders`, mappe chaque statut backend sur une des 3 phases client, et **ne sonde toutes les 10 s que s'il reste au moins une commande en cours** (une liste 100 % terminée est figée — batterie/réseau).
+2. Le backend expose le créneau de la commande avec **uniquement les champs utiles au client** ; il reflète une éventuelle réassignation de créneau.
+3. « Je suis arrivé » appelle `POST /orders/:id/arrived`. Le serveur horodate `customerArrivedAt`, **ne touche pas au statut** (le cycle de vie reste piloté par la buvette) et émet un événement realtime dédié.
+4. Le board opérateur reçoit `customer_arrived`, met à jour la commande en place (quelle que soit sa colonne) et la carte pulse.
+
+### Code References
+- backend/prisma/schema.prisma:626 — `Order.customerArrivedAt` (horodatage, pas booléen : permet de trier par ancienneté d'attente).
+- backend/src/modules/orders/orders.service.ts:476 — `markCustomerArrived` : propriété, statuts autorisés, idempotence, émission.
+- backend/src/modules/orders/orders.controller.ts:95 — route `POST /orders/:id/arrived`.
+- backend/src/modules/orders/orders.controller.ts:46 — `CUSTOMER_SLOT_SELECT` : champs de créneau exposés au client (`capacity`/`currentLoad` restent internes).
+- backend/src/modules/realtime/realtime.service.ts:117 — `emitCustomerArrived` (événement dédié + ciblage organisation/event/supplier).
+- backend/prisma/migrations/20260728_phase19_order_customer_arrived/migration.sql:1 — ajout de `customer_arrived_at`.
+- apps/mobile/src/screens/order-history.screen.tsx:26 — `LIVE_POLL_MS` (cadence du suivi live).
+- apps/mobile/src/screens/order-history.screen.tsx:48 — `STATUS_UI` : mapping statut backend → phase/couleur/libellé.
+- apps/mobile/src/screens/order-history.screen.tsx:109 — `markArrived` : maj optimiste + rollback si l'appel échoue.
+- apps/mobile/src/screens/order-history.screen.tsx:290 — `pickupLabel` : créneau, label du club, ou « dès que prête ».
+- apps/operator/src/hooks/useDashboard.ts:105 — réducteur `CUSTOMER_ARRIVED` (horodate la commande où qu'elle soit dans le board).
+- apps/operator/src/components/OrderCard.tsx:67 — bascule visuelle `arrived` (bordure + classe de pulsation).
+- apps/operator/src/app/globals.css:23 — keyframes `breakeat-arrived-pulse` + neutralisation sous `prefers-reduced-motion`.
+
+### Data Flow
+`OrderHistoryScreen` → `GET /orders` (avec `slot`) → cartes colorées. Bouton → `POST /orders/:id/arrived` → `orders.service` écrit `customerArrivedAt` → `realtime.service` émet `customer_arrived` → socket opérateur → `useDashboard` réducteur → `OrderCard` pulse. Le statut de la commande ne circule pas dans ce flux : il n'est pas modifié.
+
+### Dependencies
+Interne : `orders`, `realtime`, store `cart`, `lib/alert`, `lib/api/mobile-api`. Externe : `socket.io` (opérateur), `react-native` (Animated, Switch), Prisma.
+
+### Tests and Verification
+- `jest orders realtime` → **107/107**.
+- Bout en bout (backend local + preview web) : PAID → PREPARING → READY **sans action utilisateur** (poll 10 s) ; couleurs mesurées dans le DOM `rgb(252,64,2)` (orange) et `rgb(22,163,74)` (vert) ; créneau « Retrait 16:34 – 16:54 » ; clic → badge + `customer_arrived_at` persisté en base ; 2ᵉ POST → même horodatage ; commande `PICKED_UP` → **400**.
+
+### Risks and Safe Change Rules
+- **Ne pas remplacer `customer_arrived` par `order_updated`** : le board applique une maj optimiste sur `nextStatus` et ignorerait un événement sans changement de statut.
+- « Je suis arrivé » **ne doit jamais changer le statut** : le cycle de vie appartient à la buvette (state machine).
+- Ajouter un champ au créneau exposé au client passe par `CUSTOMER_SLOT_SELECT` — ne pas renvoyer l'objet `slot` entier (`capacity`/`currentLoad` sont des données d'exploitation).
+- Le poll s'arrête quand toutes les commandes sont terminées : si l'on ajoute un statut « en cours », l'ajouter aussi à `isLive`, sinon le suivi se fige.
+
+### Debugging Notes
+- Carte qui ne pulse pas : vérifier que `customer_arrived` est bien dans la liste d'écoute du socket-client, puis que `customerArrivedAt` remonte dans le payload dashboard (il transite via le spread des champs scalaires de `Order`).
+- « Signalement impossible » côté app : le détail réel est dans `console.warn('apiMarkArrived a échoué', …)` ; l'UI est volontairement revenue à l'état précédent (rollback).
+
+---
+
+## [2026-08-11] Phase 20 — Programme de fidélité (gain + utilisation)
+
+### What Was Built
+Un programme de points **activable par le club** : le client cumule des points sur ses commandes et peut les convertir en réduction au paiement. Configuration et taux réglés depuis le back-office, solde et registre côté backend, affichage et utilisation dans l'app.
+
+### Why It Was Built
+Demande client : fidéliser sans dépendre d'un prestataire tiers, chaque club restant libre d'activer ou non le programme et de fixer sa générosité. Implémentation **réelle** (le branchement Stripe viendra ensuite) pour que la logique d'argent soit correcte dès maintenant plutôt que rétrofitée.
+
+### How It Works
+1. **Configuration** — le club active le programme sur son **lieu** et fixe deux taux : points gagnés par euro, valeur d'un point en centimes.
+2. **Gain** — à la **récupération** de la commande (`PICKED_UP`), les points sont calculés sur le montant **réellement payé** (remise déduite) et crédités. Une commande annulée avant retrait ne rapporte rien.
+3. **Utilisation** — le client choisit des points sur son panier ; le serveur enregistre une **intention** (nombre de points) et recalcule la remise à chaque lecture, plafonnée au montant du panier.
+4. **Commande** — la remise et les points sont **figés** au moment de la création de la commande, et le débit est écrit **dans la même transaction**.
+
+### Code References
+- backend/prisma/schema.prisma:320 — `Venue.loyaltyEnabled` + taux (configuration **par lieu**).
+- backend/prisma/schema.prisma:1071 — `LoyaltyAccount` (solde **par organisation** ; `balance` = cache du registre).
+- backend/prisma/schema.prisma:1094 — `LoyaltyTransaction` + `@@unique([orderId, kind])` (garde-fou d'idempotence).
+- backend/prisma/migrations/20260728_phase20_loyalty/migration.sql:1 — types `UUID`/`gen_random_uuid()` (convention des tables existantes).
+- backend/src/modules/loyalty/loyalty.service.ts:117 — `pointsForAmount` (arrondi **inférieur** : jamais un point non entièrement gagné).
+- backend/src/modules/loyalty/loyalty.service.ts:128 — `discountForPoints` (plafonnement au panier + ne consomme que les points nécessaires).
+- backend/src/modules/loyalty/loyalty.service.ts:153 — `earnForOrder` (crédit idempotent, absorbe P2002).
+- backend/src/modules/loyalty/loyalty.service.ts:205 — `redeemForOrderTx` (débit **dans** la transaction appelante + vérification du solde).
+- backend/src/modules/orders/orders.service.ts:445 — `awardLoyaltyPoints` (déclenché à `PICKED_UP`, non bloquant).
+- backend/src/modules/orders/orders.service.ts:155 — **contrôle défensif Stripe recalculé sur le total remisé** (point sensible, voir Risks).
+- backend/src/modules/cart/cart.service.ts:593 — `setRedeemedPoints` (intention + validations).
+- backend/src/modules/cart/dto/redeem-points.dto.ts:1 — bornes d'entrée (entier ≥ 0).
+- apps/mobile/src/screens/checkout.screen.tsx:53 — `maxUsablePoints` (borné par le solde ET par la note).
+- apps/admin/src/app/(admin)/organizations/[id]/page.tsx — bloc d'activation + taux (bornes ≥ 1).
+
+### Data Flow
+Admin → `PATCH /organizations/:orgId/venues/:venueId` (config sur le lieu). App → `GET /loyalty/venues/:venueId/me` (programme + solde en un appel ; l'app ne manipule jamais d'`organizationId`). Paiement → `PATCH /carts/:id/loyalty-points` (intention) → `computeView` recalcule remise et total → `demoCheckout` / `createFromPaymentIntent` figent `discountCents`/`pointsRedeemed`, créent la commande **et** débitent les points dans la même transaction. Récupération → `transition(PICKED_UP)` → `earnForOrder` crédite et renseigne `Order.pointsEarned`.
+
+### Dependencies
+Interne : `cart`, `orders`, `venues`, `realtime` (indirect). Externe : Prisma (transactions, contrainte d'unicité), `class-validator`. Aucune dépendance ajoutée.
+
+### Tests and Verification
+- `jest` complet → **336/336** (3 specs reçoivent `loyaltyDisabledProvider` : leurs assertions financières restent inchangées).
+- Bout en bout sur backend local : activation via l'API admin (2 pts/€, 1 c/point) ; commande 250 c récupérée → **+5 pts** et `Order.pointsEarned = 5` ; panier 500 c avec 5 pts → remise 5 c → **payé 495 c**, solde 5 → 0 ; 9999 pts avec solde 0 → **400** ; points négatifs → **400** ; registre = 1 EARN + 1 REDEEM et **`balance` == somme du registre**.
+- ⚠️ **Non vérifié visuellement** : la section « Mes points » de l'écran de paiement — `EventHome` est stubbé dans `App.expo.tsx`, le parcours d'achat n'est pas atteignable en preview web.
+
+### Risks and Safe Change Rules
+- **Contrôle défensif Stripe** : `createFromPaymentIntent` compare le total de la commande au montant encaissé. Ce contrôle porte sur le **total remisé** — le repasser sur le sous-total ferait **refuser toute commande utilisant des points**. Si la config du club change entre le checkout et le webhook, l'écart est détecté et la commande refusée : c'est **volontaire** (échec sûr plutôt qu'écart financier).
+- **Le débit doit rester dans la transaction** de création de commande : sinon points perdus sans commande, ou remise accordée sans débit.
+- **Ne jamais écrire `balance` sans écrire le registre** (et inversement) : le registre est la source de vérité, `balance` n'est qu'un cache.
+- **Ne pas retirer `@@unique([orderId, kind])`** : c'est le seul garde-fou contre un double crédit lors d'un rejeu de transition.
+- Créditer au paiement plutôt qu'à la récupération ferait gagner des points sur des commandes annulées avant retrait.
+- Les taux sont bornés à ≥ 1 côté DTO et côté UI : un taux nul rendrait le programme silencieusement inopérant.
+
+### Debugging Notes
+- Solde qui semble faux : comparer `loyalty_accounts.balance` à `SUM(loyalty_transactions.points)` du compte — ils doivent être **égaux**. Un écart signale une écriture hors transaction.
+- Commande refusée par le webhook avec « does not match PaymentIntent amount » : la config fidélité du lieu a probablement changé entre le checkout et le webhook (comportement attendu).
+- Section « Mes points » invisible dans l'app : `GET /loyalty/venues/:venueId/me` renvoie `enabled: false` (programme non activé sur ce lieu) — ou `venueId` est absent du store panier (renseigné par `initCart` depuis `event.venue.id`).
+
 

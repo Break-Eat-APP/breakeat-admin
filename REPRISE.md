@@ -2,7 +2,12 @@
 
 > Ouvre ce fichier en premier dans une nouvelle session. Tout l'état utile est ici + dans les 4 docs (`CHANGELOG.md`, `DEVELOPMENT_LOG.md`, `brain/ENGINEERING_MANUAL.md`, `brain/TASK_SUMMARY.md`) + le git.
 
-_Dernière mise à jour : 2026-07-25_
+_Dernière mise à jour : 2026-08-11_
+
+## 🖥️ Développement en LOCAL (depuis l'expiration de Railway)
+Le backend hébergé étant suspendu, tout se teste **en local**. Double-clic sur **`demarrer-local.bat`** (Docker Desktop doit être ouvert) → Postgres/Redis + backend (3000) + manager (3001) + back-office (3003) dans des fenêtres indépendantes. Connexion `admin@breakeat.test` / `BreakEat2026!`.
+
+⚠️ **Piège Metro** : `EXPO_PUBLIC_*` est inliné au transform et **mis en cache**. Changer `apps/mobile/.env` ne suffit pas — il faut `npx expo export -p web --clear`, sinon le bundle garde l'ancienne URL d'API. Vérifier après build : `grep` de l'URL attendue dans `dist/_expo/static/js/web/*.js`.
 
 ## 🚨 BLOQUEUR ACTUEL (2026-07-25) — backend hors ligne
 L'essai **Railway a expiré** → le backend NestJS est **suspendu**. `https://breakeat-admin-production.up.railway.app` renvoie 404 « Application not found » (404 de l'edge Railway, PAS une erreur applicative). **Décision utilisateur : backend en pause** (ni paiement Railway, ni migration d'hébergeur pour l'instant).
@@ -30,15 +35,22 @@ Dépendance externe : **spec/clé API Flaix** toujours nécessaire pour le hando
 - **Build iOS interne (EAS)** : profil `preview`, distribution **interne (QR code)**, sans Mac. Owner `break-eat-app-spe`, projet `break-eat`, Apple Team `2A5L298Q4C`. **L'app s'ouvre et tourne** sur iPhone après la résolution de la saga des crashs (voir dette ci-dessous).
 - **Phase 18 — Plan des buvettes par lieu** : `Venue.buvettePlanUrl` (+ migration), champ admin, CTA app (pastille sur la carte du lieu + bouton sur la confirmation de commande), viewer plein écran zoomable (`buvette-plan-viewer.tsx`). Exposé dans `/public/venues` et `PublicEvent.venue`.
 - **Favoris (cœur)** : toggle local via le cœur (CTA), synchronisé Lieux ↔ Favoris. **Persistance backend = à faire.**
+- **Phase 19 — état live des commandes** : « Mes commandes » affiche 3 étapes colorées (Reçue → Préparation **orange** → Prête **vert**) + le **créneau de retrait**, rafraîchies automatiquement toutes les 10 s tant qu'une commande est en cours. `OrderTracking` n'est plus stubbé.
+- **Phase 19 — « Je suis arrivé »** : `POST /orders/:id/arrived` (idempotent, ne change pas le statut) + événement realtime dédié `customer_arrived` → la carte **pulse** sur le board buvette avec « Client présent · X min ».
+- **Phase 20 — fidélité (réelle)** : activation **par lieu** + taux (points/€, valeur du point) ; solde **par organisation** ; registre immuable auditable ; gain à la **récupération** ; utilisation en réduction au paiement ; UI admin + section « Mes points » dans l'app.
 
 ## ⏳ Reste à faire (backlog priorisé)
 1. **Relancer le backend** (Railway ou autre) — débloque tout le reste (voir bloqueur en tête).
 2. ~~Brancher l'accueil sur les vrais lieux~~ **FAIT (audit Codex 16→18)** : « Lieux près de toi » est câblé sur `apiSearchVenues`/`GET /public/venues` (recherche + géoloc, navigation Flaix/événement/« Bientôt »). Restent en placeholder : la section « À venir » (pas d'endpoint) et les favoris (locaux, pas de persistance).
-3. **Persistance des favoris** : endpoint backend (save/read par utilisateur) + store mobile.
-4. **Handoff Flaix** : bloqué sur le contrat/clé API Flaix (Phase 11.5).
-5. **Setup natif push Expo** : modules Expo + FCM/APNs + rebuild, puis `apiRegisterPushToken` post-login (méthodes API déjà prêtes).
-6. **Remise C3 au checkout** : appliquer `discountPercent` au panier (sensible — prix figé au checkout).
-7. **Audit Codex** de la phase mobile 16→18.
+3. **Brancher Stripe réel** (décision client : « on branchera le paiement plus tard »). La fidélité est déjà correcte sur ce chemin : contrôle défensif recalculé sur le total remisé + débit dans la transaction de création de commande.
+4. **Rendre `EventHome` fonctionnel** dans `App.expo.tsx` (aujourd'hui stubbé) : sans lui, le parcours d'achat n'est pas atteignable en preview web — c'est pourquoi la **section « Mes points » de l'écran de paiement n'a pas pu être vérifiée visuellement**.
+5. **Persistance des favoris** : endpoint backend (save/read par utilisateur) + store mobile.
+6. **Section « À venir »** de l'accueil : encore en placeholder (pas d'endpoint « événements à venir »).
+7. **Restyler `order-tracking.screen.tsx`** : réactivé en phase 19 mais encore en thème sombre, incohérent avec le blanc/orange.
+8. **Handoff Flaix** : bloqué sur le contrat/clé API Flaix (Phase 11.5).
+9. **Setup natif push Expo** : modules Expo + FCM/APNs + rebuild, puis `apiRegisterPushToken` post-login (méthodes API déjà prêtes).
+10. **Remise C3 au checkout** : appliquer `discountPercent` au panier (distinct de la fidélité, qui est livrée).
+11. **Audit Codex** des phases 19-20 (prompt prêt : `brain/audits/CODEX_AUDIT_2026-08-11_phases-19-20.md`).
 
 ## ⚠️ Dette technique / pièges connus (à signaler à Codex)
 - **Double React (pnpm)** : l'app épingle `react@19.0.0` (RN 0.79/SDK 53) mais le monorepo hoiste `react@19.2.x` ; les paquets `@expo-google-fonts/*` importent `react` sans le déclarer → 2 copies dans le bundle → crash `TypeError: Cannot read property 'useState' of null` dans `useFonts`. **Fix en place : singletons forcés dans `apps/mobile/metro.config.js` (`resolveRequest` → react/react-dom/react-native depuis apps/mobile). NE PAS RETIRER.**
@@ -47,6 +59,10 @@ Dépendance externe : **spec/clé API Flaix** toujours nécessaire pour le hando
 - **`Alert.alert` = no-op sur react-native-web** → utiliser `src/lib/alert.ts` (`showAlert`/`confirmAction`).
 - **@types/react** volontairement `^19.1.0` (exclu du check `expo doctor` via `package.json` > `expo.install.exclude`) : le monorepo résout 19.2.x et 19.0.x casse `tsc`. Aucun impact runtime.
 - Après tout changement de schéma Prisma : **arrêter le backend** (DLL Windows verrouillé) → `prisma generate` → relancer.
+- **Migrations SQL écrites à la main** : les PK existantes sont des `uuid` en base (dérive historique). Une nouvelle table doit utiliser `UUID … DEFAULT gen_random_uuid()` — du `TEXT` fait échouer la création des clés étrangères. En cas d'échec, `prisma migrate resolve --rolled-back <nom>` avant de rejouer (vérifier d'abord qu'aucun objet n'a survécu).
+- **Contrôle défensif Stripe (phase 20)** : `createFromPaymentIntent` compare le total de la commande au montant encaissé. Ce contrôle porte sur le **total remisé** — le repasser sur le sous-total ferait refuser toute commande utilisant des points de fidélité.
+- **Fidélité** : `balance` n'est qu'un cache du registre `LoyaltyTransaction`. Ne jamais écrire l'un sans l'autre, et ne pas retirer `@@unique([orderId, kind])` (seul garde-fou contre un double crédit lors d'un rejeu).
+- **Realtime « client arrivé »** : événement **dédié** `customer_arrived`, surtout pas `order_updated` — le board opérateur applique une maj optimiste sur `nextStatus` et ignorerait une transition sans changement de statut.
 
 ## 🔎 Vérifier un bundle iOS sans build EAS (utile pour debug crash)
 `cd apps/mobile` puis `npx expo export:embed --platform ios --dev false --entry-file <ABSOLU>/index.expo.js --bundle-output out.jsbundle --assets-dest out-assets` — l'entry DOIT être un chemin absolu. Compter les occurrences de la version React parasite dans `out.jsbundle` (doit être 0).
