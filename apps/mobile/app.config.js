@@ -25,6 +25,10 @@ module.exports = {
     bundleIdentifier: 'app.breakeat.mobile',
     supportsTablet: false,
     buildNumber: '1',
+    // PHASE 21 — requis par @bacons/apple-targets pour créer la cible du widget
+    // (l'extension doit être signée avec la même équipe que l'app hôte).
+    // Même valeur que `submit.production.ios.appleTeamId` dans eas.json.
+    appleTeamId: '2A5L298Q4C',
   },
   android: {
     package: 'app.breakeat.mobile',
@@ -40,6 +44,10 @@ module.exports = {
     // 16.2. Le dossier ios/ étant régénéré à chaque build, ces réglages ne
     // peuvent pas vivre ailleurs que dans un plugin.
     './plugins/withLiveActivity',
+    // Crée la CIBLE Xcode de l'extension WidgetKit à partir de
+    // `targets/live-activity/expo-target.config.js`. Ajouter une cible au
+    // .pbxproj à la main serait fragile et disparaîtrait au prochain prebuild.
+    '@bacons/apple-targets',
     ...(process.env.APP_ENV === 'production'
       ? [
           [

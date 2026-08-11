@@ -5,7 +5,9 @@
   "main": "index.expo.js",
   "expo": {
     "install": {
-      "exclude": ["@types/react"]
+      "exclude": [
+        "@types/react"
+      ]
     }
   },
   "scripts": {
@@ -48,10 +50,11 @@
     "zustand": "^5.0.5"
   },
   "devDependencies": {
-    "@expo/config-plugins": "~10.1.2",
     "@babel/core": "^7.26.0",
     "@babel/preset-env": "^7.26.0",
     "@babel/runtime": "^7.26.0",
+    "@bacons/apple-targets": "5.0.0",
+    "@expo/config-plugins": "~10.1.2",
     "@react-native/babel-preset": "0.79.2",
     "@react-native/eslint-config": "0.79.2",
     "@react-native/metro-config": "0.79.2",
