@@ -1,4 +1,8 @@
-const { withInfoPlist, withXcodeProject } = require('@expo/config-plugins');
+const {
+  withEntitlementsPlist,
+  withInfoPlist,
+  withXcodeProject,
+} = require('@expo/config-plugins');
 
 /**
  * Config plugin — prérequis iOS de la Live Activity.
@@ -55,6 +59,27 @@ const withDeploymentTarget = (config) =>
     return cfg;
   });
 
+/**
+ * Capacité Push Notifications.
+ *
+ * `Activity.request(pushType: .token)` EXIGE que l'app soit provisionnée pour
+ * les notifications distantes : sans l'entitlement `aps-environment`, iOS
+ * n'attribue aucun token d'activité et la Live Activity reste figée sur son
+ * état initial — sans erreur explicite.
+ *
+ * `development` en debug, `production` en release : EAS bascule la valeur selon
+ * le profil de build, et le backend doit viser l'hôte APNs correspondant
+ * (variable APNS_ENV côté serveur).
+ */
+const withPushCapability = (config) =>
+  withEntitlementsPlist(config, (cfg) => {
+    if (!cfg.modResults['aps-environment']) {
+      cfg.modResults['aps-environment'] =
+        cfg.modRequest?.mode === 'production' ? 'production' : 'development';
+    }
+    return cfg;
+  });
+
 module.exports = function withLiveActivity(config) {
-  return withDeploymentTarget(withLiveActivitiesFlag(config));
+  return withDeploymentTarget(withPushCapability(withLiveActivitiesFlag(config)));
 };
