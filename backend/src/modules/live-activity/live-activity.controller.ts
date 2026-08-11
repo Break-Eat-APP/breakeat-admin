@@ -1,8 +1,12 @@
-import { Body, Controller, Delete, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { GlobalRole } from '../../common/enums/role.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { LiveActivityService } from './live-activity.service';
+import { ApnsService } from './apns.service';
 import { RegisterLiveActivityDto } from './dto/register-live-activity.dto';
 
 /**
@@ -19,7 +23,24 @@ import { RegisterLiveActivityDto } from './dto/register-live-activity.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('live-activities')
 export class LiveActivityController {
-  constructor(private readonly liveActivity: LiveActivityService) {}
+  constructor(
+    private readonly liveActivity: LiveActivityService,
+    private readonly apns: ApnsService,
+  ) {}
+
+  /**
+   * GET /live-activities/apns-health — diagnostic des identifiants Apple.
+   *
+   * Réservé au SUPER_ADMIN : permet de valider la clé APNs sans lancer un build
+   * iOS complet. Ne renvoie AUCUN secret, seulement un verdict et l'environnement
+   * visé (sandbox / production), qui doit correspondre au profil de build.
+   */
+  @Get('apns-health')
+  @UseGuards(RolesGuard)
+  @Roles(GlobalRole.SUPER_ADMIN)
+  async apnsHealth() {
+    return this.apns.checkCredentials();
+  }
 
   /**
    * Enregistre (ou met à jour) une Live Activity. Le même appel sert à la

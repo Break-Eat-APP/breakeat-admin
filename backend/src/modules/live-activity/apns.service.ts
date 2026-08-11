@@ -23,6 +23,14 @@ export interface ApnsSendResult {
 /** Événements APNs pour une Live Activity (champ `event` de l'enveloppe). */
 export type LiveActivityEvent = 'update' | 'end';
 
+/** Clé APNs inexploitable (format PEM invalide, variable tronquée…). */
+export class ApnsKeyError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ApnsKeyError';
+  }
+}
+
 const APNS_HOST_PROD = 'https://api.push.apple.com';
 const APNS_HOST_SANDBOX = 'https://api.sandbox.push.apple.com';
 
@@ -121,10 +129,19 @@ export class ApnsService implements OnModuleDestroy {
     const signer = createSign('SHA256');
     signer.update(signingInput);
     signer.end();
-    const signature = signer.sign({
-      key: this.privateKey,
-      dsaEncoding: 'ieee-p1363',
-    });
+
+    let signature: Buffer;
+    try {
+      signature = signer.sign({ key: this.privateKey, dsaEncoding: 'ieee-p1363' });
+    } catch (err) {
+      // Cause la plus fréquente : la clé .p8 a été collée en multi-lignes dans
+      // une variable d'environnement, qui n'en conserve alors que la première.
+      // On remonte un message actionnable plutôt qu'une erreur crypto opaque.
+      throw new ApnsKeyError(
+        `Clé APNs illisible (${err instanceof Error ? err.message : 'format invalide'}). ` +
+          "Vérifier que APNS_PRIVATE_KEY contient le .p8 ENTIER, sauts de ligne échappés en \\n.",
+      );
+    }
 
     const token = `${signingInput}.${this.base64Url(signature)}`;
     this.cachedJwt = { token, issuedAt: now };
@@ -156,6 +173,83 @@ export class ApnsService implements OnModuleDestroy {
   onModuleDestroy(): void {
     this.session?.close();
     this.session = null;
+  }
+
+  // ─── Diagnostic ─────────────────────────────────────────────
+
+  /**
+   * Vérifie que la clé APNs est valide, SANS avoir besoin d'un vrai appareil.
+   *
+   * Astuce : on envoie vers un token volontairement bidon. Apple distingue
+   * clairement les deux causes d'échec —
+   *   • `InvalidProviderToken` / 403 ⇒ la CLÉ est en cause (Key ID, Team ID ou
+   *     contenu du .p8 erroné) ;
+   *   • `BadDeviceToken` / 400     ⇒ la clé est BONNE, seul le token est faux
+   *     (ce qui est attendu ici).
+   * Cela évite d'attendre un build iOS complet pour découvrir un identifiant
+   * mal recopié.
+   */
+  async checkCredentials(): Promise<{
+    configured: boolean;
+    authenticated: boolean;
+    environment: string;
+    detail: string;
+  }> {
+    const environment = this.host === APNS_HOST_PROD ? 'production' : 'sandbox';
+
+    if (!this.isConfigured()) {
+      const missing = [
+        !this.keyId && 'APNS_KEY_ID',
+        !this.teamId && 'APNS_TEAM_ID',
+        !this.bundleId && 'APNS_BUNDLE_ID',
+        !this.privateKey && 'APNS_PRIVATE_KEY',
+      ].filter(Boolean);
+      return {
+        configured: false,
+        authenticated: false,
+        environment,
+        detail: `Variables manquantes : ${missing.join(', ')}`,
+      };
+    }
+
+    // Token syntaxiquement valide mais inexistant.
+    const result = await this.sendLiveActivityUpdate('0'.repeat(64), 'update', { probe: true });
+
+    if (result.reason === 'BadDeviceToken' || result.status === 400) {
+      return {
+        configured: true,
+        authenticated: true,
+        environment,
+        detail: 'Clé acceptée par Apple (le token de test est rejeté, c’est attendu).',
+      };
+    }
+    if (result.status === 403) {
+      return {
+        configured: true,
+        authenticated: false,
+        environment,
+        detail: `Clé refusée par Apple (${result.reason}) — vérifier APNS_KEY_ID, APNS_TEAM_ID et le contenu du .p8.`,
+      };
+    }
+    if (result.status === 0) {
+      // Distingue « clé illisible » (erreur de recopie, cas le plus courant)
+      // d'une simple indisponibilité réseau.
+      const isKeyProblem = (result.reason ?? '').startsWith('Clé APNs illisible');
+      return {
+        configured: true,
+        authenticated: false,
+        environment,
+        detail: isKeyProblem
+          ? (result.reason as string)
+          : `Impossible de joindre Apple : ${result.reason ?? 'erreur réseau'}`,
+      };
+    }
+    return {
+      configured: true,
+      authenticated: false,
+      environment,
+      detail: `Réponse inattendue d’Apple : ${result.status} ${result.reason ?? ''}`.trim(),
+    };
   }
 
   // ─── Envoi ──────────────────────────────────────────────────
@@ -199,7 +293,11 @@ export class ApnsService implements OnModuleDestroy {
 
     return new Promise<ApnsSendResult>((resolve) => {
       let session: ClientHttp2Session;
+      let authorization: string;
       try {
+        // Signature AVANT l'ouverture de la requête : une clé illisible ne doit
+        // pas remonter en exception au milieu d'une transition de commande.
+        authorization = `bearer ${this.getAuthToken()}`;
         session = this.getSession();
       } catch (err) {
         resolve({
@@ -215,7 +313,7 @@ export class ApnsService implements OnModuleDestroy {
         [constants.HTTP2_HEADER_METHOD]: 'POST',
         [constants.HTTP2_HEADER_PATH]: `/3/device/${pushToken}`,
         [constants.HTTP2_HEADER_AUTHORITY]: new URL(this.host).host,
-        authorization: `bearer ${this.getAuthToken()}`,
+        authorization,
         // Topic dédié aux Live Activities — un topic classique serait refusé.
         'apns-topic': `${this.bundleId}.push-type.liveactivity`,
         'apns-push-type': 'liveactivity',
