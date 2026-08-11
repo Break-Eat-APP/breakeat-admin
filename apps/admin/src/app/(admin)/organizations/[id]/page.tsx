@@ -84,6 +84,11 @@ export default function OrganizationDetailPage() {
   const [venueTimezone, setVenueTimezone] = useState('');
   const [venueSearchTerms, setVenueSearchTerms] = useState('');
   const [venueBuvettePlanUrl, setVenueBuvettePlanUrl] = useState('');
+  // Intégration Flaix : quand elle est active, l'app passe la main à Flaix au
+  // lieu du parcours de commande Break Eat. Réglable ici pour ne pas dépendre
+  // du back-office SUPER_ADMIN (non déployé).
+  const [flaixEnabled, setFlaixEnabled] = useState(false);
+  const [flaixVenueId, setFlaixVenueId] = useState('');
   // Phase 20 — fidélité (activation + taux), pilotée par le club sur son lieu.
   const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);
   const [loyaltyPointsPerEuro, setLoyaltyPointsPerEuro] = useState('1');
@@ -114,6 +119,8 @@ export default function OrganizationDetailPage() {
       setVenueTimezone(primary?.timezone ?? '');
       setVenueSearchTerms(primary?.searchTerms ?? '');
       setVenueBuvettePlanUrl(primary?.buvettePlanUrl ?? '');
+      setFlaixEnabled(primary?.flaixEnabled ?? false);
+      setFlaixVenueId(primary?.flaixVenueId ?? '');
       setLoyaltyEnabled(primary?.loyaltyEnabled ?? false);
       setLoyaltyPointsPerEuro(String(primary?.loyaltyPointsPerEuro ?? 1));
       setLoyaltyPointValueCents(String(primary?.loyaltyPointValueCents ?? 1));
@@ -187,6 +194,8 @@ export default function OrganizationDetailPage() {
         timezone: venueTimezone.trim() || 'Europe/Paris',
         searchTerms: venueSearchTerms.trim() || null,
         buvettePlanUrl: venueBuvettePlanUrl.trim() || null,
+        flaixEnabled,
+        flaixVenueId: flaixVenueId.trim() || null,
         loyaltyEnabled,
         // Bornes basses à 1 : un taux à 0 rendrait le programme inopérant sans
         // que le club comprenne pourquoi (mieux vaut le désactiver franchement).
@@ -321,6 +330,38 @@ export default function OrganizationDetailPage() {
                 Image (créée sur Canva puis hébergée) montrant où se situent les buvettes. Affichée dans l’app sur la carte du lieu et après la commande.
               </span>
             </div>
+
+            {/* Intégration Flaix */}
+            <div style={{ gridColumn: '1 / -1', borderTop: `1px solid ${BRAND.border}`, paddingTop: 14, marginTop: 4 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={flaixEnabled}
+                  onChange={(e) => setFlaixEnabled(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: BRAND.orange, cursor: 'pointer' }}
+                />
+                <span style={{ ...venueFieldLabel, marginBottom: 0 }}>
+                  Passer la commande à Flaix
+                </span>
+              </label>
+              <span style={{ color: BRAND.grey, fontSize: 12, display: 'block', marginTop: 4 }}>
+                Quand c’est activé, l’app renvoie vers Flaix au lieu du parcours de commande Break Eat
+                (catalogue, panier, suivi, fidélité). À laisser <strong>décoché</strong> tant que
+                l’intégration Flaix n’est pas en service.
+              </span>
+            </div>
+
+            {flaixEnabled && (
+              <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <label style={venueFieldLabel}>Identifiant du lieu côté Flaix</label>
+                <input
+                  value={flaixVenueId}
+                  onChange={(e) => setFlaixVenueId(e.target.value)}
+                  placeholder="réf. fournie par Flaix"
+                  style={venueFieldInput}
+                />
+              </div>
+            )}
 
             {/* Phase 20 — programme de fidélité */}
             <div style={{ gridColumn: '1 / -1', borderTop: `1px solid ${BRAND.border}`, paddingTop: 14, marginTop: 4 }}>

@@ -680,6 +680,12 @@ export interface Venue {
   searchTerms?: string | null;
   /** URL de l'image du plan des buvettes (affichée dans l'app mobile). */
   buvettePlanUrl?: string | null;
+  /**
+   * Intégration Flaix : quand true, l'app passe la main à Flaix au lieu du
+   * parcours de commande Break Eat.
+   */
+  flaixEnabled?: boolean;
+  flaixVenueId?: string | null;
   /** Phase 20 — programme de fidélité activé par le club sur ce lieu. */
   loyaltyEnabled?: boolean;
   /** Points gagnés par euro dépensé. */
@@ -700,6 +706,8 @@ export interface VenueInput {
   longitude?: number | null;
   searchTerms?: string | null;
   buvettePlanUrl?: string | null;
+  flaixEnabled?: boolean;
+  flaixVenueId?: string | null;
   loyaltyEnabled?: boolean;
   loyaltyPointsPerEuro?: number;
   loyaltyPointValueCents?: number;
