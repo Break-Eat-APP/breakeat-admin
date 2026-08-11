@@ -2,7 +2,15 @@
 
 > Ouvre ce fichier en premier dans une nouvelle session. Tout l'état utile est ici + dans les 4 docs (`CHANGELOG.md`, `DEVELOPMENT_LOG.md`, `brain/ENGINEERING_MANUAL.md`, `brain/TASK_SUMMARY.md`) + le git.
 
-_Dernière mise à jour : 2026-08-11_
+_Dernière mise à jour : 2026-08-11 (soir)_
+
+## ⏭️ REPRISE IMMÉDIATE — à faire en premier
+1. **`git push origin main`** — 9 commits en attente (phases 19, 20, 21 + docs). Sans ce push, Railway ne connaît pas l'endpoint de diagnostic APNs.
+2. **Vérifier la clé APNs** (les 5 variables sont posées dans Railway) :
+   `GET /api/v1/live-activities/apns-health` avec un jeton SUPER_ADMIN.
+   `authenticated: true` ⇒ clé bonne. `Clé APNs illisible` ⇒ le `.p8` a été collé en multi-lignes, le remettre sur UNE ligne avec des `\n`.
+3. ⚠️ **`APNS_ENV` doit valoir `production`** : les builds se font avec `--profile preview` (Ad Hoc), pas avec le dev client. Un décalage donne `BadDeviceToken`.
+4. Passer en revue app + dashboards avec l'utilisateur, et traiter le rapport d'audit Codex à venir.
 
 ## 🖥️ Développement en LOCAL (depuis l'expiration de Railway)
 Le backend hébergé étant suspendu, tout se teste **en local**. Double-clic sur **`demarrer-local.bat`** (Docker Desktop doit être ouvert) → Postgres/Redis + backend (3000) + manager (3001) + back-office (3003) dans des fenêtres indépendantes. Connexion `admin@breakeat.test` / `BreakEat2026!`.
@@ -38,6 +46,10 @@ Dépendance externe : **spec/clé API Flaix** toujours nécessaire pour le hando
 - **Phase 19 — état live des commandes** : « Mes commandes » affiche 3 étapes colorées (Reçue → Préparation **orange** → Prête **vert**) + le **créneau de retrait**, rafraîchies automatiquement toutes les 10 s tant qu'une commande est en cours. `OrderTracking` n'est plus stubbé.
 - **Phase 19 — « Je suis arrivé »** : `POST /orders/:id/arrived` (idempotent, ne change pas le statut) + événement realtime dédié `customer_arrived` → la carte **pulse** sur le board buvette avec « Client présent · X min ».
 - **Phase 20 — fidélité (réelle)** : activation **par lieu** + taux (points/€, valeur du point) ; solde **par organisation** ; registre immuable auditable ; gain à la **récupération** ; utilisation en réduction au paiement ; UI admin + section « Mes points » dans l'app.
+- **Phase 21 — Live Activity iOS** :
+  - *Backend* (vérifié) : client APNs HTTP/2 + JWT ES256 sans dépendance ; webhook Flaix signé HMAC, anti-rejeu 5 min, idempotent par `eventId` ; tables `LiveActivity` / `FlaixWebhookEvent` ; endpoint de diagnostic `apns-health`. **Deux sources alimentent le même pipeline** : transitions Break Eat (actif) et webhook Flaix (prêt, en attente du contrat).
+  - *Natif* (**non compilé, non testé**) : extension WidgetKit SwiftUI (écran verrouillé + 3 vues Dynamic Island), module Expo local `modules/live-activity`, config plugin (`NSSupportsLiveActivities`, `aps-environment`, cible 16.2).
+  - **Reste** : installer `@bacons/apple-targets` (crée la cible Xcode du widget), puis `eas build -p ios --profile preview` et tester sur un vrai iPhone — une Live Activity ne fonctionne ni en simulateur ni dans Expo Go.
 
 ## ⏳ Reste à faire (backlog priorisé)
 1. **Relancer le backend** (Railway ou autre) — débloque tout le reste (voir bloqueur en tête).
