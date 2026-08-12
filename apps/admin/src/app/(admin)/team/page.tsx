@@ -8,6 +8,7 @@ import {
   apiRemoveMember,
   apiGetSuppliers,
   getOrgId,
+  getStoredUser,
   type OrgMemberWithUser,
   type Supplier,
 } from '@/lib/api/admin-client';
@@ -15,12 +16,21 @@ import { BRAND } from '@/lib/brand';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ROLE_OPTIONS = [
+/**
+ * Rôles distribuables selon qui regarde.
+ *
+ * Le backend n'autorise qu'OPERATOR à un responsable de club : proposer les
+ * autres ici ne ferait que produire un 403 après coup. Seule la plateforme
+ * (SUPER_ADMIN) délivre un accès manager ou responsable.
+ */
+const ROLE_OPTIONS_PLATEFORME = [
   { value: 'OPERATOR', label: 'Opérateur' },
   { value: 'MANAGER',  label: 'Manager' },
   { value: 'MARKETING', label: 'Marketing' },
   { value: 'ORG_ADMIN', label: 'Admin organisation' },
 ];
+
+const ROLE_OPTIONS_CLUB = [{ value: 'OPERATOR', label: 'Opérateur' }];
 
 // Role badges stay categorical so the four roles read apart at a glance.
 // OPERATOR — the brand's core role — wears the Break Eat orange.
@@ -30,6 +40,17 @@ const ROLE_STYLE: Record<string, { bg: string; color: string }> = {
   OPERATOR:  { bg: BRAND.orangeTint, color: BRAND.orangeDark },
   MARKETING: { bg: '#d1fae5', color: '#065f46' },
 };
+
+/**
+ * Mot de passe provisoire lisible à dicter : alphabet sans caractères
+ * ambigus (0/O, 1/l/I), et assez long pour résister à une tentative.
+ */
+function generateTemporaryPassword(): string {
+  const alphabet = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint32Array(14);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
+}
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -47,7 +68,9 @@ function RoleBadge({ role }: { role: string }) {
         display: 'inline-block',
       }}
     >
-      {ROLE_OPTIONS.find((r) => r.value === role)?.label ?? role}
+      {/* Le badge doit savoir nommer TOUS les rôles existants, même ceux que
+          l'utilisateur courant n'a pas le droit de distribuer. */}
+      {ROLE_OPTIONS_PLATEFORME.find((r) => r.value === role)?.label ?? role}
     </span>
   );
 }
@@ -92,6 +115,8 @@ function SuccessBanner({ msg }: { msg: string }) {
 
 export default function TeamPage() {
   const orgId = getOrgId();
+  const isPlatform = getStoredUser()?.globalRole === 'SUPER_ADMIN';
+  const roleOptions = isPlatform ? ROLE_OPTIONS_PLATEFORME : ROLE_OPTIONS_CLUB;
 
   const [members, setMembers] = useState<OrgMemberWithUser[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -102,9 +127,15 @@ export default function TeamPage() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('OPERATOR');
   const [inviteSupplierId, setInviteSupplierId] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState('');
   const [inviteSuccess, setInviteSuccess] = useState('');
+  /**
+   * Identifiants à transmettre quand le compte vient d'être créé. Affichés une
+   * seule fois : le mot de passe est haché côté serveur et devient irrécupérable.
+   */
+  const [newCredentials, setNewCredentials] = useState<{ email: string; password: string } | null>(null);
 
   // Remove state
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -135,16 +166,31 @@ export default function TeamPage() {
     setInviting(true);
     setInviteError('');
     setInviteSuccess('');
+    setNewCredentials(null);
+    // Généré côté navigateur pour pouvoir l'afficher : c'est le seul moment où
+    // il est lisible. Sans lui, le backend refuse un e-mail encore inconnu.
+    const password = invitePassword.trim() || generateTemporaryPassword();
     try {
-      const body: { email: string; role: string; supplierId?: string } = {
+      const body: { email: string; role: string; supplierId?: string; temporaryPassword?: string } = {
         email: inviteEmail.trim().toLowerCase(),
         role: inviteRole,
+        temporaryPassword: password,
       };
       if (inviteRole === 'OPERATOR' && inviteSupplierId) {
         body.supplierId = inviteSupplierId;
       }
       const newMember = await apiInviteMember(orgId, body);
-      setInviteSuccess(`${newMember.user.displayName} (${newMember.user.email}) ajouté avec succès.`);
+      // Le mot de passe n'est actif que si le compte vient d'être créé ; sinon
+      // la personne garde le sien et l'afficher induirait en erreur.
+      setNewCredentials(
+        newMember.accountCreated ? { email: newMember.user.email, password } : null,
+      );
+      setInvitePassword('');
+      setInviteSuccess(
+        newMember.accountCreated
+          ? `Compte créé pour ${newMember.user.email}.`
+          : `${newMember.user.displayName} (${newMember.user.email}) a rejoint l’organisation avec son compte existant.`,
+      );
       setInviteEmail('');
       setInviteRole('OPERATOR');
       setInviteSupplierId('');
@@ -204,9 +250,14 @@ export default function TeamPage() {
           border: `1px solid ${BRAND.border}`,
         }}
       >
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.ink, margin: '0 0 16px' }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.ink, margin: '0 0 6px' }}>
           Inviter un membre
         </h2>
+        <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 16px', lineHeight: 1.55, maxWidth: 620 }}>
+          {isPlatform
+            ? 'Compte plateforme : tu peux délivrer tous les rôles, y compris l’accès responsable d’un club.'
+            : 'Tu équipes ton équipe de terrain en accès opérateur. Pour un accès responsable ou manager, passe par Break Eat.'}
+        </p>
 
         {inviteError && <ErrorBanner msg={inviteError} />}
         {inviteSuccess && <SuccessBanner msg={inviteSuccess} />}
@@ -260,7 +311,7 @@ export default function TeamPage() {
                   fontFamily: 'inherit',
                 }}
               >
-                {ROLE_OPTIONS.map((r) => (
+                {roleOptions.map((r) => (
                   <option key={r.value} value={r.value}>{r.label}</option>
                 ))}
               </select>
@@ -291,7 +342,51 @@ export default function TeamPage() {
                 </select>
               </div>
             )}
+
+            {/* Mot de passe provisoire — sert uniquement si le compte n'existe pas encore */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: BRAND.inkSoft }}>
+                Mot de passe provisoire
+              </label>
+              <input
+                type="text"
+                placeholder="généré si laissé vide"
+                value={invitePassword}
+                onChange={(e) => setInvitePassword(e.target.value)}
+                minLength={8}
+                style={{
+                  padding: '9px 12px',
+                  borderRadius: 7,
+                  border: `1.5px solid ${BRAND.border}`,
+                  fontSize: 14,
+                  outline: 'none',
+                  fontFamily: 'monospace',
+                }}
+              />
+            </div>
           </div>
+
+          {newCredentials && (
+            <div
+              style={{
+                background: '#ecfdf5',
+                border: '1px solid #a7f3d0',
+                borderRadius: 8,
+                padding: '12px 16px',
+                marginBottom: 12,
+                fontSize: 14,
+                color: '#065f46',
+              }}
+            >
+              <div style={{ fontWeight: 700, marginBottom: 6 }}>Identifiants à transmettre</div>
+              <div>Email : <code>{newCredentials.email}</code></div>
+              <div>Mot de passe provisoire : <code>{newCredentials.password}</code></div>
+              <div style={{ marginTop: 8, fontSize: 12, lineHeight: 1.5 }}>
+                Passe par un canal sûr et demande-lui de le changer. Il ne sera plus affiché
+                une fois cette page quittée.
+              </div>
+            </div>
+          )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
@@ -315,7 +410,7 @@ export default function TeamPage() {
               {inviting ? 'Invitation…' : '+ Inviter'}
             </button>
             <span style={{ fontSize: 12, color: BRAND.grey }}>
-              L&apos;utilisateur doit déjà avoir un compte Break Eat.
+              Si la personne n&apos;a pas encore de compte, il est créé avec ce mot de passe.
             </span>
           </div>
         </form>

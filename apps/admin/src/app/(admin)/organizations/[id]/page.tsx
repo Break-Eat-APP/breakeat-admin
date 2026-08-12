@@ -5,13 +5,13 @@ import { useParams } from 'next/navigation';
 import { MapPin } from 'lucide-react';
 import {
   apiGetOrganization,
-  apiAddMember,
+  apiGetOrgMembers,
   apiUpdateOrgBranding,
   apiGetVenues,
   apiCreateVenue,
   apiUpdateVenue,
   type Organization,
-  type OrgMember,
+  type OrgMemberWithUser,
   type Venue,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
@@ -61,12 +61,11 @@ export default function OrganizationDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Add member form
-  const [newUserId, setNewUserId] = useState('');
-  const [newRole, setNewRole] = useState('OPERATOR');
-  const [addingMember, setAddingMember] = useState(false);
-  const [addError, setAddError] = useState('');
-  const [addSuccess, setAddSuccess] = useState('');
+  /**
+   * Membres — affichage seul. La gestion des accès (invitation, retrait) vit
+   * dans l'onglet Équipe : un seul endroit pour donner des droits.
+   */
+  const [members, setMembers] = useState<OrgMemberWithUser[]>([]);
 
   // Branding form
   const [brandingLogoUrl, setBrandingLogoUrl] = useState('');
@@ -103,8 +102,13 @@ export default function OrganizationDetailPage() {
     setLoading(true);
     setError('');
     try {
-      const [data, venues] = await Promise.all([apiGetOrganization(orgId), apiGetVenues(orgId)]);
+      const [data, venues, memberList] = await Promise.all([
+        apiGetOrganization(orgId),
+        apiGetVenues(orgId),
+        apiGetOrgMembers(orgId),
+      ]);
       setOrg(data);
+      setMembers(Array.isArray(memberList) ? memberList : []);
       // Pre-fill branding form with existing values
       setBrandingLogoUrl(data.logoUrl ?? '');
       setBrandingColor(data.primaryColor ?? '');
@@ -134,23 +138,6 @@ export default function OrganizationDetailPage() {
   }, [orgId]);
 
   useEffect(() => { void loadOrg(); }, [loadOrg]);
-
-  async function handleAddMember(e: React.FormEvent) {
-    e.preventDefault();
-    setAddingMember(true);
-    setAddError('');
-    setAddSuccess('');
-    try {
-      await apiAddMember(orgId, { userId: newUserId.trim(), role: newRole });
-      setAddSuccess('Membre ajouté avec succès');
-      setNewUserId('');
-      await loadOrg();
-    } catch (err) {
-      setAddError(err instanceof Error ? err.message : 'Erreur');
-    } finally {
-      setAddingMember(false);
-    }
-  }
 
   async function handleSaveBranding(e: React.FormEvent) {
     e.preventDefault();
@@ -471,24 +458,28 @@ export default function OrganizationDetailPage() {
         )}
       </SectionCard>
 
-      {/* Members */}
-      <SectionCard title={`Membres (${org.members?.length ?? 0})`}>
-        {!org.members || org.members.length === 0 ? (
-          <p style={{ color: BRAND.grey, fontSize: 14 }}>Aucun membre.</p>
+      {/* Membres — invitation par e-mail, le compte est créé au passage */}
+      <SectionCard title={`Membres (${members.length})`}>
+        {members.length === 0 ? (
+          <p style={{ color: BRAND.grey, fontSize: 14 }}>Aucun membre pour l’instant.</p>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr style={{ borderBottom: `2px solid ${BRAND.border}` }}>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: BRAND.grey, fontWeight: 600, fontSize: 12 }}>User ID</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: BRAND.grey, fontWeight: 600, fontSize: 12 }}>Rôle</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', color: BRAND.grey, fontWeight: 600, fontSize: 12 }}>Ajouté le</th>
+                <th style={memberTh}>Personne</th>
+                <th style={memberTh}>Rôle</th>
+                <th style={memberTh}>Point de vente</th>
+                <th style={memberTh}>Depuis le</th>
               </tr>
             </thead>
             <tbody>
-              {org.members.map((m: OrgMember) => (
+              {members.map((m) => (
                 <tr key={m.id} style={{ borderBottom: `1px solid ${BRAND.border}` }}>
-                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 12, color: BRAND.inkSoft }}>
-                    {m.userId}
+                  <td style={{ padding: '10px 12px' }}>
+                    <div style={{ color: BRAND.ink, fontWeight: 600, fontSize: 13.5 }}>
+                      {m.user.displayName}
+                    </div>
+                    <div style={{ color: BRAND.grey, fontSize: 12 }}>{m.user.email}</div>
                   </td>
                   <td style={{ padding: '10px 12px' }}>
                     <span
@@ -504,6 +495,9 @@ export default function OrganizationDetailPage() {
                       {ROLE_LABELS[m.orgRole] ?? m.orgRole}
                     </span>
                   </td>
+                  <td style={{ padding: '10px 12px', color: BRAND.inkSoft, fontSize: 13 }}>
+                    {m.supplier?.name ?? '—'}
+                  </td>
                   <td style={{ padding: '10px 12px', color: BRAND.grey, fontSize: 12 }}>
                     {new Date(m.createdAt).toLocaleDateString('fr-FR')}
                   </td>
@@ -513,74 +507,10 @@ export default function OrganizationDetailPage() {
           </table>
         )}
 
-        {/* Add member form */}
-        <form
-          onSubmit={handleAddMember}
-          style={{
-            marginTop: 20,
-            padding: '16px',
-            background: BRAND.bgSubtle,
-            borderRadius: 8,
-            border: `1px solid ${BRAND.border}`,
-          }}
-        >
-          <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.inkSoft, marginBottom: 12 }}>
-            Ajouter un membre
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              placeholder="UUID du compte utilisateur"
-              value={newUserId}
-              onChange={(e) => setNewUserId(e.target.value)}
-              required
-              style={{
-                flex: 1,
-                minWidth: 200,
-                padding: '8px 12px',
-                borderRadius: 6,
-                border: `1px solid ${BRAND.border}`,
-                fontSize: 13,
-                fontFamily: 'monospace',
-              }}
-            />
-            <select
-              value={newRole}
-              onChange={(e) => setNewRole(e.target.value)}
-              style={{
-                padding: '8px 12px',
-                borderRadius: 6,
-                border: `1px solid ${BRAND.border}`,
-                fontSize: 13,
-                background: BRAND.bg,
-                fontFamily: 'inherit',
-              }}
-            >
-              {Object.entries(ROLE_LABELS).map(([v, l]) => (
-                <option key={v} value={v}>{l}</option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              disabled={addingMember}
-              style={{
-                background: addingMember ? BRAND.grey : BRAND.orange,
-                color: '#fff',
-                border: 'none',
-                borderRadius: 6,
-                padding: '8px 16px',
-                fontWeight: 600,
-                fontSize: 13,
-                cursor: addingMember ? 'not-allowed' : 'pointer',
-                fontFamily: 'inherit',
-              }}
-            >
-              {addingMember ? 'Ajout…' : 'Ajouter'}
-            </button>
-          </div>
-          {addError && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 8 }}>{addError}</div>}
-          {addSuccess && <div style={{ color: '#16a34a', fontSize: 13, marginTop: 8 }}>{addSuccess}</div>}
-        </form>
+        <p style={{ marginTop: 16, marginBottom: 0, fontSize: 12.5, color: BRAND.grey, lineHeight: 1.55 }}>
+          Pour donner ou retirer un accès, passe par l’onglet <strong>Équipe</strong> — les droits
+          se gèrent à un seul endroit.
+        </p>
       </SectionCard>
 
       {/* Branding */}
@@ -707,6 +637,14 @@ function ErrorBanner({ msg }: { msg: string }) {
     </div>
   );
 }
+
+const memberTh: React.CSSProperties = {
+  textAlign: 'left',
+  padding: '8px 12px',
+  color: BRAND.grey,
+  fontWeight: 600,
+  fontSize: 12,
+};
 
 const venueFieldLabel: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: BRAND.inkSoft };
 const venueFieldInput: React.CSSProperties = {

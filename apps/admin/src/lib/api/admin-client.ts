@@ -149,6 +149,15 @@ export interface OrgMemberWithUser extends OrgMember {
   } | null;
 }
 
+/**
+ * Réponse d'une invitation. `accountCreated` vaut true quand le compte vient
+ * d'être créé : le mot de passe provisoire envoyé est alors actif et doit être
+ * transmis. Sinon le compte existait déjà et ce mot de passe a été ignoré.
+ */
+export interface InviteResult extends OrgMemberWithUser {
+  accountCreated: boolean;
+}
+
 export type EventVisibility = 'PUBLIC' | 'PRIVATE';
 
 export interface AdminEvent {
@@ -273,12 +282,18 @@ export async function apiGetOrgMembers(orgId: string): Promise<OrgMemberWithUser
   return req<OrgMemberWithUser[]>('GET', `/organizations/${orgId}/members`);
 }
 
-/** POST /organizations/:id/invite — invite by email, optionally assign to supplier */
+/**
+ * POST /organizations/:id/invite — invite par e-mail, sans connaître d'UUID.
+ *
+ * `temporaryPassword` permet d'intégrer quelqu'un qui n'a pas encore de compte :
+ * il est alors créé à la volée. Sans lui, le backend répond 404 si l'e-mail est
+ * inconnu.
+ */
 export async function apiInviteMember(
   orgId: string,
-  data: { email: string; role: string; supplierId?: string },
-): Promise<OrgMemberWithUser> {
-  return req<OrgMemberWithUser>('POST', `/organizations/${orgId}/invite`, data);
+  data: { email: string; role: string; supplierId?: string; temporaryPassword?: string },
+): Promise<InviteResult> {
+  return req<InviteResult>('POST', `/organizations/${orgId}/invite`, data);
 }
 
 /** DELETE /organizations/:id/members/:memberId */

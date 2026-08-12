@@ -250,6 +250,28 @@ export async function apiGetVenues(orgId: string): Promise<Venue[]> {
   return req<Venue[]>('GET', `/organizations/${orgId}/venues`);
 }
 
+/**
+ * Réponse d'une invitation. `accountCreated` vaut true quand le compte vient
+ * d'être créé : le mot de passe provisoire est alors actif et doit être
+ * transmis. Sinon la personne conserve le sien.
+ */
+export interface InviteResult extends OrgMemberWithUser {
+  accountCreated: boolean;
+}
+
+/**
+ * POST /organizations/:id/invite — donne un accès à un club.
+ *
+ * `temporaryPassword` crée le compte quand l'e-mail est inconnu : c'est le cas
+ * courant d'un responsable de club qu'on intègre, qui n'a jamais utilisé l'app.
+ */
+export async function apiInviteMember(
+  orgId: string,
+  data: { email: string; role: string; temporaryPassword?: string },
+): Promise<InviteResult> {
+  return req<InviteResult>('POST', `/organizations/${orgId}/invite`, data);
+}
+
 export async function apiCreateVenue(
   orgId: string,
   data: VenueInput & { name: string; address: string },

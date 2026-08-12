@@ -23,6 +23,23 @@ export type MemberWithDetails = OrganizationMember & {
 };
 
 /**
+ * Retour d'une invitation. `accountCreated` distingue le compte créé à la volée
+ * (le mot de passe provisoire est actif, il faut le transmettre) du compte qui
+ * existait déjà (le mot de passe fourni a été ignoré — l'annoncer serait faux).
+ */
+export type InviteResult = MemberWithDetails & { accountCreated: boolean };
+
+/**
+ * Rôles qu'un responsable de club (ORG_ADMIN) peut distribuer lui-même.
+ *
+ * Il équipe son équipe de terrain — les opérateurs du dashboard commandes —
+ * mais ne peut pas fabriquer d'autres responsables : donner les clés d'un club
+ * reste une décision de la plateforme (SUPER_ADMIN). Sans cette borne, un accès
+ * responsable se dupliquerait sans qu'on en garde la trace.
+ */
+const ROLES_DELEGABLES_PAR_ORG_ADMIN: readonly OrgRole[] = [OrgRole.OPERATOR];
+
+/**
  * OrganizationsService owns all organisation persistence logic.
  *
  * Rules:
@@ -79,6 +96,18 @@ export class OrganizationsService {
     this.logger.log(`Organization created: ${organization.id} (${organization.slug}) by user ${creatorId}`);
 
     return organization;
+  }
+
+  /**
+   * Interdit à un responsable de club de distribuer un rôle plus large que
+   * l'opérateur. Appelé seulement quand l'appelant n'est pas SUPER_ADMIN.
+   */
+  private assertRoleDelegable(role: OrgRole): void {
+    if (!ROLES_DELEGABLES_PAR_ORG_ADMIN.includes(role)) {
+      throw new ForbiddenException(
+        'Vous ne pouvez créer que des accès opérateur. Un accès manager ou admin est délivré par Break Eat.',
+      );
+    }
   }
 
   /**
@@ -160,6 +189,7 @@ export class OrganizationsService {
       if (!callerMembership || callerMembership.orgRole !== OrgRole.ORG_ADMIN) {
         throw new ForbiddenException('Only ORG_ADMIN can add members');
       }
+      this.assertRoleDelegable(role);
     }
 
     // Verify the target user actually exists in the platform
@@ -207,7 +237,7 @@ export class OrganizationsService {
      * conserve l'ancien comportement (404 + invitation à créer un compte).
      */
     temporaryPassword?: string,
-  ): Promise<MemberWithDetails> {
+  ): Promise<InviteResult> {
     // Permission check
     if (callerGlobalRole !== GlobalRole.SUPER_ADMIN) {
       const callerMembership = await this.prisma.organizationMember.findUnique({
@@ -216,11 +246,13 @@ export class OrganizationsService {
       if (!callerMembership || callerMembership.orgRole !== OrgRole.ORG_ADMIN) {
         throw new ForbiddenException('Only ORG_ADMIN can invite members');
       }
+      this.assertRoleDelegable(role);
     }
 
     // Find user by email — ou le créer si un mot de passe provisoire est fourni.
     const normalizedEmail = email.toLowerCase().trim();
     let targetUser = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    let accountCreated = false;
 
     if (!targetUser) {
       if (!temporaryPassword) {
@@ -239,6 +271,7 @@ export class OrganizationsService {
           isActive: true,
         },
       });
+      accountCreated = true;
       this.logger.log(`Compte créé à l'invitation : ${normalizedEmail}`);
     }
 
@@ -275,7 +308,7 @@ export class OrganizationsService {
       `Member invited: ${targetUser.email} → org ${organizationId} as ${role}${supplierId ? ` (supplier ${supplierId})` : ''} (by ${callerId})`,
     );
 
-    return member as MemberWithDetails;
+    return { ...(member as MemberWithDetails), accountCreated };
   }
 
   /**

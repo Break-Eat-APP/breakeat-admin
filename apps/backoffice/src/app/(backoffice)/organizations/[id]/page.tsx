@@ -13,6 +13,7 @@ import {
   apiGetVenues,
   apiCreateVenue,
   apiUpdateVenue,
+  apiInviteMember,
   type OrgDetail,
   type Venue,
 } from '@/lib/api/backoffice-client';
@@ -79,6 +80,39 @@ export default function OrganizationDetailPage({
   const deactivateMut = useMutation({
     mutationFn: () => apiDeactivateOrganization(id),
     onSuccess: invalidate,
+  });
+
+  // ── Accès responsable du club ──
+  //
+  // Seule la plateforme délivre un accès responsable : le backend interdit à un
+  // ORG_ADMIN d'en créer un autre. C'est donc ici, et nulle part ailleurs.
+  const [accessEmail, setAccessEmail] = useState('');
+  const [accessPassword, setAccessPassword] = useState('');
+  /** Identifiants affichés une seule fois : le mot de passe est ensuite haché. */
+  const [accessCreated, setAccessCreated] = useState<{ email: string; password: string } | null>(null);
+  const [accessNotice, setAccessNotice] = useState('');
+
+  const inviteMut = useMutation({
+    mutationFn: (vars: { email: string; password: string }) =>
+      apiInviteMember(id, {
+        email: vars.email,
+        role: 'ORG_ADMIN',
+        temporaryPassword: vars.password,
+      }),
+    onSuccess: (member, vars) => {
+      // Le mot de passe n'est actif que sur un compte neuf : sur un compte
+      // existant le backend l'ignore, et l'afficher enverrait le responsable
+      // se connecter avec un mot de passe qui ne marche pas.
+      setAccessCreated(member.accountCreated ? { email: member.user.email, password: vars.password } : null);
+      setAccessNotice(
+        member.accountCreated
+          ? ''
+          : `${member.user.email} avait déjà un compte Break Eat : il garde son mot de passe et accède maintenant à ce club.`,
+      );
+      setAccessEmail('');
+      setAccessPassword('');
+      invalidate();
+    },
   });
 
   // ── Lieu du club (config plateforme — un club = un lieu) ──
@@ -335,12 +369,104 @@ export default function OrganizationDetailPage({
             </form>
           </section>
 
+          {/* Accès responsable — délivré uniquement ici */}
+          <section style={{ ...card, marginTop: 20 }}>
+            <h2 style={cardTitle}>Donner l’accès au responsable du club</h2>
+            <p style={{ fontSize: 13.5, color: BRAND.grey, margin: '0 0 16px', lineHeight: 1.55, maxWidth: 620 }}>
+              Crée le compte du responsable de <strong>{data.name}</strong> et lui ouvre son dashboard
+              manager. Il pourra ensuite créer les accès opérateurs de son équipe — mais pas d’autres
+              accès responsables : ça reste ta décision.
+            </p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const email = accessEmail.trim().toLowerCase();
+                if (!email) return;
+                inviteMut.mutate({ email, password: accessPassword.trim() || generateTemporaryPassword() });
+              }}
+            >
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                <Field label="E-mail du responsable">
+                  <input
+                    type="email"
+                    required
+                    value={accessEmail}
+                    onChange={(e) => setAccessEmail(e.target.value)}
+                    placeholder="responsable@spartiates-marseille.fr"
+                    style={inputStyle}
+                  />
+                </Field>
+                <Field label="Mot de passe (généré si vide)">
+                  <input
+                    type="text"
+                    minLength={8}
+                    value={accessPassword}
+                    onChange={(e) => setAccessPassword(e.target.value)}
+                    placeholder="laisser vide pour en générer un"
+                    style={{ ...inputStyle, fontFamily: 'monospace' }}
+                  />
+                </Field>
+              </div>
+
+              {inviteMut.isError && (
+                <div style={{ ...errorBox, marginBottom: 14 }}>
+                  {inviteMut.error instanceof Error ? inviteMut.error.message : 'Échec de la création'}
+                </div>
+              )}
+
+              {accessNotice && (
+                <div
+                  style={{
+                    background: '#fffbeb',
+                    border: '1px solid #fcd34d',
+                    borderRadius: 10,
+                    padding: '12px 16px',
+                    color: '#92400e',
+                    fontSize: 13.5,
+                    marginBottom: 14,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {accessNotice}
+                </div>
+              )}
+
+              {accessCreated && (
+                <div
+                  style={{
+                    background: '#ecfdf5',
+                    border: '1px solid #6ee7b7',
+                    borderRadius: 10,
+                    padding: '14px 16px',
+                    color: '#065f46',
+                    fontSize: 14,
+                    marginBottom: 14,
+                  }}
+                >
+                  <div style={{ fontWeight: 700, marginBottom: 8 }}>Accès créé — à transmettre</div>
+                  <div>Dashboard : <code>{MANAGER_DASHBOARD_URL}</code></div>
+                  <div>Identifiant : <code>{accessCreated.email}</code></div>
+                  <div>Mot de passe : <code>{accessCreated.password}</code></div>
+                  <div style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.5 }}>
+                    Transmets-le par un canal sûr et demande-lui d’en changer. Il ne sera plus
+                    affiché après avoir quitté cette page.
+                  </div>
+                </div>
+              )}
+
+              <button type="submit" disabled={inviteMut.isPending} style={primaryBtn}>
+                {inviteMut.isPending ? 'Création…' : 'Créer l’accès responsable'}
+              </button>
+            </form>
+          </section>
+
           {/* Members */}
           <section style={{ ...card, marginTop: 20 }}>
             <h2 style={cardTitle}>Membres ({data.members.length})</h2>
             {data.members.length === 0 ? (
               <div style={{ fontSize: 14, color: BRAND.grey }}>
-                Aucun membre. Invitez un administrateur depuis le dashboard de l’organisation.
+                Aucun membre — commence par donner l’accès au responsable ci-dessus.
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -377,6 +503,21 @@ export default function OrganizationDetailPage({
       )}
     </div>
   );
+}
+
+/** Adresse à communiquer au responsable avec ses identifiants. */
+const MANAGER_DASHBOARD_URL =
+  process.env.NEXT_PUBLIC_MANAGER_URL ?? 'https://breakeat-admin-admin.vercel.app';
+
+/**
+ * Mot de passe provisoire dictable : alphabet sans caractères ambigus
+ * (0/O, 1/l/I) et assez long pour résister à une tentative.
+ */
+function generateTemporaryPassword(): string {
+  const alphabet = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = new Uint32Array(14);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
 }
 
 // ─── Presentational helpers ──────────────────────────────────────────────────
