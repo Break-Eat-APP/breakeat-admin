@@ -135,6 +135,10 @@ export default function OrganizationDetailPage({
   const [vTerms, setVTerms] = useState('');
   const [vFlaixOn, setVFlaixOn] = useState(false);
   const [vFlaixId, setVFlaixId] = useState('');
+  const [vPlanUrl, setVPlanUrl] = useState('');
+  const [vLoyaltyOn, setVLoyaltyOn] = useState(false);
+  const [vPointsPerEuro, setVPointsPerEuro] = useState('1');
+  const [vPointValue, setVPointValue] = useState('1');
   const [vCoordsRaw, setVCoordsRaw] = useState('');
   const [vCoordsError, setVCoordsError] = useState('');
   const [venueError, setVenueError] = useState('');
@@ -162,6 +166,10 @@ export default function OrganizationDetailPage({
       setVTerms(venue.searchTerms ?? '');
       setVFlaixOn(!!venue.flaixEnabled);
       setVFlaixId(venue.flaixVenueId ?? '');
+      setVPlanUrl(venue.buvettePlanUrl ?? '');
+      setVLoyaltyOn(!!venue.loyaltyEnabled);
+      setVPointsPerEuro(String(venue.loyaltyPointsPerEuro ?? 1));
+      setVPointValue(String(venue.loyaltyPointValueCents ?? 1));
     }
   }, [venue]);
 
@@ -178,8 +186,14 @@ export default function OrganizationDetailPage({
         latitude: lat,
         longitude: lng,
         searchTerms: vTerms.trim() || null,
+        buvettePlanUrl: vPlanUrl.trim() || null,
         flaixEnabled: vFlaixOn,
         flaixVenueId: vFlaixId.trim() || null,
+        loyaltyEnabled: vLoyaltyOn,
+        // Bornes basses à 1 : un taux à zéro rendrait le programme inopérant
+        // sans que le club comprenne pourquoi. Mieux vaut le désactiver.
+        loyaltyPointsPerEuro: Math.max(1, Number(vPointsPerEuro) || 1),
+        loyaltyPointValueCents: Math.max(1, Number(vPointValue) || 1),
       };
       return venue ? apiUpdateVenue(id, venue.id, payload) : apiCreateVenue(id, payload);
     },
@@ -364,6 +378,63 @@ export default function OrganizationDetailPage({
                   <input value={vFlaixId} onChange={(e) => setVFlaixId(e.target.value)} placeholder="flx_..." style={inputStyle} />
                 </Field>
               )}
+
+              <Field label="Plan des buvettes (URL de l’image)">
+                <input
+                  value={vPlanUrl}
+                  onChange={(e) => setVPlanUrl(e.target.value)}
+                  placeholder="https://…/plan-buvettes.png"
+                  style={inputStyle}
+                />
+                <span style={{ fontSize: 12, color: BRAND.grey, marginTop: 2 }}>
+                  Affiché dans l’app sur la carte du lieu et après la commande. Indépendant de
+                  Flaix : il vient du lieu, pas du catalogue.
+                </span>
+              </Field>
+
+              {/* Fidélité — réglée sur le lieu, soldes portés par le club */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: BRAND.ink }}>
+                <input
+                  type="checkbox"
+                  checked={vLoyaltyOn}
+                  onChange={(e) => setVLoyaltyOn(e.target.checked)}
+                />
+                Programme de fidélité activé
+              </label>
+              <span style={{ fontSize: 12, color: BRAND.grey, marginTop: -8, lineHeight: 1.5 }}>
+                Les points appartiennent au <strong>club</strong>, pas à Break Eat : un client
+                cumule séparément chez chaque club, et les garde d’un événement à l’autre.
+              </span>
+
+              {vLoyaltyOn && (
+                <div style={{ display: 'flex', gap: 16 }}>
+                  <Field label="Points gagnés par euro dépensé">
+                    <input
+                      type="number"
+                      min={1}
+                      value={vPointsPerEuro}
+                      onChange={(e) => setVPointsPerEuro(e.target.value)}
+                      style={inputStyle}
+                    />
+                    <span style={{ fontSize: 12, color: BRAND.grey, marginTop: 2 }}>
+                      Ex. 1 → une commande de 20 € rapporte 20 points.
+                    </span>
+                  </Field>
+                  <Field label="Valeur d’un point (centimes)">
+                    <input
+                      type="number"
+                      min={1}
+                      value={vPointValue}
+                      onChange={(e) => setVPointValue(e.target.value)}
+                      style={inputStyle}
+                    />
+                    <span style={{ fontSize: 12, color: BRAND.grey, marginTop: 2 }}>
+                      Ex. 1 → 100 points = 1 € de réduction.
+                    </span>
+                  </Field>
+                </div>
+              )}
+
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 <button type="submit" disabled={saveVenueMut.isPending} style={primaryBtn}>
                   {saveVenueMut.isPending ? 'Enregistrement…' : venue ? 'Enregistrer le lieu' : 'Créer le lieu'}

@@ -229,8 +229,17 @@ export interface Venue {
   latitude?: number | null;
   longitude?: number | null;
   searchTerms?: string | null;
+  buvettePlanUrl?: string | null;
   flaixEnabled?: boolean;
   flaixVenueId?: string | null;
+  /**
+   * Fidélité : réglée sur le LIEU parce que c'est le club qui décide de son
+   * programme et de son taux. Le solde des clients, lui, vit au niveau de
+   * l'organisation — les points suivent le club, pas le bâtiment.
+   */
+  loyaltyEnabled?: boolean;
+  loyaltyPointsPerEuro?: number;
+  loyaltyPointValueCents?: number;
   timezone?: string | null;
   status: string;
 }
@@ -241,8 +250,12 @@ export interface VenueInput {
   latitude?: number | null;
   longitude?: number | null;
   searchTerms?: string | null;
+  buvettePlanUrl?: string | null;
   flaixEnabled?: boolean;
   flaixVenueId?: string | null;
+  loyaltyEnabled?: boolean;
+  loyaltyPointsPerEuro?: number;
+  loyaltyPointValueCents?: number;
   timezone?: string;
 }
 
