@@ -105,7 +105,7 @@ export default function SupplierDetailPage() {
     try {
       const [sups, cats, prods, evs] = await Promise.all([
         apiGetSuppliers(orgId),
-        apiGetCategories(orgId),
+        apiGetCategories(orgId, supplierId),
         apiGetProducts(orgId, supplierId),
         apiGetEvents(orgId),
       ]);
@@ -130,7 +130,7 @@ export default function SupplierDetailPage() {
     setCreatingCat(true);
     setCatError('');
     try {
-      const cat = await apiCreateCategory(orgId, { name: newCatName.trim() });
+      const cat = await apiCreateCategory(orgId, supplierId, { name: newCatName.trim() });
       setCategories((prev) => [...prev, cat]);
       setNewCatName('');
     } catch (err) {

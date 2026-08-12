@@ -138,9 +138,11 @@ export default function DemoSetupPage() {
 
       // Step 4 — Categories
       updateStep(4, { status: 'running' });
+      // Les catégories appartiennent à la buvette créée à l'étape 2 : d'où le
+      // `supplierId`, disponible ici parce que cette étape la précède.
       const [catBoissons, catSnacks] = await Promise.all([
-        apiCreateCategory(orgId, { name: 'Boissons', sortOrder: 1 }),
-        apiCreateCategory(orgId, { name: 'Snacks', sortOrder: 2 }),
+        apiCreateCategory(orgId, supplierId, { name: 'Boissons', sortOrder: 1 }),
+        apiCreateCategory(orgId, supplierId, { name: 'Snacks', sortOrder: 2 }),
       ]);
       catBoissonsId = catBoissons.id;
       catSnacksId = catSnacks.id;

@@ -189,7 +189,12 @@ export interface ScreenConditionsFormProps {
   draft: ScreenDraft;
   onChange: (patch: Partial<ScreenDraft>) => void;
   suppliers: { id: string; name: string }[];
-  categories: { id: string; name: string }[];
+  /**
+   * Une catégorie appartient à une buvette : deux buvettes peuvent avoir chacune
+   * la leur nommée « Boissons ». `label` porte alors « Boissons — Buvette Nord »
+   * pour qu'on sache laquelle on coche.
+   */
+  categories: { id: string; name: string; label?: string }[];
   /** Hide the name field (e.g. when the page renders its own). Default: shown. */
   hideName?: boolean;
 }
@@ -330,7 +335,9 @@ export function ScreenConditionsForm({
         hint="Vide = toutes les catégories. Sinon, seules ces catégories apparaissent sur l'écran."
       >
         {categories.length === 0 ? (
-          <div style={emptyHint}>Aucune catégorie dans cette organisation.</div>
+          <div style={emptyHint}>
+            Aucune catégorie — commence par en créer sur une buvette.
+          </div>
         ) : (
           <div style={chipRow}>
             {categories.map((c) => (
@@ -339,7 +346,7 @@ export function ScreenConditionsForm({
                 active={draft.categoryIds.includes(c.id)}
                 onClick={() => onChange({ categoryIds: toggle(draft.categoryIds, c.id) })}
               >
-                {c.name}
+                {c.label ?? c.name}
               </Chip>
             ))}
           </div>

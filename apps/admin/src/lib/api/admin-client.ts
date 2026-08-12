@@ -759,15 +759,56 @@ export interface Category {
   createdAt: string;
 }
 
-export async function apiGetCategories(orgId: string): Promise<Category[]> {
-  return req<Category[]>('GET', `/organizations/${orgId}/categories`);
+/**
+ * Une catégorie appartient à une BUVETTE, pas à l'organisation : deux buvettes
+ * peuvent nommer « Boissons » des cartes différentes, et chacune range la
+ * sienne. Le `supplierId` est donc obligatoire — sans lui la route n'existe pas.
+ */
+export async function apiGetCategories(orgId: string, supplierId: string): Promise<Category[]> {
+  return req<Category[]>('GET', `/organizations/${orgId}/suppliers/${supplierId}/categories`);
 }
 
 export async function apiCreateCategory(
   orgId: string,
+  supplierId: string,
   data: { name: string; sortOrder?: number },
 ): Promise<Category> {
-  return req<Category>('POST', `/organizations/${orgId}/categories`, data);
+  return req<Category>(
+    'POST',
+    `/organizations/${orgId}/suppliers/${supplierId}/categories`,
+    data,
+  );
+}
+
+/**
+ * Toutes les catégories de l'organisation, buvette par buvette.
+ *
+ * Il n'existe pas de route « catégories de l'org » côté serveur, parce qu'une
+ * catégorie n'appartient pas à l'org : chaque buvette a sa carte. Les écrans
+ * qui raisonnent à l'échelle du club (les écrans opérateur configurables)
+ * doivent donc agréger eux-mêmes.
+ *
+ * `label` préfixe le nom de la buvette : sans lui, deux « Boissons » venant de
+ * buvettes différentes seraient impossibles à distinguer dans une liste de
+ * cases à cocher, alors qu'elles filtrent des produits distincts.
+ */
+export async function apiGetAllCategories(
+  orgId: string,
+): Promise<(Category & { supplierName: string; label: string })[]> {
+  const suppliers = await apiGetSuppliers(orgId);
+  const lists = await Promise.all(
+    (Array.isArray(suppliers) ? suppliers : []).map(async (s) => {
+      // Une buvette sans catégorie — ou momentanément illisible — ne doit pas
+      // vider toute la liste : on l'ignore et on garde les autres.
+      const cats = await apiGetCategories(orgId, s.id).catch(() => [] as Category[]);
+      return cats.map((c) => ({
+        ...c,
+        supplierName: s.name,
+        label: `${c.name} — ${s.name}`,
+      }));
+    }),
+  );
+  return lists.flat();
 }
 
 // ─── Products ─────────────────────────────────────────────────────────────────

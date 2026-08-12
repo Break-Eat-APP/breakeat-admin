@@ -7,7 +7,7 @@ import {
   apiGetOperatorScreens,
   apiCreateOperatorScreen,
   apiGetSuppliers,
-  apiGetCategories,
+  apiGetAllCategories,
   getOrgId,
   type OperatorScreenTemplate,
   type Supplier,
@@ -62,7 +62,7 @@ export default function OperatorScreensPage() {
       const [tpls, sups, cats] = await Promise.all([
         apiGetOperatorScreens(orgId),
         apiGetSuppliers(orgId),
-        apiGetCategories(orgId),
+        apiGetAllCategories(orgId),
       ]);
       setTemplates(Array.isArray(tpls) ? tpls : []);
       setSuppliers(Array.isArray(sups) ? sups : []);

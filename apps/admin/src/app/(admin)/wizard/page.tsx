@@ -411,12 +411,10 @@ export default function WizardPage() {
 
     const slots = slotPreview();
     const hasPush = data.push.title.trim() !== '' && data.push.message.trim() !== '';
-    const allCategories = Array.from(new Set(data.buvettes.flatMap((b) => b.categories)));
 
     // Shared mutable context across tasks
     let venueId = '';
     let eventId = '';
-    const catMap: Record<string, string> = {};
 
     type Task = { label: string; run: () => Promise<string | void> };
     const startAt = new Date(`${data.eventDate}T${data.eventStart}:00`);
@@ -473,20 +471,15 @@ export default function WizardPage() {
           return data.eventName.trim();
         },
       },
-      {
-        label: `Création des catégories (${allCategories.length})`,
-        run: async () => {
-          let order = 1;
-          for (const name of allCategories) {
-            const c = await apiCreateCategory(orgId, { name, sortOrder: order++ });
-            catMap[name] = c.id;
-          }
-          return allCategories.join(', ');
-        },
-      },
     ];
 
-    // Une tâche par buvette : fournisseur + attachement + point de retrait + produits
+    // Une tâche par buvette : fournisseur + attachement + point de retrait +
+    // catégories + produits.
+    //
+    // Les catégories sont créées ICI, buvette par buvette, et non en amont : une
+    // catégorie appartient à une buvette. Chacune a donc sa propre « Boissons »,
+    // avec son propre identifiant — un dictionnaire commun rattacherait les
+    // produits d'une buvette à la carte d'une autre.
     for (const b of data.buvettes) {
       tasks.push({
         label: `Buvette « ${b.name.trim() || 'sans nom'} »`,
@@ -504,6 +497,21 @@ export default function WizardPage() {
               supplierId: sup.id,
             });
           }
+
+          // Les catégories réellement utilisées par les produits de CETTE
+          // buvette. On part des produits plutôt que de `b.categories` : une
+          // catégorie déclarée mais jamais utilisée n'a pas à exister, et un
+          // produit rangé dans une catégorie oubliée ne doit pas échouer.
+          const nomsCategories = Array.from(
+            new Set(b.products.map((p) => p.category).filter(Boolean)),
+          );
+          const catMap: Record<string, string> = {};
+          let order = 1;
+          for (const name of nomsCategories) {
+            const c = await apiCreateCategory(orgId, sup.id, { name, sortOrder: order++ });
+            catMap[name] = c.id;
+          }
+
           await Promise.all(
             b.products.map((p) =>
               apiCreateProduct(orgId, sup.id, {
@@ -513,7 +521,10 @@ export default function WizardPage() {
               }),
             ),
           );
-          const parts = [`${b.products.length} produit${b.products.length > 1 ? 's' : ''}`];
+          const parts = [
+            `${b.products.length} produit${b.products.length > 1 ? 's' : ''}`,
+            `${nomsCategories.length} catégorie${nomsCategories.length > 1 ? 's' : ''}`,
+          ];
           if (b.pickupPoint.trim()) parts.push(`retrait : ${b.pickupPoint.trim()}`);
           return parts.join(' · ');
         },

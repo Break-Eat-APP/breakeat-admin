@@ -8,7 +8,7 @@ import {
   apiUpdateOperatorScreen,
   apiDeleteOperatorScreen,
   apiGetSuppliers,
-  apiGetCategories,
+  apiGetAllCategories,
   getOrgId,
   type OperatorScreenTemplate,
   type Supplier,
@@ -51,7 +51,7 @@ export default function OperatorScreenDetailPage() {
       const [t, sups, cats] = await Promise.all([
         apiGetOperatorScreen(orgId, screenId),
         apiGetSuppliers(orgId),
-        apiGetCategories(orgId),
+        apiGetAllCategories(orgId),
       ]);
       setTemplate(t);
       setDraft(templateToDraft(t));
