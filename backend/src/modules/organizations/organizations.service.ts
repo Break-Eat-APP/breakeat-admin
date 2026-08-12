@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   Logger,
 } from '@nestjs/common';
+import * as argon2 from 'argon2';
 import { PrismaService } from '../../database/prisma.service';
 import { GlobalRole, OrgRole } from '../../common/enums/role.enum';
 import type { CreateOrganizationDto } from './dto/create-organization.dto';
@@ -200,6 +201,12 @@ export class OrganizationsService {
     email: string,
     role: OrgRole,
     supplierId?: string,
+    /**
+     * Mot de passe provisoire : permet d'inviter quelqu'un qui n'a PAS encore
+     * de compte (cas courant d'un responsable F&B qu'on intègre). Sans lui, on
+     * conserve l'ancien comportement (404 + invitation à créer un compte).
+     */
+    temporaryPassword?: string,
   ): Promise<MemberWithDetails> {
     // Permission check
     if (callerGlobalRole !== GlobalRole.SUPER_ADMIN) {
@@ -211,14 +218,28 @@ export class OrganizationsService {
       }
     }
 
-    // Find user by email
-    const targetUser = await this.prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-    });
+    // Find user by email — ou le créer si un mot de passe provisoire est fourni.
+    const normalizedEmail = email.toLowerCase().trim();
+    let targetUser = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+
     if (!targetUser) {
-      throw new NotFoundException(
-        `Aucun compte trouvé pour "${email}". Demandez-leur de créer un compte d'abord.`,
-      );
+      if (!temporaryPassword) {
+        throw new NotFoundException(
+          `Aucun compte trouvé pour "${email}". Fournissez un mot de passe provisoire pour créer le compte, ou demandez-lui de s'inscrire d'abord.`,
+        );
+      }
+      // Compte créé avec le rôle global le plus faible : les droits viennent
+      // UNIQUEMENT de l'appartenance à l'organisation, jamais d'un rôle global.
+      targetUser = await this.prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          passwordHash: await argon2.hash(temporaryPassword),
+          displayName: normalizedEmail.split('@')[0] ?? 'Membre',
+          globalRole: GlobalRole.CUSTOMER,
+          isActive: true,
+        },
+      });
+      this.logger.log(`Compte créé à l'invitation : ${normalizedEmail}`);
     }
 
     // Prevent duplicate membership

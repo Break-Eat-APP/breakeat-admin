@@ -99,6 +99,7 @@ export class OrganizationsController {
       dto.email,
       dto.role,
       dto.supplierId,
+      dto.temporaryPassword,
     );
   }
 

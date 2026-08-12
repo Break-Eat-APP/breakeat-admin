@@ -30,6 +30,7 @@ import { StatsModule } from './modules/stats/stats.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
 import { LiveActivityModule } from './modules/live-activity/live-activity.module';
+import { BootstrapModule } from './modules/bootstrap/bootstrap.module';
 import appConfig from './config/app.config';
 
 @Module({
@@ -83,6 +84,7 @@ import appConfig from './config/app.config';
     NotificationsModule,
     LoyaltyModule,
     LiveActivityModule,
+    BootstrapModule,
   ],
 })
 export class AppModule {}

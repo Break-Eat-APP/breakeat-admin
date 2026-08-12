@@ -34,6 +34,15 @@ export default registerAs('app', () => ({
    */
   stagingToken: process.env.STAGING_ONLY_TOKEN ?? '',
 
+  /**
+   * Secret d'amorçage du compte principal (POST /bootstrap/super-admin).
+   *
+   * Vide = route désactivée (404). N'ouvrir que le temps de reprendre la main,
+   * puis RETIRER la variable : tant qu'elle est là, qui connaît le secret peut
+   * se créer un accès tout-puissant.
+   */
+  bootstrapSecret: process.env.ADMIN_BOOTSTRAP_SECRET ?? '',
+
   database: {
     url: process.env.DATABASE_URL ?? '',
   },
