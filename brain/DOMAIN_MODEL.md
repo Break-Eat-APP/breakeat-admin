@@ -165,7 +165,18 @@ Required fields:
 - createdAt
 - updatedAt
 
+Phase 19/20 fields:
+
+- estimatedReadyAt optional — expected pickup time, drives the live status in "Mes commandes"
+- customerArrivedAt optional — set once when the customer announces their presence
+- discountCents — loyalty discount applied, always `subtotal - discount = total`
+- pointsRedeemed / pointsEarned — mirrors of the ledger, for reading an order without joining LoyaltyTransaction
+
 Orders must use snapshots for items and totals. Never depend on mutable product data to render historical orders.
+
+`customerArrivedAt` records a fact, not a state: it never changes `status`. The
+stand alone drives the lifecycle — a customer standing at the counter does not
+make an order ready. Setting it is idempotent; a second announcement is a no-op.
 
 ### Payment
 
@@ -198,6 +209,53 @@ Required fields:
 
 `source` must indicate whether the slot came from manual config, default rules or Flaix.
 
+### LoyaltyAccount
+
+A customer's point balance **with one club**. Phase 20.
+
+Required fields:
+
+- id
+- userId
+- organizationId
+- balance
+
+Scope is deliberately split from configuration: the programme is **configured on
+the Venue** (`loyaltyEnabled`, `loyaltyPointsPerEuro`, `loyaltyPointValueCents`)
+because the club decides its own rates, but the **balance lives on the
+Organization** so points follow the club rather than a building — a customer
+keeps them from one event to the next.
+
+`balance` is a cache. The truth is the sum of the ledger below; the two are
+always written in the same transaction, never one without the other.
+
+### LoyaltyTransaction
+
+Append-only ledger of point movements. Phase 20.
+
+Required fields:
+
+- id
+- accountId
+- orderId
+- kind — EARN or REDEEM
+- points — positive on EARN, negative on REDEEM
+- balanceAfter — the account balance once this movement was applied
+- createdAt
+
+Rules:
+
+- Unique on `(orderId, kind)`. An order credits at most once and debits at most
+  once, so a replayed transition has no effect.
+- Entries are never updated or deleted. A correction is a new movement.
+- `balance` must always equal the sum of `points` for the account. Any code
+  touching the balance uses a database-side `increment` / `decrement`, never a
+  read-then-write of an absolute value — concurrent orders would otherwise lose
+  a movement or spend the same points twice.
+- A redemption always leaves a payable minimum on the order (see
+  `MIN_PAYABLE_CENTS`): points reduce a bill, they never settle it entirely,
+  because the payment provider rejects amounts below its floor.
+
 ## Relationship Rules
 
 - One organization has many venues.
@@ -209,6 +267,9 @@ Required fields:
 - One order belongs to one event.
 - One order can contain products from multiple suppliers only if the multi-vendor flag is enabled.
 - One order must have one customer-facing pickup point.
+- One customer has at most one loyalty account per organization.
+- One loyalty account has many loyalty transactions.
+- One order produces at most one EARN and one REDEEM transaction.
 
 ## Audit Trail Rules
 

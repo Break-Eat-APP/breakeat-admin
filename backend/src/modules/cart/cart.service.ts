@@ -18,7 +18,7 @@ import {
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
 import { GroupsService } from '../groups/groups.service';
-import { LoyaltyService } from '../loyalty/loyalty.service';
+import { LoyaltyService, MIN_PAYABLE_CENTS } from '../loyalty/loyalty.service';
 import type { CreateCartDto } from './dto/create-cart.dto';
 import type { UpdateCartDto } from './dto/update-cart.dto';
 import type { AddCartItemDto } from './dto/add-cart-item.dto';
@@ -360,8 +360,13 @@ export class CartService {
     for (const item of view.items) {
       await this.assertProductOrderable(item.productId, cart.supplierId, cart.pickupPointId);
     }
-    if (view.totalCents <= 0) {
-      throw new BadRequestException('Cart total must be > 0');
+    // Même seuil que la remise fidélité : le paiement refuse en dessous, autant
+    // le dire ici avec un message compréhensible plutôt que de laisser Stripe
+    // renvoyer une erreur technique au dernier écran.
+    if (view.totalCents < MIN_PAYABLE_CENTS) {
+      throw new BadRequestException(
+        `Le montant à payer doit être d’au moins ${(MIN_PAYABLE_CENTS / 100).toFixed(2)} €`,
+      );
     }
 
     // Capture the exact unit prices that back the PaymentIntent amount.

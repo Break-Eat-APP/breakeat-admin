@@ -1,5 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { RealtimeService, NewOrderPayload, OrderUpdatedPayload, OrderReadyPayload } from './realtime.service';
+import {
+  RealtimeService,
+  NewOrderPayload,
+  OrderUpdatedPayload,
+  OrderReadyPayload,
+  CustomerArrivedPayload,
+} from './realtime.service';
 import { RealtimeGateway } from './realtime.gateway';
 
 // ─── Mock server with a chainable to() ───────────────────────────
@@ -48,6 +54,20 @@ function makeOrderReadyPayload(): OrderReadyPayload {
     organizationId: ORG_ID,
     eventId: EVENT_ID,
     pickupPointId: PICKUP_ID,
+  };
+}
+
+const ARRIVED_AT = '2026-08-12T18:30:00.000Z';
+
+function makeCustomerArrivedPayload(): CustomerArrivedPayload {
+  return {
+    orderId: ORDER_ID,
+    publicOrderNumber: 'BE-00000001',
+    organizationId: ORG_ID,
+    eventId: EVENT_ID,
+    supplierId: SUPPLIER_ID,
+    pickupPointId: PICKUP_ID,
+    arrivedAt: ARRIVED_AT,
   };
 }
 
@@ -157,6 +177,66 @@ describe('RealtimeService', () => {
       expect(payload.eventName).toBe('order_ready');
       expect(payload.pickupPointId).toBe(PICKUP_ID);
       expect(payload.publicOrderNumber).toBe('BE-00000001');
+    });
+  });
+
+  // ─── emitCustomerArrived (phase 19) ───────────────────────────
+  //
+  // Événement DISTINCT d'`order_updated`, volontairement : le board opérateur
+  // applique une mise à jour optimiste sur `nextStatus` en recevant
+  // `order_updated`. Réutiliser ce canal pour une simple présence ferait donc
+  // sauter la carte d'une colonne à l'autre alors que le statut n'a pas bougé.
+
+  describe('emitCustomerArrived', () => {
+    it('émet vers les rooms organisation, événement et point de vente', () => {
+      service.emitCustomerArrived(makeCustomerArrivedPayload());
+
+      const rooms = serverMock._toSpy.mock.calls.map(([r]: [string]) => r);
+      expect(rooms).toContain(`organization:${ORG_ID}`);
+      expect(rooms).toContain(`event:${EVENT_ID}`);
+      expect(rooms).toContain(`supplier:${SUPPLIER_ID}`);
+    });
+
+    it('n’émet PAS vers la room de la commande — le client n’a rien à apprendre', () => {
+      service.emitCustomerArrived(makeCustomerArrivedPayload());
+
+      const rooms = serverMock._toSpy.mock.calls.map(([r]: [string]) => r);
+      expect(rooms).not.toContain(`order:${ORDER_ID}`);
+    });
+
+    it('enveloppe : eventName=customer_arrived, eventId UUID, horodatage d’arrivée', () => {
+      service.emitCustomerArrived(makeCustomerArrivedPayload());
+
+      const [evtName, payload] = serverMock._emitSpy.mock.calls[0] as [
+        string,
+        Record<string, unknown>,
+      ];
+      expect(evtName).toBe('customer_arrived');
+      expect(payload.eventName).toBe('customer_arrived');
+      expect((payload.eventId as string).length).toBe(36);
+      expect(typeof payload.occurredAt).toBe('string');
+      expect(payload.orderId).toBe(ORDER_ID);
+      expect(payload.publicOrderNumber).toBe('BE-00000001');
+      expect(payload.pickupPointId).toBe(PICKUP_ID);
+      expect(payload.arrivedAt).toBe(ARRIVED_AT);
+    });
+
+    it('ne porte aucun statut : la présence ne pilote pas le cycle de vie', () => {
+      service.emitCustomerArrived(makeCustomerArrivedPayload());
+
+      const [, payload] = serverMock._emitSpy.mock.calls[0] as [string, Record<string, unknown>];
+      expect(payload).not.toHaveProperty('nextStatus');
+      expect(payload).not.toHaveProperty('previousStatus');
+      expect(payload).not.toHaveProperty('status');
+    });
+
+    it('génère un eventId par appel — clé d’idempotence côté client', () => {
+      service.emitCustomerArrived(makeCustomerArrivedPayload());
+      service.emitCustomerArrived(makeCustomerArrivedPayload());
+
+      const calls = serverMock._emitSpy.mock.calls as [string, Record<string, unknown>][];
+      // 3 rooms par appel : on compare la 1re émission de chaque appel.
+      expect(calls[0][1].eventId).not.toBe(calls[3][1].eventId);
     });
   });
 });

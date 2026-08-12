@@ -23,6 +23,21 @@ export const LOYALTY_DISABLED: LoyaltyConfig = {
 };
 
 /**
+ * Reste à payer minimum, en centimes, après remise fidélité.
+ *
+ * Stripe refuse les paiements en dessous de 0,50 € (EUR). Une remise qui
+ * amènerait la note à 0 — ou à 20 centimes — produirait un panier que l'app
+ * affiche comme payable et que le paiement rejette ensuite : le client se
+ * retrouverait bloqué au dernier écran sans comprendre pourquoi.
+ *
+ * On préfère donc plafonner la remise et l'annoncer, plutôt que d'ouvrir une
+ * voie « commande gratuite » qui court-circuiterait le paiement. Le jour où
+ * payer entièrement en points devient souhaitable, c'est une décision produit
+ * à prendre avec le parcours de paiement en face, pas un effet de bord.
+ */
+export const MIN_PAYABLE_CENTS = 50;
+
+/**
  * LoyaltyService — programme de fidélité (gain + utilisation).
  *
  * Deux portées distinctes, volontairement :
@@ -120,10 +135,21 @@ export class LoyaltyService {
   }
 
   /**
-   * Remise obtenue en dépensant `points`, plafonnée au montant du panier :
-   * la fidélité réduit une note, elle ne la rend jamais négative.
-   * Renvoie aussi les points RÉELLEMENT consommés (on ne débite pas plus que
-   * nécessaire si le plafond s'applique).
+   * Remise obtenue en dépensant `points`.
+   *
+   * Deux plafonds, dans cet ordre :
+   *  1. la remise ne dépasse jamais la note (pas de note négative) ;
+   *  2. il reste toujours au moins {@link MIN_PAYABLE_CENTS} à payer, sans quoi
+   *     le paiement rejetterait la commande après coup.
+   *
+   * Une note déjà inférieure à ce minimum n'accepte donc aucune remise : mieux
+   * vaut le dire tout de suite que de laisser espérer une réduction impossible.
+   *
+   * Renvoie aussi les points RÉELLEMENT consommés — on ne débite jamais plus
+   * que ce que la remise a servi.
+   *
+   * SOURCE UNIQUE de la règle : le panier, la création de commande et l'écran
+   * de paiement en dépendent tous. La dupliquer les ferait diverger.
    */
   discountForPoints(
     points: number,
@@ -133,12 +159,18 @@ export class LoyaltyService {
     if (!config.enabled || config.pointValueCents <= 0 || points <= 0 || subtotalCents <= 0) {
       return { pointsUsed: 0, discountCents: 0 };
     }
-    const raw = points * config.pointValueCents;
-    if (raw <= subtotalCents) return { pointsUsed: points, discountCents: raw };
 
-    // Plafonné : on ne consomme que les points nécessaires pour couvrir la note.
-    const needed = Math.ceil(subtotalCents / config.pointValueCents);
-    return { pointsUsed: needed, discountCents: subtotalCents };
+    const remiseMax = subtotalCents - MIN_PAYABLE_CENTS;
+    if (remiseMax <= 0) return { pointsUsed: 0, discountCents: 0 };
+
+    const raw = points * config.pointValueCents;
+    if (raw <= remiseMax) return { pointsUsed: points, discountCents: raw };
+
+    // Plafonné : on ne consomme que les points nécessaires pour l'atteindre.
+    // Arrondi INFÉRIEUR — arrondir au-dessus ferait passer sous le minimum.
+    const pointsUsed = Math.floor(remiseMax / config.pointValueCents);
+    if (pointsUsed <= 0) return { pointsUsed: 0, discountCents: 0 };
+    return { pointsUsed, discountCents: pointsUsed * config.pointValueCents };
   }
 
   // ─── Mouvements ─────────────────────────────────────────────
@@ -163,8 +195,20 @@ export class LoyaltyService {
     try {
       await this.prisma.$transaction(async (tx) => {
         const account = await this.upsertAccount(tx, params.userId, params.organizationId);
-        const balanceAfter = account.balance + points;
 
+        // `increment` plutôt que « lire puis écrire une valeur absolue » : en
+        // READ COMMITTED (défaut PostgreSQL), deux crédits simultanés liraient
+        // le même solde et le second écraserait le premier — des points perdus
+        // sans trace. L'incrément est résolu par la base, jamais par nous.
+        const { balance: balanceAfter } = await tx.loyaltyAccount.update({
+          where: { id: account.id },
+          data: { balance: { increment: points } },
+          select: { balance: true },
+        });
+
+        // Créé APRÈS l'incrément pour porter le solde réel d'après-coup. Un
+        // doublon (orderId, EARN) lève P2002 ici et annule toute la
+        // transaction, incrément compris : le rejeu reste sans effet.
         await tx.loyaltyTransaction.create({
           data: {
             accountId: account.id,
@@ -173,10 +217,6 @@ export class LoyaltyService {
             points,
             balanceAfter,
           },
-        });
-        await tx.loyaltyAccount.update({
-          where: { id: account.id },
-          data: { balance: balanceAfter },
         });
         await tx.order.update({
           where: { id: params.orderId },
@@ -214,13 +254,31 @@ export class LoyaltyService {
     if (params.points <= 0) return;
 
     const account = await this.upsertAccount(tx, params.userId, params.organizationId);
-    if (account.balance < params.points) {
+
+    // Contrôle du solde ET débit dans la MÊME instruction : `updateMany` avec
+    // `balance >= points` dans le `where` laisse la base arbitrer. Vérifier
+    // d'abord puis débiter ensuite ouvrirait une fenêtre où deux commandes
+    // simultanées passent toutes deux le contrôle et dépensent le même solde
+    // deux fois — le compte finirait négatif, ou la seconde dépense serait
+    // silencieusement offerte.
+    const { count } = await tx.loyaltyAccount.updateMany({
+      where: { id: account.id, balance: { gte: params.points } },
+      data: { balance: { decrement: params.points } },
+    });
+    if (count === 0) {
       throw new BadRequestException(
         `Solde de fidélité insuffisant (${account.balance} point(s) disponible(s))`,
       );
     }
 
-    const balanceAfter = account.balance - params.points;
+    // Relu après le débit : `updateMany` ne renvoie pas la ligne, et le solde
+    // inscrit au grand livre doit être celui d'après l'opération pour que la
+    // somme des mouvements reste égale au solde du compte.
+    const { balance: balanceAfter } = await tx.loyaltyAccount.findUniqueOrThrow({
+      where: { id: account.id },
+      select: { balance: true },
+    });
+
     await tx.loyaltyTransaction.create({
       data: {
         accountId: account.id,
@@ -229,10 +287,6 @@ export class LoyaltyService {
         points: -params.points,
         balanceAfter,
       },
-    });
-    await tx.loyaltyAccount.update({
-      where: { id: account.id },
-      data: { balance: balanceAfter },
     });
   }
 

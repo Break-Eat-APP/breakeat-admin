@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -482,11 +481,11 @@ export class OrdersService {
    * annulée ou clôturée n'est plus sur le board, l'annonce n'aurait aucun effet.
    */
   async markCustomerArrived(orderId: string, userId: string) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    // Filtré sur (id, userId) plutôt que sur l'id seul : distinguer 404 et 403
+    // révélerait qu'une commande existe à qui n'y a pas droit. Le propriétaire
+    // légitime, lui, ne voit aucune différence.
+    const order = await this.prisma.order.findFirst({ where: { id: orderId, userId } });
     if (!order) throw new NotFoundException('Order not found');
-    if (order.userId !== userId) {
-      throw new ForbiddenException('You do not own this order');
-    }
 
     const ANNOUNCEABLE: OrderStatus[] = [
       OrderStatus.PAID,
@@ -559,7 +558,25 @@ export class OrdersService {
         status: { in: [...DASHBOARD_STATUSES] },
         ...(supplierId ? { supplierId } : {}),
       },
-      include: {
+      // Champs listés un par un, jamais un `...rest` : le board opérateur est
+      // un écran partagé, souvent visible du public derrière un comptoir. Avec
+      // une diffusion implicite, tout champ ajouté un jour à Order (une note
+      // client, une référence de paiement) atterrirait là sans que personne
+      // ne l'ait décidé. Ici, l'ajout d'un champ est un choix explicite.
+      select: {
+        id: true,
+        publicOrderNumber: true,
+        status: true,
+        supplierId: true,
+        pickupPointId: true,
+        eventId: true,
+        slotId: true,
+        estimatedReadyAt: true,
+        customerArrivedAt: true,
+        totalCents: true,
+        currency: true,
+        createdAt: true,
+        updatedAt: true,
         items: true,
         slot: { select: { kind: true } },
         user: { select: { displayName: true } },
@@ -592,6 +609,10 @@ export class OrdersService {
     // Flatten the slot relation + resolved category into scalar fields the
     // operator screens can filter on directly (slotKind per order, categoryId
     // per item).
+    //
+    // `...rest` reste sans danger ici : le `select` ci-dessus a déjà borné les
+    // champs rapportés. Ce qui n'est pas listé là-haut n'existe pas dans
+    // `order`, donc ne peut pas fuir ici.
     const enriched = orders.map((order) => {
       const { slot, items, user, ...rest } = order;
       return {

@@ -26,6 +26,15 @@ import { PageHeader } from '@components/page-header';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Checkout'>;
 
+/**
+ * Reste à payer minimum après remise fidélité, en centimes.
+ *
+ * Doit rester égal à `MIN_PAYABLE_CENTS` côté serveur : le paiement refuse les
+ * montants inférieurs, et une remise plus généreuse ici ne ferait que déplacer
+ * l'échec au moment de payer.
+ */
+const MIN_PAYABLE_CENTS = 50;
+
 export function CheckoutScreen({ navigation }: Props) {
   const { user, token } = useAuthStore();
   const {
@@ -48,14 +57,17 @@ export function CheckoutScreen({ navigation }: Props) {
   const [usePoints, setUsePoints] = useState(false);
 
   const subtotal = totalCents();
-  // Points réellement utilisables : bornés par le solde ET par la note (on ne
-  // brûle jamais plus de points que nécessaire pour couvrir le panier).
+  // Points réellement utilisables : bornés par le solde ET par la remise
+  // maximale autorisée. Cette borne DOIT reproduire `discountForPoints` côté
+  // serveur (loyalty.service.ts) : afficher une remise que le serveur refuse
+  // ensuite bloquerait le client au dernier écran, sans explication.
+  const remiseMax = Math.max(0, subtotal - MIN_PAYABLE_CENTS);
   const maxUsablePoints =
-    loyalty?.enabled && loyalty.pointValueCents > 0
-      ? Math.min(loyalty.balance, Math.ceil(subtotal / loyalty.pointValueCents))
+    loyalty?.enabled && loyalty.pointValueCents > 0 && remiseMax > 0
+      ? Math.min(loyalty.balance, Math.floor(remiseMax / loyalty.pointValueCents))
       : 0;
   const pointsToUse = usePoints ? maxUsablePoints : 0;
-  const discountCents = Math.min(pointsToUse * (loyalty?.pointValueCents ?? 0), subtotal);
+  const discountCents = pointsToUse * (loyalty?.pointValueCents ?? 0);
   const dueCents = subtotal - discountCents;
   const pointsToEarn = loyalty?.enabled
     ? Math.floor((dueCents / 100) * loyalty.pointsPerEuro)
@@ -195,8 +207,7 @@ export function CheckoutScreen({ navigation }: Props) {
                   <Text style={styles.loyaltyLabel}>Utiliser mes points</Text>
                   <Text style={styles.loyaltyHint}>
                     {maxUsablePoints} point{maxUsablePoints > 1 ? 's' : ''} ={' '}
-                    {formatPrice(Math.min(maxUsablePoints * loyalty.pointValueCents, subtotal))} de
-                    réduction
+                    {formatPrice(maxUsablePoints * loyalty.pointValueCents)} de réduction
                   </Text>
                 </View>
                 <Switch
@@ -208,7 +219,9 @@ export function CheckoutScreen({ navigation }: Props) {
               </View>
             ) : (
               <Text style={styles.loyaltyHint}>
-                Pas encore assez de points pour obtenir une réduction.
+                {loyalty.balance > 0
+                  ? `Une commande garde toujours ${formatPrice(MIN_PAYABLE_CENTS)} à payer : tes points s’appliqueront sur une note plus élevée.`
+                  : 'Pas encore assez de points pour obtenir une réduction.'}
               </Text>
             )}
 

@@ -88,6 +88,42 @@ Payload:
 }
 ```
 
+### customer_arrived
+
+Emitted when a customer taps "Je suis arrivé" at the pickup point (phase 19).
+
+Rooms: `organization:{id}`, `event:{id}`, `supplier:{id}`.
+Deliberately **not** `order:{id}` — this is an operator-facing signal; the
+customer already knows they arrived.
+
+Payload:
+
+```json
+{
+  "eventName": "customer_arrived",
+  "eventId": "uuid",
+  "occurredAt": "iso-date",
+  "orderId": "uuid",
+  "publicOrderNumber": "string",
+  "pickupPointId": "uuid",
+  "arrivedAt": "iso-date"
+}
+```
+
+**Why a separate event and not `order_updated`.** The operator board applies an
+optimistic update on `nextStatus` whenever it receives `order_updated`. Carrying
+a mere presence signal on that channel would move the card to another column
+while the order's status has not changed. `customer_arrived` therefore carries
+**no status field at all** — consumers must treat it as a highlight hint only.
+
+Arrival does not drive the order lifecycle: the stand still decides when the
+order moves to READY or PICKED_UP.
+
+**Idempotent at the source.** A second tap re-emits nothing (`customerArrivedAt`
+is already set), so the card does not flash twice. Clients must nonetheless
+tolerate a duplicate delivery and de-duplicate on `eventId`, as with every other
+event here.
+
 ### supplier_status_changed
 
 Payload:
