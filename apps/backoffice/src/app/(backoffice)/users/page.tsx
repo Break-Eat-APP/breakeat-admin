@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BRAND } from '@break-eat/brand';
 import {
   apiListUsers,
-  apiSetUserBlocked,
+  apiSetUserArchived,
   getStoredUser,
   type BackofficeUserListItem,
 } from '@/lib/api/backoffice-client';
@@ -23,9 +23,9 @@ function fmtDate(iso: string) {
 
 export default function UsersPage() {
   const [search, setSearch] = useState('');
-  const [bloquesOuverts, setBloquesOuverts] = useState(false);
+  const [archivesOuverts, setArchivesOuverts] = useState(false);
   const qc = useQueryClient();
-  /** Son propre compte : le serveur refuse de le bloquer, autant ne pas le proposer. */
+  /** Son propre compte : le serveur refuse de l'archiver, autant ne pas le proposer. */
   const moiId = getStoredUser()?.id ?? '';
 
   const { data, isLoading, isError, error } = useQuery<BackofficeUserListItem[]>({
@@ -33,9 +33,9 @@ export default function UsersPage() {
     queryFn: apiListUsers,
   });
 
-  const blockMut = useMutation({
-    mutationFn: (vars: { id: string; blocked: boolean }) =>
-      apiSetUserBlocked(vars.id, vars.blocked),
+  const archiveMut = useMutation({
+    mutationFn: (vars: { id: string; archived: boolean }) =>
+      apiSetUserArchived(vars.id, vars.archived),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['backoffice', 'users'] }),
   });
 
@@ -49,17 +49,17 @@ export default function UsersPage() {
     );
   });
 
-  // Deux listes distinctes : un compte bloqué n'a plus rien à faire au milieu
-  // des comptes en service, on ne le retrouverait pas pour le rétablir.
+  // Deux listes distinctes : un compte archivé n'a plus rien à faire au milieu
+  // des comptes en service, on ne le retrouverait pas pour le réactiver.
   const actifs = filtered.filter((u) => u.isActive);
-  const bloques = filtered.filter((u) => !u.isActive);
+  const archives = filtered.filter((u) => !u.isActive);
 
   const basculer = (u: BackofficeUserListItem) => {
     const question = u.isActive
-      ? `Bloquer ${u.email} ?\n\nSa session s’arrête tout de suite. Le compte et son historique de commandes sont conservés : tu pourras le rétablir.`
-      : `Rétablir l’accès de ${u.email} ?`;
+      ? `Archiver ${u.email} ?\n\nSa session s’arrête tout de suite. Le compte et son historique de commandes sont conservés : tu pourras le réactiver.`
+      : `Réactiver l’accès de ${u.email} ?`;
     if (window.confirm(question)) {
-      blockMut.mutate({ id: u.id, blocked: u.isActive });
+      archiveMut.mutate({ id: u.id, archived: u.isActive });
     }
   };
 
@@ -83,9 +83,9 @@ export default function UsersPage() {
         />
       </div>
 
-      {blockMut.isError && (
+      {archiveMut.isError && (
         <div style={{ ...errorBox, marginBottom: 16 }}>
-          {blockMut.error instanceof Error ? blockMut.error.message : 'Action refusée.'}
+          {archiveMut.error instanceof Error ? archiveMut.error.message : 'Action refusée.'}
         </div>
       )}
 
@@ -113,40 +113,40 @@ export default function UsersPage() {
             users={actifs}
             moiId={moiId}
             onToggle={basculer}
-            pending={blockMut.isPending}
+            pending={archiveMut.isPending}
           />
         </section>
       )}
 
-      {/* Comptes bloqués — repliés par défaut : c'est une réserve, pas le
+      {/* Comptes archivés — repliés par défaut : c'est une réserve, pas le
           quotidien. On garde le compteur visible pour ne pas les oublier. */}
-      {bloques.length > 0 && (
+      {archives.length > 0 && (
         <section>
           <button
             type="button"
-            onClick={() => setBloquesOuverts((v) => !v)}
+            onClick={() => setArchivesOuverts((v) => !v)}
             style={{
               display: 'flex', alignItems: 'center', gap: 8, background: 'none',
               border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
             <span style={{ color: BRAND.grey, fontSize: 12 }}>
-              {bloquesOuverts ? '▾' : '▸'}
+              {archivesOuverts ? '▾' : '▸'}
             </span>
-            <SectionHeading titre="Comptes bloqués" compte={bloques.length} couleur="#b91c1c" />
+            <SectionHeading titre="Comptes archivés" compte={archives.length} couleur="#b91c1c" />
           </button>
 
-          {bloquesOuverts && (
+          {archivesOuverts && (
             <>
               <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 14px', maxWidth: 640, lineHeight: 1.55 }}>
                 Ces comptes ne peuvent plus se connecter, nulle part. Leur historique de commandes
-                est conservé — rétablir l’accès leur rend tout, à l’identique.
+                est conservé — les réactiver leur rend tout, à l’identique.
               </p>
               <UserTable
-                users={bloques}
+                users={archives}
                 moiId={moiId}
                 onToggle={basculer}
-                pending={blockMut.isPending}
+                pending={archiveMut.isPending}
               />
             </>
           )}
@@ -179,7 +179,7 @@ function SectionHeading({
 
 /**
  * Tableau de comptes. Partagé par les deux sections : une seule définition de
- * colonnes, donc pas de dérive entre la liste des actifs et celle des bloqués.
+ * colonnes, donc pas de dérive entre la liste des actifs et celle des archivés.
  */
 function UserTable({
   users,
@@ -255,7 +255,7 @@ function UserTable({
               {fmtDate(u.createdAt)}
             </div>
 
-            {/* Blocage — réversible, jamais sur soi-même */}
+            {/* Archivage — réversible, jamais sur soi-même */}
             <div style={{ width: 96, textAlign: 'right' }}>
               {u.id === moiId ? (
                 <span style={{ fontSize: 11, color: BRAND.grey }}>toi</span>
@@ -264,9 +264,9 @@ function UserTable({
                   type="button"
                   onClick={() => onToggle(u)}
                   disabled={pending}
-                  style={u.isActive ? blockBtn : unblockBtn}
+                  style={u.isActive ? archiveBtn : unarchiveBtn}
                 >
-                  {u.isActive ? 'Bloquer' : 'Rétablir'}
+                  {u.isActive ? 'Archiver' : 'Réactiver'}
                 </button>
               )}
             </div>
@@ -290,7 +290,7 @@ const avatarStyle: React.CSSProperties = {
 };
 const avatarText: React.CSSProperties = { color: BRAND.orange, fontWeight: 700, fontSize: 14 };
 
-// Un compte bloqué perd l'orange de la marque : il ne fait plus partie du service.
+// Un compte archivé perd l'orange de la marque : il ne fait plus partie du service.
 const avatarStyleMuted: React.CSSProperties = { ...avatarStyle, background: BRAND.bgSubtle };
 const avatarTextMuted: React.CSSProperties = { ...avatarText, color: BRAND.grey };
 
@@ -310,11 +310,11 @@ const actionBtn: React.CSSProperties = {
   fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', background: '#fff',
 };
 
-const blockBtn: React.CSSProperties = {
+const archiveBtn: React.CSSProperties = {
   ...actionBtn, color: '#dc2626', border: '1px solid #fca5a5',
 };
 
-const unblockBtn: React.CSSProperties = {
+const unarchiveBtn: React.CSSProperties = {
   ...actionBtn, color: '#059669', border: '1px solid #6ee7b7',
 };
 

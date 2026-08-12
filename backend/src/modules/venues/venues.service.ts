@@ -126,6 +126,33 @@ export class VenuesService {
     return venue;
   }
 
+  /**
+   * Contenant d'un lieu ouvert en continu.
+   *
+   * Écarté des listes d'événements par conception, il reste nécessaire aux
+   * outils de configuration : buvettes et points de retrait s'y rattachent.
+   *
+   * 404 sur un lieu événementiel — il n'en a pas, et n'en aura jamais.
+   */
+  async findPermanentContainer(
+    organizationId: string,
+    venueId: string,
+    userId: string,
+  ): Promise<{ id: string; name: string }> {
+    await requireOrgAccess(this.prisma, userId, organizationId, ALL_ORG_ROLES);
+
+    const container = await this.prisma.event.findFirst({
+      where: { venueId, organizationId, isPermanentContainer: true },
+      select: { id: true, name: true },
+    });
+    if (!container) {
+      throw new NotFoundException(
+        'Ce lieu n’est pas ouvert en continu : il n’a pas de contenant permanent.',
+      );
+    }
+    return container;
+  }
+
   async update(
     organizationId: string,
     venueId: string,

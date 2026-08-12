@@ -52,6 +52,23 @@ export class VenuesController {
     return this.venuesService.findOne(orgId, id, user.sub);
   }
 
+  /**
+   * GET /api/v1/organizations/:orgId/venues/:id/container
+   *
+   * Contenant d'un lieu ouvert en continu. Il est volontairement absent de la
+   * liste des événements — mais les outils de configuration ont besoin de son
+   * identifiant pour y rattacher buvettes et points de retrait. D'où cette
+   * route explicite plutôt qu'un drapeau sur la liste.
+   */
+  @Get(':id/container')
+  findPermanentContainer(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.venuesService.findPermanentContainer(orgId, id, user.sub);
+  }
+
   /** PATCH /api/v1/organizations/:orgId/venues/:id */
   @Patch(':id')
   update(

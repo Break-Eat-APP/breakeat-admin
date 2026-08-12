@@ -365,19 +365,19 @@ export async function apiListUsers(): Promise<BackofficeUserListItem[]> {
 }
 
 /**
- * Coupe ou rétablit l'accès d'un compte (`isActive`).
+ * Archive ou réactive un compte (`isActive`).
  *
- * Le compte et son historique de commandes sont conservés — c'est un blocage
+ * Le compte et son historique de commandes sont conservés — c'est un archivage
  * réversible, pas une suppression. L'effet est immédiat : le serveur relit
  * `isActive` à chaque requête, une session ouverte cesse donc de fonctionner.
  */
-export async function apiSetUserBlocked(
+export async function apiSetUserArchived(
   userId: string,
-  blocked: boolean,
+  archived: boolean,
 ): Promise<BackofficeUserListItem> {
   return req<BackofficeUserListItem>(
     'PATCH',
-    `/backoffice/users/${userId}/${blocked ? 'block' : 'unblock'}`,
+    `/backoffice/users/${userId}/${archived ? 'archive' : 'unarchive'}`,
   );
 }
 

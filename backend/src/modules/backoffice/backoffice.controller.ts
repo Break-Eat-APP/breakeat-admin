@@ -102,19 +102,22 @@ export class BackofficeController {
   }
 
   /**
-   * PATCH /users/:id/block — coupe l'accès d'un compte (isActive = false).
+   * PATCH /users/:id/archive — coupe l'accès d'un compte (isActive = false).
    *
-   * `callerId` sert aux verrous du service : on ne se bloque pas soi-même, et
-   * on ne bloque pas le dernier administrateur plateforme actif.
+   * « Archiver » et non « supprimer » : le compte et ses commandes passées
+   * restent en base, seul l'accès tombe. Le geste est réversible.
+   *
+   * `callerId` sert aux verrous du service : on ne s'archive pas soi-même, et
+   * on n'archive pas le dernier administrateur plateforme actif.
    */
-  @Patch('users/:id/block')
-  blockUser(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
+  @Patch('users/:id/archive')
+  archiveUser(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
     return this.backoffice.setUserActive(id, false, user.sub);
   }
 
-  /** PATCH /users/:id/unblock — rétablit l'accès d'un compte. */
-  @Patch('users/:id/unblock')
-  unblockUser(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
+  /** PATCH /users/:id/unarchive — réactive l'accès d'un compte. */
+  @Patch('users/:id/unarchive')
+  unarchiveUser(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
     return this.backoffice.setUserActive(id, true, user.sub);
   }
 

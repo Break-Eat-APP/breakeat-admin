@@ -741,6 +741,23 @@ export interface VenueInput {
  */
 export type VenueOperatingMode = 'EVENT_BASED' | 'PERMANENT';
 
+/**
+ * Contenant d'un lieu ouvert en continu.
+ *
+ * Absent de la liste des événements par conception — mais les outils de
+ * configuration ont besoin de son identifiant pour y rattacher buvettes et
+ * points de retrait. 404 sur un lieu événementiel.
+ */
+export async function apiGetPermanentContainer(
+  orgId: string,
+  venueId: string,
+): Promise<{ id: string; name: string }> {
+  return req<{ id: string; name: string }>(
+    'GET',
+    `/organizations/${orgId}/venues/${venueId}/container`,
+  );
+}
+
 export async function apiGetVenues(orgId: string): Promise<Venue[]> {
   return req<Venue[]>('GET', `/organizations/${orgId}/venues`);
 }

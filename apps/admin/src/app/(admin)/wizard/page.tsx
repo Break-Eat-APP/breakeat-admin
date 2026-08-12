@@ -16,7 +16,9 @@ import {
   apiCreateSlot,
   apiUpdateEventStatus,
   apiSetAppSetting,
+  apiGetPermanentContainer,
   getOrgId,
+  type VenueOperatingMode,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 
@@ -61,6 +63,11 @@ interface WizardData {
   description: string;
   venueName: string;
   venueAddress: string;
+  /**
+   * Rythme d'exploitation. En PERMANENT, les étapes « Événement » et
+   * « Créneaux » disparaissent du parcours : il n'y a rien à dater.
+   */
+  operatingMode: VenueOperatingMode;
   eventName: string;
   eventDate: string; // YYYY-MM-DD
   eventStart: string; // HH:MM
@@ -247,14 +254,46 @@ const TEMPLATES: TemplatePreset[] = [
   },
 ];
 
-const STEP_LABELS = [
-  'Template',
-  'Événement',
-  'Buvettes & produits',
-  'Créneaux',
-  'Notifications',
-  'Campagne push',
-];
+/**
+ * Identifiants stables des étapes.
+ *
+ * Le parcours n'est PAS une suite de nombres consécutifs : un lieu ouvert en
+ * continu saute « Événement » et « Créneaux ». Les composants gardent donc un
+ * identifiant fixe, et la navigation se fait sur la liste des étapes visibles.
+ */
+const STEP = {
+  TEMPLATE: 0,
+  EVENT: 1,
+  BUVETTES: 2,
+  SLOTS: 3,
+  NOTIFICATIONS: 4,
+  PUSH: 5,
+  RECAP: 6,
+} as const;
+
+const STEP_LABELS: Record<number, string> = {
+  [STEP.TEMPLATE]: 'Template',
+  [STEP.EVENT]: 'Événement',
+  [STEP.BUVETTES]: 'Buvettes & produits',
+  [STEP.SLOTS]: 'Créneaux',
+  [STEP.NOTIFICATIONS]: 'Notifications',
+  [STEP.PUSH]: 'Campagne push',
+};
+
+/**
+ * Étapes du parcours selon le rythme d'exploitation.
+ *
+ * L'étape « Lieu » est TOUJOURS là — c'est elle qui porte le nom et l'adresse,
+ * dont un restaurant a autant besoin qu'un stade. Ce qui disparaît en mode
+ * permanent, ce sont les champs de date à l'intérieur, et l'étape des créneaux.
+ */
+function stepsForMode(mode: VenueOperatingMode): number[] {
+  if (mode === 'PERMANENT') {
+    return [STEP.TEMPLATE, STEP.EVENT, STEP.BUVETTES, STEP.NOTIFICATIONS, STEP.PUSH];
+  }
+  return [STEP.TEMPLATE, STEP.EVENT, STEP.BUVETTES, STEP.SLOTS, STEP.NOTIFICATIONS, STEP.PUSH];
+}
+
 
 // ─── Shared styles ─────────────────────────────────────────────────────────────
 
@@ -291,6 +330,7 @@ function defaultData(): WizardData {
       primaryColor: BRAND.orange,
       logoUrl: '',
       description: '',
+      operatingMode: 'EVENT_BASED' as VenueOperatingMode,
       eventDate: todayPlus(7),
       notif: {
         orderAccepted: true,
@@ -335,15 +375,18 @@ export default function WizardPage() {
 
   // ─── Validation ────────────────────────────────────────────────────────────
   function validate(s: number): string | null {
-    if (s === 1) {
+    if (s === STEP.EVENT) {
       if (!data.venueName.trim()) return 'Le nom du lieu est requis.';
       if (!data.venueAddress.trim()) return 'L’adresse du lieu est requise.';
-      if (!data.eventName.trim()) return 'Le nom de l’événement est requis.';
-      if (!data.eventDate) return 'La date de l’événement est requise.';
-      if (!data.eventStart || !data.eventEnd) return 'Les heures de début et de fin sont requises.';
-      if (data.eventEnd <= data.eventStart) return 'L’heure de fin doit être après l’heure de début.';
+      // Les champs d'événement ne sont ni affichés ni requis en mode permanent.
+      if (data.operatingMode !== 'PERMANENT') {
+        if (!data.eventName.trim()) return 'Le nom de l’événement est requis.';
+        if (!data.eventDate) return 'La date de l’événement est requise.';
+        if (!data.eventStart || !data.eventEnd) return 'Les heures de début et de fin sont requises.';
+        if (data.eventEnd <= data.eventStart) return 'L’heure de fin doit être après l’heure de début.';
+      }
     }
-    if (s === 2) {
+    if (s === STEP.BUVETTES) {
       if (data.buvettes.length === 0) return 'Ajoutez au moins une buvette / un stand.';
       for (const b of data.buvettes) {
         const bn = b.name.trim() || 'buvette';
@@ -359,7 +402,7 @@ export default function WizardPage() {
         }
       }
     }
-    if (s === 3) {
+    if (s === STEP.SLOTS) {
       if (data.slotCount < 1) return 'Il faut au moins un créneau.';
       if (data.slotDuration < 1) return 'La durée d’un créneau doit être d’au moins 1 minute.';
       if (data.slotCapacity < 1) return 'La capacité d’un créneau doit être d’au moins 1.';
@@ -368,6 +411,11 @@ export default function WizardPage() {
     return null;
   }
 
+  // Parcours effectif : un lieu ouvert en continu n'a ni événement ni créneaux.
+  const visibleSteps = stepsForMode(data.operatingMode);
+  const currentIndex = visibleSteps.indexOf(step);
+  const isLastInput = currentIndex === visibleSteps.length - 1;
+
   function next() {
     const err = validate(step);
     if (err) {
@@ -375,11 +423,13 @@ export default function WizardPage() {
       return;
     }
     setStepError('');
-    setStep((s) => Math.min(s + 1, 6));
+    // Après la dernière étape de saisie vient le récapitulatif, quel que soit
+    // le nombre d'étapes traversées.
+    setStep(isLastInput ? STEP.RECAP : visibleSteps[currentIndex + 1]);
   }
   function back() {
     setStepError('');
-    setStep((s) => Math.max(s - 1, 0));
+    if (currentIndex > 0) setStep(visibleSteps[currentIndex - 1]);
   }
 
   // ─── Slot preview ──────────────────────────────────────────────────────────
@@ -411,6 +461,7 @@ export default function WizardPage() {
 
     const slots = slotPreview();
     const hasPush = data.push.title.trim() !== '' && data.push.message.trim() !== '';
+    const permanent = data.operatingMode === 'PERMANENT';
 
     // Shared mutable context across tasks
     let venueId = '';
@@ -438,29 +489,35 @@ export default function WizardPage() {
         run: async () => {
           // Un club = un lieu : on RÉUTILISE le lieu existant de l'org (et on le
           // met à jour) au lieu d'en créer un nouveau à chaque passage du wizard.
+          const payload = {
+            name: data.venueName.trim(),
+            address: data.venueAddress.trim(),
+            operatingMode: data.operatingMode,
+            timezone: 'Europe/Paris',
+          };
           const existing = await apiGetVenues(orgId);
           const list = Array.isArray(existing) ? existing : [];
           if (list.length > 0) {
             venueId = list[0].id;
-            await apiUpdateVenue(orgId, venueId, {
-              name: data.venueName.trim(),
-              address: data.venueAddress.trim(),
-              timezone: 'Europe/Paris',
-            });
+            await apiUpdateVenue(orgId, venueId, payload);
             return `${data.venueName.trim()} (lieu existant réutilisé)`;
           }
-          const v = await apiCreateVenue(orgId, {
-            name: data.venueName.trim(),
-            address: data.venueAddress.trim(),
-            timezone: 'Europe/Paris',
-          });
+          const v = await apiCreateVenue(orgId, payload);
           venueId = v.id;
           return data.venueName.trim();
         },
       },
       {
-        label: 'Création de l’événement',
+        label: permanent ? 'Ouverture en continu' : 'Création de l’événement',
         run: async () => {
+          if (permanent) {
+            // Le contenant a été posé par le serveur au moment où le lieu est
+            // passé en permanent. On le récupère au lieu d'en créer un : il
+            // n'y en a qu'un, et il porte déjà les commandes existantes.
+            const container = await apiGetPermanentContainer(orgId, venueId);
+            eventId = container.id;
+            return 'aucun événement à créer — le lieu est ouvert tous les jours';
+          }
           const e = await apiCreateEvent(orgId, {
             venueId,
             name: data.eventName.trim(),
@@ -531,8 +588,10 @@ export default function WizardPage() {
       });
     }
 
-    tasks.push(
-      {
+    // Les créneaux n'existent pas pour un lieu ouvert en continu : le client
+    // vient quand il veut, il n'y a pas de mi-temps à absorber.
+    if (!permanent) {
+      tasks.push({
         label: `Création des créneaux (${slots.length})`,
         run: async () => {
           await Promise.all(
@@ -547,7 +606,10 @@ export default function WizardPage() {
           );
           return `${slots.length} créneaux de ${data.slotDuration} min`;
         },
-      },
+      });
+    }
+
+    tasks.push(
       {
         label: 'Enregistrement des préférences de notifications',
         run: async () => {
@@ -580,12 +642,16 @@ export default function WizardPage() {
       });
     }
 
-    tasks.push({
-      label: 'Activation de l’événement',
-      run: async () => {
-        await apiUpdateEventStatus(orgId, eventId, 'ACTIVE');
-      },
-    });
+    // Le contenant permanent naît déjà ACTIVE — et toute modification est
+    // refusée par le serveur. Rien à activer ici.
+    if (!permanent) {
+      tasks.push({
+        label: 'Activation de l’événement',
+        run: async () => {
+          await apiUpdateEventStatus(orgId, eventId, 'ACTIVE');
+        },
+      });
+    }
 
     setSteps(tasks.map((t) => ({ label: t.label, status: 'pending' as const })));
 
@@ -634,17 +700,19 @@ export default function WizardPage() {
       </p>
 
       {/* Stepper */}
-      {!done && <Stepper current={step} />}
+      {!done && <Stepper current={step} steps={visibleSteps} />}
 
       {/* Body */}
-      {!done && step < 6 && (
+      {!done && step < STEP.RECAP && (
         <div style={{ ...sCard, marginTop: 18 }}>
-          {step === 0 && <StepTemplate data={data} patch={patch} applyTemplate={applyTemplate} />}
-          {step === 1 && <StepEvent data={data} patch={patch} />}
-          {step === 2 && <StepBuvettes data={data} patch={patch} />}
-          {step === 3 && <StepSlots data={data} patch={patch} preview={slotPreview()} />}
-          {step === 4 && <StepNotifications data={data} patch={patch} />}
-          {step === 5 && <StepPush data={data} patch={patch} />}
+          {step === STEP.TEMPLATE && (
+            <StepTemplate data={data} patch={patch} applyTemplate={applyTemplate} />
+          )}
+          {step === STEP.EVENT && <StepEvent data={data} patch={patch} />}
+          {step === STEP.BUVETTES && <StepBuvettes data={data} patch={patch} />}
+          {step === STEP.SLOTS && <StepSlots data={data} patch={patch} preview={slotPreview()} />}
+          {step === STEP.NOTIFICATIONS && <StepNotifications data={data} patch={patch} />}
+          {step === STEP.PUSH && <StepPush data={data} patch={patch} />}
 
           {stepError && (
             <div
@@ -671,11 +739,11 @@ export default function WizardPage() {
               borderTop: `1px solid ${BRAND.border}`,
             }}
           >
-            <button onClick={back} disabled={step === 0} style={btnSecondary(step === 0)}>
+            <button onClick={back} disabled={currentIndex === 0} style={btnSecondary(currentIndex === 0)}>
               ← Précédent
             </button>
             <button onClick={next} style={btnPrimary()}>
-              {step === 5 ? 'Vérifier le récapitulatif →' : 'Suivant →'}
+              {isLastInput ? 'Vérifier le récapitulatif →' : 'Suivant →'}
             </button>
           </div>
         </div>
@@ -689,7 +757,7 @@ export default function WizardPage() {
           steps={steps}
           running={running}
           globalError={globalError}
-          onBack={() => setStep(5)}
+          onBack={() => setStep(visibleSteps[visibleSteps.length - 1])}
           onRun={() => void runConfiguration()}
         />
       )}
@@ -708,16 +776,25 @@ export default function WizardPage() {
 
 // ─── Stepper ─────────────────────────────────────────────────────────────────
 
-function Stepper({ current }: { current: number }) {
-  const shown = Math.min(current, 5);
+/**
+ * `steps` porte le parcours réel : il est plus court pour un lieu ouvert en
+ * continu. Le compteur affiche donc « 3/4 » et non « 3/6 » — annoncer des
+ * étapes qui n'existent pas ferait attendre au club un travail qu'il n'aura
+ * jamais à faire.
+ */
+function Stepper({ current, steps }: { current: number; steps: number[] }) {
+  // Sur le récapitulatif, on met en avant la dernière étape de saisie.
+  const idx = steps.indexOf(current);
+  const shown = idx === -1 ? steps.length - 1 : idx;
   return (
     <div>
       <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.orange, marginBottom: 10 }}>
-        Étape {shown + 1}/6 — {STEP_LABELS[shown]}
+        Étape {shown + 1}/{steps.length} — {STEP_LABELS[steps[shown]]}
       </div>
       <div style={{ display: 'flex', gap: 6 }}>
-        {STEP_LABELS.map((lbl, i) => {
-          const state = i < current ? 'done' : i === current ? 'active' : 'todo';
+        {steps.map((stepId, i) => {
+          const lbl = STEP_LABELS[stepId];
+          const state = i < shown ? 'done' : i === shown ? 'active' : 'todo';
           return (
             <div key={lbl} style={{ flex: 1 }}>
               <div
@@ -836,9 +913,17 @@ function StepTemplate({
 // ─── Step 1 — Lieu & événement ──────────────────────────────────────────────────
 
 function StepEvent({ data, patch }: { data: WizardData; patch: (p: Partial<WizardData>) => void }) {
+  const permanent = data.operatingMode === 'PERMANENT';
   return (
     <div>
-      <StepTitle title="Lieu & événement" subtitle="Où et quand ? C'est le cadre qui accueillera les commandes et les créneaux de retrait." />
+      <StepTitle
+        title={permanent ? 'Lieu' : 'Lieu & événement'}
+        subtitle={
+          permanent
+            ? 'Votre point de vente, ouvert en continu. Rien à dater : vous configurez une fois, et c’est tout.'
+            : "Où et quand ? C'est le cadre qui accueillera les commandes et les créneaux de retrait."
+        }
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <Field label="Nom du lieu">
@@ -849,23 +934,80 @@ function StepEvent({ data, patch }: { data: WizardData; patch: (p: Partial<Wizar
         </Field>
       </div>
 
+      {/* Ce choix raccourcit le parcours : il doit venir avant le reste. */}
       <div style={{ marginTop: 16 }}>
-        <Field label="Nom de l'événement">
-          <input value={data.eventName} onChange={(e) => patch({ eventName: e.target.value })} style={sInput} />
+        <Field label="Rythme d’exploitation">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(
+              [
+                {
+                  value: 'EVENT_BASED' as const,
+                  label: 'Par événement',
+                  hint: 'Stade, arena, salle de concert : chaque match ou concert a ses horaires.',
+                },
+                {
+                  value: 'PERMANENT' as const,
+                  label: 'Ouvert en continu',
+                  hint: 'Restaurant, restauration d’entreprise, aéroport, parc : ouvert tous les jours. Ni date ni créneaux à saisir, ici ou plus tard.',
+                },
+              ]
+            ).map((opt) => (
+              <label
+                key={opt.value}
+                style={{
+                  display: 'flex',
+                  gap: 10,
+                  alignItems: 'flex-start',
+                  padding: '11px 13px',
+                  borderRadius: 10,
+                  border: `1.5px solid ${data.operatingMode === opt.value ? BRAND.orange : BRAND.border}`,
+                  background: data.operatingMode === opt.value ? BRAND.orangeTint : '#fff',
+                  cursor: 'pointer',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="wizardOperatingMode"
+                  checked={data.operatingMode === opt.value}
+                  onChange={() => patch({ operatingMode: opt.value })}
+                  style={{ marginTop: 3, accentColor: BRAND.orange }}
+                />
+                <span>
+                  <span style={{ fontWeight: 600, fontSize: 13.5, color: BRAND.ink }}>{opt.label}</span>
+                  <span style={{ display: 'block', fontSize: 12, color: BRAND.grey, lineHeight: 1.5, marginTop: 2 }}>
+                    {opt.hint}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
         </Field>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginTop: 16 }}>
-        <Field label="Date">
-          <input type="date" value={data.eventDate} onChange={(e) => patch({ eventDate: e.target.value })} style={sInput} />
-        </Field>
-        <Field label="Début">
-          <input type="time" value={data.eventStart} onChange={(e) => patch({ eventStart: e.target.value })} style={sInput} />
-        </Field>
-        <Field label="Fin">
-          <input type="time" value={data.eventEnd} onChange={(e) => patch({ eventEnd: e.target.value })} style={sInput} />
-        </Field>
-      </div>
+      {/* Nom, date et horaires n'existent que pour un lieu événementiel. Les
+          afficher en mode permanent obligerait à inventer une date, puis à la
+          corriger chaque jour — précisément ce qu'on supprime. */}
+      {!permanent && (
+        <>
+          <div style={{ marginTop: 16 }}>
+            <Field label="Nom de l'événement">
+              <input value={data.eventName} onChange={(e) => patch({ eventName: e.target.value })} style={sInput} />
+            </Field>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginTop: 16 }}>
+            <Field label="Date">
+              <input type="date" value={data.eventDate} onChange={(e) => patch({ eventDate: e.target.value })} style={sInput} />
+            </Field>
+            <Field label="Début">
+              <input type="time" value={data.eventStart} onChange={(e) => patch({ eventStart: e.target.value })} style={sInput} />
+            </Field>
+            <Field label="Fin">
+              <input type="time" value={data.eventEnd} onChange={(e) => patch({ eventEnd: e.target.value })} style={sInput} />
+            </Field>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -988,10 +1130,23 @@ function BuvetteCard({
         </div>
         {canRemove && (
           <button
-            onClick={onRemove}
-            style={{ border: `1px solid ${BRAND.border}`, background: '#fff', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', color: '#dc2626', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit' }}
+            onClick={() => {
+              // Confirmation : la carte emporte ses produits et ses catégories,
+              // et le wizard n'a pas d'annulation.
+              const nom = buvette.name.trim() || 'cette buvette';
+              const n = buvette.products.length;
+              if (
+                window.confirm(
+                  `Supprimer ${nom} ?` +
+                    (n > 0 ? `\n\nSes ${n} produit${n > 1 ? 's' : ''} seront perdus.` : ''),
+                )
+              ) {
+                onRemove();
+              }
+            }}
+            style={{ border: '1px solid #fca5a5', background: '#fff', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: '#dc2626', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit' }}
           >
-            Retirer
+            Supprimer
           </button>
         )}
       </div>
