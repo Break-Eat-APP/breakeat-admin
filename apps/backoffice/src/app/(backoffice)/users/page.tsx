@@ -1,9 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BRAND } from '@break-eat/brand';
-import { apiListUsers, type BackofficeUserListItem } from '@/lib/api/backoffice-client';
+import {
+  apiListUsers,
+  apiSetUserBlocked,
+  getStoredUser,
+  type BackofficeUserListItem,
+} from '@/lib/api/backoffice-client';
 
 const ROLE_LABEL: Record<string, { label: string; color: string; bg: string }> = {
   SUPER_ADMIN: { label: 'Super Admin', color: '#7c3aed', bg: '#ede9fe' },
@@ -18,10 +23,19 @@ function fmtDate(iso: string) {
 
 export default function UsersPage() {
   const [search, setSearch] = useState('');
+  const qc = useQueryClient();
+  /** Son propre compte : le serveur refuse de le bloquer, autant ne pas le proposer. */
+  const moiId = getStoredUser()?.id ?? '';
 
   const { data, isLoading, isError, error } = useQuery<BackofficeUserListItem[]>({
     queryKey: ['backoffice', 'users'],
     queryFn: apiListUsers,
+  });
+
+  const blockMut = useMutation({
+    mutationFn: (vars: { id: string; blocked: boolean }) =>
+      apiSetUserBlocked(vars.id, vars.blocked),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['backoffice', 'users'] }),
   });
 
   const filtered = (data ?? []).filter((u) => {
@@ -54,6 +68,12 @@ export default function UsersPage() {
         />
       </div>
 
+      {blockMut.isError && (
+        <div style={{ ...errorBox, marginBottom: 16 }}>
+          {blockMut.error instanceof Error ? blockMut.error.message : 'Action refusée.'}
+        </div>
+      )}
+
       {isLoading && <div style={{ color: BRAND.grey, fontSize: 14 }}>Chargement…</div>}
       {isError && (
         <div style={errorBox}>
@@ -76,6 +96,7 @@ export default function UsersPage() {
             <div style={{ flex: 1.5 }}>Rôle</div>
             <div style={{ flex: 2 }}>Club(s)</div>
             <div style={{ flex: 1, textAlign: 'right' }}>Inscrit le</div>
+            <div style={{ width: 96 }} />
           </div>
 
           {filtered.map((u) => {
@@ -128,6 +149,29 @@ export default function UsersPage() {
                 <div style={{ flex: 1, textAlign: 'right', fontSize: 12, color: BRAND.grey }}>
                   {fmtDate(u.createdAt)}
                 </div>
+
+                {/* Blocage — réversible, jamais sur soi-même */}
+                <div style={{ width: 96, textAlign: 'right' }}>
+                  {u.id === moiId ? (
+                    <span style={{ fontSize: 11, color: BRAND.grey }}>toi</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const question = u.isActive
+                          ? `Bloquer ${u.email} ?\n\nSa session s’arrête tout de suite. Le compte et son historique de commandes sont conservés : tu pourras le rétablir.`
+                          : `Rétablir l’accès de ${u.email} ?`;
+                        if (window.confirm(question)) {
+                          blockMut.mutate({ id: u.id, blocked: u.isActive });
+                        }
+                      }}
+                      disabled={blockMut.isPending}
+                      style={u.isActive ? blockBtn : unblockBtn}
+                    >
+                      {u.isActive ? 'Bloquer' : 'Rétablir'}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -157,6 +201,19 @@ const searchStyle: React.CSSProperties = {
   padding: '10px 16px', borderRadius: 10, border: `1.5px solid ${BRAND.border}`,
   fontSize: 14, color: BRAND.ink, background: '#fff', outline: 'none',
   width: '100%', maxWidth: 400, fontFamily: 'inherit',
+};
+
+const actionBtn: React.CSSProperties = {
+  borderRadius: 8, padding: '5px 12px', fontSize: 12.5,
+  fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', background: '#fff',
+};
+
+const blockBtn: React.CSSProperties = {
+  ...actionBtn, color: '#dc2626', border: '1px solid #fca5a5',
+};
+
+const unblockBtn: React.CSSProperties = {
+  ...actionBtn, color: '#059669', border: '1px solid #6ee7b7',
 };
 
 const errorBox: React.CSSProperties = {

@@ -19,7 +19,9 @@ import { ScheduleNotificationDto } from './dto/schedule-notification.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { GlobalRole } from '../../common/enums/role.enum';
+import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 
 /**
  * BackofficeController — platform supervision API, base path /api/v1/backoffice.
@@ -97,6 +99,23 @@ export class BackofficeController {
   @Get('users')
   listUsers() {
     return this.backoffice.listUsers();
+  }
+
+  /**
+   * PATCH /users/:id/block — coupe l'accès d'un compte (isActive = false).
+   *
+   * `callerId` sert aux verrous du service : on ne se bloque pas soi-même, et
+   * on ne bloque pas le dernier administrateur plateforme actif.
+   */
+  @Patch('users/:id/block')
+  blockUser(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.backoffice.setUserActive(id, false, user.sub);
+  }
+
+  /** PATCH /users/:id/unblock — rétablit l'accès d'un compte. */
+  @Patch('users/:id/unblock')
+  unblockUser(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.backoffice.setUserActive(id, true, user.sub);
   }
 
   // ─── Groups ───────────────────────────────────────────────────

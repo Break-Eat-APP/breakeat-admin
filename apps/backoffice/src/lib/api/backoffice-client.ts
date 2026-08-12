@@ -320,6 +320,23 @@ export async function apiListUsers(): Promise<BackofficeUserListItem[]> {
   return req<BackofficeUserListItem[]>('GET', '/backoffice/users');
 }
 
+/**
+ * Coupe ou rétablit l'accès d'un compte (`isActive`).
+ *
+ * Le compte et son historique de commandes sont conservés — c'est un blocage
+ * réversible, pas une suppression. L'effet est immédiat : le serveur relit
+ * `isActive` à chaque requête, une session ouverte cesse donc de fonctionner.
+ */
+export async function apiSetUserBlocked(
+  userId: string,
+  blocked: boolean,
+): Promise<BackofficeUserListItem> {
+  return req<BackofficeUserListItem>(
+    'PATCH',
+    `/backoffice/users/${userId}/${blocked ? 'block' : 'unblock'}`,
+  );
+}
+
 // ─── Groups (cross-tenant CRUD) ────────────────────────────────────────────────
 
 export interface CreateGroupInput {

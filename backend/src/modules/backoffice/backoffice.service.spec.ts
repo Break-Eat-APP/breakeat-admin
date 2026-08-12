@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { ConflictException, NotFoundException } from '@nestjs/common';
-import { PaymentStatus, OrgStatus } from '@prisma/client';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { PaymentStatus, OrgStatus, GlobalRole } from '@prisma/client';
 import { BackofficeService } from './backoffice.service';
 import { PrismaService } from '../../database/prisma.service';
 import { ExpoPushService } from '../notifications/expo-push.service';
@@ -21,7 +21,7 @@ describe('BackofficeService', () => {
   let service: BackofficeService;
   let prisma: {
     order: { aggregate: jest.Mock };
-    user: { count: jest.Mock };
+    user: { count: jest.Mock; findUnique: jest.Mock; update: jest.Mock };
     organization: {
       count: jest.Mock;
       findMany: jest.Mock;
@@ -35,7 +35,7 @@ describe('BackofficeService', () => {
   beforeEach(async () => {
     prisma = {
       order: { aggregate: jest.fn() },
-      user: { count: jest.fn() },
+      user: { count: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
       organization: {
         count: jest.fn(),
         findMany: jest.fn(),
@@ -218,6 +218,81 @@ describe('BackofficeService', () => {
       prisma.organization.findUnique.mockResolvedValue(null);
 
       await expect(service.setOrganizationStatus('missing', true)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
+  // ─── setUserActive ────────────────────────────────────────────
+  //
+  // Les deux verrous protègent d'un verrouillage définitif : les mots de passe
+  // sont hachés et il n'existe aucun « mot de passe oublié » pour le
+  // back-office. Un blocage de trop et la plateforme est fermée.
+
+  describe('setUserActive', () => {
+    const MOI = 'admin-courant';
+    const AUTRE = 'compte-cible';
+
+    it('bloque un compte ordinaire', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: AUTRE, email: 'test@club.fr', globalRole: GlobalRole.CUSTOMER, isActive: true,
+      });
+      prisma.user.update.mockResolvedValue({ id: AUTRE, isActive: false });
+
+      await service.setUserActive(AUTRE, false, MOI);
+
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: AUTRE }, data: { isActive: false } }),
+      );
+    });
+
+    it('refuse qu’on se bloque soi-même', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: MOI, email: 'moi@breakeat.fr', globalRole: GlobalRole.SUPER_ADMIN, isActive: true,
+      });
+
+      await expect(service.setUserActive(MOI, false, MOI)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('refuse de bloquer le dernier administrateur plateforme actif', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: AUTRE, email: 'admin@breakeat.fr', globalRole: GlobalRole.SUPER_ADMIN, isActive: true,
+      });
+      prisma.user.count.mockResolvedValue(0); // aucun autre SUPER_ADMIN actif
+
+      await expect(service.setUserActive(AUTRE, false, MOI)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('accepte de bloquer un administrateur s’il en reste un autre', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: AUTRE, email: 'admin2@breakeat.fr', globalRole: GlobalRole.SUPER_ADMIN, isActive: true,
+      });
+      prisma.user.count.mockResolvedValue(1);
+      prisma.user.update.mockResolvedValue({ id: AUTRE, isActive: false });
+
+      await expect(service.setUserActive(AUTRE, false, MOI)).resolves.toBeDefined();
+    });
+
+    it('rétablit un compte sans passer par les verrous', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: MOI, email: 'moi@breakeat.fr', globalRole: GlobalRole.SUPER_ADMIN, isActive: false,
+      });
+      prisma.user.update.mockResolvedValue({ id: MOI, isActive: true });
+
+      await expect(service.setUserActive(MOI, true, MOI)).resolves.toBeDefined();
+      expect(prisma.user.count).not.toHaveBeenCalled();
+    });
+
+    it('renvoie 404 sur un compte inconnu', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.setUserActive('inconnu', false, MOI)).rejects.toBeInstanceOf(
         NotFoundException,
       );
     });

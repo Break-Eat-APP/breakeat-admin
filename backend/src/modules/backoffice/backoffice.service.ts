@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PaymentStatus, OrgStatus } from '@prisma/client';
+import { PaymentStatus, OrgStatus, GlobalRole } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { ExpoPushService } from '../notifications/expo-push.service';
 import { PushTokensService } from '../notifications/push-tokens.service';
@@ -230,6 +230,62 @@ export class BackofficeService {
         },
       },
     });
+  }
+
+  /**
+   * Bloque ou rétablit un compte.
+   *
+   * Bloquer plutôt que supprimer : les commandes passées restent rattachées au
+   * compte, donc le chiffre d'affaires reste juste. L'effet est immédiat — la
+   * stratégie JWT relit `isActive` en base à chaque requête, un jeton déjà émis
+   * cesse donc de fonctionner.
+   *
+   * Deux verrous, parce qu'un blocage mal placé ferme la plateforme sans retour
+   * possible (les mots de passe sont hachés, il n'existe pas de « mot de passe
+   * oublié » pour le back-office) :
+   *  - on ne se bloque pas soi-même ;
+   *  - on ne bloque pas le dernier SUPER_ADMIN actif.
+   */
+  async setUserActive(id: string, active: boolean, callerId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, globalRole: true, isActive: true },
+    });
+    if (!user) throw new NotFoundException('Compte introuvable');
+
+    if (!active) {
+      if (user.id === callerId) {
+        throw new BadRequestException(
+          'Vous ne pouvez pas bloquer votre propre compte : vous perdriez l’accès au back-office.',
+        );
+      }
+      if (user.globalRole === GlobalRole.SUPER_ADMIN) {
+        const autresAdmins = await this.prisma.user.count({
+          where: {
+            globalRole: GlobalRole.SUPER_ADMIN,
+            isActive: true,
+            id: { not: user.id },
+          },
+        });
+        if (autresAdmins === 0) {
+          throw new BadRequestException(
+            'C’est le dernier administrateur plateforme actif : le bloquer rendrait le back-office inaccessible.',
+          );
+        }
+      }
+    }
+
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: { isActive: active },
+      select: { id: true, email: true, displayName: true, globalRole: true, isActive: true },
+    });
+
+    // Trace explicite : couper un accès doit rester visible dans les journaux.
+    this.logger.warn(
+      `[backoffice] Compte ${updated.email} ${active ? 'rétabli' : 'bloqué'} par ${callerId}`,
+    );
+    return updated;
   }
 
   // ─── Groups (cross-tenant CRUD) ───────────────────────────────
