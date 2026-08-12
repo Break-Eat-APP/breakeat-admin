@@ -14,6 +14,7 @@ import {
   apiCreateVenue,
   apiUpdateVenue,
   apiInviteMember,
+  apiRemoveMember,
   type OrgDetail,
   type Venue,
 } from '@/lib/api/backoffice-client';
@@ -113,6 +114,12 @@ export default function OrganizationDetailPage({
       setAccessPassword('');
       invalidate();
     },
+  });
+
+  /** Retrait d'un accès. Le compte survit — seul le rattachement au club tombe. */
+  const removeMut = useMutation({
+    mutationFn: (memberId: string) => apiRemoveMember(id, memberId),
+    onSuccess: invalidate,
   });
 
   // ── Lieu du club (config plateforme — un club = un lieu) ──
@@ -464,6 +471,11 @@ export default function OrganizationDetailPage({
           {/* Members */}
           <section style={{ ...card, marginTop: 20 }}>
             <h2 style={cardTitle}>Membres ({data.members.length})</h2>
+            {removeMut.isError && (
+              <div style={{ ...errorBox, marginBottom: 14 }}>
+                {removeMut.error instanceof Error ? removeMut.error.message : 'Échec du retrait'}
+              </div>
+            )}
             {data.members.length === 0 ? (
               <div style={{ fontSize: 14, color: BRAND.grey }}>
                 Aucun membre — commence par donner l’accès au responsable ci-dessus.
@@ -491,9 +503,27 @@ export default function OrganizationDetailPage({
                         {m.user.email}
                       </span>
                     </div>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: BRAND.inkSoft }}>
-                      {m.orgRole}
-                    </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: BRAND.inkSoft }}>
+                        {m.orgRole}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Retirer l’accès de ${m.user.email} à ${data.name} ?\n\nSon compte Break Eat est conservé : il perd ce club, pas son historique.`,
+                            )
+                          ) {
+                            removeMut.mutate(m.id);
+                          }
+                        }}
+                        disabled={removeMut.isPending}
+                        style={{ ...dangerBtn, padding: '5px 12px', fontSize: 12.5 }}
+                      >
+                        Retirer
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

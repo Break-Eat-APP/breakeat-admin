@@ -272,6 +272,18 @@ export async function apiInviteMember(
   return req<InviteResult>('POST', `/organizations/${orgId}/invite`, data);
 }
 
+/**
+ * DELETE /organizations/:id/members/:memberId — retire l'accès d'une personne
+ * à ce club.
+ *
+ * Le compte Break Eat lui-même n'est pas supprimé : la personne garde son accès
+ * client à l'application, elle perd seulement ce club. Supprimer un compte
+ * effacerait aussi son historique de commandes.
+ */
+export async function apiRemoveMember(orgId: string, memberId: string): Promise<void> {
+  return req<void>('DELETE', `/organizations/${orgId}/members/${memberId}`);
+}
+
 export async function apiCreateVenue(
   orgId: string,
   data: VenueInput & { name: string; address: string },
