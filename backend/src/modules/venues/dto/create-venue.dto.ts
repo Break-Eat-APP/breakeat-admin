@@ -13,7 +13,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { VenueStatus } from '@prisma/client';
+import { VenueStatus, VenueOperatingMode } from '@prisma/client';
 
 export class CreateVenueDto {
   @IsString()
@@ -86,6 +86,16 @@ export class CreateVenueDto {
   @Max(1000)
   @IsOptional()
   loyaltyPointValueCents?: number;
+
+  /**
+   * Rythme d'exploitation. PERMANENT pour un restaurant, une cantine
+   * d'entreprise, un point de vente d'aéroport : ouvert tous les jours, aucun
+   * événement à créer. Break Eat pose alors son contenant unique tout seul.
+   * Par défaut EVENT_BASED (stade, arena, concert).
+   */
+  @IsEnum(VenueOperatingMode)
+  @IsOptional()
+  operatingMode?: VenueOperatingMode;
 
   @IsString()
   @IsOptional()

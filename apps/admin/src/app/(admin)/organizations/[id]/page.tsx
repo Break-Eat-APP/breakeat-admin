@@ -13,6 +13,7 @@ import {
   type Organization,
   type OrgMemberWithUser,
   type Venue,
+  type VenueOperatingMode,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 
@@ -83,6 +84,8 @@ export default function OrganizationDetailPage() {
   const [venueTimezone, setVenueTimezone] = useState('');
   const [venueSearchTerms, setVenueSearchTerms] = useState('');
   const [venueBuvettePlanUrl, setVenueBuvettePlanUrl] = useState('');
+  // Phase 22 — un lieu ouvert en continu n'a aucun événement à créer.
+  const [venueMode, setVenueMode] = useState<VenueOperatingMode>('EVENT_BASED');
   // Intégration Flaix : quand elle est active, l'app passe la main à Flaix au
   // lieu du parcours de commande Break Eat. Réglable ici pour ne pas dépendre
   // du back-office SUPER_ADMIN (non déployé).
@@ -123,6 +126,7 @@ export default function OrganizationDetailPage() {
       setVenueTimezone(primary?.timezone ?? '');
       setVenueSearchTerms(primary?.searchTerms ?? '');
       setVenueBuvettePlanUrl(primary?.buvettePlanUrl ?? '');
+      setVenueMode(primary?.operatingMode ?? 'EVENT_BASED');
       setFlaixEnabled(primary?.flaixEnabled ?? false);
       setFlaixVenueId(primary?.flaixVenueId ?? '');
       setLoyaltyEnabled(primary?.loyaltyEnabled ?? false);
@@ -181,6 +185,7 @@ export default function OrganizationDetailPage() {
         timezone: venueTimezone.trim() || 'Europe/Paris',
         searchTerms: venueSearchTerms.trim() || null,
         buvettePlanUrl: venueBuvettePlanUrl.trim() || null,
+        operatingMode: venueMode,
         flaixEnabled,
         flaixVenueId: flaixVenueId.trim() || null,
         loyaltyEnabled,
@@ -293,6 +298,55 @@ export default function OrganizationDetailPage() {
                 style={venueFieldInput}
               />
             </div>
+            {/* Rythme d'exploitation — décide s'il faudra créer des événements */}
+            <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <label style={venueFieldLabel}>Rythme d’exploitation</label>
+              {(
+                [
+                  {
+                    value: 'EVENT_BASED' as const,
+                    label: 'Par événement',
+                    hint: 'Stade, arena, salle de concert : on vend par match ou par concert.',
+                  },
+                  {
+                    value: 'PERMANENT' as const,
+                    label: 'Ouvert en continu',
+                    hint: 'Restaurant, restauration d’entreprise, aéroport : ouvert tous les jours, aucun événement à créer.',
+                  },
+                ]
+              ).map((opt) => (
+                <label
+                  key={opt.value}
+                  style={{
+                    display: 'flex',
+                    gap: 10,
+                    alignItems: 'flex-start',
+                    padding: '11px 13px',
+                    borderRadius: BRAND.radius.control,
+                    border: `1.5px solid ${venueMode === opt.value ? BRAND.orange : BRAND.border}`,
+                    background: venueMode === opt.value ? BRAND.orangeTint : BRAND.bg,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="venueOperatingMode"
+                    checked={venueMode === opt.value}
+                    onChange={() => setVenueMode(opt.value)}
+                    style={{ marginTop: 3, accentColor: BRAND.orange }}
+                  />
+                  <span>
+                    <span style={{ fontWeight: 600, fontSize: 13.5, color: BRAND.ink }}>
+                      {opt.label}
+                    </span>
+                    <span style={{ display: 'block', fontSize: 12, color: BRAND.grey, lineHeight: 1.5, marginTop: 2 }}>
+                      {opt.hint}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+
             <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label style={venueFieldLabel}>Mots-clés de recherche</label>
               <input

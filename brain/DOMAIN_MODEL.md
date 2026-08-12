@@ -46,6 +46,34 @@ Required fields:
 - timezone
 - status
 
+### Venue operating mode
+
+Phase 22. A Venue carries `operatingMode`:
+
+- `EVENT_BASED` — stadium, arena, concert hall. Sales happen per match, each with
+  its own schedule and catalogue. Flaix drives these.
+- `PERMANENT` — restaurant, corporate catering, airport, theme park. Open every
+  day, the menu barely moves, there is no "event" to speak of.
+
+**Why the mode exists.** `Order.eventId` and `Cart.eventId` are required, and
+eight tables hang off Event. A permanent venue still needs somewhere for its
+orders to live — but asking an operator to create one event per day would be
+absurd. So Break Eat creates, on its own, a single open-ended Event flagged
+`isPermanentContainer`, ACTIVE from birth.
+
+That container is invisible on purpose: excluded from event listings and from
+org statistics, and rejected by every event mutation. Renaming or closing it
+would strip the venue of its only anchor — no order could be placed, and the
+failure would be unintelligible to the club.
+
+Switching a venue to PERMANENT creates the container if missing. Switching back
+to EVENT_BASED never deletes it: past orders are attached to it. It simply goes
+dormant.
+
+A partial unique index enforces one container per venue at the database level,
+so two concurrent mode switches cannot silently produce two containers with
+orders scattered between them.
+
 ### Event
 
 Represents a time-bound ordering context.

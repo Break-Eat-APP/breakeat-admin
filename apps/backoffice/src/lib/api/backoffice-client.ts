@@ -240,9 +240,39 @@ export interface Venue {
   loyaltyEnabled?: boolean;
   loyaltyPointsPerEuro?: number;
   loyaltyPointValueCents?: number;
+  operatingMode?: VenueOperatingMode;
   timezone?: string | null;
   status: string;
 }
+
+/**
+ * Rythme d'exploitation d'un lieu.
+ *
+ * EVENT_BASED — stade, arena, salle de concert : on vend par match ou par
+ * concert, chacun avec sa programmation.
+ *
+ * PERMANENT — restaurant, cantine d'entreprise, aéroport, parc : ouvert tous
+ * les jours, la carte bouge peu. Aucun événement à créer ni à dater.
+ */
+export type VenueOperatingMode = 'EVENT_BASED' | 'PERMANENT';
+
+/** Libellés et explications du mode, partagés par les écrans de configuration. */
+export const VENUE_MODE_OPTIONS: {
+  value: VenueOperatingMode;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    value: 'EVENT_BASED',
+    label: 'Par événement',
+    hint: 'Stade, arena, salle de concert : on vend par match ou par concert, chacun avec ses horaires et sa carte.',
+  },
+  {
+    value: 'PERMANENT',
+    label: 'Ouvert en continu',
+    hint: 'Restaurant, restauration d’entreprise, aéroport, parc : ouvert tous les jours. Aucun événement à créer ni à dater — la configuration se fait une seule fois.',
+  },
+];
 
 export interface VenueInput {
   name?: string;
@@ -256,6 +286,7 @@ export interface VenueInput {
   loyaltyEnabled?: boolean;
   loyaltyPointsPerEuro?: number;
   loyaltyPointValueCents?: number;
+  operatingMode?: VenueOperatingMode;
   timezone?: string;
 }
 

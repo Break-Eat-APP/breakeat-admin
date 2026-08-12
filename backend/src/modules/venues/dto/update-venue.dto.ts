@@ -12,7 +12,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { VenueStatus } from '@prisma/client';
+import { VenueStatus, VenueOperatingMode } from '@prisma/client';
 
 export class UpdateVenueDto {
   @IsString()
@@ -80,6 +80,15 @@ export class UpdateVenueDto {
   @Max(1000)
   @IsOptional()
   loyaltyPointValueCents?: number;
+
+  /**
+   * Bascule du rythme d'exploitation. Passer à PERMANENT crée le contenant
+   * s'il manque ; repasser à EVENT_BASED ne le supprime pas — des commandes y
+   * sont rattachées, il devient simplement dormant.
+   */
+  @IsEnum(VenueOperatingMode)
+  @IsOptional()
+  operatingMode?: VenueOperatingMode;
 
   @IsString()
   @IsOptional()

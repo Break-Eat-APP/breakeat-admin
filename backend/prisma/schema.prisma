@@ -324,6 +324,8 @@ model Venue {
   loyaltyPointsPerEuro   Int  @default(1) @map("loyalty_points_per_euro")
   /// Valeur d'UN point en centimes lors de l'utilisation (1 = 1 centime).
   loyaltyPointValueCents Int  @default(1) @map("loyalty_point_value_cents")
+  /// PHASE 22 — rythme d'exploitation du lieu. Voir {@link VenueOperatingMode}.
+  operatingMode  VenueOperatingMode @default(EVENT_BASED) @map("operating_mode")
   timezone       String      @default("Europe/Paris")
   status         VenueStatus @default(ACTIVE)
   createdAt      DateTime    @default(now()) @map("created_at")
@@ -336,6 +338,23 @@ model Venue {
   @@map("venues")
 }
 
+/// PHASE 22 — comment un lieu ouvre à la commande.
+///
+/// EVENT_BASED : stade, arena, salle de concert. Chaque match ou concert est un
+/// événement daté, avec sa programmation propre. C'est Flaix qui les pilote.
+///
+/// PERMANENT : restaurant, restauration d'entreprise, aéroport, parc. Il n'y a
+/// pas d'« événement » — c'est ouvert tous les jours, la carte bouge peu. Break
+/// Eat crée alors UN contenant unique et sans fin, invisible dans l'interface,
+/// pour que les commandes aient où vivre. Sans lui il faudrait créer un
+/// événement par jour, ce qui n'a aucun sens pour un restaurant.
+enum VenueOperatingMode {
+  EVENT_BASED
+  PERMANENT
+
+  @@map("venue_operating_mode")
+}
+
 /// A time-bound ordering context. Belongs to one org and one venue.
 /// An event activates suppliers, pickup points, and slots.
 model Event {
@@ -346,6 +365,13 @@ model Event {
   startAt            DateTime    @map("start_at")
   endAt              DateTime    @map("end_at")
   status             EventStatus @default(DRAFT)
+  /// PHASE 22 — vrai pour le contenant unique d'un lieu PERMANENT.
+  ///
+  /// Ce n'est pas un événement au sens commercial : personne ne l'a créé, ne le
+  /// modifie ni ne le voit. Il existe pour porter les commandes d'un lieu ouvert
+  /// en continu. Le drapeau permet de le retrouver de façon fiable et de
+  /// l'écarter des listes d'événements, où il n'aurait aucun sens.
+  isPermanentContainer Boolean   @default(false) @map("is_permanent_container")
   activeFeatureFlags Json        @default("{}") @map("active_feature_flags")
   /// PHASE 14 — public (everyone) or private (restricted to linked groups).
   visibility         EventVisibility @default(PUBLIC)

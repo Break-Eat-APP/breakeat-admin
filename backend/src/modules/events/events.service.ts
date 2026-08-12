@@ -78,7 +78,11 @@ export class EventsService {
     await requireOrgAccess(this.prisma, userId, organizationId, ALL_ORG_ROLES);
 
     return this.prisma.event.findMany({
-      where: { organizationId },
+      // Le contenant d'un lieu permanent est écarté : ce n'est pas un
+      // événement, personne ne l'a créé et il n'y a rien à y régler. L'exposer
+      // ferait apparaître un « Service continu » que le club tenterait de
+      // modifier ou de supprimer, cassant ses commandes en cours.
+      where: { organizationId, isPermanentContainer: false },
       include: { eventSuppliers: { include: { supplier: true } } },
       orderBy: { startAt: 'desc' },
     });
@@ -116,6 +120,7 @@ export class EventsService {
     });
     if (!existing) throw new NotFoundException('Event not found');
 
+    this.guardPermanentContainer(existing);
     this.guardFinalized(existing);
 
     const startAt = dto.startAt ? new Date(dto.startAt) : existing.startAt;
@@ -199,6 +204,7 @@ export class EventsService {
     });
     if (!existing) throw new NotFoundException('Event not found');
 
+    this.guardPermanentContainer(existing);
     this.guardFinalized(existing);
     this.validateTransition(existing.status, dto.status);
 
@@ -287,6 +293,25 @@ export class EventsService {
     if (event.status === EventStatus.ENDED || event.status === EventStatus.CANCELLED) {
       throw new BadRequestException(
         `Cannot modify an event with status ${event.status}`,
+      );
+    }
+  }
+
+  /**
+   * PHASE 22 — le contenant d'un lieu permanent n'est pas modifiable.
+   *
+   * Il est déjà écarté des listes, donc personne ne le voit ; ce garde-fou
+   * couvre l'appel direct à l'API. Le clore ou le renommer priverait le lieu de
+   * son seul point d'ancrage : plus aucune commande ne pourrait être passée, et
+   * la panne serait incompréhensible côté club.
+   *
+   * Le rythme d'exploitation se change sur le LIEU, pas ici.
+   */
+  private guardPermanentContainer(event: Event): void {
+    if (event.isPermanentContainer) {
+      throw new BadRequestException(
+        'Ce lieu est ouvert en continu : il n’a pas d’événement à configurer. ' +
+          'Le rythme d’exploitation se règle sur le lieu.',
       );
     }
   }

@@ -141,6 +141,51 @@ describe('EventsService', () => {
 
   // ─── update (Phase 14.7 — visibility + group access) ─────────
 
+  // PHASE 22 — le contenant d'un lieu permanent est hors de portée.
+  //
+  // Il est déjà écarté des listes, donc invisible ; ces tests couvrent l'appel
+  // direct à l'API. Le clore ou le renommer priverait le lieu de son seul point
+  // d'ancrage : plus aucune commande possible, sans explication côté club.
+  describe('contenant permanent', () => {
+    const conteneur = { ...mockEvent(), isPermanentContainer: true };
+
+    it('refuse de le modifier', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.event.findFirst as jest.Mock).mockResolvedValue(conteneur);
+
+      await expect(
+        service.update(ORG_ID, EVENT_ID, USER_ID, { name: 'Renommé' }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+
+    it('refuse d’en changer le statut', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.event.findFirst as jest.Mock).mockResolvedValue({
+        ...conteneur,
+        status: EventStatus.ACTIVE,
+      });
+
+      await expect(
+        service.updateStatus(ORG_ID, EVENT_ID, USER_ID, { status: EventStatus.ENDED }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+
+    it('l’écarte de la liste des événements de l’organisation', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findAllByOrg(ORG_ID, USER_ID);
+
+      expect(prisma.event.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ isPermanentContainer: false }),
+        }),
+      );
+    });
+  });
+
   describe('update', () => {
     it('sets event visibility to PRIVATE', async () => {
       (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());

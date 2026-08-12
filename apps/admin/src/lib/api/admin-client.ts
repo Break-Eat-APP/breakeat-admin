@@ -707,6 +707,8 @@ export interface Venue {
   loyaltyPointsPerEuro?: number;
   /** Valeur d'un point en centimes à l'utilisation. */
   loyaltyPointValueCents?: number;
+  /** Phase 22 — voir {@link VenueOperatingMode}. */
+  operatingMode?: VenueOperatingMode;
   timezone?: string | null;
   status: string;
   organizationId: string;
@@ -726,8 +728,18 @@ export interface VenueInput {
   loyaltyEnabled?: boolean;
   loyaltyPointsPerEuro?: number;
   loyaltyPointValueCents?: number;
+  operatingMode?: VenueOperatingMode;
   timezone?: string;
 }
+
+/**
+ * Rythme d'exploitation d'un lieu.
+ *
+ * EVENT_BASED — stade, arena, concert : on vend par match, chacun avec sa
+ * programmation. PERMANENT — restaurant, cantine d'entreprise, aéroport :
+ * ouvert tous les jours, aucun événement à créer ni à dater.
+ */
+export type VenueOperatingMode = 'EVENT_BASED' | 'PERMANENT';
 
 export async function apiGetVenues(orgId: string): Promise<Venue[]> {
   return req<Venue[]>('GET', `/organizations/${orgId}/venues`);

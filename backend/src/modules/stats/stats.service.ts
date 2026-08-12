@@ -120,7 +120,11 @@ export class StatsService {
         _count: { _all: true },
       }),
       this.prisma.event.findMany({
-        where: { organizationId: orgId },
+        // Contenant permanent exclu : une ligne « Service continu » agrégeant
+        // tout le chiffre d'affaires depuis l'ouverture n'apprend rien. Pour un
+        // lieu permanent, la lecture utile est par période — c'est le prochain
+        // chantier (statistiques par jour / semaine).
+        where: { organizationId: orgId, isPermanentContainer: false },
         orderBy: { startAt: 'desc' },
         select: { id: true, name: true, status: true, startAt: true, endAt: true },
       }),

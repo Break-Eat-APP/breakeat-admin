@@ -15,8 +15,10 @@ import {
   apiUpdateVenue,
   apiInviteMember,
   apiRemoveMember,
+  VENUE_MODE_OPTIONS,
   type OrgDetail,
   type Venue,
+  type VenueOperatingMode,
 } from '@/lib/api/backoffice-client';
 import { StatusBadge } from '@/components/status-badge';
 
@@ -136,6 +138,7 @@ export default function OrganizationDetailPage({
   const [vFlaixOn, setVFlaixOn] = useState(false);
   const [vFlaixId, setVFlaixId] = useState('');
   const [vPlanUrl, setVPlanUrl] = useState('');
+  const [vMode, setVMode] = useState<VenueOperatingMode>('EVENT_BASED');
   const [vLoyaltyOn, setVLoyaltyOn] = useState(false);
   const [vPointsPerEuro, setVPointsPerEuro] = useState('1');
   const [vPointValue, setVPointValue] = useState('1');
@@ -167,6 +170,7 @@ export default function OrganizationDetailPage({
       setVFlaixOn(!!venue.flaixEnabled);
       setVFlaixId(venue.flaixVenueId ?? '');
       setVPlanUrl(venue.buvettePlanUrl ?? '');
+      setVMode(venue.operatingMode ?? 'EVENT_BASED');
       setVLoyaltyOn(!!venue.loyaltyEnabled);
       setVPointsPerEuro(String(venue.loyaltyPointsPerEuro ?? 1));
       setVPointValue(String(venue.loyaltyPointValueCents ?? 1));
@@ -187,6 +191,7 @@ export default function OrganizationDetailPage({
         longitude: lng,
         searchTerms: vTerms.trim() || null,
         buvettePlanUrl: vPlanUrl.trim() || null,
+        operatingMode: vMode,
         flaixEnabled: vFlaixOn,
         flaixVenueId: vFlaixId.trim() || null,
         loyaltyEnabled: vLoyaltyOn,
@@ -346,6 +351,52 @@ export default function OrganizationDetailPage({
               <Field label="Adresse">
                 <input value={vAddress} onChange={(e) => setVAddress(e.target.value)} placeholder="Le Palais omnisports, Marseille" style={inputStyle} required />
               </Field>
+              {/* Rythme d'exploitation — le réglage qui décide s'il faudra
+                  créer des événements, ou plus jamais y penser. */}
+              <Field label="Rythme d’exploitation">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {VENUE_MODE_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.value}
+                      style={{
+                        display: 'flex',
+                        gap: 10,
+                        alignItems: 'flex-start',
+                        padding: '12px 14px',
+                        borderRadius: 10,
+                        border: `1.5px solid ${vMode === opt.value ? BRAND.orange : BRAND.border}`,
+                        background: vMode === opt.value ? BRAND.orangeTint : '#fff',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <input
+                        type="radio"
+                        name="operatingMode"
+                        checked={vMode === opt.value}
+                        onChange={() => setVMode(opt.value)}
+                        style={{ marginTop: 3, accentColor: BRAND.orange }}
+                      />
+                      <span>
+                        <span style={{ fontWeight: 600, fontSize: 14, color: BRAND.ink }}>
+                          {opt.label}
+                        </span>
+                        <span
+                          style={{
+                            display: 'block',
+                            fontSize: 12.5,
+                            color: BRAND.grey,
+                            lineHeight: 1.5,
+                            marginTop: 2,
+                          }}
+                        >
+                          {opt.hint}
+                        </span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </Field>
+
               <Field label="Mots-clés de recherche">
                 <input value={vTerms} onChange={(e) => setVTerms(e.target.value)} placeholder="marseille, spartiates, patinoire" style={inputStyle} />
               </Field>
