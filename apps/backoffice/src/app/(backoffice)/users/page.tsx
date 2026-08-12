@@ -23,6 +23,7 @@ function fmtDate(iso: string) {
 
 export default function UsersPage() {
   const [search, setSearch] = useState('');
+  const [bloquesOuverts, setBloquesOuverts] = useState(false);
   const qc = useQueryClient();
   /** Son propre compte : le serveur refuse de le bloquer, autant ne pas le proposer. */
   const moiId = getStoredUser()?.id ?? '';
@@ -47,6 +48,20 @@ export default function UsersPage() {
       u.memberships.some((m) => m.organization.name.toLowerCase().includes(q))
     );
   });
+
+  // Deux listes distinctes : un compte bloqué n'a plus rien à faire au milieu
+  // des comptes en service, on ne le retrouverait pas pour le rétablir.
+  const actifs = filtered.filter((u) => u.isActive);
+  const bloques = filtered.filter((u) => !u.isActive);
+
+  const basculer = (u: BackofficeUserListItem) => {
+    const question = u.isActive
+      ? `Bloquer ${u.email} ?\n\nSa session s’arrête tout de suite. Le compte et son historique de commandes sont conservés : tu pourras le rétablir.`
+      : `Rétablir l’accès de ${u.email} ?`;
+    if (window.confirm(question)) {
+      blockMut.mutate({ id: u.id, blocked: u.isActive });
+    }
+  };
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1100 }}>
@@ -87,99 +102,182 @@ export default function UsersPage() {
         </div>
       )}
 
-      {filtered.length > 0 && (
-        <div style={{ border: `1px solid ${BRAND.border}`, borderRadius: 14, overflow: 'hidden' }}>
-          {/* Header */}
-          <div style={{ ...rowStyle, background: BRAND.bgSubtle, fontWeight: 600, fontSize: 13 }}>
-            <div style={{ flex: 2 }}>Utilisateur</div>
-            <div style={{ flex: 2 }}>Email</div>
-            <div style={{ flex: 1.5 }}>Rôle</div>
-            <div style={{ flex: 2 }}>Club(s)</div>
-            <div style={{ flex: 1, textAlign: 'right' }}>Inscrit le</div>
-            <div style={{ width: 96 }} />
-          </div>
+      {actifs.length > 0 && (
+        <section style={{ marginBottom: 36 }}>
+          <SectionHeading
+            titre="Comptes actifs"
+            compte={actifs.length}
+            couleur={BRAND.ink}
+          />
+          <UserTable
+            users={actifs}
+            moiId={moiId}
+            onToggle={basculer}
+            pending={blockMut.isPending}
+          />
+        </section>
+      )}
 
-          {filtered.map((u) => {
-            const roleInfo = ROLE_LABEL[u.globalRole] ?? { label: u.globalRole, color: BRAND.grey, bg: BRAND.bgSubtle };
-            return (
-              <div key={u.id} style={{ ...rowStyle, borderTop: `1px solid ${BRAND.border}` }}>
-                {/* Avatar + nom */}
-                <div style={{ flex: 2, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                  <div style={avatarStyle}>
-                    <span style={avatarText}>
-                      {(u.displayName?.charAt(0) || u.email.charAt(0)).toUpperCase()}
-                    </span>
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, color: BRAND.ink, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {u.displayName || '—'}
-                    </div>
-                    {!u.isActive && (
-                      <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>Désactivé</div>
-                    )}
-                  </div>
-                </div>
+      {/* Comptes bloqués — repliés par défaut : c'est une réserve, pas le
+          quotidien. On garde le compteur visible pour ne pas les oublier. */}
+      {bloques.length > 0 && (
+        <section>
+          <button
+            type="button"
+            onClick={() => setBloquesOuverts((v) => !v)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8, background: 'none',
+              border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            <span style={{ color: BRAND.grey, fontSize: 12 }}>
+              {bloquesOuverts ? '▾' : '▸'}
+            </span>
+            <SectionHeading titre="Comptes bloqués" compte={bloques.length} couleur="#b91c1c" />
+          </button>
 
-                {/* Email */}
-                <div style={{ flex: 2, fontSize: 13, color: BRAND.inkSoft, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {u.email}
-                </div>
-
-                {/* Rôle */}
-                <div style={{ flex: 1.5 }}>
-                  <span style={{ display: 'inline-block', fontSize: 12, fontWeight: 600, color: roleInfo.color, background: roleInfo.bg, padding: '3px 10px', borderRadius: 999 }}>
-                    {roleInfo.label}
-                  </span>
-                </div>
-
-                {/* Organisations */}
-                <div style={{ flex: 2, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {u.memberships.length === 0 ? (
-                    <span style={{ color: BRAND.grey, fontSize: 12 }}>Aucun</span>
-                  ) : (
-                    u.memberships.map((m) => (
-                      <span key={m.organization.id} style={orgPill}>
-                        {m.organization.name}
-                      </span>
-                    ))
-                  )}
-                </div>
-
-                {/* Date */}
-                <div style={{ flex: 1, textAlign: 'right', fontSize: 12, color: BRAND.grey }}>
-                  {fmtDate(u.createdAt)}
-                </div>
-
-                {/* Blocage — réversible, jamais sur soi-même */}
-                <div style={{ width: 96, textAlign: 'right' }}>
-                  {u.id === moiId ? (
-                    <span style={{ fontSize: 11, color: BRAND.grey }}>toi</span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const question = u.isActive
-                          ? `Bloquer ${u.email} ?\n\nSa session s’arrête tout de suite. Le compte et son historique de commandes sont conservés : tu pourras le rétablir.`
-                          : `Rétablir l’accès de ${u.email} ?`;
-                        if (window.confirm(question)) {
-                          blockMut.mutate({ id: u.id, blocked: u.isActive });
-                        }
-                      }}
-                      disabled={blockMut.isPending}
-                      style={u.isActive ? blockBtn : unblockBtn}
-                    >
-                      {u.isActive ? 'Bloquer' : 'Rétablir'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+          {bloquesOuverts && (
+            <>
+              <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 14px', maxWidth: 640, lineHeight: 1.55 }}>
+                Ces comptes ne peuvent plus se connecter, nulle part. Leur historique de commandes
+                est conservé — rétablir l’accès leur rend tout, à l’identique.
+              </p>
+              <UserTable
+                users={bloques}
+                moiId={moiId}
+                onToggle={basculer}
+                pending={blockMut.isPending}
+              />
+            </>
+          )}
+        </section>
       )}
     </div>
   );
 }
+
+// ─── Sous-composants ──────────────────────────────────────────────────────────
+
+function SectionHeading({
+  titre,
+  compte,
+  couleur,
+}: {
+  titre: string;
+  compte: number;
+  couleur: string;
+}) {
+  return (
+    <h2 style={{ fontSize: 17, fontWeight: 700, color: couleur, margin: '0 0 12px' }}>
+      {titre}
+      <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 600, color: BRAND.grey }}>
+        {compte}
+      </span>
+    </h2>
+  );
+}
+
+/**
+ * Tableau de comptes. Partagé par les deux sections : une seule définition de
+ * colonnes, donc pas de dérive entre la liste des actifs et celle des bloqués.
+ */
+function UserTable({
+  users,
+  moiId,
+  onToggle,
+  pending,
+}: {
+  users: BackofficeUserListItem[];
+  moiId: string;
+  onToggle: (u: BackofficeUserListItem) => void;
+  pending: boolean;
+}) {
+  return (
+    <div style={{ border: `1px solid ${BRAND.border}`, borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ ...rowStyle, background: BRAND.bgSubtle, fontWeight: 600, fontSize: 13 }}>
+        <div style={{ flex: 2 }}>Utilisateur</div>
+        <div style={{ flex: 2 }}>Email</div>
+        <div style={{ flex: 1.5 }}>Rôle</div>
+        <div style={{ flex: 2 }}>Club(s)</div>
+        <div style={{ flex: 1, textAlign: 'right' }}>Inscrit le</div>
+        <div style={{ width: 96 }} />
+      </div>
+
+      {users.map((u) => {
+        const roleInfo = ROLE_LABEL[u.globalRole] ?? {
+          label: u.globalRole,
+          color: BRAND.grey,
+          bg: BRAND.bgSubtle,
+        };
+        return (
+          <div key={u.id} style={{ ...rowStyle, borderTop: `1px solid ${BRAND.border}` }}>
+            {/* Avatar + nom */}
+            <div style={{ flex: 2, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+              <div style={u.isActive ? avatarStyle : avatarStyleMuted}>
+                <span style={u.isActive ? avatarText : avatarTextMuted}>
+                  {(u.displayName?.charAt(0) || u.email.charAt(0)).toUpperCase()}
+                </span>
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, color: BRAND.ink, fontSize: 14, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {u.displayName || '—'}
+                </div>
+              </div>
+            </div>
+
+            {/* Email */}
+            <div style={{ flex: 2, fontSize: 13, color: BRAND.inkSoft, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {u.email}
+            </div>
+
+            {/* Rôle */}
+            <div style={{ flex: 1.5 }}>
+              <span style={{ display: 'inline-block', fontSize: 12, fontWeight: 600, color: roleInfo.color, background: roleInfo.bg, padding: '3px 10px', borderRadius: 999 }}>
+                {roleInfo.label}
+              </span>
+            </div>
+
+            {/* Organisations */}
+            <div style={{ flex: 2, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {u.memberships.length === 0 ? (
+                <span style={{ color: BRAND.grey, fontSize: 12 }}>Aucun</span>
+              ) : (
+                u.memberships.map((m) => (
+                  <span key={m.organization.id} style={orgPill}>
+                    {m.organization.name}
+                  </span>
+                ))
+              )}
+            </div>
+
+            {/* Date */}
+            <div style={{ flex: 1, textAlign: 'right', fontSize: 12, color: BRAND.grey }}>
+              {fmtDate(u.createdAt)}
+            </div>
+
+            {/* Blocage — réversible, jamais sur soi-même */}
+            <div style={{ width: 96, textAlign: 'right' }}>
+              {u.id === moiId ? (
+                <span style={{ fontSize: 11, color: BRAND.grey }}>toi</span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onToggle(u)}
+                  disabled={pending}
+                  style={u.isActive ? blockBtn : unblockBtn}
+                >
+                  {u.isActive ? 'Bloquer' : 'Rétablir'}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const rowStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 16, padding: '12px 18px', fontSize: 14,
@@ -191,6 +289,10 @@ const avatarStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
 };
 const avatarText: React.CSSProperties = { color: BRAND.orange, fontWeight: 700, fontSize: 14 };
+
+// Un compte bloqué perd l'orange de la marque : il ne fait plus partie du service.
+const avatarStyleMuted: React.CSSProperties = { ...avatarStyle, background: BRAND.bgSubtle };
+const avatarTextMuted: React.CSSProperties = { ...avatarText, color: BRAND.grey };
 
 const orgPill: React.CSSProperties = {
   fontSize: 11, fontWeight: 600, background: BRAND.bgSubtle,
