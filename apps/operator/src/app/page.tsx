@@ -17,7 +17,11 @@ interface EventItem {
 }
 
 async function fetchEvents(orgId: string, token: string): Promise<EventItem[]> {
-  const res = await fetch(`${API_URL}/organizations/${orgId}/events`, {
+  // `includePermanent` : un lieu ouvert en continu n'a pas d'événement au sens
+  // commercial, mais un contenant technique qui porte ses commandes. Sans lui,
+  // un restaurant n'offrirait aucun tableau à ouvrir — l'opérateur se
+  // connecterait pour arriver sur une page vide.
+  const res = await fetch(`${API_URL}/organizations/${orgId}/events?includePermanent=true`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) return [];

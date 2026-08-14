@@ -742,6 +742,22 @@ export interface VenueInput {
 export type VenueOperatingMode = 'EVENT_BASED' | 'PERMANENT';
 
 /**
+ * Adresse du poste opérateur.
+ *
+ * Codée en dur sur localhost, elle ne menait nulle part depuis un dashboard
+ * déployé : le club cliquait sur « ouvrir le dashboard opérateur » et
+ * atterrissait sur une page morte. `NEXT_PUBLIC_OPERATOR_URL` permet de la
+ * pointer ailleurs (préproduction, développement local).
+ */
+export const OPERATOR_URL =
+  process.env.NEXT_PUBLIC_OPERATOR_URL ?? 'https://breakeat-operator.vercel.app';
+
+/** Lien vers le tableau de commandes d'un événement donné. */
+export function operatorDashboardUrl(eventId: string): string {
+  return `${OPERATOR_URL}/dashboard/${eventId}`;
+}
+
+/**
  * Contenant d'un lieu ouvert en continu.
  *
  * Absent de la liste des événements par conception — mais les outils de

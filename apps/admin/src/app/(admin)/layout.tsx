@@ -20,13 +20,22 @@ import {
   Flag,
   Rocket,
   FlaskConical,
+  ExternalLink,
   type LucideIcon,
 } from 'lucide-react';
-import { getToken, getOrgId, getOrgName, getStoredUser, clearSession } from '@/lib/api/admin-client';
+import {
+  getToken,
+  getOrgId,
+  getOrgName,
+  getStoredUser,
+  clearSession,
+  OPERATOR_URL,
+} from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 import { BreakEatLogo } from '@/components/brand/BreakEatLogo';
 
-type NavItem = { href: string; icon: LucideIcon; label: string };
+/** `external` ouvre dans un onglet à part : on quitte l'admin, pas la session. */
+type NavItem = { href: string; icon: LucideIcon; label: string; external?: boolean };
 type NavGroup = { title: string; items: NavItem[] };
 
 // Grouped navigation — structure le menu par intention (pilotage / config /
@@ -40,23 +49,36 @@ const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    title: 'Configuration',
+    // Regroupé par objet plutôt que par écran : « mon lieu », « mes points de
+    // retrait », « mon équipe ». Le club cherche une chose, pas une page.
+    title: 'Mon lieu',
     items: [
       { href: '/wizard', icon: Wand2, label: 'Configurer mon lieu' },
-      { href: '/events', icon: CalendarDays, label: 'Événements & config' },
-      { href: '/suppliers', icon: Store, label: 'Buvettes' },
-      { href: '/groups', icon: Tags, label: 'Groupes' },
-      { href: '/operator-screens', icon: MonitorSmartphone, label: 'Écrans opérateur' },
-      { href: '/appearance', icon: Palette, label: "Apparence de l'app" },
-      { href: '/notifications', icon: Bell, label: 'Notifications' },
-      { href: '/campaigns', icon: Megaphone, label: 'Campagnes & push' },
+      { href: '/organizations', icon: Building2, label: 'Fiche du lieu' },
+      { href: '/events', icon: CalendarDays, label: 'Événements' },
     ],
   },
   {
-    title: 'Organisation',
+    title: 'Points de retrait',
     items: [
-      { href: '/organizations', icon: Building2, label: 'Organisation' },
+      { href: '/suppliers', icon: Store, label: 'Points de retrait' },
+      { href: '/operator-screens', icon: MonitorSmartphone, label: 'Écrans opérateur' },
+      { href: OPERATOR_URL, icon: ExternalLink, label: 'Ouvrir le poste opérateur', external: true },
+    ],
+  },
+  {
+    title: 'Équipe & clients',
+    items: [
       { href: '/team', icon: Users, label: 'Équipe' },
+      { href: '/groups', icon: Tags, label: 'Groupes de clients' },
+    ],
+  },
+  {
+    title: 'Communication',
+    items: [
+      { href: '/appearance', icon: Palette, label: "Apparence de l'app" },
+      { href: '/notifications', icon: Bell, label: 'Notifications' },
+      { href: '/campaigns', icon: Megaphone, label: 'Campagnes & push' },
     ],
   },
   {
@@ -205,21 +227,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               >
                 {group.title}
               </div>
-              {group.items.map(({ href, icon: Icon, label }) => {
+              {group.items.map(({ href, icon: Icon, label, external }) => {
                 // For /organizations, redirect to specific org id if available
                 const resolvedHref =
                   href === '/organizations' && getOrgId()
                     ? `/organizations/${getOrgId()}`
                     : href;
 
+                // Un lien externe n'est jamais « actif » : il ne correspond à
+                // aucune route de l'admin.
                 const isActive =
-                  pathname === resolvedHref ||
-                  (href !== '/dashboard' && pathname.startsWith(href));
+                  !external &&
+                  (pathname === resolvedHref ||
+                    (href !== '/dashboard' && pathname.startsWith(href)));
 
                 return (
                   <Link
                     key={href}
                     href={resolvedHref}
+                    target={external ? '_blank' : undefined}
+                    rel={external ? 'noopener noreferrer' : undefined}
                     style={{
                       display: 'flex',
                       alignItems: 'center',

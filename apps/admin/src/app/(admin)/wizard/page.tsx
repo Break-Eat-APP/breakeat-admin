@@ -18,6 +18,7 @@ import {
   apiSetAppSetting,
   apiGetPermanentContainer,
   getOrgId,
+  operatorDashboardUrl,
   type VenueOperatingMode,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
@@ -667,7 +668,7 @@ export default function WizardPage() {
       }
       setDone({
         eventId,
-        operatorUrl: `http://localhost:3002/dashboard/${eventId}`,
+        operatorUrl: operatorDashboardUrl(eventId),
         simulatorPath: `/simulator?eventId=${eventId}`,
         qrLink: `breakeat://event/${eventId}`,
       });

@@ -74,15 +74,32 @@ export class EventsService {
     return event;
   }
 
-  async findAllByOrg(organizationId: string, userId: string): Promise<EventWithSuppliers[]> {
+  /**
+   * Événements d'une organisation.
+   *
+   * Le contenant d'un lieu permanent est écarté par défaut : ce n'est pas un
+   * événement, personne ne l'a créé, et l'exposer dans les écrans de gestion
+   * ferait apparaître un « Service continu » que le club tenterait de modifier
+   * ou de supprimer — cassant ses commandes en cours.
+   *
+   * `includePermanent` le réintègre pour les écrans qui doivent TRAVAILLER
+   * dessus plutôt que le configurer : le poste opérateur, notamment, n'aurait
+   * sinon aucun tableau à ouvrir sur un restaurant. La distinction est entre
+   * régler un événement et servir des commandes, pas entre deux niveaux de
+   * droits — l'accès à l'organisation reste seul juge.
+   */
+  async findAllByOrg(
+    organizationId: string,
+    userId: string,
+    options: { includePermanent?: boolean } = {},
+  ): Promise<EventWithSuppliers[]> {
     await requireOrgAccess(this.prisma, userId, organizationId, ALL_ORG_ROLES);
 
     return this.prisma.event.findMany({
-      // Le contenant d'un lieu permanent est écarté : ce n'est pas un
-      // événement, personne ne l'a créé et il n'y a rien à y régler. L'exposer
-      // ferait apparaître un « Service continu » que le club tenterait de
-      // modifier ou de supprimer, cassant ses commandes en cours.
-      where: { organizationId, isPermanentContainer: false },
+      where: {
+        organizationId,
+        ...(options.includePermanent ? {} : { isPermanentContainer: false }),
+      },
       include: { eventSuppliers: { include: { supplier: true } } },
       orderBy: { startAt: 'desc' },
     });

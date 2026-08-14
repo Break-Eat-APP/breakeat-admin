@@ -15,6 +15,7 @@ import {
   apiCreateSlot,
   apiUpdateEventStatus,
   getOrgId,
+  operatorDashboardUrl,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 
@@ -196,7 +197,7 @@ export default function DemoSetupPage() {
         eventId,
         supplierId,
         qrLink: `breakeat://event/${eventId}`,
-        operatorUrl: `http://localhost:3002/dashboard/${eventId}`,
+        operatorUrl: operatorDashboardUrl(eventId),
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Erreur inconnue';

@@ -184,6 +184,19 @@ describe('EventsService', () => {
         }),
       );
     });
+
+    it('le réintègre pour qui doit travailler dessus (poste opérateur)', async () => {
+      // Sans cette porte, un restaurant n'offre aucun tableau de commandes :
+      // l'opérateur se connecte et tombe sur une page vide.
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findAllByOrg(ORG_ID, USER_ID, { includePermanent: true });
+
+      const where = (prisma.event.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where).not.toHaveProperty('isPermanentContainer');
+      expect(where.organizationId).toBe(ORG_ID);
+    });
   });
 
   describe('update', () => {

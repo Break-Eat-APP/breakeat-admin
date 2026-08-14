@@ -7,6 +7,7 @@ import {
   Body,
   Param,
   ParseUUIDPipe,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -36,13 +37,23 @@ export class EventsController {
     return this.eventsService.create(orgId, user.sub, dto);
   }
 
-  /** GET /api/v1/organizations/:orgId/events */
+  /**
+   * GET /api/v1/organizations/:orgId/events
+   *
+   * `?includePermanent=true` ajoute le contenant des lieux ouverts en continu.
+   * Réservé aux écrans qui doivent travailler dessus — le poste opérateur —
+   * et non à ceux qui configurent : sans lui, un restaurant n'offrirait aucun
+   * tableau de commandes à ouvrir.
+   */
   @Get()
   findAll(
     @Param('orgId', ParseUUIDPipe) orgId: string,
     @CurrentUser() user: JwtPayload,
+    @Query('includePermanent') includePermanent?: string,
   ) {
-    return this.eventsService.findAllByOrg(orgId, user.sub);
+    return this.eventsService.findAllByOrg(orgId, user.sub, {
+      includePermanent: includePermanent === 'true',
+    });
   }
 
   /** GET /api/v1/organizations/:orgId/events/:id */
