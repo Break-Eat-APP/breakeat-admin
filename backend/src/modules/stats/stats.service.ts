@@ -48,6 +48,32 @@ export interface OrgStatsOverview {
   events: OrgEventStat[];
 }
 
+/** Granularité d'une lecture par période. */
+export type PeriodGranularity = 'day' | 'week' | 'month';
+
+/** Une tranche de temps avec son chiffre d'affaires. */
+export interface PeriodBucket {
+  /** Début de la tranche, en ISO. Le libellé se compose côté interface. */
+  startAt: string;
+  caTtcCents: number;
+  caHtCents: number;
+  ordersCount: number;
+}
+
+export interface PeriodStats {
+  organizationId: string;
+  granularity: PeriodGranularity;
+  from: string;
+  to: string;
+  revenue: RevenueBlock;
+  ordersCount: number;
+  averageBasket: BasketBlock;
+  /** Tranches triées du plus ancien au plus récent, y compris les vides. */
+  buckets: PeriodBucket[];
+  /** Meilleures ventes sur la période (max 10). */
+  topProducts: TopProduct[];
+}
+
 export interface TopProduct {
   productId: string;
   name: string;
@@ -175,6 +201,152 @@ export class StatsService {
       activeEventsCount,
       events: eventStats,
     };
+  }
+
+  // ─── Lecture par période ──────────────────────────────────────
+
+  /**
+   * PHASE 22 — chiffre d'affaires découpé dans le temps.
+   *
+   * C'est la lecture des lieux ouverts en continu : un restaurant ne se lit
+   * pas « par match », il se lit par jour, par semaine ou par mois. La
+   * répartition par événement, elle, reste pour les stades.
+   *
+   * L'agrégation se fait sur `Order.createdAt` : l'événement n'intervient à
+   * aucun moment, ce qui rend cette lecture valable pour les deux rythmes.
+   */
+  async getPeriodStats(
+    orgId: string,
+    userId: string,
+    options: { granularity?: PeriodGranularity; from?: string; to?: string } = {},
+  ): Promise<PeriodStats> {
+    await requireOrgAccess(this.prisma, userId, orgId, MANAGE_ROLES);
+
+    const granularity = options.granularity ?? 'day';
+    const { from, to } = this.resolveRange(options.from, options.to, granularity);
+
+    const revenueWhere = {
+      organizationId: orgId,
+      paymentStatus: PaymentStatus.SUCCEEDED,
+      status: { not: OrderStatus.CANCELLED },
+      createdAt: { gte: from, lte: to },
+    };
+
+    const [orders, topItems] = await Promise.all([
+      // Les commandes brutes, pas un groupBy SQL : PostgreSQL grouperait en UTC
+      // alors qu'un service du soir doit tomber dans la bonne journée locale.
+      // Le volume est borné par la fenêtre demandée.
+      this.prisma.order.findMany({
+        where: revenueWhere,
+        select: { createdAt: true, totalCents: true },
+      }),
+      this.prisma.orderItem.groupBy({
+        by: ['productId', 'productNameSnapshot'],
+        where: { order: revenueWhere },
+        _sum: { quantity: true, lineTotalCents: true },
+        orderBy: { _sum: { quantity: 'desc' } },
+        take: 10,
+      }),
+    ]);
+
+    // Toutes les tranches sont pré-remplies à zéro : un jour sans vente est une
+    // information, pas un trou. Sans ça, un graphique relierait deux dates
+    // éloignées comme si de rien n'était.
+    const buckets = new Map<string, { ttc: number; count: number }>();
+    for (const start of this.enumerateBuckets(from, to, granularity)) {
+      buckets.set(start.toISOString(), { ttc: 0, count: 0 });
+    }
+    for (const order of orders) {
+      const key = this.bucketStart(order.createdAt, granularity).toISOString();
+      const bucket = buckets.get(key);
+      if (!bucket) continue; // hors fenêtre après arrondi — ignoré
+      bucket.ttc += order.totalCents;
+      bucket.count += 1;
+    }
+
+    const caTtcCents = orders.reduce((sum, o) => sum + o.totalCents, 0);
+    const ordersCount = orders.length;
+    const caHtCents = this.toHtCents(caTtcCents);
+
+    return {
+      organizationId: orgId,
+      granularity,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      revenue: { caTtcCents, caHtCents, vatRate: this.vatRate },
+      ordersCount,
+      averageBasket: this.averageBasket(caTtcCents, caHtCents, ordersCount),
+      buckets: [...buckets.entries()].map(([startAt, b]) => ({
+        startAt,
+        caTtcCents: b.ttc,
+        caHtCents: this.toHtCents(b.ttc),
+        ordersCount: b.count,
+      })),
+      topProducts: topItems.map((row) => ({
+        productId: row.productId,
+        name: row.productNameSnapshot,
+        quantity: row._sum.quantity ?? 0,
+        revenueCents: row._sum.lineTotalCents ?? 0,
+      })),
+    };
+  }
+
+  /**
+   * Fenêtre par défaut selon la granularité : 30 jours, 12 semaines ou 12 mois.
+   * Une plage explicite l'emporte ; une plage inversée est remise à l'endroit
+   * plutôt que de renvoyer un résultat vide sans explication.
+   */
+  private resolveRange(
+    fromRaw: string | undefined,
+    toRaw: string | undefined,
+    granularity: PeriodGranularity,
+  ): { from: Date; to: Date } {
+    const to = this.parseDate(toRaw) ?? new Date();
+    let from = this.parseDate(fromRaw);
+    if (!from) {
+      from = new Date(to);
+      if (granularity === 'day') from.setDate(from.getDate() - 29);
+      else if (granularity === 'week') from.setDate(from.getDate() - 7 * 11);
+      else from.setMonth(from.getMonth() - 11);
+    }
+    if (from > to) return { from: to, to: from };
+    return { from: this.bucketStart(from, granularity), to };
+  }
+
+  private parseDate(raw?: string): Date | null {
+    if (!raw) return null;
+    const d = new Date(raw);
+    return Number.isNaN(d.getTime()) ? null : d;
+  }
+
+  /** Début de la tranche contenant `date`. Les semaines commencent le lundi. */
+  private bucketStart(date: Date, granularity: PeriodGranularity): Date {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    if (granularity === 'week') {
+      // getDay() renvoie 0 pour dimanche : on le ramène à 6 pour que la
+      // semaine commence lundi, comme partout en restauration.
+      const offset = (d.getDay() + 6) % 7;
+      d.setDate(d.getDate() - offset);
+    } else if (granularity === 'month') {
+      d.setDate(1);
+    }
+    return d;
+  }
+
+  private enumerateBuckets(from: Date, to: Date, granularity: PeriodGranularity): Date[] {
+    const out: Date[] = [];
+    const cursor = this.bucketStart(from, granularity);
+    // Borne de sécurité : une plage absurde (dix ans en jours) ne doit pas
+    // faire exploser la réponse ni la mémoire.
+    const MAX_BUCKETS = 400;
+    while (cursor <= to && out.length < MAX_BUCKETS) {
+      out.push(new Date(cursor));
+      if (granularity === 'day') cursor.setDate(cursor.getDate() + 1);
+      else if (granularity === 'week') cursor.setDate(cursor.getDate() + 7);
+      else cursor.setMonth(cursor.getMonth() + 1);
+    }
+    return out;
   }
 
   // ─── Event detail ─────────────────────────────────────────────

@@ -1055,6 +1055,48 @@ export async function apiGetOrgStats(orgId: string): Promise<OrgStatsOverview> {
   return req<OrgStatsOverview>('GET', `/organizations/${orgId}/stats`);
 }
 
+export type PeriodGranularity = 'day' | 'week' | 'month';
+
+export interface PeriodBucket {
+  /** Début de la tranche, en ISO. Le libellé se compose ici, côté interface. */
+  startAt: string;
+  caTtcCents: number;
+  caHtCents: number;
+  ordersCount: number;
+}
+
+export interface PeriodStats {
+  organizationId: string;
+  granularity: PeriodGranularity;
+  from: string;
+  to: string;
+  revenue: RevenueBlock;
+  ordersCount: number;
+  averageBasket: BasketBlock;
+  /** Tranches triées, y compris les vides — un jour sans vente reste visible. */
+  buckets: PeriodBucket[];
+  topProducts: TopProduct[];
+}
+
+/**
+ * GET /organizations/:orgId/stats/periods — chiffre d'affaires dans le temps.
+ *
+ * La lecture des lieux ouverts en continu, où « par événement » n'a pas de
+ * sens. L'agrégation porte sur la date de commande, donc elle vaut aussi pour
+ * un stade qui voudrait voir ses ventes jour par jour.
+ */
+export async function apiGetPeriodStats(
+  orgId: string,
+  params: { granularity?: PeriodGranularity; from?: string; to?: string } = {},
+): Promise<PeriodStats> {
+  const q = new URLSearchParams();
+  if (params.granularity) q.set('granularity', params.granularity);
+  if (params.from) q.set('from', params.from);
+  if (params.to) q.set('to', params.to);
+  const suffix = q.toString() ? `?${q}` : '';
+  return req<PeriodStats>('GET', `/organizations/${orgId}/stats/periods${suffix}`);
+}
+
 /** GET /events/:eventId/stats — single-event analytics (status breakdown + top products). */
 export async function apiGetEventStats(eventId: string): Promise<EventStats> {
   return req<EventStats>('GET', `/events/${eventId}/stats`);

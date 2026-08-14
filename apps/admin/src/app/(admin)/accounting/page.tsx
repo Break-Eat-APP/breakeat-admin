@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshCw, TrendingUp, ShoppingBag, Receipt, BarChart2 } from 'lucide-react';
-import { apiGetOrgStats, getOrgId, getOrgName, type OrgStatsOverview } from '@/lib/api/admin-client';
+import {
+  apiGetOrgStats,
+  apiGetPeriodStats,
+  apiGetVenues,
+  getOrgId,
+  getOrgName,
+  type OrgStatsOverview,
+  type PeriodGranularity,
+  type PeriodStats,
+} from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 
 // ─── Formatters ──────────────────────────────────────────────────────────────
@@ -15,6 +24,41 @@ function pct(a: number, b: number) { return b === 0 ? '—' : `${((a / b) * 100)
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function pill(active: boolean): React.CSSProperties {
+  return {
+    background: active ? BRAND.orangeTint : BRAND.surface,
+    border: `1px solid ${active ? BRAND.orange : BRAND.border}`,
+    color: active ? BRAND.orange : BRAND.inkSoft,
+    borderRadius: 999,
+    padding: '5px 14px',
+    fontSize: 12.5,
+    fontWeight: 600,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+  };
+}
+
+const GRANULARITES: { value: PeriodGranularity; label: string }[] = [
+  { value: 'day', label: 'Jour' },
+  { value: 'week', label: 'Semaine' },
+  { value: 'month', label: 'Mois' },
+];
+
+/** Libellé d'une tranche : le serveur ne renvoie qu'une date de début. */
+function labelBucket(iso: string, g: PeriodGranularity) {
+  const d = new Date(iso);
+  if (g === 'month') {
+    return d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+  }
+  if (g === 'week') {
+    const fin = new Date(d);
+    fin.setDate(fin.getDate() + 6);
+    const fmt = (x: Date) => x.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' });
+    return `${fmt(d)} → ${fmt(fin)}`;
+  }
+  return d.toLocaleDateString('fr-FR', { weekday: 'short', day: '2-digit', month: 'short' });
 }
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
@@ -51,6 +95,14 @@ export default function AccountingPage() {
   const orgId = getOrgId();
   const orgName = getOrgName();
   const [data, setData] = useState<OrgStatsOverview | null>(null);
+  const [periods, setPeriods] = useState<PeriodStats | null>(null);
+  const [granularity, setGranularity] = useState<PeriodGranularity>('day');
+  /**
+   * Lecture affichée. Le rythme du lieu décide du défaut : « par événement »
+   * n'apprend rien sur un restaurant, « par période » masquerait le découpage
+   * par match sur un stade. Les deux restent accessibles.
+   */
+  const [view, setView] = useState<'periods' | 'events' | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
@@ -60,8 +112,17 @@ export default function AccountingPage() {
     if (isRefresh) setRefreshing(true); else setLoading(true);
     setError('');
     try {
-      const stats = await apiGetOrgStats(orgId);
+      const [stats, venues] = await Promise.all([
+        apiGetOrgStats(orgId),
+        // Le mode ne sert qu'à choisir la vue par défaut : son indisponibilité
+        // ne doit pas priver le manager de ses chiffres.
+        apiGetVenues(orgId).catch(() => []),
+      ]);
       setData(stats);
+      const permanent = Array.isArray(venues) && venues[0]?.operatingMode === 'PERMANENT';
+      // Ne se recalcule qu'au premier chargement : un rafraîchissement ne doit
+      // pas ramener le manager sur la vue qu'il vient de quitter.
+      setView((v) => v ?? (permanent ? 'periods' : 'events'));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de chargement');
     } finally {
@@ -69,6 +130,18 @@ export default function AccountingPage() {
       setRefreshing(false);
     }
   }, [orgId]);
+
+  // Les tranches se rechargent seules quand la granularité change.
+  useEffect(() => {
+    if (!orgId || view !== 'periods') return;
+    let annule = false;
+    void apiGetPeriodStats(orgId, { granularity })
+      .then((r) => { if (!annule) setPeriods(r); })
+      .catch((err: unknown) => {
+        if (!annule) setError(err instanceof Error ? err.message : 'Erreur de chargement');
+      });
+    return () => { annule = true; };
+  }, [orgId, view, granularity]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -119,12 +192,79 @@ export default function AccountingPage() {
             <KpiCard icon={ShoppingBag} label="Commandes" value={INT.format(nbOrders)} sub={avgBasket ? `Panier moyen ${euros(avgBasket)}` : undefined} accent="#0284c7" />
           </div>
 
-          {/* Par événement */}
+          {/* Détail — par période ou par événement */}
           <div style={{ background: BRAND.surface, borderRadius: BRAND.radius.card, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}`, overflow: 'hidden' }}>
-            <div style={{ padding: '16px 22px', borderBottom: `1px solid ${BRAND.border}` }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.ink, margin: 0 }}>Détail par événement</h2>
+            <div style={{ padding: '16px 22px', borderBottom: `1px solid ${BRAND.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.ink, margin: 0 }}>
+                {view === 'periods' ? 'Détail par période' : 'Détail par événement'}
+              </h2>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {view === 'periods' &&
+                  GRANULARITES.map((g) => (
+                    <button
+                      key={g.value}
+                      onClick={() => setGranularity(g.value)}
+                      style={pill(granularity === g.value)}
+                    >
+                      {g.label}
+                    </button>
+                  ))}
+                <button
+                  onClick={() => setView(view === 'periods' ? 'events' : 'periods')}
+                  style={{ ...pill(false), marginLeft: 8, color: BRAND.orange, borderColor: BRAND.orange }}
+                >
+                  {view === 'periods' ? 'Voir par événement' : 'Voir par période'}
+                </button>
+              </div>
             </div>
-            {!data?.events?.length ? (
+
+            {view === 'periods' ? (
+              !periods ? (
+                <div style={{ padding: 32, textAlign: 'center', color: BRAND.grey, fontSize: 14 }}>Chargement…</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+                  <thead>
+                    <tr style={{ background: BRAND.bgSubtle }}>
+                      {['Période', 'Commandes', 'CA TTC', 'CA HT', 'TVA'].map((h) => (
+                        <th key={h} style={{ padding: '10px 16px', textAlign: h === 'Période' ? 'left' : 'right', fontWeight: 700, color: BRAND.inkSoft, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${BRAND.border}` }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {periods.buckets.map((b, i) => {
+                      const tvB = b.caTtcCents - b.caHtCents;
+                      // Une tranche sans vente reste affichée, en gris : c'est
+                      // une information, pas un trou dans le tableau.
+                      const creux = b.ordersCount === 0;
+                      return (
+                        <tr key={b.startAt} style={{ borderBottom: i < periods.buckets.length - 1 ? `1px solid ${BRAND.border}` : 'none', background: i % 2 === 1 ? BRAND.bg : BRAND.surface }}>
+                          <td style={{ padding: '12px 16px', fontWeight: 600, color: creux ? BRAND.grey : BRAND.ink, whiteSpace: 'nowrap' }}>
+                            {labelBucket(b.startAt, periods.granularity)}
+                          </td>
+                          <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: creux ? BRAND.grey : BRAND.ink }}>{INT.format(b.ordersCount)}</td>
+                          <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: creux ? BRAND.grey : BRAND.ink }}>{euros(b.caTtcCents)}</td>
+                          <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: creux ? BRAND.grey : '#059669' }}>{euros(b.caHtCents)}</td>
+                          <td style={{ padding: '12px 16px', textAlign: 'right', color: BRAND.inkSoft }}>{euros(tvB)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: BRAND.bgSubtle, borderTop: `2px solid ${BRAND.border}` }}>
+                      <td style={{ padding: '12px 16px', fontWeight: 800, color: BRAND.ink, fontSize: 13 }}>
+                        TOTAL — {formatDate(periods.from)} → {formatDate(periods.to)}
+                      </td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: BRAND.ink }}>{INT.format(periods.ordersCount)}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: BRAND.ink }}>{euros(periods.revenue.caTtcCents)}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: '#059669' }}>{euros(periods.revenue.caHtCents)}</td>
+                      <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: BRAND.inkSoft }}>
+                        {euros(periods.revenue.caTtcCents - periods.revenue.caHtCents)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              )
+            ) : !data?.events?.length ? (
               <div style={{ padding: 32, textAlign: 'center', color: BRAND.grey, fontSize: 14 }}>Aucun événement avec des données.</div>
             ) : (
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>

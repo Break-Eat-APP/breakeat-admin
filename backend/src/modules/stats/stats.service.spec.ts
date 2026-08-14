@@ -22,7 +22,7 @@ describe('StatsService', () => {
   let prisma: {
     user: { findUnique: jest.Mock };
     organizationMember: { findUnique: jest.Mock };
-    order: { aggregate: jest.Mock; groupBy: jest.Mock };
+    order: { aggregate: jest.Mock; groupBy: jest.Mock; findMany: jest.Mock };
     orderItem: { groupBy: jest.Mock };
     event: { findMany: jest.Mock; findUnique: jest.Mock };
   };
@@ -41,7 +41,7 @@ describe('StatsService', () => {
     prisma = {
       user: { findUnique: jest.fn() },
       organizationMember: { findUnique: jest.fn() },
-      order: { aggregate: jest.fn(), groupBy: jest.fn() },
+      order: { aggregate: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
       orderItem: { groupBy: jest.fn() },
       event: { findMany: jest.fn(), findUnique: jest.fn() },
     };
@@ -221,6 +221,140 @@ describe('StatsService', () => {
         ForbiddenException,
       );
       expect(prisma.order.aggregate).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── getPeriodStats (phase 22) ────────────────────────────────
+  //
+  // La lecture des lieux ouverts en continu. Le risque n'est pas l'arithmétique
+  // — elle est partagée avec le reste — mais le DÉCOUPAGE : une commande rangée
+  // dans la mauvaise journée, ou un jour creux qui disparaît du graphique,
+  // donnent un chiffre juste au total et faux là où on le lit.
+
+  describe('getPeriodStats', () => {
+    function order(iso: string, cents: number) {
+      return { createdAt: new Date(iso), totalCents: cents };
+    }
+
+    beforeEach(() => {
+      prisma.orderItem.groupBy.mockResolvedValue([]);
+    });
+
+    it('range chaque commande dans sa journée, et garde les jours creux', async () => {
+      asMember(OrgRole.MANAGER);
+      prisma.order.findMany.mockResolvedValue([
+        order('2026-08-10T12:00:00', 1_000),
+        order('2026-08-10T19:30:00', 2_000),
+        order('2026-08-12T12:00:00', 500),
+      ]);
+
+      const r = await service.getPeriodStats(ORG_ID, USER_ID, {
+        granularity: 'day',
+        from: '2026-08-10T00:00:00',
+        to: '2026-08-12T23:59:59',
+      });
+
+      expect(r.buckets).toHaveLength(3);
+      expect(r.buckets[0].caTtcCents).toBe(3_000);
+      expect(r.buckets[0].ordersCount).toBe(2);
+      // Le 11 n'a rien vendu : il DOIT rester, à zéro. Le supprimer ferait
+      // relier le 10 au 12 comme si la journée n'avait pas existé.
+      expect(r.buckets[1].caTtcCents).toBe(0);
+      expect(r.buckets[2].caTtcCents).toBe(500);
+    });
+
+    it('totalise l’ensemble de la fenêtre', async () => {
+      asMember(OrgRole.MANAGER);
+      prisma.order.findMany.mockResolvedValue([
+        order('2026-08-10T12:00:00', 1_100),
+        order('2026-08-11T12:00:00', 1_000),
+      ]);
+
+      const r = await service.getPeriodStats(ORG_ID, USER_ID, {
+        granularity: 'day',
+        from: '2026-08-10T00:00:00',
+        to: '2026-08-11T23:59:59',
+      });
+
+      expect(r.revenue.caTtcCents).toBe(2_100);
+      expect(r.ordersCount).toBe(2);
+      // CA HT = TTC / 1,10 — même règle que partout ailleurs.
+      expect(r.revenue.caHtCents).toBe(Math.round(2_100 / 1.1));
+    });
+
+    it('fait commencer les semaines le lundi', async () => {
+      asMember(OrgRole.MANAGER);
+      // Le 16 août 2026 est un dimanche : il appartient à la semaine du lundi 10.
+      prisma.order.findMany.mockResolvedValue([order('2026-08-16T20:00:00', 900)]);
+
+      const r = await service.getPeriodStats(ORG_ID, USER_ID, {
+        granularity: 'week',
+        from: '2026-08-10T00:00:00',
+        to: '2026-08-16T23:59:59',
+      });
+
+      expect(r.buckets).toHaveLength(1);
+      expect(new Date(r.buckets[0].startAt).getDay()).toBe(1); // lundi
+      expect(r.buckets[0].caTtcCents).toBe(900);
+    });
+
+    it('regroupe par mois calendaire', async () => {
+      asMember(OrgRole.MANAGER);
+      prisma.order.findMany.mockResolvedValue([
+        order('2026-07-03T12:00:00', 100),
+        order('2026-07-28T12:00:00', 200),
+        order('2026-08-01T12:00:00', 300),
+      ]);
+
+      const r = await service.getPeriodStats(ORG_ID, USER_ID, {
+        granularity: 'month',
+        from: '2026-07-01T00:00:00',
+        to: '2026-08-31T23:59:59',
+      });
+
+      expect(r.buckets).toHaveLength(2);
+      expect(r.buckets[0].caTtcCents).toBe(300);
+      expect(r.buckets[1].caTtcCents).toBe(300);
+    });
+
+    it('remet une plage inversée à l’endroit', async () => {
+      asMember(OrgRole.MANAGER);
+      prisma.order.findMany.mockResolvedValue([]);
+
+      const r = await service.getPeriodStats(ORG_ID, USER_ID, {
+        granularity: 'day',
+        from: '2026-08-12T00:00:00',
+        to: '2026-08-10T00:00:00',
+      });
+
+      // Plutôt qu'un résultat vide sans explication.
+      expect(new Date(r.from) <= new Date(r.to)).toBe(true);
+      expect(r.buckets.length).toBeGreaterThan(0);
+    });
+
+    it('n’interroge rien quand l’accès est refusé', async () => {
+      asMember(OrgRole.OPERATOR);
+
+      await expect(service.getPeriodStats(ORG_ID, USER_ID)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(prisma.order.findMany).not.toHaveBeenCalled();
+    });
+
+    it('n’agrège jamais une commande annulée ou impayée', async () => {
+      asMember(OrgRole.MANAGER);
+      prisma.order.findMany.mockResolvedValue([]);
+
+      await service.getPeriodStats(ORG_ID, USER_ID);
+
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            paymentStatus: PaymentStatus.SUCCEEDED,
+            status: { not: OrderStatus.CANCELLED },
+          }),
+        }),
+      );
     });
   });
 });
