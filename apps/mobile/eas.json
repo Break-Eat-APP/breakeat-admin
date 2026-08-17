@@ -35,10 +35,16 @@
       "autoIncrement": true
     },
     "preview": {
-      "extends": "beta",
       "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "APP_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1"
       }
     },
     "production": {
