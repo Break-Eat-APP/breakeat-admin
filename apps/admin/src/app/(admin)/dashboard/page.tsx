@@ -7,6 +7,7 @@ import {
   apiGetOrgStats,
   getStoredUser,
   getOrgId,
+  OPERATOR_URL,
   getOrgName,
   type OrgStatsOverview,
   type OrgEventStat,
@@ -292,12 +293,12 @@ export default function DashboardPage() {
         <div style={{ fontSize: 12, color: BRAND.grey }}>
           Accès rapide — Dashboard opérateur :{' '}
           <a
-            href="http://localhost:3002/dashboard"
+            href={OPERATOR_URL}
             target="_blank"
             rel="noopener noreferrer"
             style={{ color: BRAND.orange, fontWeight: 600 }}
           >
-            localhost:3002
+            Ouvrir le poste opérateur
           </a>
         </div>
       </div>

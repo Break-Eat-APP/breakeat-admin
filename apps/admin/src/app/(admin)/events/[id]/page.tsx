@@ -38,6 +38,7 @@ import {
   type EventStats,
   type OperatorOrderStatus,
   getOrgId,
+  operatorDashboardUrl,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 import { KIND_LABELS } from '@/components/operator-screens/screen-form';
@@ -1418,7 +1419,7 @@ export default function EventDetailPage() {
           Accédez au dashboard opérateur pour gérer les commandes en temps réel.
         </p>
         <a
-          href={`http://localhost:3002/dashboard/${event.id}`}
+          href={operatorDashboardUrl(event.id)}
           target="_blank"
           rel="noopener noreferrer"
           style={{ display: 'inline-block', background: BRAND.ink, color: '#fff', borderRadius: 8, padding: '10px 20px', fontWeight: 600, fontSize: 14, textDecoration: 'none' }}
