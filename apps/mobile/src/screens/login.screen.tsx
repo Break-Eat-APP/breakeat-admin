@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,11 +15,25 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiLogin, apiRegister } from '@lib/api/mobile-api';
 import { useAuthStore } from '@store/auth.store';
+import { showAlert } from '@lib/alert';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
 import { BreakEatLogo } from '@components/break-eat-logo';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
+
+/**
+ * Connexion par Apple / Google / Facebook.
+ *
+ * Les boutons existaient mais n'étaient branchés sur rien : ils affichaient
+ * « bientôt disponible » — et sur le web, rien du tout. Trois boutons bien
+ * visibles qui ne mènent nulle part font croire à une application cassée,
+ * surtout devant de vrais utilisateurs.
+ *
+ * Ils restent écrits et prêts : passer cette constante à `true` les rétablit
+ * le jour où les fournisseurs seront branchés.
+ */
+const SOCIAL_LOGIN_READY = false;
 
 export function LoginScreen({ navigation, route }: Props) {
   const { setAuth } = useAuthStore();
@@ -49,15 +62,15 @@ export function LoginScreen({ navigation, route }: Props) {
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Champs requis', 'Email et mot de passe sont obligatoires.');
+      showAlert('Champs requis', 'Email et mot de passe sont obligatoires.');
       return;
     }
     if (password.length < 8) {
-      Alert.alert('Mot de passe trop court', 'Le mot de passe doit contenir au moins 8 caractères.');
+      showAlert('Mot de passe trop court', 'Le mot de passe doit contenir au moins 8 caractères.');
       return;
     }
     if (mode === 'register' && displayName.trim().length < 2) {
-      Alert.alert('Champ requis', 'Indiquez un nom (au moins 2 caractères).');
+      showAlert('Champ requis', 'Indiquez un nom (au moins 2 caractères).');
       return;
     }
     setLoading(true);
@@ -89,14 +102,16 @@ export function LoginScreen({ navigation, route }: Props) {
       } else if (msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('conflict')) {
         msg = 'Un compte existe déjà avec cet email.';
       }
-      Alert.alert('Erreur', msg);
+      showAlert('Erreur', msg);
     } finally {
       setLoading(false);
     }
   };
 
   const social = (provider: string) =>
-    Alert.alert('Bientôt', `Connexion avec ${provider} disponible prochainement.`);
+    // `Alert.alert` ne fait RIEN sur le web : le bouton semblait cassé plutôt
+    // qu'indisponible. Le helper couvre les deux plateformes.
+    showAlert('Bientôt', `Connexion avec ${provider} disponible prochainement.`);
 
   return (
     <KeyboardAvoidingView
@@ -141,31 +156,34 @@ export function LoginScreen({ navigation, route }: Props) {
           </Pressable>
         </View>
 
-        {/* Boutons sociaux (placeholders) */}
-        <SocialButton
-          icon="logo-apple"
-          iconColor={THEME.ink}
-          label="Continuer avec Apple"
-          onPress={() => social('Apple')}
-        />
-        <SocialButton
-          icon="logo-google"
-          iconColor="#EA4335"
-          label="Continuer avec Google"
-          onPress={() => social('Google')}
-        />
-        <SocialButton
-          icon="logo-facebook"
-          iconColor="#1877F2"
-          label="Continuer avec Facebook"
-          onPress={() => social('Facebook')}
-        />
+        {SOCIAL_LOGIN_READY && (
+          <>
+            <SocialButton
+              icon="logo-apple"
+              iconColor={THEME.ink}
+              label="Continuer avec Apple"
+              onPress={() => social('Apple')}
+            />
+            <SocialButton
+              icon="logo-google"
+              iconColor="#EA4335"
+              label="Continuer avec Google"
+              onPress={() => social('Google')}
+            />
+            <SocialButton
+              icon="logo-facebook"
+              iconColor="#1877F2"
+              label="Continuer avec Facebook"
+              onPress={() => social('Facebook')}
+            />
 
-        <View style={styles.orRow}>
-          <View style={styles.orLine} />
-          <Text style={styles.orText}>ou</Text>
-          <View style={styles.orLine} />
-        </View>
+            <View style={styles.orRow}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>ou</Text>
+              <View style={styles.orLine} />
+            </View>
+          </>
+        )}
 
         {/* Champs */}
         {mode === 'register' && (
@@ -205,7 +223,7 @@ export function LoginScreen({ navigation, route }: Props) {
 
         {mode === 'login' && (
           <Pressable
-            onPress={() => Alert.alert('Bientôt', 'Réinitialisation du mot de passe à venir.')}
+            onPress={() => showAlert('Bientôt', 'Réinitialisation du mot de passe à venir.')}
             style={styles.forgot}
           >
             <Text style={styles.forgotText}>Mot de passe oublié ?</Text>

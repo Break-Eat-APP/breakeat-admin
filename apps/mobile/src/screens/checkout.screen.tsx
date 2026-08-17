@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -23,6 +22,7 @@ import {
 import { useCartStore } from '@store/cart.store';
 import { useAuthStore } from '@store/auth.store';
 import { PageHeader } from '@components/page-header';
+import { showAlert } from '@lib/alert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Checkout'>;
 
@@ -108,7 +108,7 @@ export function CheckoutScreen({ navigation }: Props) {
 
   const handleOrder = async () => {
     if (!eventId || !supplierId || items.length === 0) {
-      Alert.alert('Panier vide', 'Votre panier est vide.');
+      showAlert('Panier vide', 'Votre panier est vide.');
       return;
     }
 
@@ -147,7 +147,7 @@ export function CheckoutScreen({ navigation }: Props) {
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erreur inconnue';
-      Alert.alert('Erreur', msg.includes('409')
+      showAlert('Erreur', msg.includes('409')
         ? 'Un panier est déjà ouvert. Réessayez dans 30 min.'
         : `Impossible de passer la commande : ${msg}`);
     } finally {

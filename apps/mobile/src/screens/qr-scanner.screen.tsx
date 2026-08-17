@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
   Linking,
   Platform,
   Pressable,
@@ -19,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
+import { showAlert } from '@lib/alert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'QRScanner'>;
 
@@ -54,7 +54,7 @@ export function QRScannerScreen({ navigation }: Props) {
         // Reset after a short delay to allow re-scanning
         setTimeout(() => setScanned(false), 2000);
       } else {
-        Alert.alert('QR invalide', "Ce QR code n'est pas un code Break Eat valide.");
+        showAlert('QR invalide', "Ce QR code n'est pas un code Break Eat valide.");
       }
     },
     [scanned, navigation],
@@ -79,7 +79,7 @@ export function QRScannerScreen({ navigation }: Props) {
     if (eventId) {
       navigation.navigate('EventHome', { eventId });
     } else {
-      Alert.alert('ID invalide', "Format attendu : UUID ou breakeat://event/<uuid>");
+      showAlert('ID invalide', "Format attendu : UUID ou breakeat://event/<uuid>");
     }
   };
 
