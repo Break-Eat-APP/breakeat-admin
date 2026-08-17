@@ -81,11 +81,20 @@ export function LoginScreen({ navigation, route }: Props) {
           : await apiRegister(email.trim(), password, displayName.trim());
       await setAuth(res.accessToken, res.user);
       if (mode === 'register') {
-        // Demande localisation + notifications juste après l'inscription
-        requestLocation();
-        const NotifAPI = (globalThis as { Notification?: { permission: string; requestPermission: () => Promise<string> } }).Notification;
-        if (NotifAPI && NotifAPI.permission === 'default') {
-          void NotifAPI.requestPermission();
+        // Confort, pas prérequis : localisation et notifications sont demandées
+        // APRÈS que le compte existe. Isolées dans leur propre try, car un
+        // navigateur qui refuse ces API ferait basculer une inscription
+        // RÉUSSIE dans le catch — l'utilisateur verrait « Erreur » alors que
+        // son compte vient d'être créé, puis « ce compte existe déjà » en
+        // réessayant. Impossible à comprendre de l'extérieur.
+        try {
+          requestLocation();
+          const NotifAPI = (globalThis as { Notification?: { permission: string; requestPermission: () => Promise<string> } }).Notification;
+          if (NotifAPI && NotifAPI.permission === 'default') {
+            void NotifAPI.requestPermission();
+          }
+        } catch (err) {
+          console.warn('Permissions post-inscription ignorées:', err);
         }
       }
       proceed();
