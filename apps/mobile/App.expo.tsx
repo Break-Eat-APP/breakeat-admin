@@ -47,6 +47,7 @@ import { ProfileScreen } from '@screens/profile.screen';
 import { PartnersScreen } from '@screens/partners.screen';
 import { LoginScreen } from '@screens/login.screen';
 import { FlaixOrderScreen } from '@screens/flaix-order.screen';
+import { EventHomeScreen } from '@screens/event-home.screen';
 import { SupplierCatalogScreen } from '@screens/supplier-catalog.screen';
 import { SlotSelectorScreen } from '@screens/slot-selector.screen';
 import { CheckoutScreen } from '@screens/checkout.screen';
@@ -71,9 +72,6 @@ function StubScreen({ icon, title, sub }: { icon: string; title: string; sub: st
 }
 
 // Écrans indisponibles en prévisualisation web (caméra / événement live).
-const EventHomeStub = (_: NativeStackScreenProps<RootStackParamList, 'EventHome'>) => (
-  <StubScreen icon="stadium-variant" title="Sélection du lieu" sub="Ici, l'app de production ouvre l'événement (catalogue & commande)." />
-);
 const QRScannerStub = (_: NativeStackScreenProps<RootStackParamList, 'QRScanner'>) => (
   <StubScreen icon="qrcode-scan" title="Scanner un QR code" sub="La caméra n'est pas disponible dans la prévisualisation web." />
 );
@@ -136,7 +134,7 @@ export default function AppPreview() {
               <Stack.Screen name="OrderConfirmation" component={OrderConfirmationScreen} />
 
               {/* Stubs (caméra / événement live) */}
-              <Stack.Screen name="EventHome" component={EventHomeStub} />
+              <Stack.Screen name="EventHome" component={EventHomeScreen} />
               <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
               <Stack.Screen name="QRScanner" component={QRScannerStub} />
             </Stack.Navigator>
