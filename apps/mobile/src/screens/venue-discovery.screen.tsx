@@ -33,16 +33,19 @@ const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as 
 type Fav = { id: string; name: string; imageUrl: string | null };
 type Up = { id: string; title: string; date: string; venue: string; image: string };
 
-// ─── « À venir » : placeholder en attendant un endpoint « événements à venir »
-// (loremflickr = images thématisées). Les lieux et favoris, eux, sont réels.
-const PHOTO = (tags: string, lock: number, w = 200, h = 200) =>
-  `https://loremflickr.com/${w}/${h}/${tags}?lock=${lock}`;
-
-const UPCOMING: Up[] = [
-  { id: 'u1', title: 'Spartiates vs Nîmes Gard Roussillon', date: 'Sam. 5 juil. · 20h00', venue: 'Palais Omnisports Marseille', image: PHOTO('handball,sport,match', 10, 120, 120) },
-  { id: 'u2', title: 'PAUC vs Montpellier HB', date: 'Dim. 6 juil. · 18h30', venue: 'Arena Aix en Provence', image: PHOTO('handball,arena,sport', 22, 120, 120) },
-  { id: 'u3', title: 'Soirée Rock Live', date: 'Ven. 11 juil. · 21h00', venue: 'Le Dôme Marseille', image: PHOTO('concert,rock,stage', 33, 120, 120) },
-];
+/**
+ * « À venir » — vide tant que la source de données n'existe pas.
+ *
+ * Cette section a longtemps affiché trois événements ÉCRITS EN DUR, avec des
+ * photos tirées d'un service d'images aléatoires. Ils ressemblaient à de vrais
+ * matchs, n'existaient dans aucune base, et ne pouvaient donc être supprimés
+ * depuis aucun écran d'administration. Un club y voyait une programmation
+ * qu'il n'avait pas saisie et ne pouvait pas corriger.
+ *
+ * Mieux vaut une section vide, qui dit la vérité, qu'une fausse programmation
+ * crédible. Elle se remplira quand les événements viendront de Flaix.
+ */
+const UPCOMING: Up[] = [];
 
 export function VenueDiscoveryScreen() {
   const navigation = useNavigation<Nav>();
