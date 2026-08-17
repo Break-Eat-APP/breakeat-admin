@@ -4,7 +4,11 @@
   "buildCommand": "pnpm build:web",
   "outputDirectory": "dist",
   "regions": ["cdg1"],
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  "build": {
+    "env": {
+      "APP_ENV": "production",
+      "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1"
+    }
+  },
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
