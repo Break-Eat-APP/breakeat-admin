@@ -112,4 +112,32 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
     expect(res.map((v) => v.id)).toEqual(['near']);
     expect(res[0].distanceKm).toBeLessThanOrEqual(50);
   });
+
+  // Un club sans coordonnees GPS disparaissait des que le navigateur donnait
+  // une position : il etait filtre avec les lieux hors rayon. Un club qui n a
+  // pas renseigne son GPS reste un club reel — le faire disparaitre sans rien
+  // dire est la pire des reponses.
+  it('geoloc : garde les lieux SANS coordonnees, apres les lieux localises', async () => {
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      { ...PUBLIC_VENUE, id: 'sans-gps', latitude: null, longitude: null },
+      { ...PUBLIC_VENUE, id: 'proche', latitude: 43.30, longitude: 5.37 },
+    ]);
+
+    const res = await makeController().search(undefined, undefined, '43.30', '5.37', '50');
+
+    expect(res.map((v) => v.id)).toEqual(['proche', 'sans-gps']);
+  });
+
+  // Taper un nom est une intention explicite : elle doit primer sur la
+  // proximite. Sinon chercher « spartiates » a 400 km ne renvoie rien, alors
+  // que le nom correspond exactement.
+  it('recherche par nom : la proximite ne filtre plus', async () => {
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      { ...PUBLIC_VENUE, id: 'loin', latitude: 48.85, longitude: 2.35 },
+    ]);
+
+    const res = await makeController().search(undefined, 'spartiates', '43.30', '5.37', '10');
+
+    expect(res.map((v) => v.id)).toEqual(['loin']);
+  });
 });

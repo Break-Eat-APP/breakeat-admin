@@ -129,13 +129,20 @@ export class PublicVenuesController {
       })
       .filter((v): v is NonNullable<typeof v> => v !== null);
 
-    if (hasLocation) {
-      // Quand la position est connue : on n'affiche que les lieux géolocalisés dans
-      // le rayon. Les lieux sans coordonnées sont masqués (ils n'ont pas de position
-      // exploitable pour un tri de proximité).
-      result = result.filter((v) => v.distanceKm !== null && v.distanceKm <= radius);
-      // Trie par distance croissante.
-      result.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
+    // Une RECHERCHE explicite l'emporte sur la proximité : qui tape « spartiates »
+    // veut ce club, qu'il soit à 2 ou 400 km. Filtrer par rayon ici donnerait
+    // « aucun résultat » sur un nom pourtant exact — incompréhensible.
+    if (hasLocation && !term) {
+      // Sans recherche, on classe par proximité. Mais un lieu SANS coordonnées
+      // n'est pas masqué pour autant : un club qui n'a pas renseigné son GPS
+      // reste un club réel, et le faire disparaître de l'app sans rien dire est
+      // la pire des réponses. Il passe simplement après les lieux localisés.
+      result = result.filter((v) => v.distanceKm === null || v.distanceKm <= radius);
+      result.sort((a, b) => {
+        if (a.distanceKm === null) return 1;
+        if (b.distanceKm === null) return -1;
+        return a.distanceKm - b.distanceKm;
+      });
     }
 
     return result;
