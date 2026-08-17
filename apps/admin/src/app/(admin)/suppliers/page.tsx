@@ -68,9 +68,13 @@ Cette action est definitive.`)) return;
       await apiDeleteSupplier(orgId, id);
       await load();
     } catch (err) {
-      // Le serveur refuse quand des commandes existent : son message explique
-      // quoi faire a la place (fermer le point de vente).
-      setError(err instanceof Error ? err.message : 'Erreur');
+      const msg = err instanceof Error ? err.message : 'Erreur';
+      // Le serveur refuse quand des commandes existent, et son message explique
+      // quoi faire à la place (fermer le point de vente). Affiché SEULEMENT en
+      // haut de page, ce refus passait inaperçu dès que la liste dépassait un
+      // écran : le bouton semblait ne rien faire. On le met devant les yeux.
+      setError(msg);
+      window.alert(`Suppression impossible\n\n${msg}`);
     } finally {
       setDeletingId(null);
     }
