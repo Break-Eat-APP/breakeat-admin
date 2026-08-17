@@ -19,18 +19,30 @@
         "APP_ENV": "development"
       }
     },
-    "preview": {
-      "distribution": "internal",
+
+    "beta": {
+      "distribution": "store",
+      "channel": "beta",
       "ios": {
         "simulator": false
       },
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       },
       "env": {
-        "APP_ENV": "staging"
+        "APP_ENV": "staging",
+        "EXPO_PUBLIC_API_URL": "FILL_IN_STAGING_API_URL"
       }
     },
+
+    "preview": {
+      "extends": "beta",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    },
+
     "production": {
       "distribution": "store",
       "channel": "production",
@@ -38,11 +50,23 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "APP_ENV": "production"
+        "APP_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1"
       }
     }
   },
   "submit": {
+    "beta": {
+      "ios": {
+        "appleId": "reminotta@breakeatapp.com",
+        "ascAppId": "FILL_IN_APP_STORE_CONNECT_APP_ID",
+        "appleTeamId": "2A5L298Q4C"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "beta"
+      }
+    },
     "production": {
       "ios": {
         "appleId": "reminotta@breakeatapp.com",
