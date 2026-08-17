@@ -16,7 +16,7 @@ module.exports = {
   // Doit rester cohérent avec `ios.bundleIdentifier` de app.config.js :
   // le topic APNs utilisé par le backend en dépend
   // (<bundleId>.push-type.liveactivity).
-  bundleIdentifier: 'app.breakeat.mobile.LiveActivity',
+  bundleIdentifier: 'com.shapper.breakeat.LiveActivity',
   deploymentTarget: '16.2',
   frameworks: ['SwiftUI', 'WidgetKit', 'ActivityKit'],
 };

@@ -75,8 +75,20 @@ eas build --profile beta --platform android
 Distribution : **TestFlight** (iOS) et **canal de test fermé** (Google Play).
 Ni l'une ni l'autre n'atteint le public.
 
-> ⚠️ Le `buildNumber` iOS et le `versionCode` Android doivent être incrémentés
-> à chaque envoi, sinon les stores refusent la build.
+> ⚠️ **Numéros de version.** `autoIncrement` est activé sur les profils `beta`
+> et `production` : EAS pose le numéro suivant à chaque build. Mais il part de
+> ce que déclare `app.config.js`, aujourd'hui `version: 1.0.0`,
+> `buildNumber: 1`, `versionCode: 1`.
+>
+> L'application publiée est en production depuis janvier 2026 : ses numéros sont
+> **forcément plus élevés**. Une build qui repartirait de 1 serait refusée par
+> les deux stores.
+>
+> Avant la première soumission, relever les valeurs réelles et les reporter dans
+> `app.config.js` :
+>
+> - **Android** — Play Console → *Production* → dernière version → code de version
+> - **iOS** — App Store Connect → l'app → *Versions* → numéro de version et de build
 
 ## Les trois profils
 
@@ -107,7 +119,25 @@ Trois vérifications préalables, sans exception :
   webhook signé, idempotence par panier.
 - **`charge.refunded`** — un remboursement fait dans Stripe ne redescend pas
   encore dans Break Eat.
-- **Identifiants de build** — l'app publiée sur Android est
-  `com.shapper.breakeat` ; le dépôt porte `app.breakeat.mobile`. Tant que les
-  deux diffèrent, une build crée une **nouvelle** application au lieu de mettre
-  à jour l'existante.
+- **Clé de signature Android** — pour mettre à jour l'app existante, Google Play
+  exige la clé d'origine. Vérifier dans Play Console → *Test et versions* →
+  *Intégrité de l'app*. Si « Signature d'application Play » est activée, Google
+  détient la clé et une clé d'upload perdue se réinitialise sur demande. Sinon,
+  il faut récupérer la clé auprès de Shapper.
+- **Capacités de l'App ID iOS** — l'identifiant `com.shapper.breakeat` doit
+  porter *Push Notifications* dans le portail Apple Developer, sans quoi la
+  Live Activity ne pourra pas être signée.
+- **`APNS_BUNDLE_ID`** sur Railway doit valoir `com.shapper.breakeat`. Le topic
+  APNs de la Live Activity en dépend directement.
+
+## Identifiants de l'application
+
+Alignés sur l'application publiée, pour que la nouvelle version parte en **mise
+à jour** et non en app séparée :
+
+| | Valeur |
+|---|---|
+| Bundle ID iOS | `com.shapper.breakeat` |
+| Package Android | `com.shapper.breakeat` |
+| Identifiant Apple (soumission) | `6496204412` |
+| Extension Live Activity | `com.shapper.breakeat.LiveActivity` |

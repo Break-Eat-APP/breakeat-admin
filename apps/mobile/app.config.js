@@ -22,7 +22,7 @@ module.exports = {
     backgroundColor: '#ffffff',
   },
   ios: {
-    bundleIdentifier: 'app.breakeat.mobile',
+    bundleIdentifier: 'com.shapper.breakeat',
     supportsTablet: false,
     buildNumber: '1',
     // PHASE 21 — requis par @bacons/apple-targets pour créer la cible du widget
@@ -31,7 +31,7 @@ module.exports = {
     appleTeamId: '2A5L298Q4C',
   },
   android: {
-    package: 'app.breakeat.mobile',
+    package: 'com.shapper.breakeat',
     versionCode: 1,
     adaptiveIcon: {
       foregroundImage: './assets/logo-mark-orange.png',
