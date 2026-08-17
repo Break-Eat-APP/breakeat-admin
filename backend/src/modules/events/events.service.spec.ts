@@ -52,11 +52,13 @@ describe('EventsService', () => {
             user: { findUnique: jest.fn() },
             organizationMember: { findUnique: jest.fn() },
             venue: { findFirst: jest.fn() },
+            order: { count: jest.fn() },
             event: {
               create: jest.fn(),
               findMany: jest.fn(),
               findFirst: jest.fn(),
               update: jest.fn(),
+              delete: jest.fn(),
             },
             supplier: { findFirst: jest.fn() },
             eventSupplier: {
@@ -170,6 +172,16 @@ describe('EventsService', () => {
         service.updateStatus(ORG_ID, EVENT_ID, USER_ID, { status: EventStatus.ENDED }),
       ).rejects.toBeInstanceOf(BadRequestException);
       expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+
+    it('refuse de le supprimer', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.event.findFirst as jest.Mock).mockResolvedValue(conteneur);
+
+      await expect(service.remove(ORG_ID, EVENT_ID, USER_ID)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(prisma.event.delete).not.toHaveBeenCalled();
     });
 
     it('l’écarte de la liste des événements de l’organisation', async () => {
@@ -351,6 +363,45 @@ describe('EventsService', () => {
       await expect(
         service.attachSupplier(ORG_ID, EVENT_ID, SUPPLIER_ID, USER_ID),
       ).rejects.toThrow(ConflictException);
+    });
+  });
+
+  // ─── remove ───────────────────────────────────────────────────
+  //
+  // Archiver et supprimer repondent a deux besoins distincts : le premier sort
+  // l'evenement de la circulation en gardant tout, le second efface la ligne.
+  // Les confondre ferait disparaitre un chiffre d'affaires sans trace.
+
+  describe('remove', () => {
+    it('supprime un evenement qui n’a jamais rien vendu', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.event.findFirst as jest.Mock).mockResolvedValue(mockEvent());
+      (prisma.order.count as jest.Mock).mockResolvedValue(0);
+
+      await service.remove(ORG_ID, EVENT_ID, USER_ID);
+
+      expect(prisma.event.delete).toHaveBeenCalledWith({ where: { id: EVENT_ID } });
+    });
+
+    it('refuse des qu’une commande y est rattachee', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.event.findFirst as jest.Mock).mockResolvedValue(mockEvent());
+      (prisma.order.count as jest.Mock).mockResolvedValue(12);
+
+      await expect(service.remove(ORG_ID, EVENT_ID, USER_ID)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      // Le chiffre d'affaires de la saison reste intact.
+      expect(prisma.event.delete).not.toHaveBeenCalled();
+    });
+
+    it('renvoie 404 sur un evenement inconnu', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.event.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.remove(ORG_ID, EVENT_ID, USER_ID)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 });

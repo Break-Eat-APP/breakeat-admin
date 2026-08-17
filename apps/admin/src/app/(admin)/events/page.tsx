@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { MapPin } from 'lucide-react';
 import {
   apiGetEvents,
+  apiDeleteEvent,
+  apiUpdateEventStatus,
   apiCreateEvent,
   apiGetVenues,
   type AdminEvent,
@@ -75,6 +77,56 @@ export default function EventsPage() {
       setForm((f) => ({ ...f, venueId: venues[0].id }));
     }
   }, [venues, form.venueId]);
+
+
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  /**
+   * Archiver = sortir l'evenement de la circulation en CONSERVANT tout.
+   * C'est le geste normal apres un match : commandes, chiffre d'affaires et
+   * historique client restent intacts, l'evenement cesse simplement d'accepter
+   * de nouvelles commandes.
+   */
+  async function handleArchive(id: string, name: string) {
+    if (!confirm(`Archiver « ${name} » ?
+
+Il n'acceptera plus de commandes. Toutes les donnees sont conservees.`)) return;
+    setBusyId(id);
+    setError('');
+    try {
+      await apiUpdateEventStatus(orgId, id, 'ENDED');
+      await loadEvents();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erreur';
+      setError(msg);
+      window.alert(`Archivage impossible
+
+${msg}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  /** Supprimer = effacer la ligne. Le serveur refuse si des commandes existent. */
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`Supprimer « ${name} » ?
+
+Cette action est definitive. Pour conserver les donnees, archivez plutot.`)) return;
+    setBusyId(id);
+    setError('');
+    try {
+      await apiDeleteEvent(orgId, id);
+      await loadEvents();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erreur';
+      setError(msg);
+      window.alert(`Suppression impossible
+
+${msg}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -354,6 +406,26 @@ export default function EventsPage() {
                   >
                     {STATUS_LABEL[ev.status] ?? ev.status}
                   </span>
+                  {ev.status !== 'ENDED' && ev.status !== 'CANCELLED' && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleArchive(ev.id, ev.name); }}
+                      disabled={busyId === ev.id}
+                      title="Archiver — conserve toutes les donnees"
+                      style={ghostBtn}
+                    >
+                      Archiver
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleDelete(ev.id, ev.name); }}
+                    disabled={busyId === ev.id}
+                    title="Supprimer definitivement"
+                    style={dangerBtn}
+                  >
+                    Supprimer
+                  </button>
                   <span style={{ color: BRAND.grey, fontSize: 18 }}>›</span>
                 </div>
               </Link>
@@ -364,6 +436,16 @@ export default function EventsPage() {
     </div>
   );
 }
+
+const ghostBtn: React.CSSProperties = {
+  background: '#fff', border: `1px solid ${BRAND.border}`, color: BRAND.inkSoft,
+  borderRadius: 8, padding: '5px 12px', fontSize: 12.5, fontWeight: 600,
+  cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0,
+};
+
+const dangerBtn: React.CSSProperties = {
+  ...ghostBtn, borderColor: '#fca5a5', color: '#dc2626',
+};
 
 const labelStyle: React.CSSProperties = {
   display: 'block',

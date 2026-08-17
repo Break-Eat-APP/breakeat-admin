@@ -318,6 +318,17 @@ export async function apiCreateEvent(
   return req<AdminEvent>('POST', `/organizations/${orgId}/events`, data);
 }
 
+/**
+ * DELETE /organizations/:orgId/events/:id
+ *
+ * Le serveur refuse dès qu'une commande y est rattachée : archiver (statut
+ * ENDED) est le geste qui sort l'événement de la circulation en conservant
+ * tout. Supprimer ne vaut que pour un événement créé par erreur.
+ */
+export async function apiDeleteEvent(orgId: string, eventId: string): Promise<void> {
+  return req<void>('DELETE', `/organizations/${orgId}/events/${eventId}`);
+}
+
 export async function apiUpdateEventStatus(
   orgId: string,
   id: string,

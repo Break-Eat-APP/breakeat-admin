@@ -315,6 +315,44 @@ export class EventsService {
   }
 
   /**
+   * Supprime un événement.
+   *
+   * REFUSÉ dès qu'une commande y est rattachée. Archiver et supprimer répondent
+   * à deux besoins qu'il ne faut pas confondre :
+   *
+   *  - ARCHIVER (statut ENDED) sort l'événement de la circulation en CONSERVANT
+   *    tout : commandes, chiffre d'affaires, historique client. C'est le geste
+   *    normal après un match.
+   *  - SUPPRIMER efface la ligne. Ça n'a de sens que pour un événement créé par
+   *    erreur, qui n'a jamais rien vendu.
+   *
+   * Sans cette borne, effacer un événement passé rendrait le chiffre d'affaires
+   * de la saison faux sans que personne ne s'en aperçoive.
+   */
+  async remove(organizationId: string, eventId: string, userId: string): Promise<void> {
+    await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
+
+    const existing = await this.prisma.event.findFirst({
+      where: { id: eventId, organizationId },
+    });
+    if (!existing) throw new NotFoundException('Event not found');
+
+    this.guardPermanentContainer(existing);
+
+    const ordersCount = await this.prisma.order.count({ where: { eventId } });
+    if (ordersCount > 0) {
+      throw new BadRequestException(
+        `« ${existing.name} » porte ${ordersCount} commande${ordersCount > 1 ? 's' : ''} : ` +
+          'le supprimer effacerait ce chiffre d’affaires. Archivez-le plutôt — ' +
+          'il sort de la circulation et toutes les données sont conservées.',
+      );
+    }
+
+    await this.prisma.event.delete({ where: { id: eventId } });
+    this.logger.log(`Event deleted: ${eventId} ("${existing.name}") by ${userId}`);
+  }
+
+  /**
    * PHASE 22 — le contenant d'un lieu permanent n'est pas modifiable.
    *
    * Il est déjà écarté des listes, donc personne ne le voit ; ce garde-fou

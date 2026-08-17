@@ -100,6 +100,22 @@ export class EventsController {
     return this.eventsService.attachSupplier(orgId, id, dto.supplierId, user.sub);
   }
 
+  /**
+   * DELETE /api/v1/organizations/:orgId/events/:id
+   *
+   * Refusé dès qu'une commande y est rattachée : archiver (statut ENDED) est
+   * le geste qui conserve les données. Voir EventsService.remove.
+   */
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.eventsService.remove(orgId, id, user.sub);
+  }
+
   /** DELETE /api/v1/organizations/:orgId/events/:id/suppliers/:supplierId */
   @Delete(':id/suppliers/:supplierId')
   @HttpCode(HttpStatus.NO_CONTENT)
