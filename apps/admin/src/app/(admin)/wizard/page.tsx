@@ -1561,7 +1561,7 @@ function Success({ done, onReset }: { done: DoneResult; onReset: () => void }) {
 function StepTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <h2 style={{ fontSize: 19, fontWeight: 600, color: BRAND.ink, margin: '0 0 4px' }}>{title}</h2>
+      <h2 style={{ fontSize: 19, fontWeight: 600, color: BRAND.orange, margin: '0 0 4px' }}>{title}</h2>
       <p style={{ fontSize: 13.5, color: BRAND.grey, margin: 0, lineHeight: 1.5 }}>{subtitle}</p>
     </div>
   );

@@ -262,7 +262,7 @@ export default function DashboardPage() {
 
           {/* Per-event breakdown */}
           <div style={{ marginBottom: 12, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-            <h2 style={{ fontSize: 18, fontWeight: 600, color: BRAND.ink, margin: 0 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, color: BRAND.orange, margin: 0 }}>
               Performance par événement
             </h2>
             <Link href="/events" style={{ fontSize: 13, fontWeight: 600, color: BRAND.orange, textDecoration: 'none' }}>
