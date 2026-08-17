@@ -44,7 +44,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
         marginBottom: 20,
       }}
     >
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.ink, margin: '0 0 16px' }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.orange, margin: '0 0 16px' }}>
         {title}
       </h2>
       {children}

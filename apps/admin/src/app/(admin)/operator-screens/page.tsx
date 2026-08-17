@@ -152,7 +152,7 @@ export default function OperatorScreensPage() {
             border: `2px solid ${BRAND.orange}`,
           }}
         >
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.ink, margin: '0 0 18px' }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.orange, margin: '0 0 18px' }}>
             Nouvel écran
           </h2>
           <ScreenConditionsForm

@@ -707,10 +707,12 @@ const card: React.CSSProperties = {
   padding: 24,
 };
 
+// Orange : marque le debut d'une section, la ou sous-titres et libelles
+// restent en encre. Un lecteur repere ainsi la structure d'un coup d'oeil.
 const cardTitle: React.CSSProperties = {
   fontSize: 16,
   fontWeight: 700,
-  color: BRAND.ink,
+  color: BRAND.orange,
   margin: '0 0 16px',
 };
 

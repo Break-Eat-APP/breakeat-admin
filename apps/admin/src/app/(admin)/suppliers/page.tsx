@@ -3,7 +3,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Store, ChevronRight } from 'lucide-react';
-import { apiGetSuppliers, apiCreateSupplier, type Supplier, getOrgId } from '@/lib/api/admin-client';
+import {
+  apiGetSuppliers,
+  apiCreateSupplier,
+  apiDeleteSupplier,
+  type Supplier,
+  getOrgId,
+} from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 
 // Statuts de buvette (alignés sur SupplierStatus backend).
@@ -48,6 +54,27 @@ export default function SuppliersPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  async function handleDelete(id: string, name: string) {
+    if (!confirm(`Supprimer « ${name} » ?
+
+Cette action est definitive.`)) return;
+    setDeletingId(id);
+    setError('');
+    try {
+      await apiDeleteSupplier(orgId, id);
+      await load();
+    } catch (err) {
+      // Le serveur refuse quand des commandes existent : son message explique
+      // quoi faire a la place (fermer le point de vente).
+      setError(err instanceof Error ? err.message : 'Erreur');
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -124,7 +151,7 @@ export default function SuppliersPage() {
             border: `2px solid ${BRAND.orange}`,
           }}
         >
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.ink, margin: '0 0 16px' }}>Créer une buvette</h2>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.orange, margin: '0 0 16px' }}>Créer une buvette</h2>
           <div>
             <label style={labelStyle}>Nom de la buvette *</label>
             <input
@@ -235,6 +262,32 @@ export default function SuppliersPage() {
                   <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: '3px 12px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
                     {st.label}
                   </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      // La carte entière est un lien : sans cela, supprimer
+                      // ouvrirait aussi la fiche du point de retrait.
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleDelete(s.id, s.name);
+                    }}
+                    disabled={deletingId === s.id}
+                    title="Supprimer ce point de retrait"
+                    style={{
+                      background: '#fff',
+                      border: '1px solid #fca5a5',
+                      color: '#dc2626',
+                      borderRadius: 8,
+                      padding: '5px 12px',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      cursor: deletingId === s.id ? 'not-allowed' : 'pointer',
+                      fontFamily: 'inherit',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {deletingId === s.id ? 'Suppression…' : 'Supprimer'}
+                  </button>
                   <ChevronRight size={18} strokeWidth={2} color={BRAND.grey} style={{ flexShrink: 0 }} />
                 </div>
               </Link>

@@ -140,7 +140,7 @@ export default function GroupsPage() {
           {byOrg.map(({ org, groups }) => (
             <section key={org.id}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
-                <Link href={`/organizations/${org.id}`} style={{ fontSize: 16, fontWeight: 700, color: BRAND.ink, textDecoration: 'none' }}>
+                <Link href={`/organizations/${org.id}`} style={{ fontSize: 16, fontWeight: 700, color: BRAND.orange, textDecoration: 'none' }}>
                   {org.name}
                 </Link>
                 <span style={{ fontSize: 12, color: BRAND.grey }}>/{org.slug}</span>

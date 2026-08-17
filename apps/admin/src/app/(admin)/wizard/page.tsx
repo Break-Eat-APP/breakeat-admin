@@ -1125,7 +1125,7 @@ function BuvetteCard({
           >
             {index + 1}
           </span>
-          <span style={{ fontSize: 15, fontWeight: 700, color: BRAND.ink }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: BRAND.orange }}>
             {buvette.name.trim() || `Buvette ${index + 1}`}
           </span>
         </div>

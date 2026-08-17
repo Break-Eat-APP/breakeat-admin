@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   ParseUUIDPipe,
@@ -63,6 +64,21 @@ export class SuppliersController {
     @Body() dto: UpdateSupplierDto,
   ) {
     return this.suppliersService.update(orgId, id, user.sub, dto);
+  }
+
+  /**
+   * DELETE /api/v1/organizations/:orgId/suppliers/:id
+   *
+   * Refusé si des commandes y sont rattachées — voir SuppliersService.remove.
+   */
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  remove(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.suppliersService.remove(orgId, id, user.sub);
   }
 
   /** PATCH /api/v1/organizations/:orgId/suppliers/:id/status */

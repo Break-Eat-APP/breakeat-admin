@@ -348,6 +348,17 @@ export async function apiGetSuppliers(orgId: string): Promise<Supplier[]> {
   return req<Supplier[]>('GET', `/organizations/${orgId}/suppliers`);
 }
 
+/**
+ * DELETE /organizations/:orgId/suppliers/:id
+ *
+ * Le serveur refuse dès qu'une commande y est rattachée : supprimer un point
+ * de vente qui a vendu effacerait son chiffre d'affaires. Il se ferme alors
+ * plutôt qu'il ne se supprime.
+ */
+export async function apiDeleteSupplier(orgId: string, supplierId: string): Promise<void> {
+  return req<void>('DELETE', `/organizations/${orgId}/suppliers/${supplierId}`);
+}
+
 export async function apiCreateSupplier(
   orgId: string,
   data: { name: string; preparationZone?: string; isExternal?: boolean },

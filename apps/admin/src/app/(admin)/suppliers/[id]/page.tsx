@@ -49,7 +49,7 @@ function Card({ title, children, action }: {
   return (
     <div style={{ background: BRAND.surface, borderRadius: 12, padding: 24, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}`, marginBottom: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.ink, margin: 0 }}>{title}</h2>
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.orange, margin: 0 }}>{title}</h2>
         {action}
       </div>
       {children}

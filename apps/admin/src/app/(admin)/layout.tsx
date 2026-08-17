@@ -55,6 +55,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/wizard', icon: Wand2, label: 'Configurer mon lieu' },
       { href: '/organizations', icon: Building2, label: 'Fiche du lieu' },
+      // L'apparence décrit ce que le client voit DE CE LIEU : sa place est ici,
+      // pas dans un groupe « communication » avec les campagnes push.
+      { href: '/appearance', icon: Palette, label: "Apparence de l'app" },
       { href: '/events', icon: CalendarDays, label: 'Événements' },
     ],
   },
@@ -76,7 +79,6 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Communication',
     items: [
-      { href: '/appearance', icon: Palette, label: "Apparence de l'app" },
       { href: '/notifications', icon: Bell, label: 'Notifications' },
       { href: '/campaigns', icon: Megaphone, label: 'Campagnes & push' },
     ],

@@ -157,7 +157,7 @@ export default function EventsPage() {
             border: `2px solid ${BRAND.orange}`,
           }}
         >
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.ink, margin: '0 0 16px' }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.orange, margin: '0 0 16px' }}>
             Créer un événement
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

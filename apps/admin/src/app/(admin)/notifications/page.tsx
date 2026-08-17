@@ -116,7 +116,7 @@ export default function NotificationsPage() {
                     <div style={{ width: 34, height: 34, borderRadius: 9, background: BRAND.orangeTint, color: BRAND.orange, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <Bell size={17} strokeWidth={2} />
                     </div>
-                    <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.ink, margin: 0 }}>{step.label}</h2>
+                    <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.orange, margin: 0 }}>{step.label}</h2>
                   </div>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: BRAND.inkSoft }}>
                     <input type="checkbox" checked={t.enabled} onChange={(e) => patch(step.status, { enabled: e.target.checked })} />

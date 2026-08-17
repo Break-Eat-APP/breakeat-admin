@@ -250,7 +250,7 @@ export default function TeamPage() {
           border: `1px solid ${BRAND.border}`,
         }}
       >
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.ink, margin: '0 0 6px' }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.orange, margin: '0 0 6px' }}>
           Inviter un membre
         </h2>
         <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 16px', lineHeight: 1.55, maxWidth: 620 }}>
@@ -435,7 +435,7 @@ export default function TeamPage() {
             justifyContent: 'space-between',
           }}
         >
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.ink, margin: 0 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.orange, margin: 0 }}>
             Membres ({loading ? '…' : members.length})
           </h2>
         </div>

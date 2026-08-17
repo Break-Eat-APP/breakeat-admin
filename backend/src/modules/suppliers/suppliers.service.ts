@@ -182,6 +182,41 @@ export class SuppliersService {
    * Updates only the operational status.
    * OPERATOR is allowed to change status (e.g. mark as OPEN when ready).
    */
+  /**
+   * Supprime un point de retrait.
+   *
+   * REFUSÉ dès qu'une commande y est rattachée. `Order.supplierId` porterait
+   * alors dans le vide : le chiffre d'affaires passé deviendrait faux, et
+   * l'historique d'un client illisible. Un point de vente qui a vendu ne
+   * disparaît pas — il se ferme (statut CLOSED / OFFLINE).
+   *
+   * La suppression sert au cas réel : une erreur de saisie qu'on corrige avant
+   * la première vente.
+   */
+  async remove(
+    organizationId: string,
+    supplierId: string,
+    userId: string,
+  ): Promise<void> {
+    await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
+
+    const existing = await this.prisma.supplier.findFirst({
+      where: { id: supplierId, organizationId },
+    });
+    if (!existing) throw new NotFoundException('Supplier not found');
+
+    const ordersCount = await this.prisma.order.count({ where: { supplierId } });
+    if (ordersCount > 0) {
+      throw new BadRequestException(
+        `« ${existing.name} » a déjà reçu ${ordersCount} commande${ordersCount > 1 ? 's' : ''} : ` +
+          'le supprimer effacerait cet historique de ventes. Fermez-le plutôt (statut « Fermée »).',
+      );
+    }
+
+    await this.prisma.supplier.delete({ where: { id: supplierId } });
+    this.logger.log(`Supplier deleted: ${supplierId} ("${existing.name}") by ${userId}`);
+  }
+
   async updateStatus(
     organizationId: string,
     supplierId: string,

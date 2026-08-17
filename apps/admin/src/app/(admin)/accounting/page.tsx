@@ -195,7 +195,7 @@ export default function AccountingPage() {
           {/* Détail — par période ou par événement */}
           <div style={{ background: BRAND.surface, borderRadius: BRAND.radius.card, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}`, overflow: 'hidden' }}>
             <div style={{ padding: '16px 22px', borderBottom: `1px solid ${BRAND.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-              <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.ink, margin: 0 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.orange, margin: 0 }}>
                 {view === 'periods' ? 'Détail par période' : 'Détail par événement'}
               </h2>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
