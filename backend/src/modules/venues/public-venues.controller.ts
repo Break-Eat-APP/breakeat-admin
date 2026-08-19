@@ -13,11 +13,13 @@ import type { JwtPayload } from '../auth/strategies/jwt.strategy';
  * proximité. Aucune authentification requise (navigation libre).
  *
  * GET /api/v1/public/venues?q=&lat=&lng=&radiusKm=
- *   - q        : filtre texte sur le nom ou l'adresse (insensible à la casse).
- *   - lat,lng  : position de l'utilisateur → calcule la distance (Haversine), trie
- *                par proximité et écarte les lieux hors rayon (les lieux SANS
- *                coordonnées restent listés — tolérance pendant le déploiement).
- *   - radiusKm : rayon de filtrage (défaut 150 km).
+ *   - q        : nom, adresse ou mots-clés configurés par le club (insensible à
+ *                la casse). Une recherche IGNORE le rayon : on cherche un club
+ *                précis, pas ce qui est à côté.
+ *   - lat,lng  : position de l'utilisateur → distance (Haversine), tri par
+ *                proximité, et exclusion de tout ce qui dépasse le rayon. Un
+ *                lieu sans coordonnées n'apparaît donc PAS par ce chemin.
+ *   - radiusKm : rayon de filtrage (défaut 10 km).
  *
  * Lieux privés (Phase 16.1) : un lieu n'apparaît que s'il a au moins un événement
  * accessible à l'appelant (PUBLIC, ou PRIVATE via appartenance à un groupe), TOUTES
@@ -129,20 +131,18 @@ export class PublicVenuesController {
       })
       .filter((v): v is NonNullable<typeof v> => v !== null);
 
-    // Une RECHERCHE explicite l'emporte sur la proximité : qui tape « spartiates »
-    // veut ce club, qu'il soit à 2 ou 400 km. Filtrer par rayon ici donnerait
-    // « aucun résultat » sur un nom pourtant exact — incompréhensible.
+    // Deux chemins pour trouver un lieu, et deux seulement :
+    //
+    //  1. LA PROXIMITÉ — sans recherche, on n'affiche que les lieux géolocalisés
+    //     dans le rayon. Un lieu sans coordonnées n'y figure pas : il n'a
+    //     aucune position à comparer. C'est au club de renseigner son GPS.
+    //  2. LA RECHERCHE — taper un nom, une adresse ou un mot-clé configuré par
+    //     le club l'emporte sur la distance. Qui cherche « spartiates » veut ce
+    //     club, qu'il soit à 2 ou 400 km ; répondre « aucun résultat » sur un
+    //     nom exact serait incompréhensible.
     if (hasLocation && !term) {
-      // Sans recherche, on classe par proximité. Mais un lieu SANS coordonnées
-      // n'est pas masqué pour autant : un club qui n'a pas renseigné son GPS
-      // reste un club réel, et le faire disparaître de l'app sans rien dire est
-      // la pire des réponses. Il passe simplement après les lieux localisés.
-      result = result.filter((v) => v.distanceKm === null || v.distanceKm <= radius);
-      result.sort((a, b) => {
-        if (a.distanceKm === null) return 1;
-        if (b.distanceKm === null) return -1;
-        return a.distanceKm - b.distanceKm;
-      });
+      result = result.filter((v) => v.distanceKm !== null && v.distanceKm <= radius);
+      result.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
     }
 
     return result;

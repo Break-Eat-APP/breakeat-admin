@@ -113,11 +113,10 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
     expect(res[0].distanceKm).toBeLessThanOrEqual(50);
   });
 
-  // Un club sans coordonnees GPS disparaissait des que le navigateur donnait
-  // une position : il etait filtre avec les lieux hors rayon. Un club qui n a
-  // pas renseigne son GPS reste un club reel — le faire disparaitre sans rien
-  // dire est la pire des reponses.
-  it('geoloc : garde les lieux SANS coordonnees, apres les lieux localises', async () => {
+  // La proximite ne peut classer que ce qui a une position. Un lieu sans
+  // coordonnees n'apparait donc pas par ce chemin — c'est au club de renseigner
+  // son GPS. Il reste trouvable par la recherche (test suivant).
+  it('geoloc : ecarte les lieux SANS coordonnees', async () => {
     (prisma.venue.findMany as jest.Mock).mockResolvedValue([
       { ...PUBLIC_VENUE, id: 'sans-gps', latitude: null, longitude: null },
       { ...PUBLIC_VENUE, id: 'proche', latitude: 43.30, longitude: 5.37 },
@@ -125,7 +124,19 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
 
     const res = await makeController().search(undefined, undefined, '43.30', '5.37', '50');
 
-    expect(res.map((v) => v.id)).toEqual(['proche', 'sans-gps']);
+    expect(res.map((v) => v.id)).toEqual(['proche']);
+  });
+
+  // Le filet de securite : un lieu sans GPS reste atteignable en tapant un
+  // mot-cle configure par le club sur son dashboard.
+  it('recherche : un lieu sans coordonnees reste trouvable', async () => {
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      { ...PUBLIC_VENUE, id: 'sans-gps', latitude: null, longitude: null },
+    ]);
+
+    const res = await makeController().search(undefined, 'spartiates', '43.30', '5.37', '10');
+
+    expect(res.map((v) => v.id)).toEqual(['sans-gps']);
   });
 
   // Taper un nom est une intention explicite : elle doit primer sur la
