@@ -48,7 +48,16 @@ module.exports = {
     // `targets/live-activity/expo-target.config.js`. Ajouter une cible au
     // .pbxproj à la main serait fragile et disparaîtrait au prochain prebuild.
     '@bacons/apple-targets',
-    ...(process.env.APP_ENV === 'production'
+    // Sentry est conditionne au JETON, pas a l'environnement.
+    //
+    // Son plugin televerse les source maps pendant la compilation Gradle. Sans
+    // SENTRY_AUTH_TOKEN il echoue, et fait echouer TOUTE la build — y compris
+    // une build de test qui n'avait aucun besoin de remontee d'erreurs.
+    //
+    // Se fier a APP_ENV etait donc un piege : toute build marquee « production »
+    // exigeait implicitement un jeton que rien ne rappelait de poser. Definir
+    // le jeton (secret EAS ou variable locale) suffit desormais a l'activer.
+    ...(process.env.SENTRY_AUTH_TOKEN
       ? [
           [
             '@sentry/react-native/expo',
