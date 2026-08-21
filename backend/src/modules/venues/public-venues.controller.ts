@@ -145,6 +145,13 @@ export class PublicVenuesController {
       result.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
     }
 
+    // Ni position, ni recherche : aucun des deux chemins n'est emprunté, donc
+    // rien à montrer. Lister tout le catalogue serait un troisième chemin non
+    // voulu — et trompeur : un client verrait des clubs à 400 km comme s'ils
+    // le concernaient. L'app affiche alors son invitation à autoriser la
+    // localisation ou à chercher un nom.
+    if (!hasLocation && !term) return [];
+
     return result;
   }
 }

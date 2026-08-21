@@ -62,7 +62,7 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
   });
 
   it('anonyme : masque les lieux privés (même non-actifs), garde public + sans-événement', async () => {
-    const res = await makeController().search(undefined);
+    const res = await makeController().search(undefined, 'palais');
 
     const ids = res.map((v) => v.id);
     expect(ids).toContain('v-pub');
@@ -83,7 +83,7 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
       { group: { events: [{ eventId: 'e-priv' }] } },
     ]);
 
-    const res = await makeController().search({ sub: 'member-uuid' } as never);
+    const res = await makeController().search({ sub: 'member-uuid' } as never, 'palais');
 
     const priv = res.find((v) => v.id === 'v-priv');
     expect(priv).toBeDefined();
@@ -95,7 +95,7 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
       { group: { events: [{ eventId: 'autre-event' }] } },
     ]);
 
-    const res = await makeController().search({ sub: 'intruder-uuid' } as never);
+    const res = await makeController().search({ sub: 'intruder-uuid' } as never, 'palais');
 
     expect(res.map((v) => v.id)).not.toContain('v-priv');
   });
@@ -150,5 +150,18 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
     const res = await makeController().search(undefined, 'spartiates', '43.30', '5.37', '10');
 
     expect(res.map((v) => v.id)).toEqual(['loin']);
+  });
+
+  // Ni position, ni recherche : aucun des deux chemins voulus n'est emprunte.
+  // Lister tout le catalogue serait trompeur — un client verrait des clubs a
+  // 400 km comme s'ils le concernaient.
+  it('sans position ni recherche : ne renvoie rien', async () => {
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      { ...PUBLIC_VENUE, id: 'v1', latitude: 43.30, longitude: 5.37 },
+    ]);
+
+    const res = await makeController().search(undefined);
+
+    expect(res).toEqual([]);
   });
 });

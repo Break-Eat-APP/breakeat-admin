@@ -178,7 +178,15 @@ export function VenueDiscoveryScreen() {
         ) : venues.length === 0 ? (
           <EmptyHint
             icon="location-outline"
-            text={query.trim() ? 'Aucun lieu ne correspond à ta recherche.' : 'Aucun lieu près de toi pour le moment.'}
+            text={
+              query.trim()
+                ? 'Aucun lieu ne correspond à ta recherche.'
+                : granted
+                  ? 'Aucun lieu à moins de 10 km. Cherche un club par son nom.'
+                  : // Sans position, l'app n'a RIEN cherché : annoncer « aucun
+                    // lieu près de toi » laisserait croire qu'elle a regardé.
+                    'Active ta position, ou cherche un club par son nom.'
+            }
           />
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
