@@ -24,7 +24,6 @@ module.exports = {
   ios: {
     bundleIdentifier: 'com.shapper.breakeat',
     supportsTablet: false,
-    buildNumber: '1',
     // PHASE 21 — requis par @bacons/apple-targets pour créer la cible du widget
     // (l'extension doit être signée avec la même équipe que l'app hôte).
     // Même valeur que `submit.production.ios.appleTeamId` dans eas.json.
@@ -32,7 +31,6 @@ module.exports = {
   },
   android: {
     package: 'com.shapper.breakeat',
-    versionCode: 1,
     adaptiveIcon: {
       foregroundImage: './assets/logo-mark-orange.png',
       backgroundColor: '#ffffff',
