@@ -10,7 +10,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
-        "simulator": true
+        "simulator": true,
+        "image": "latest"
       },
       "android": {
         "buildType": "apk",
@@ -25,7 +26,8 @@
     "beta": {
       "distribution": "store",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "image": "latest"
       },
       "android": {
         "buildType": "app-bundle"
@@ -40,7 +42,8 @@
     "preview": {
       "distribution": "internal",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "image": "latest"
       },
       "android": {
         "buildType": "apk"
@@ -62,7 +65,10 @@
         "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1"
       },
       "autoIncrement": true,
-      "node": "20.18.0"
+      "node": "20.18.0",
+      "ios": {
+        "image": "latest"
+      }
     }
   },
   "submit": {
