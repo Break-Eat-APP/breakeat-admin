@@ -65,7 +65,8 @@ L'app publiée sur les deux stores porte **`com.shapper.breakeat`** (« Break Ea
 
 - Identifiant Apple (soumission) : `6496204412`
 - Extension Live Activity : `com.shapper.breakeat.LiveActivity`
-- ⚠️ `version` / `buildNumber` / `versionCode` valent encore `1.0.0` / `1` / `1`. **Les stores refuseront** — relever les vraies valeurs dans les consoles avant toute soumission.
+- `version` = **1.1.0**, au-dessus de la 1.0.10 publiée. Apple refuse toute soumission dont la version n'est pas supérieure à celle en ligne.
+- Le **numéro de build** est tenu par EAS (`appVersionSource: remote`) et s'incrémente seul. Ne pas le remettre dans `app.config.js` : il y serait ignoré, tout en laissant croire qu'il se pilote là.
 - ⚠️ **Clé de signature Android non vérifiée** : Play Console → Intégrité de l'app. Si « Signature d'application Play » n'est pas activée, la clé d'origine est probablement chez Shapper — sans elle, mettre à jour l'app publiée est impossible.
 
 ## 🧱 Entrées de build — À SAVOIR ABSOLUMENT
