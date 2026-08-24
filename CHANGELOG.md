@@ -5,6 +5,102 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.46.0] — 2026-08-24 — Test réel : rendre le parcours atteignable
+
+### Objectif
+Passer du « ça compile » au « ça s'utilise ». Une série de défauts empêchait tout test en conditions réelles, chacun masquant le suivant.
+
+### Le parcours de commande était inaccessible
+`App.expo.tsx` — le fichier que **toutes** les builds embarquent — enregistrait un `EventHomeStub` à la place du vrai écran. Cliquer sur un lieu ouvrait un placeholder : ni points de retrait, ni carte, ni commande. Le vrai écran existait depuis longtemps, jamais relié.
+
+C'est aussi ce qui donnait l'impression qu'aucune configuration ne s'enregistrait : le lieu était bien configuré, l'app n'avait aucun écran pour le montrer.
+
+### L'app appelait l'IP du poste de développement
+Trois causes empilées, toutes avec le même symptôme (`Failed to fetch`) :
+
+1. `CORS_ORIGINS` contenait une entrée malformée — deux URL collées par un `/`.
+2. `expo export` tournait **sans `--clear`** : Metro inline `EXPO_PUBLIC_*` puis met le résultat en cache. Définir la variable sur Vercel ne changeait donc rien au bundle produit.
+3. La variable n'existait pas dans le projet Vercel. Elle est désormais gravée dans `apps/mobile/vercel.json` — publique par nature.
+
+`env.ts` refuse maintenant de démarrer une build empaquetée sans adresse explicite, plutôt que de retomber en silence sur une IP locale.
+
+### Alertes muettes
+`Alert.alert` de React Native **ne fait rien sur le web**. Sept appels en dépendaient, dont « Email ou mot de passe incorrect » et « Impossible de passer la commande ». L'app paraissait morte là où elle refusait une action.
+
+### Découverte des lieux — deux chemins, deux seulement
+Sans position **et** sans recherche, aucun filtre ne s'appliquait : l'API renvoyait tout le catalogue. Un troisième chemin non voulu, et trompeur.
+
+La règle est rétablie : proximité dans 10 km, ou recherche par mot-clé configuré sur le dashboard. Une recherche l'emporte sur la distance — chercher un nom exact doit le trouver, à 2 comme à 400 km.
+
+### Faux événements
+La section « À venir » affichait trois matchs écrits en dur, avec des photos aléatoires. Ils n'existaient dans aucune base : aucun écran d'administration ne pouvait les supprimer.
+
+### Aussi
+- Identifiants alignés sur l'app publiée (`com.shapper.breakeat`) — une build créait sinon une **nouvelle** application au lieu d'une mise à jour.
+- Sentry conditionné au jeton et non à `APP_ENV` : toute build « production » sans `SENTRY_AUTH_TOKEN` échouait pendant Gradle.
+- Titres de section en orange dans les deux dashboards ; menu regroupé par objet ; « Buvettes » devient « Points de retrait ».
+- Suppression d'un point de retrait et archivage/suppression d'un événement — **refusés** dès qu'une commande existe.
+- Deux liens vers le poste opérateur pointaient sur `localhost:3002`.
+
+### Vérifications
+449 tests backend · typecheck et lint des cinq paquets · builds web et dashboards.
+
+---
+
+## [0.45.0] — 2026-08-17 — Environnement Beta séparé de la production
+
+### Objectif
+Pouvoir faire tester la nouvelle app sans écrire dans les données réelles.
+
+Le cloisonnement repose sur un fait simple : **l'adresse du backend est compilée dans chaque build**. Une build Beta ne connaît pas l'adresse de la production, elle en est donc incapable de l'atteindre.
+
+- Profils EAS distincts (`development` / `beta` / `preview` / `production`), chacun portant son adresse **en toutes lettres**. Plus de valeur par défaut partagée : les confondre demande un geste délibéré.
+- `.env.example` pour le backend et le mobile — noms de variables uniquement.
+- `GUIDE_DEVELOPPEMENT/ENVIRONNEMENT_BETA.md` : mode d'emploi Railway, tableau des variables, pièges (base distincte, `JWT_SECRET` différent, `DEMO_MODE` à retirer).
+- `autoIncrement` sur `beta` et `production` : deux envois de suite portaient le même numéro, et le second était refusé.
+
+**Non traité, documenté comme tel** : PaymentSheet mobile n'existe pas, `charge.refunded` n'est pas écouté, et le service staging reste à créer sur Railway.
+
+---
+
+## [0.44.0] — 2026-08-12 — Phase 22 : lieux ouverts en continu
+
+### Objectif
+Un stade vend par match. Un restaurant, une cantine d'entreprise ou un point de vente d'aéroport vendent tous les jours. Leur imposer un événement daté — donc un par jour — rendait la configuration absurde.
+
+### Décision : garder `Event`, le rendre invisible
+`Order.eventId` et `Cart.eventId` sont obligatoires, et huit tables dépendent d'`Event`. Le supprimer aurait signifié réécrire le cœur du parcours de commande pour un gain visible nul.
+
+Le lieu porte désormais son **rythme d'exploitation** (`Venue.operatingMode`). En `PERMANENT`, Break Eat crée tout seul **un contenant unique et sans fin** pour porter les commandes.
+
+Ce contenant est invisible par construction : écarté des listes d'événements et des statistiques, refusé par toute mutation. Le renommer ou le clore priverait le lieu de son seul point d'ancrage. Un index unique partiel impose un seul contenant par lieu, au niveau de la base.
+
+Repasser en `EVENT_BASED` ne le supprime jamais : des commandes y sont rattachées. Il devient dormant.
+
+### Aussi
+- Le wizard saute « Événement » et « Créneaux » en mode continu, et affiche 4 étapes au lieu de 6.
+- Statistiques **par période** (jour / semaine / mois), avec les tranches vides conservées — un jour sans vente est une information.
+- Le contenant reste accessible au **poste opérateur** (`?includePermanent=true`) : sans quoi un restaurant n'offrirait aucun tableau de commandes.
+
+---
+
+## [0.43.1] — 2026-08-12 — Audit Codex : atomicité de la fidélité
+
+### Le point grave
+Le service lisait le solde puis écrivait une valeur absolue. En *read committed* (défaut PostgreSQL), deux commandes simultanées lisent le même solde : au crédit l'une écrase l'autre, au débit les deux passent le contrôle et **dépensent les mêmes points deux fois**.
+
+Le calcul est rendu à la base : `increment` au crédit, et au débit un `updateMany` dont le `WHERE` porte `balance >= points` — contrôle et prélèvement en une seule instruction.
+
+### Règle du montant nul
+L'app laissait la remise couvrir 100 % du panier tandis que le serveur refusait tout total à zéro : un client ayant assez de points restait bloqué au dernier écran. La remise laisse désormais toujours `MIN_PAYABLE_CENTS` à payer, seuil sous lequel le paiement refuse de toute façon.
+
+### Aussi
+- `markCustomerArrived` ne distingue plus 404 et 403 — l'écart révélait l'existence d'une commande à qui n'y a pas droit.
+- Le board opérateur reçoit une **sélection explicite** de champs : un champ ajouté un jour à `Order` n'atterrira plus sur un écran partagé sans décision.
+- 15 tests de fidélité (le module n'en avait aucun), 5 sur `customer_arrived`, contrat realtime et modèle métier mis à jour.
+
+**Non retenu** : l'audit signalait la phase 21 non commitée. Elle l'était depuis `0bf0931`.
+
 ## [0.43.0] — 2026-08-11 — Phase 20 : Programme de fidélité (gain + utilisation)
 
 ### Objectif

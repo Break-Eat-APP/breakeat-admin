@@ -18,9 +18,12 @@ Modules et à quoi ils servent :
 | `organizations`, `groups` | Clubs, membres, groupes d'accès privé |
 | `venues` | **Lieux** (géoloc, recherche, Flaix, plan buvettes). `public-venues.controller.ts` = endpoint app |
 | `events`, `slots` | Événements + créneaux de retrait. `public-events.controller.ts` = endpoint app |
-| `suppliers`, `products`, `categories`, `stock` | Buvettes, catalogue, stock |
+| `suppliers`, `products`, `categories`, `stock` | Points de retrait (« buvettes »), catalogue, stock. Une **catégorie appartient à une buvette**, pas à l'organisation |
 | `cart`, `orders`, `payments`, `webhooks` | Panier → commande → paiement (Stripe) |
-| `pickup-points` | Points de retrait (1–4 par buvette) |
+| `pickup-points` | Comptoirs de retrait (1–4 par buvette) |
+| `loyalty` | Fidélité : solde par organisation, registre immuable |
+| `live-activity` | Live Activity iOS : client APNs + webhook Flaix signé |
+| `bootstrap` | Reprise de l'accès principal (route inerte sans secret) |
 | `realtime` | Temps réel (Socket.IO) vers l'écran opérateur |
 | `notifications` | Push Expo : par statut de commande + programmées |
 | `operator-screens` | Écrans configurables du board opérateur |
@@ -44,11 +47,12 @@ Modules et à quoi ils servent :
 
 | Écran | Rôle | Livré ? |
 |---|---|---|
-| `venue-discovery.screen.tsx` | **Accueil** : recherche + lieux près de toi + favoris + à venir + plan buvettes | ✅ |
+| `venue-discovery.screen.tsx` | **Accueil** : recherche + lieux dans 10 km + favoris + plan buvettes. Section « À venir » vide en attendant les données Flaix | ✅ |
 | `login.screen.tsx` | Connexion / inscription (optionnelle) | ✅ |
 | `order-history.screen.tsx`, `profile.screen.tsx` | Historique, profil | ✅ |
 | `flaix-order.screen.tsx`, `supplier-catalog.screen.tsx`, `cart.screen.tsx`, `slot-selector.screen.tsx`, `checkout.screen.tsx`, `order-confirmation.screen.tsx` | Parcours de commande | ✅ |
-| `event-home.screen.tsx`, `order-tracking.screen.tsx`, `qr-scanner.screen.tsx` | Event live / suivi / scan QR | ⚠️ **stubbés** dans App.expo.tsx |
+| `event-home.screen.tsx`, `order-tracking.screen.tsx` | Écran d'un lieu (catalogue, retrait) et suivi de commande | ✅ branchés dans `App.expo.tsx` |
+| `qr-scanner.screen.tsx` | Scan QR | ⚠️ **stubbé** dans `App.expo.tsx` — la caméra n'existe pas sur le web |
 | `partners.screen.tsx`, `placeholder.screen.tsx` | Secondaires | ✅ |
 
 **`src/`** — le reste :
