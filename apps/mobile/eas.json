@@ -18,7 +18,8 @@
       },
       "env": {
         "APP_ENV": "development"
-      }
+      },
+      "node": "20.18.0"
     },
     "beta": {
       "distribution": "store",
@@ -32,7 +33,8 @@
         "APP_ENV": "staging",
         "EXPO_PUBLIC_API_URL": "FILL_IN_STAGING_API_URL"
       },
-      "autoIncrement": true
+      "autoIncrement": true,
+      "node": "20.18.0"
     },
     "preview": {
       "distribution": "internal",
@@ -45,7 +47,8 @@
       "env": {
         "APP_ENV": "production",
         "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1"
-      }
+      },
+      "node": "20.18.0"
     },
     "production": {
       "distribution": "store",
@@ -56,7 +59,8 @@
         "APP_ENV": "production",
         "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1"
       },
-      "autoIncrement": true
+      "autoIncrement": true,
+      "node": "20.18.0"
     }
   },
   "submit": {
