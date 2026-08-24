@@ -2,13 +2,45 @@
 
 > Ouvre ce fichier en premier dans une nouvelle session. Tout l'état utile est ici + dans les 4 docs (`CHANGELOG.md`, `DEVELOPMENT_LOG.md`, `brain/ENGINEERING_MANUAL.md`, `brain/TASK_SUMMARY.md`) + le git.
 
-_Dernière mise à jour : 2026-08-24_
+_Dernière mise à jour : 2026-08-24 (soir)_
 
 ## ⏭️ REPRISE IMMÉDIATE
 
-1. **Build Android de test** — `cd apps/mobile` puis `eas build --profile preview --platform android`. APK installable qui vise la **production**. La première tentative a échoué (Sentry sans jeton), corrigé dans `a75b1cf`.
-2. **Renseigner les coordonnées GPS des lieux** — sans elles, un lieu n'apparaît jamais par proximité. Il reste trouvable par la recherche.
-3. **Nettoyer les données de test** du wizard et de « Démo Spartiates » : événements d'abord, puis points de retrait, puis comptes.
+1. **`APNS_BUNDLE_ID = com.shapper.breakeat`** sur Railway. La build TestFlight porte l'identifiant réel ; avec une autre valeur, le topic APNs ne correspond pas et **aucune Live Activity ne démarrera**.
+2. **TestFlight** — App Store Connect → onglet TestFlight → remplir les *informations de test* (obligatoire), puis s'ajouter en testeur interne.
+3. **Renseigner les coordonnées GPS des lieux** — sans elles, un lieu n'apparaît jamais par proximité. Il reste trouvable par la recherche.
+4. **Nettoyer les données de test** du wizard et de « Démo Spartiates » : événements d'abord, puis points de retrait, puis comptes.
+
+## 🚀 Livraison (24/08 au soir)
+
+**Version 1.1.0 soumise à App Store Connect**, en attente de traitement Apple.
+La version publiée reste la **1.0.10** (20/05/2026) : TestFlight est un canal
+séparé, seuls les testeurs invités reçoivent la 1.1.0.
+
+**L'extension Live Activity a été compilée et signée pour la première fois.**
+Écrite en phase 21, elle n'avait jamais été construite. Un seul défaut à
+corriger : `accentColor` masquait un modificateur SwiftUI du même nom.
+
+Les deux cibles sont signées : `com.shapper.breakeat` et
+`com.shapper.breakeat.LiveActivity`.
+
+**Une nouvelle version ne demande plus que deux commandes** — certificats, clé
+API et profils sont enregistrés chez EAS :
+
+```
+eas build  --profile beta --platform ios
+eas submit --profile beta --platform ios
+```
+
+Le numéro de build s'incrémente seul (`appVersionSource: remote`). `version`
+dans `app.config.js` ne bouge que pour une sortie publique.
+
+⚠️ **Android reste bloqué** : l'autolinking génère un import vers
+`expo.core.ExpoModulesPackage`, classe supprimée depuis des années, alors que
+le paquet installé fournit `expo.modules.ExpoModulesPackage`. Rien dans le
+dépôt ni dans `node_modules` ne mentionne l'ancien chemin. `nodeLinker:
+hoisted` n'y a rien changé. **Cause non expliquée** — 7 échecs Android contre
+4 réussites iOS.
 
 ⚠️ Dans PowerShell, **`&&` n'existe pas** : utiliser `;` ou deux commandes séparées.
 
@@ -50,7 +82,7 @@ L'app publiée sur les deux stores porte **`com.shapper.breakeat`** (« Break Ea
 - **18** — Plan des buvettes par lieu, viewer plein écran.
 - **19** — État live des commandes + « Je suis arrivé » (événement realtime dédié `customer_arrived`).
 - **20** — Fidélité : activation par lieu, solde par organisation, registre immuable, gain à la récupération.
-- **21** — Live Activity iOS : *backend vérifié* (APNs HTTP/2, JWT ES256, webhook Flaix signé HMAC). *Natif jamais compilé* — aucun build iOS lancé à ce jour.
+- **21** — Live Activity iOS : *backend vérifié* (APNs HTTP/2, JWT ES256, webhook Flaix signé HMAC). *Natif compilé et signé le 24/08* — reste à valider sur un appareil réel.
 - **22** — **Lieux ouverts en continu** (`Venue.operatingMode`) : un restaurant ou une cantine n'a aucun événement à créer. Break Eat pose un contenant unique et invisible (`isPermanentContainer`), protégé contre toute modification. Le wizard saute alors « Événement » et « Créneaux ».
 - **Environnement Beta** : profils EAS séparés, `.env.example`, mode d'emploi Railway.
 - **Statistiques par période** : jour / semaine / mois, tranches vides conservées. La vue par défaut suit le rythme du lieu.
