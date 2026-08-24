@@ -75,3 +75,15 @@ apps/mobile/.expo
 
 # Local Claude tooling (preview launch config)
 .claude/
+
+# Configs Expo egarees a la racine.
+#
+# `eas` lance depuis un mauvais dossier remonte l'arborescence et, ne trouvant
+# pas de projet, en fabrique un ICI : un eas.json sans variables d'environnement
+# et un app.json portant un identifiant inconnu des stores. La build part alors
+# sur un projet fantome et echoue a « Install dependencies ».
+#
+# La seule configuration valable vit dans apps/mobile/. Ces fichiers ne doivent
+# jamais entrer dans le depot.
+/eas.json
+/app.json
