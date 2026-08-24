@@ -79,10 +79,12 @@ module.exports = {
       projectId: 'a6f65999-68f3-4f33-a8de-449d568ab0b5',
     },
   },
-  updates: {
-    url: 'https://u.expo.dev/a6f65999-68f3-4f33-a8de-449d568ab0b5',
-  },
-  runtimeVersion: {
-    policy: 'appVersion',
-  },
+  // PAS de bloc `updates` ni `runtimeVersion` : ils declarent des mises a
+  // jour a distance (OTA) que `expo-updates` fournirait — or le paquet n'est
+  // pas installe. Declarer une capacite absente faisait echouer la
+  // compilation Android sur une reference manquante.
+  //
+  // Installer `expo-updates` est une DECISION PRODUIT (livrer un correctif
+  // sans passer par les stores), pas un correctif de build : `npx expo
+  // install expo-updates` puis `eas update:configure` retabliront ce bloc.
 };

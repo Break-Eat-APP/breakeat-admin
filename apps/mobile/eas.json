@@ -22,7 +22,6 @@
     },
     "beta": {
       "distribution": "store",
-      "channel": "beta",
       "ios": {
         "simulator": false
       },
@@ -50,7 +49,6 @@
     },
     "production": {
       "distribution": "store",
-      "channel": "production",
       "android": {
         "buildType": "app-bundle"
       },
