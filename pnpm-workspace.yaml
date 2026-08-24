@@ -1,3 +1,17 @@
+# Disposition PLATE de node_modules, au lieu des liens symboliques de pnpm.
+#
+# L'autolinking Android de React Native parcourt node_modules pour trouver les
+# modules natifs et generer PackageList.java. Il ne suit PAS les liens
+# symboliques : sur EAS, il produisait un import vers
+# `expo.core.ExpoModulesPackage` — une classe supprimee depuis longtemps, alors
+# que le paquet installe fournit `expo.modules.ExpoModulesPackage`.
+#
+# CocoaPods, lui, suit les liens : c'est pourquoi les builds iOS passaient.
+#
+# A NOTER : depuis pnpm 10, ce reglage n'est plus lu depuis .npmrc. Le poser
+# la-bas ne produit aucun effet, et aucun avertissement.
+nodeLinker: hoisted
+
 packages:
   - "backend"
   - "apps/*"
