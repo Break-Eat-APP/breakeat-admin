@@ -15,10 +15,14 @@ private enum Brand {
   static let border = Color(red: 0.937, green: 0.918, blue: 0.902) // #EFEAE6
 }
 
+/// Couleur de l'état : NE PAS renommer en `accentColor`, qui est aussi une
+/// methode de SwiftUI.View — dans le corps d'une vue, Swift choisirait le
+/// membre plutot que cette fonction, et le widget ne compilerait plus.
+///
 /// Couleur d'accent selon l'état : orange pendant la préparation, vert quand
 /// c'est prêt, gris une fois terminé. Même code visuel que l'écran « Mes
 /// commandes » de l'app.
-private func accentColor(for state: BreakEatOrderAttributes.ContentState) -> Color {
+private func statusColor(for state: BreakEatOrderAttributes.ContentState) -> Color {
   if state.isCancelled { return Brand.inkSoft }
   if state.isReady { return Brand.green }
   if state.status == "COLLECTED" { return Brand.inkSoft }
@@ -57,7 +61,7 @@ private struct LockScreenView: View {
       HStack(alignment: .center, spacing: 10) {
         Image(systemName: statusSymbol(for: state))
           .font(.system(size: 22))
-          .foregroundStyle(accentColor(for: state))
+          .foregroundStyle(statusColor(for: state))
 
         VStack(alignment: .leading, spacing: 2) {
           Text(state.statusLabel)
@@ -135,7 +139,7 @@ struct BreakEatLiveActivity: Widget {
         DynamicIslandExpandedRegion(.leading) {
           Image(systemName: statusSymbol(for: context.state))
             .font(.system(size: 26))
-            .foregroundStyle(accentColor(for: context.state))
+            .foregroundStyle(statusColor(for: context.state))
             .padding(.leading, 4)
         }
 
@@ -180,24 +184,24 @@ struct BreakEatLiveActivity: Widget {
       } compactLeading: {
         // ── Vue compacte : une seule commande en cours ─────────
         Image(systemName: statusSymbol(for: context.state))
-          .foregroundStyle(accentColor(for: context.state))
+          .foregroundStyle(statusColor(for: context.state))
 
       } compactTrailing: {
         if let time = context.state.pickupTimeLabel, !context.state.isFinished {
           Text(time)
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(accentColor(for: context.state))
+            .foregroundStyle(statusColor(for: context.state))
         }
 
       } minimal: {
         // ── Vue minimale : plusieurs activités simultanées ─────
         Image(systemName: statusSymbol(for: context.state))
-          .foregroundStyle(accentColor(for: context.state))
+          .foregroundStyle(statusColor(for: context.state))
       }
       // Ouvre l'app sur le suivi de la commande concernée (deep link déjà géré
       // par l'app : breakeat://order/<id>).
       .widgetURL(URL(string: "breakeat://order/\(context.attributes.orderId)"))
-      .keylineTint(accentColor(for: context.state))
+      .keylineTint(statusColor(for: context.state))
     }
   }
 }
