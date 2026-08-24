@@ -3941,4 +3941,142 @@ Interne : `cart`, `orders`, `venues`, `realtime` (indirect). Externe : Prisma (t
 - Commande refusée par le webhook avec « does not match PaymentIntent amount » : la config fidélité du lieu a probablement changé entre le checkout et le webhook (comportement attendu).
 - Section « Mes points » invisible dans l'app : `GET /loyalty/venues/:venueId/me` renvoie `enabled: false` (programme non activé sur ce lieu) — ou `venueId` est absent du store panier (renseigné par `initCart` depuis `event.venue.id`).
 
+## [2026-08-11] Phase 21 — Live Activity iOS (socle backend + extension native)
 
+### What Was Built
+Le suivi d'une commande sur l'**écran verrouillé** et dans la **Dynamic Island** d'un iPhone. Backend complet et vérifié contre les vrais serveurs Apple ; extension native écrite mais **jamais compilée**.
+
+### Why It Was Built
+Le client veut que le spectateur suive sa commande sans rouvrir l'application. Contrainte posée dès la spécification : **événementiel, pas de sondage** — l'état vient de transitions réelles, jamais d'une interrogation périodique.
+
+### How It Works
+1. **Démarrage** — l'application crée la Live Activity côté iOS et envoie son jeton au backend (`LiveActivity`).
+2. **Mise à jour** — deux sources alimentent le **même pipeline** : les transitions Break Eat (actif) et les webhooks Flaix (prêt, en attente du contrat).
+3. **Transport** — appel **direct** à APNs en HTTP/2. Expo Push ne peut pas le faire : Apple exige l'en-tête `apns-push-type: liveactivity` et le topic `<bundleId>.push-type.liveactivity`.
+4. **Authentification** — JWT ES256 signé avec le module `crypto` de Node, sans dépendance.
+
+### Code References
+- backend/prisma/schema.prisma — `LiveActivity` (+ `LiveActivityStatus`), `FlaixWebhookEvent`.
+- backend/src/modules/live-activity/apns.service.ts:114 — `dsaEncoding: 'ieee-p1363'` : **indispensable**, le DER par défaut de Node est rejeté par Apple.
+- backend/src/modules/live-activity/apns.service.ts — `checkCredentials` : distingue `403 InvalidProviderToken` (clé fausse) de `400 BadDeviceToken` (clé bonne, jeton factice).
+- backend/src/modules/live-activity/flaix-webhook.service.ts:3 — signature HMAC-SHA256 sur le **corps brut**, comparée en temps constant.
+- backend/src/config/app.config.ts — bloc `apns` ; `privateKey` restaure les `\n` échappés.
+- apps/mobile/plugins/withLiveActivity.js — `NSSupportsLiveActivities`, cible iOS 16.2, et `aps-environment` déduit d'`APP_ENV`.
+- apps/mobile/targets/live-activity/ — extension WidgetKit SwiftUI (écran verrouillé + trois vues Dynamic Island).
+
+### Data Flow
+Transition de commande **ou** webhook Flaix → `LiveActivityService` → `ApnsService` (HTTP/2, JWT ES256) → APNs → extension WidgetKit. Le webhook est idempotent par `eventId` (contrainte unique, P2002 absorbé) et rejette tout envoi de plus de 5 minutes.
+
+### Tests and Verification
+- Client APNs éprouvé **contre les vrais serveurs Apple** via `GET /live-activities/apns-health`.
+- Webhook : signature, anti-rejeu, idempotence couverts par `flaix-webhook.service.spec.ts`.
+- ⚠️ **L'extension native n'a jamais été compilée.** `expo prebuild -p ios` ne tourne pas sous Windows, et aucun build iOS n'a été lancé. Une Live Activity ne fonctionne ni en simulateur ni dans Expo Go — seul un vrai iPhone la validera.
+
+### Risks and Safe Change Rules
+- **`dsaEncoding: 'ieee-p1363'` ne doit pas disparaître** : sans lui, Apple rejette chaque appel avec une erreur cryptographique opaque.
+- **La clé `.p8` reste strictement serveur.** Jamais dans le dépôt, jamais dans l'application.
+- **Le `.p8` doit tenir sur UNE ligne** dans la variable d'environnement, sauts de ligne échappés en `\n` : `dotenv` ne garde que la première ligne d'une valeur multi-lignes.
+- **`APNS_ENV` doit correspondre au type de build.** Un décalage donne `BadDeviceToken` — TestFlight et Ad Hoc utilisent l'APNs de **production**, pas le sandbox.
+- **`aps-environment` est déduit d'`APP_ENV`** : une build `preview` (Ad Hoc) doit valoir `production`, sinon la signature de code échoue.
+- **Ne jamais accepter un webhook non signé** faute de configuration : `FLAIX_WEBHOOK_SECRET` vide ⇒ refus.
+
+### Debugging Notes
+- `apns-health` renvoie « Clé APNs illisible » : le `.p8` a été collé en multi-lignes.
+- `403 InvalidProviderToken` : mauvaise clé, mauvais `keyId` ou mauvais `teamId`.
+- `400 BadDeviceToken` sur un vrai appareil : décalage `APNS_ENV` / type de build.
+- Webhook en 401 alors que le secret est posé : vérifier qu'il transite par `app.config.ts` — les webhooks sont **exclus** du préfixe global `api/v1`.
+
+---
+
+## [2026-08-12] Phase 22 — Lieux ouverts en continu (`Venue.operatingMode`)
+
+### What Was Built
+Un lieu porte désormais son **rythme d'exploitation**. En mode `PERMANENT`, Break Eat crée tout seul un **contenant** unique et sans fin qui porte les commandes — un événement au sens technique, invisible et immodifiable. Le wizard saute alors les étapes « Événement » et « Créneaux ». Les statistiques manager gagnent une lecture **par période** (jour / semaine / mois).
+
+### Why It Was Built
+Un stade vend par match ; un restaurant, une cantine d'entreprise ou un point de vente d'aéroport vendent tous les jours. Leur imposer un événement daté revenait à en créer un par jour — configuration absurde et source d'erreurs quotidiennes.
+
+**Pourquoi ne pas supprimer `Event`** : `Order.eventId` et `Cart.eventId` sont obligatoires, et huit tables en dépendent (`Cart`, `Slot`, `PickupPoint`, `EventSupplier`, `EventGroup`, `EventOperatorScreen`, `ScheduledPush`, `FlaixDecision`). Le retirer signifiait réécrire le cœur du parcours de commande pour un gain visible nul, puisque personne ne verrait jamais ce contenant. On sépare donc les deux métiers que `Event` cumulait : le **concept commercial** (le match) et le **contenant technique** (là où vivent les commandes).
+
+### How It Works
+1. **Création ou bascule** — un lieu passé en `PERMANENT` reçoit son contenant dans la foulée, `ACTIVE` d'emblée : il n'y a personne pour « ouvrir » un restaurant chaque matin.
+2. **Invisibilité** — le contenant est écarté des listes d'événements et des statistiques par événement, et refusé par toute mutation.
+3. **Exception opérateur** — le poste de préparation le réclame explicitement (`?includePermanent=true`), sans quoi un restaurant n'offrirait aucun tableau de commandes.
+4. **Retour arrière** — repasser en `EVENT_BASED` ne supprime jamais le contenant : des commandes y sont rattachées. Il devient dormant.
+
+### Code References
+- backend/prisma/schema.prisma:351 — `enum VenueOperatingMode` (EVENT_BASED | PERMANENT).
+- backend/prisma/schema.prisma:374 — `Event.isPermanentContainer` (drapeau du contenant).
+- backend/prisma/migrations/20260812_phase22_venue_operating_mode/migration.sql:1 — index unique **partiel** `events_permanent_container_per_venue` : un seul contenant par lieu, imposé par la base.
+- backend/src/modules/venues/venues.service.ts:65 — `ensurePermanentContainer` (idempotent, absorbe P2002).
+- backend/src/modules/venues/venues.service.ts:137 — `findPermanentContainer` (route dédiée pour les outils de configuration).
+- backend/src/modules/events/events.service.ts:140 — `guardPermanentContainer` (refuse modification et suppression).
+- backend/src/modules/events/events.controller.ts:43 — `?includePermanent=true`.
+- backend/src/modules/stats/stats.service.ts:218 — `getPeriodStats` (agrège sur `Order.createdAt`, jamais sur l'événement).
+- backend/src/modules/stats/stats.service.ts:323 — `bucketStart` (semaines commençant le **lundi**).
+- apps/admin/src/app/(admin)/wizard/page.tsx — `stepsForMode` : le parcours n'est plus une suite de nombres consécutifs.
+
+### Data Flow
+Back-office ou dashboard → `PATCH /organizations/:orgId/venues/:venueId` avec `operatingMode` → `ensurePermanentContainer` sur le mode **résultant**. Wizard en mode continu → `GET /organizations/:orgId/venues/:venueId/container` pour récupérer l'`eventId` auquel rattacher buvettes et comptoirs. Statistiques → `GET /organizations/:orgId/stats/periods?granularity=day|week|month`.
+
+### Tests and Verification
+- 6 tests sur `ensurePermanentContainer` (création, bascule, mode résultant, P2002 absorbé, vraie panne remontée), 4 sur les gardes du contenant, 7 sur le découpage temporel.
+- `jest` complet **445/445** au moment de la livraison.
+
+### Risks and Safe Change Rules
+- **Le découpage temporel se fait en mémoire, pas en SQL.** PostgreSQL grouperait en UTC : un service du soir tomberait dans la mauvaise journée. Ne pas « optimiser » en `groupBy` SQL sans gérer le fuseau du lieu.
+- **Les tranches vides sont conservées** : un jour sans vente est une information. Les supprimer ferait relier deux dates éloignées sur un graphique comme si la journée n'avait pas existé.
+- **Ne pas exposer le contenant dans les écrans de configuration** : un club tenterait de le renommer ou de le clore, et priverait son lieu de son seul point d'ancrage — plus aucune commande possible, sans explication.
+- `endAt` du contenant vaut `2099-12-31` : sentinelle lisible, aucune logique ne compare à cette borne (l'ouverture se décide sur `status`).
+
+### Debugging Notes
+- « Ce lieu n'est pas ouvert en continu » sur `/container` : le lieu est en `EVENT_BASED`, ou la bascule n'a pas été enregistrée.
+- Poste opérateur vide sur un restaurant : vérifier que l'appel porte bien `includePermanent=true`.
+- Statistiques par événement vides sur un lieu permanent : **comportement attendu** — utiliser la vue par période.
+
+---
+
+## [2026-08-24] Fiabilité de livraison — le parcours était inatteignable
+
+### What Was Built
+Une série de correctifs sans lesquels aucun test en conditions réelles n'était possible. Aucune fonctionnalité nouvelle : uniquement la levée des obstacles qui rendaient l'application inutilisable une fois déployée.
+
+### Why It Was Built
+Le client tentait depuis plusieurs sessions de tester son application et n'y parvenait pas. Chaque cause en masquait une autre, avec toujours le même symptôme — un écran vide ou un `Failed to fetch` — ce qui donnait l'impression que rien n'avançait.
+
+### How It Works
+**1. Le parcours de commande était un placeholder.** `App.expo.tsx` — le fichier que **toutes** les builds embarquent, web comme natif — enregistrait un `EventHomeStub` à la place de `EventHomeScreen`. Cliquer sur un lieu ouvrait un écran vide. Le vrai écran existait depuis longtemps, jamais relié. C'est aussi ce qui donnait l'impression qu'aucune configuration ne s'enregistrait : le lieu **était** configuré, l'app n'avait aucun écran pour le montrer.
+
+**2. L'application appelait l'IP du poste de développement.** Trois causes empilées : une entrée `CORS_ORIGINS` malformée (deux URL collées par un `/`) ; `expo export` sans `--clear`, Metro servant un bundle en cache où l'ancienne adresse était déjà inlinée ; et la variable absente du projet Vercel.
+
+**3. Les alertes étaient muettes sur le web.** `Alert.alert` de React Native ne fait rien sur `react-native-web`. Sept appels en dépendaient, dont « Email ou mot de passe incorrect » et « Impossible de passer la commande ».
+
+**4. La découverte des lieux avait un troisième chemin.** Sans position **et** sans recherche, aucun filtre ne s'appliquait : l'API renvoyait tout le catalogue.
+
+### Code References
+- apps/mobile/App.expo.tsx:50 — `EventHomeScreen` branché (le stub est supprimé).
+- apps/mobile/src/lib/config/env.ts:26 — `resolveApiUrl` : **jette** sur une build empaquetée sans `EXPO_PUBLIC_API_URL`, au lieu de retomber sur une IP locale.
+- apps/mobile/vercel.json — `build.env` : l'adresse de l'API est gravée, versionnée avec le code (publique par nature).
+- apps/mobile/package.json — `build:web` porte `--clear`.
+- apps/mobile/app.config.js:54 — Sentry conditionné à `SENTRY_AUTH_TOKEN`, pas à `APP_ENV`.
+- backend/src/modules/venues/public-venues.controller.ts:143 — deux chemins de découverte, et un retour vide quand aucun n'est emprunté.
+- backend/src/modules/suppliers/suppliers.service.ts:196 — suppression d'un point de retrait, **refusée** si des commandes existent.
+- backend/src/modules/events/events.service.ts:332 — suppression d'un événement, même règle ; le message oriente vers l'archivage.
+- backend/src/modules/backoffice/backoffice.service.ts — `setUserActive` : archivage réversible, avec deux verrous (pas soi-même, pas le dernier administrateur actif).
+
+### Tests and Verification
+- `jest` complet **449/449**.
+- Reproduit dans le navigateur, sur l'application **déployée** : la requête d'inscription partait vers `http://192.168.1.133:3000` ; après correction, le bundle contient l'adresse Railway et plus aucune trace de l'IP.
+- Chaque origine testée individuellement contre la production pour identifier celle qui manquait dans `CORS_ORIGINS`.
+
+### Risks and Safe Change Rules
+- **`--clear` sur `build:web` n'est pas optionnel.** Sans lui, changer une variable d'environnement ne change **rien** au bundle produit : le déploiement réussit tout en servant l'ancienne adresse. C'est le piège le plus coûteux rencontré sur ce projet.
+- **Ne jamais remettre de repli silencieux** sur l'adresse d'API. Une panne bruyante au premier écran vaut mieux qu'un test « réussi » qui écrivait ailleurs.
+- **Conditionner un plugin de build à un environnement plutôt qu'à sa vraie dépendance** est un piège : Sentry exigeait implicitement un jeton que rien ne rappelait de poser, et faisait échouer toute la compilation Gradle.
+- **Toute suppression touchant de l'argent est refusée si des commandes existent.** Archiver conserve ; supprimer ne vaut que pour une erreur de saisie antérieure à la première vente.
+- **`Alert.alert` reste un no-op sur le web** : tout nouvel écran doit passer par `src/lib/alert.ts`.
+
+### Debugging Notes
+- `Failed to fetch` depuis l'app : vérifier **dans cet ordre** l'adresse gravée dans le bundle (`grep` de l'URL attendue dans `dist/_expo/static/js/web/*.js`), puis l'en-tête `access-control-allow-origin` renvoyé par le backend pour cette origine exacte.
+- Un bouton qui « ne fait rien » sur le web : chercher un `Alert.alert` non migré.
+- Écran « Lieux » vide : c'est désormais le comportement attendu sans position **et** sans recherche.

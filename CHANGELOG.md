@@ -84,7 +84,7 @@ Repasser en `EVENT_BASED` ne le supprime jamais : des commandes y sont rattaché
 
 ---
 
-## [0.43.1] — 2026-08-12 — Audit Codex : atomicité de la fidélité
+## [0.43.2] — 2026-08-12 — Audit Codex : atomicité de la fidélité
 
 ### Le point grave
 Le service lisait le solde puis écrivait une valeur absolue. En *read committed* (défaut PostgreSQL), deux commandes simultanées lisent le même solde : au crédit l'une écrase l'autre, au débit les deux passent le contrôle et **dépensent les mêmes points deux fois**.
@@ -100,6 +100,28 @@ L'app laissait la remise couvrir 100 % du panier tandis que le serveur refusait 
 - 15 tests de fidélité (le module n'en avait aucun), 5 sur `customer_arrived`, contrat realtime et modèle métier mis à jour.
 
 **Non retenu** : l'audit signalait la phase 21 non commitée. Elle l'était depuis `0bf0931`.
+
+## [0.43.1] — 2026-08-11 — Phase 21 : Live Activity iOS
+
+### Objectif
+Suivre sa commande sur l'écran verrouillé et dans la Dynamic Island, sans rouvrir l'application. Contrainte posée dès la spécification : **événementiel, pas de sondage**.
+
+### Backend (vérifié)
+- Client **APNs HTTP/2** sans dépendance, JWT ES256 signé avec le module `crypto` de Node. `dsaEncoding: 'ieee-p1363'` est indispensable : le DER par défaut est rejeté par Apple.
+- Appel **direct** à Apple, pas Expo Push : le topic `<bundleId>.push-type.liveactivity` et l'en-tête `apns-push-type: liveactivity` ne passent pas autrement.
+- **Webhook Flaix** signé HMAC-SHA256 sur le corps brut, comparaison en temps constant, anti-rejeu 5 minutes, idempotence par `eventId`.
+- Tables `LiveActivity` et `FlaixWebhookEvent`. Endpoint de diagnostic `apns-health`, qui distingue une clé fausse d'un jeton d'appareil factice.
+- **Deux sources, un seul pipeline** : transitions Break Eat (actif) et webhooks Flaix (prêt, en attente du contrat).
+
+### Natif (écrit, jamais compilé)
+Extension WidgetKit SwiftUI (écran verrouillé + trois vues Dynamic Island), module Expo local, config plugin (`NSSupportsLiveActivities`, `aps-environment` déduit d'`APP_ENV`, cible iOS 16.2).
+
+⚠️ `expo prebuild -p ios` ne tourne pas sous Windows et **aucun build iOS n'a été lancé**. Une Live Activity ne fonctionne ni en simulateur ni dans Expo Go.
+
+### Aussi
+Module `bootstrap` : reprise de l'accès principal par une route inerte tant qu'`ADMIN_BOOTSTRAP_SECRET` n'est pas défini (404, comparaison à temps constant, secret d'au moins 24 caractères).
+
+---
 
 ## [0.43.0] — 2026-08-11 — Phase 20 : Programme de fidélité (gain + utilisation)
 

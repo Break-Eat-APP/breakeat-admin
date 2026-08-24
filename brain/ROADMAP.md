@@ -2,6 +2,16 @@
 
 Version: V1 source of truth
 
+> ⚠️ **Ce document couvre les phases 1 a 10** — le plan initial, integralement livre.
+>
+> Le projet a continue au-dela, sous la conduite du client plutot que d'un plan
+> ecrit d'avance : phases 11 a 22 (board operateur configurable, dashboard
+> manager, back-office, pivot mobile, plan des buvettes, etat live des
+> commandes, fidelite, Live Activity iOS, lieux ouverts en continu).
+>
+> Pour l'etat reel : `../REPRISE.md`. Pour le detail par phase :
+> `../CHANGELOG.md` et `ENGINEERING_MANUAL.md`.
+
 ## Roadmap Rule
 
 Never skip phases.

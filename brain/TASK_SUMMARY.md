@@ -4,6 +4,105 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-08-24] Rendre l'app testable en réel — parcours, découverte, gestion
+
+> Session de terrain : le client tentait de tester son application et n'y parvenait pas. Détail fichiers dans `CHANGELOG.md` [0.46.0] ; références de code dans `ENGINEERING_MANUAL.md`.
+
+### Livré
+- **Le parcours de commande est enfin atteignable** : `App.expo.tsx` enregistrait un stub à la place de `EventHomeScreen`. Cliquer sur un lieu ouvrait un écran vide — ni points de retrait, ni carte, ni commande. Dans **toutes** les versions livrées depuis l'origine.
+- **L'app parle à la production** : trois causes empilées l'en empêchaient (CORS malformé, cache Metro, variable absente de Vercel). L'adresse est désormais gravée dans `vercel.json`, et `env.ts` refuse de démarrer sans elle.
+- **Alertes visibles sur le web** : `Alert.alert` est un no-op sur `react-native-web`. Sept appels muets, dont l'échec de connexion et l'échec de commande.
+- **Découverte des lieux** : deux chemins et deux seulement — proximité dans 10 km, ou recherche par mot-clé. Le troisième chemin (ni position ni recherche ⇒ tout le catalogue) est fermé.
+- **Gestion** : archiver ou supprimer un événement, supprimer un point de retrait, archiver un compte. Chaque suppression est **refusée** si des commandes existent.
+- **Identifiants de build alignés** sur l'app publiée (`com.shapper.breakeat`) — sans quoi une build créait une **nouvelle** application au lieu d'une mise à jour.
+- **Menu du dashboard** regroupé par objet ; titres de section en orange ; « Buvettes » devient « Points de retrait ».
+
+### Décisions techniques
+- **Archiver ≠ supprimer.** Archiver sort de la circulation en conservant tout ; supprimer efface. Toute suppression touchant de l'argent est refusée si des commandes existent, et le message oriente vers l'archivage. Vaut pour les événements, les points de retrait et les comptes.
+- **Panne bruyante plutôt que repli silencieux** : `env.ts` jette sur une build empaquetée sans adresse d'API. Une erreur au premier écran vaut mieux qu'un test « réussi » qui écrivait ailleurs.
+- **Sentry conditionné au jeton, pas à l'environnement** : se fier à `APP_ENV` faisait échouer toute build « production » sans `SENTRY_AUTH_TOKEN`, pendant la compilation Gradle.
+- **Les faux événements sont supprimés du code.** La section « À venir » affichait trois matchs écrits en dur : aucun écran d'administration ne pouvait les effacer, puisqu'ils n'existaient dans aucune base.
+
+### ⚠️ Piège structurel corrigé
+`expo export -p web` tournait **sans `--clear`**. Metro inline les `EXPO_PUBLIC_*` puis **met le résultat en cache** : définir la variable sur Vercel ne changeait rien au bundle produit. Le déploiement réussissait tout en servant l'ancienne adresse — ici l'IP du poste de développement. C'est le piège le plus coûteux rencontré sur ce projet, et il était déjà documenté sans être structurellement corrigé.
+
+### Reste
+1. **Commande miroir Flaix** — sans elle, fidélité, « Je suis arrivé » et Live Activity restent éteintes sur les lieux Flaix.
+2. **PaymentSheet mobile** — `@stripe/stripe-react-native` n'est pas installé ; le serveur est prêt.
+3. **`charge.refunded`** non écouté.
+4. **Staging Railway** à créer.
+5. Favoris non persistés ; `order-tracking.screen.tsx` encore en thème sombre ; connexions sociales masquées.
+
+### Vérifs
+`jest` **449/449** · typecheck et lint des cinq paquets · builds web et dashboards · reproduction dans le navigateur sur l'app **déployée** (adresse gravée dans le bundle vérifiée par `grep`).
+
+---
+
+## [2026-08-12] Phase 22 — Lieux ouverts en continu
+
+> Détail dans `CHANGELOG.md` [0.44.0] ; références de code dans `ENGINEERING_MANUAL.md`.
+
+### Livré
+- `Venue.operatingMode` : `EVENT_BASED` (stade, arena) ou `PERMANENT` (restaurant, cantine, aéroport, parc).
+- En mode continu, Break Eat crée **tout seul** un contenant unique et sans fin qui porte les commandes. Invisible, immodifiable, un seul par lieu (index unique partiel).
+- Le wizard saute « Événement » et « Créneaux », et affiche 4 étapes au lieu de 6.
+- Statistiques **par période** (jour / semaine / mois) — la lecture utile d'un restaurant.
+- Suppression et archivage d'événements, avec la garantie sur les données.
+
+### Décisions techniques
+- **Garder `Event`, le rendre invisible.** `Order.eventId` et `Cart.eventId` sont obligatoires et huit tables en dépendent : le supprimer signifiait réécrire le cœur du parcours de commande pour un gain visible nul. On sépare le **concept commercial** (le match) du **contenant technique**.
+- **Le poste opérateur doit voir le contenant** (`?includePermanent=true`) : sans cette porte, un restaurant n'offre aucun tableau de commandes. La distinction est entre *configurer* un événement et *servir* des commandes.
+- **Découpage temporel en mémoire, pas en SQL** : PostgreSQL grouperait en UTC et rangerait un service du soir dans la mauvaise journée.
+- **Les tranches vides sont conservées** : un jour sans vente est une information.
+
+### Vérifs
+`jest` **445/445** · 17 tests nouveaux (contenant, gardes, découpage temporel) · typecheck, lint, builds.
+
+---
+
+## [2026-08-12] Audit Codex — atomicité de la fidélité
+
+> Détail dans `CHANGELOG.md` [0.43.1].
+
+### ⚠️ Le point grave
+Le service **lisait** le solde puis **écrivait** une valeur absolue. En *read committed* (défaut PostgreSQL), deux commandes simultanées lisent le même solde : au crédit l'une écrase l'autre (points perdus), au débit les deux passent le contrôle et **dépensent les mêmes points deux fois** (remise offerte).
+
+Le calcul est rendu à la base : `increment` au crédit, et au débit un `updateMany` dont le `WHERE` porte `balance >= points` — contrôle et prélèvement en **une seule instruction**. Le module n'avait aucun test ; il en a 15.
+
+### Autres corrections
+- **Règle du montant nul** : l'app laissait la remise couvrir 100 % du panier tandis que le serveur refusait tout total à zéro. Une remise laisse désormais toujours `MIN_PAYABLE_CENTS` (0,50 €) à payer, seuil sous lequel le paiement refuse de toute façon.
+- **Fuite d'existence** : `markCustomerArrived` distinguait 404 et 403 — l'écart révélait l'existence d'une commande à qui n'y a pas droit.
+- **Board opérateur** : sélection **explicite** de champs, pour qu'un champ ajouté un jour à `Order` n'atterrisse plus sur un écran partagé sans décision.
+- Contrat realtime `customer_arrived` documenté, phases 19/20 ajoutées au modèle métier.
+
+### Non retenu
+L'audit signalait la phase 21 non commitée. Elle l'était depuis `0bf0931`, et l'arbre était propre.
+
+---
+## [2026-08-11] Phase 21 — Live Activity iOS
+
+> Detail dans `CHANGELOG.md` ; references de code dans `ENGINEERING_MANUAL.md`.
+
+### Livre
+- **Backend complet et verifie** : client APNs HTTP/2 sans dependance, JWT ES256 signe avec le module `crypto` de Node, webhook Flaix signe HMAC sur le corps brut, anti-rejeu 5 minutes, idempotence par `eventId`. Tables `LiveActivity` et `FlaixWebhookEvent`. Endpoint de diagnostic `apns-health`.
+- **Extension native ecrite** : WidgetKit SwiftUI (ecran verrouille + trois vues Dynamic Island), module Expo local, config plugin (`NSSupportsLiveActivities`, `aps-environment`, cible iOS 16.2).
+
+### Decisions techniques
+- **Evenementiel, pas de sondage** — contrainte posee des la specification. Deux sources alimentent le MEME pipeline : transitions Break Eat (actif) et webhooks Flaix (pret, en attente du contrat).
+- **Appel direct a APNs**, pas Expo Push : Apple exige `apns-push-type: liveactivity` et le topic `<bundleId>.push-type.liveactivity`.
+- **`dsaEncoding: 'ieee-p1363'`** sur la signature JWT : le DER par defaut de Node est rejete par Apple avec une erreur opaque.
+- **La cle `.p8` reste strictement serveur**, et doit tenir sur UNE ligne dans la variable d'environnement (`dotenv` ne garde que la premiere ligne).
+
+### ⚠️ Jamais compile
+`expo prebuild -p ios` ne tourne pas sous Windows, et **aucun build iOS n'a ete lance a ce jour**. Une Live Activity ne fonctionne ni en simulateur ni dans Expo Go : seul un vrai iPhone la validera. Le backend, lui, est eprouve contre les vrais serveurs Apple.
+
+### Reste
+1. Lancer `eas build -p ios --profile preview` et tester sur un appareil reel.
+2. Verifier que `APNS_ENV` vaut `production` (TestFlight et Ad Hoc utilisent l'APNs de production, pas le sandbox).
+3. Commande miroir Flaix — sans elle, aucune Live Activity ne peut demarrer sur un lieu Flaix (`LiveActivity.orderId` est une cle etrangere obligatoire).
+
+---
+
 ## [2026-08-11] Phases 19 & 20 — état live des commandes, « Je suis arrivé », fidélité
 
 > Trois modules demandés par le client, livrés dans l'ordre choisi : état live → « Je suis arrivé » → fidélité. Détail fichiers dans `CHANGELOG.md` [0.42.0] et [0.43.0] ; références de code exactes dans `ENGINEERING_MANUAL.md`.
