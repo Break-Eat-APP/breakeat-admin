@@ -30,7 +30,13 @@ module.exports = {
   name: 'BREAK EAT',
   slug: 'break-eat',
   owner: 'break-eat-app-spe',
-  version: '1.0.0',
+  // Doit DEPASSER la version publiee sur les stores — 1.0.10 au 20/05/2026,
+  // relevee via l'API publique d'Apple. Apple refuse toute soumission dont la
+  // version n'est pas superieure a la derniere en ligne.
+  //
+  // 1.1.0 plutot que 1.0.11 : nouvelle architecture et nouveau parcours de
+  // commande, ce n'est pas un correctif.
+  version: '1.1.0',
   orientation: 'portrait',
   scheme: 'breakeat',
   icon: './assets/logo-mark-orange.png',
