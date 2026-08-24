@@ -17,7 +17,8 @@
         "gradleCommand": ":app:assembleDebug"
       },
       "env": {
-        "APP_ENV": "development"
+        "APP_ENV": "development",
+        "BUNDLE_ID": "com.shapper.breakeat.dev"
       },
       "node": "20.18.0"
     },
@@ -46,7 +47,8 @@
       },
       "env": {
         "APP_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1",
+        "BUNDLE_ID": "com.shapper.breakeat.preview"
       },
       "node": "20.18.0"
     },

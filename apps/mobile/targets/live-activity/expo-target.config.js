@@ -16,7 +16,9 @@ module.exports = {
   // Doit rester cohérent avec `ios.bundleIdentifier` de app.config.js :
   // le topic APNs utilisé par le backend en dépend
   // (<bundleId>.push-type.liveactivity).
-  bundleIdentifier: 'com.shapper.breakeat.LiveActivity',
+  // Derive du meme BUNDLE_ID que l'app hote : une extension doit prefixer
+  // l'identifiant de son application, sinon la cible ne se signe pas.
+  bundleIdentifier: `${process.env.BUNDLE_ID ?? 'com.shapper.breakeat'}.LiveActivity`,
   deploymentTarget: '16.2',
   frameworks: ['SwiftUI', 'WidgetKit', 'ActivityKit'],
 };

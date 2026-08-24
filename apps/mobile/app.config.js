@@ -7,6 +7,24 @@
  * Note: FILL_IN_* values must be set before the first production build.
  */
 
+/**
+ * Identifiant de l'application, pilote par le profil de build.
+ *
+ * `BUNDLE_ID` est pose dans eas.json, profil par profil. Non defini, on retombe
+ * sur l'identifiant de l'app PUBLIEE : c'est la valeur qui compte pour une mise
+ * a jour des stores, et la seule qu'on veut par defaut.
+ *
+ * Le profil `preview` en utilise un DISTINCT (`.preview`) : la build de test
+ * s'installe alors A COTE de l'app publiee au lieu de la remplacer sur le
+ * telephone. Rien ne peut atteindre le store sans une soumission explicite,
+ * mais cela evite d'avoir a reinstaller l'app du store apres chaque essai.
+ *
+ * ⚠️ Le topic APNs de la Live Activity derive de cet identifiant. Tester les
+ * Live Activity sur une build `preview` exige donc `APNS_BUNDLE_ID` accorde
+ * cote serveur, sinon Apple refuse l'envoi.
+ */
+const BUNDLE_ID = process.env.BUNDLE_ID ?? 'com.shapper.breakeat';
+
 /** @type {import('expo/config').ExpoConfig} */
 module.exports = {
   name: 'BREAK EAT',
@@ -22,7 +40,7 @@ module.exports = {
     backgroundColor: '#ffffff',
   },
   ios: {
-    bundleIdentifier: 'com.shapper.breakeat',
+    bundleIdentifier: BUNDLE_ID,
     supportsTablet: false,
     // PHASE 21 — requis par @bacons/apple-targets pour créer la cible du widget
     // (l'extension doit être signée avec la même équipe que l'app hôte).
@@ -30,7 +48,7 @@ module.exports = {
     appleTeamId: '2A5L298Q4C',
   },
   android: {
-    package: 'com.shapper.breakeat',
+    package: BUNDLE_ID,
     adaptiveIcon: {
       foregroundImage: './assets/logo-mark-orange.png',
       backgroundColor: '#ffffff',
