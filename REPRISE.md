@@ -31,6 +31,16 @@ Trois ruptures, **toutes silencieuses** (rien n'échouait à la compilation) :
    `/tsconfig.json` derrière une carte `exports` → l'`extends` échouait sans
    bruit et `tsc` repartait sur ses défauts.
 
+Une quatrième rupture n'est apparue qu'à la compilation Xcode : le podspec du
+module Live Activity référençait le contrat Swift partagé par un chemin
+**sortant de la racine du pod**. CocoaPods ne garantit pas les sources hors
+racine — cela marchait en SDK 53, plus en 57. Le podspec matérialise désormais
+lui-même la copie (voir « Pièges connus »).
+
+✅ **Build EAS iOS n° 5 réussie** (25/08, profil `beta`, SDK 57.0.0, v1.1.0) —
+React Native 0.86 compile avec Xcode 26 : le blocage `fmt`/consteval est levé.
+IPA produite, **pas encore soumise à TestFlight**.
+
 Vérifié : typecheck, export web, 3 apps Next.js, 449 tests backend,
 `expo-doctor` 20/21. ⚠️ **La compilation native ne se vérifie que sur EAS** :
 Windows refuse de générer un projet iOS.
@@ -142,6 +152,7 @@ L'app Break Eat = **porte d'entrée du click-and-collect Flaix**. Flaix gèrera 
 - **`splash`** ne vit plus à la racine d'`app.config.js` (retiré du schéma en SDK 57) mais dans le plugin `expo-splash-screen`. L'y remettre serait ignoré sans avertissement.
 - **`expo-modules-core` / `@expo/config-plugins`** ne doivent PAS être des dépendances directes : le SDK les réexporte (`expo`, `expo/config-plugins`). Une copie à part diverge du SDK au premier décalage.
 - **TypeScript 5.8.3 volontairement conservé** face aux 6.0.3 recommandés par Expo : les 7 paquets du monorepo la partagent. Acté dans `expo.install.exclude`.
+- **Contrat Swift Live Activity** : `BreakEatOrderAttributes.swift` doit exister dans DEUX cibles. La source de vérité est `targets/live-activity/` (ramassée automatiquement par apple-targets, qui ne lit QUE son propre dossier). Le podspec en **matérialise une copie** dans `modules/live-activity/ios/` à chaque `pod install` — copie ignorée par git. Ne pas la commiter, et ne pas revenir à un chemin `../../../` : CocoaPods l'ignore silencieusement, et la build échoue sur « cannot find type … in scope ».
 - **`expo prebuild -p ios` échoue sur Windows** : la validation des plugins natifs passe obligatoirement par une build EAS.
 - **`Alert.alert` = no-op sur react-native-web** → utiliser `src/lib/alert.ts`. Corrigé partout dans les écrans (`320e72d`), mais le piège reste pour tout nouveau code.
 - **Découverte des lieux** : deux chemins, deux seulement — proximité dans 10 km, ou recherche par mot-clé configuré sur le dashboard. Ni position ni recherche ⇒ **liste vide** (`0b67ff7`). Ne pas rouvrir un troisième chemin.
