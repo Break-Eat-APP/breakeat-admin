@@ -48,6 +48,10 @@ module.exports = {
     // Même valeur que `submit.production.ios.appleTeamId` dans eas.json.
     appleTeamId: '2A5L298Q4C',
     infoPlist: {
+      // Repond une fois pour toutes a la question de conformite a
+      // l'exportation, sinon posee a chaque envoi vers App Store Connect.
+      // Break Eat n'utilise que HTTPS : c'est un usage exempte.
+      ITSAppUsesNonExemptEncryption: false,
       // ITMS-90683 — Apple detecte une reference aux API de localisation dans
       // le binaire (apportee par une bibliotheque, pas par notre code) et
       // EXIGE une justification, meme si l'app ne s'en sert pas encore.
@@ -65,7 +69,13 @@ module.exports = {
       foregroundImage: './assets/logo-mark-orange.png',
       backgroundColor: '#ffffff',
     },
-    permissions: ['android.permission.CAMERA'],
+    permissions: [
+      'android.permission.CAMERA',
+      // Pendant du purpose string iOS : sans elle, la demande de position
+      // n'est jamais presentee et la decouverte par proximite reste muette.
+      'android.permission.ACCESS_FINE_LOCATION',
+      'android.permission.ACCESS_COARSE_LOCATION',
+    ],
   },
   plugins: [
     // PHASE 21 — prérequis Live Activity : NSSupportsLiveActivities + cible iOS
