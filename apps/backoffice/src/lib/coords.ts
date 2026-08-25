@@ -8,8 +8,13 @@
  *   - Paire DMS    : "43° 17' 45.6\" N, 5° 24' 17.2\" E"
  */
 
-/** Convertit un token DMS ou décimal en nombre décimal. Retourne null si invalide. */
-function parseSingleCoord(raw: string): number | null {
+/**
+ * Convertit un token DMS ou décimal en nombre décimal. Retourne null si invalide.
+ *
+ * ⚠️ JUMEAU de `apps/admin/src/lib/coords.ts`. Le monorepo n'a pas de paquet
+ * d'utilitaires partagé ; toute correction ici doit être reportée là-bas.
+ */
+export function parseSingleCoord(raw: string): number | null {
   const s = raw.trim();
   if (!s) return null;
 

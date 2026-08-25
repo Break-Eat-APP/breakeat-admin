@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { parseCoordsString, fmtCoord } from '@/lib/coords';
+import { parseCoordsString, parseSingleCoord, fmtCoord } from '@/lib/coords';
 import { BRAND } from '@break-eat/brand';
 import {
   apiListOrganizations,
@@ -33,6 +33,17 @@ export default function OrganizationsPage() {
   });
 
   const [showForm, setShowForm] = useState(false);
+
+  /**
+   * Organisation déjà créée par une tentative précédente restée inachevée.
+   *
+   * La création se fait en deux écritures (organisation, puis lieu) qu'aucune
+   * transaction ne réunit — l'API n'expose pas de création groupée. Si la
+   * seconde échoue, la première a bel et bien eu lieu : relancer sans mémoire
+   * produirait un doublon. Cette référence fait reprendre là où ça s'est
+   * arrêté, et se vide dès que le formulaire est réinitialisé.
+   */
+  const orgCreeRef = useRef<string | null>(null);
 
   // Org fields
   const [name, setName] = useState('');
@@ -74,21 +85,48 @@ export default function OrganizationsPage() {
     setVCoordsRaw(''); setVCoordsError('');
     setVTerms(''); setVFlaixOn(false); setVFlaixId('');
     setFormError(''); setStep('idle');
+    // La reprise ne vaut que pour la creation en cours.
+    orgCreeRef.current = null;
   };
 
   const createMut = useMutation({
     mutationFn: async () => {
-      setStep('org');
-      const org = await apiCreateOrganization({ name: name.trim(), slug: slug.trim() });
+      // Tout valider AVANT la moindre écriture.
+      //
+      // La validation des coordonnées se faisait après la création de
+      // l'organisation : une virgule mal placée créait le club, faisait échouer
+      // le lieu, et la tentative suivante se heurtait à « ce slug existe déjà ».
+      // On changeait alors le slug — et une SECONDE organisation naissait.
+      // C'est l'origine des doublons.
+      const lat = vLat.trim() ? parseSingleCoord(vLat) : null;
+      const lng = vLng.trim() ? parseSingleCoord(vLng) : null;
+      if ((vLat.trim() && lat === null) || (vLng.trim() && lng === null)) {
+        throw new Error(
+          'Coordonnées non reconnues. Formats acceptés : 43.296 · 43,296 · 43°17\'45.6"N.',
+        );
+      }
+      if ((lat !== null && Math.abs(lat) > 90) || (lng !== null && Math.abs(lng) > 180)) {
+        throw new Error(
+          'Hors limites : la latitude va de -90 à 90, la longitude de -180 à 180. ' +
+            'Les deux valeurs sont peut-être inversées.',
+        );
+      }
+
+      // Reprise après échec partiel : si l'organisation a déjà été créée lors
+      // d'une tentative précédente, on la réutilise au lieu d'en fabriquer une
+      // seconde. Sans cela, la seule issue était de changer le slug — donc de
+      // laisser derrière soi un club orphelin, sans lieu.
+      let orgId = orgCreeRef.current;
+      if (!orgId) {
+        setStep('org');
+        const org = await apiCreateOrganization({ name: name.trim(), slug: slug.trim() });
+        orgId = org.id;
+        orgCreeRef.current = org.id;
+      }
 
       if (vName.trim()) {
         setStep('venue');
-        const lat = vLat.trim() ? Number(vLat.trim().replace(',', '.')) : null;
-        const lng = vLng.trim() ? Number(vLng.trim().replace(',', '.')) : null;
-        if ((lat !== null && Number.isNaN(lat)) || (lng !== null && Number.isNaN(lng))) {
-          throw new Error('Latitude / longitude invalides (ex. 43.296, 5.370).');
-        }
-        await apiCreateVenue(org.id, {
+        await apiCreateVenue(orgId, {
           name: vName.trim(),
           address: vAddress.trim(),
           latitude: lat,
@@ -99,7 +137,7 @@ export default function OrganizationsPage() {
         });
       }
 
-      return org;
+      return { id: orgId };
     },
     onSuccess: () => {
       resetForm();
