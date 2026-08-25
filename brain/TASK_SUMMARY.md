@@ -4,6 +4,65 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-08-25] Le repli silencieux — accès opérateur, remise à zéro, doublons
+
+> Détail dans `CHANGELOG.md` [0.49.0] ; analyse dans `ENGINEERING_MANUAL.md`
+> [2026-08-25] « Le repli silencieux ».
+
+### Livré
+- **Adresse d'API gravée** dans les trois `vercel.json` + filet console dès
+  qu'une app servie en ligne vise localhost. C'était la cause réelle du
+  « erreur identifiant » : l'app opérateur appelait la machine du visiteur,
+  et le formulaire présentait cet échec réseau comme un mauvais mot de passe.
+- **Remise à zéro** d'une organisation (`POST /backoffice/organizations/:id/
+  reset-data`) — efface l'exploitation, conserve lieu, accès et groupes.
+- **Suppression définitive d'un compte** (`DELETE /backoffice/users/:id`).
+- **Libellés métier des rôles**, identiques dans les deux back-offices.
+- **Coordonnées tolérantes** dans le dashboard manager : décimal, virgule, DMS,
+  et paire collée qui se répartit seule.
+- **Doublons de clubs corrigés** — validation avant écriture, création
+  reprenable.
+
+### Décisions d'architecture
+- **Conserver le lieu et les accès** à la remise à zéro : sans eux, plus
+  personne ne pourrait se reconnecter pour reconfigurer. Une remise à zéro qui
+  enferme dehors n'en est pas une.
+- **Confirmation par recopie du nom** plutôt qu'un simple bouton : un bouton se
+  clique par accident, ou sur la mauvaise ligne.
+- **Mot de passe généré par le navigateur**, jamais par le serveur — le générer
+  côté serveur obligerait à le renvoyer, donc à le faire transiter par les
+  journaux en cas de débogage.
+- **`coords.ts` dupliqué** entre admin et back-office : le monorepo n'a pas de
+  paquet d'utilitaires partagé, et en créer un pour deux fonctions coûterait
+  plus qu'il ne rapporte. Les deux fichiers se signalent mutuellement.
+
+### Tests
+465 backend (11 nouveaux sur les garde-fous), admin 21 pages, back-office 10,
+opérateur 4.
+
+### Risques
+- **Aucune interface vérifiée dans un navigateur** : cela demande une session
+  authentifiée sur le back-office, donc des identifiants que je ne manipule pas.
+- **Wizard et demo-setup restent non idempotents** — ils recréent événement,
+  buvettes et comptoirs à chaque passage. C'est la seule chose qui fera revenir
+  les doublons après une remise à zéro.
+- **`resetOrgData` est une arme.** SUPER_ADMIN seulement, confirmation par
+  recopie, transaction unique — mais elle efface du chiffre d'affaires sans
+  retour.
+
+### Erreur commise, à ne pas reproduire
+J'ai affirmé au client qu'aucune suppression de buvette n'existait. **C'était
+faux** — service, route, client et bouton sont en place depuis longtemps. Mon
+inventaire des routes `@Delete` était tronqué à 20 lignes, et `suppliers`
+tombait juste après. Une liste coupée n'est pas un inventaire.
+
+### Reste à faire
+- Rendre wizard et demo-setup idempotents.
+- Décider du sort de `DEVELOPMENT_LOG.md` (dernière entrée : phase 19, juin).
+- Resserrer les trois écrans qui modifient le lieu vers un seul faisant autorité.
+
+---
+
 ## [2026-08-25] Accès opérateur — un compte sans issue, un écran qui se taisait
 
 > Détail dans `CHANGELOG.md` [0.48.0].

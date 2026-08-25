@@ -42,6 +42,9 @@ Modules et à quoi ils servent :
 - `metro.config.js` = config bundler + **fix React singleton** (ne pas toucher).
 - `app.config.js` / `eas.json` = config build natif (icône, splash, EAS, Apple).
 - `scripts/fix-web-assets.cjs` = post-traitement de l'export web (assets → `/vendor`).
+- `src/lib/geolocation-polyfill.ts` = pont `navigator.geolocation` pour iOS/Android. Ce global n'existe PAS sur natif : sans ce pont, la découverte par proximité est muette sur téléphone, **sans erreur**. Appelé depuis `index.expo.js`, avant tout écran.
+- `modules/live-activity/` = module Expo natif. Son podspec **recopie** `targets/live-activity/BreakEatOrderAttributes.swift` à chaque `pod install` : le contrat doit exister dans les deux cibles, et CocoaPods ne garantit pas les sources hors racine du pod. La copie est ignorée par git.
+- **Expo SDK 57 / React Native 0.86.2** depuis le 25/08/2026. Ajouter un paquet : `npx expo install`, jamais `pnpm add`.
 
 **`src/screens/`** — un écran = un fichier :
 
@@ -70,6 +73,13 @@ Modules et à quoi ils servent :
 - `apps/backoffice/` — super-admin : création de clubs, utilisateurs, groupes, notifications programmées. Appels : `src/lib/api/backoffice-client.ts`.
 - `apps/operator/` — écran buvette temps réel (Kanban des commandes). Appels + Socket.IO.
 - Les trois partagent `packages/brand` (couleurs `#FC4002`, logo).
+
+**À savoir sur les apps web :**
+- **`NEXT_PUBLIC_API_URL` est gravée dans chaque `vercel.json`.** Elle est inlinée à la compilation : absente ce jour-là, le repli `localhost` part en production et l'app appelle la machine du visiteur. Un filet console le signale.
+- **`src/lib/coords.ts` existe en DOUBLE** — `apps/admin` et `apps/backoffice`. Pas de paquet d'utilitaires partagé dans le monorepo. Il convertit DMS ↔ décimal et répartit une paire collée. **Toute correction vaut pour les deux fichiers.**
+- **Remise à zéro et suppressions** vivent dans le back-office : `organizations/[id]/page.tsx` (vider un club) et `users/page.tsx` (supprimer un compte). Voir `REPRISE.md` pour ce qui est conservé.
+- **Le lieu s'édite depuis TROIS écrans** — back-office, page Organisation du dashboard manager, et wizard. Trois occasions de diverger : à resserrer.
+- ⚠️ **Wizard (`admin/.../wizard`) et `demo-setup` ne sont PAS idempotents** : ils recréent événement, buvettes, comptoirs, catégories et produits à chaque passage. Relancer empile des doublons et donne l'illusion que « rien ne s'enregistre ».
 
 ## Un parcours de bout en bout (exemple : passer commande)
 

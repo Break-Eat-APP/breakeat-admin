@@ -5,6 +5,110 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.49.0] — 2026-08-25 — Ce qui échoue en silence
+
+### Le fil commun
+Quatre correctifs, une même faute sous quatre formes : **une erreur avalée
+devient indiagnosticable**. Chaque symptôme rapporté par le client pointait
+ailleurs que sa cause.
+
+### « Erreur identifiant » — l'app opérateur appelait la machine du visiteur
+Les trois apps web partageaient ce repli :
+
+```
+process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1'
+```
+
+`NEXT_PUBLIC_*` est gravée à la **compilation**. Absente ce jour-là, le repli
+local part en production — et l'app déployée tape sur la machine du *visiteur*.
+`apps/operator/vercel.json` ne la définissait pas ; admin et back-office s'en
+sortaient parce qu'elle avait été posée à la main dans leur projet Vercel.
+
+Le formulaire présentait cet échec réseau comme **« identifiant incorrect »**.
+Nous avons cherché du côté des comptes pendant des heures ; le mot de passe n'a
+jamais été en cause.
+
+C'est le défaut exact déjà corrigé côté mobile (`05afc62`), jamais reporté sur
+les apps Next.js. L'adresse est désormais gravée dans les trois `vercel.json`,
+et un filet console se déclenche dès qu'une app servie en ligne vise localhost.
+
+### Remise à zéro des données d'une organisation
+`POST /backoffice/organizations/:id/reset-data`, SUPER_ADMIN uniquement.
+
+**Efface** événements, buvettes, comptoirs, commandes, fidélité, notifications —
+plus tout ce qui cascade. **Conserve** le lieu (GPS, mots-clés), les accès et les
+groupes : sans eux, plus personne ne pourrait se reconnecter pour reconfigurer
+après le ménage.
+
+Deux garde-fous : le nom de l'organisation doit être **recopié à l'identique**
+(un bouton seul se clique par accident, ou sur la mauvaise ligne), et tout se
+joue dans **une transaction** — un échec à mi-parcours laisserait une
+organisation à moitié vidée, état pire que celui de départ.
+
+### Suppression définitive d'un compte
+Un compte s'archivait mais ne se supprimait jamais. Après vérification, c'était
+le **seul** trou réel : événements, buvettes et organisations avaient déjà leur
+suppression, interface comprise.
+
+`DELETE /backoffice/users/:id`, refusé sur soi-même, sur le dernier SUPER_ADMIN
+actif, et sur tout compte portant des **commandes** — `Order.user` n'a pas de
+cascade, la base refuserait de toute façon, et effacer un client retirerait son
+chiffre d'affaires de la comptabilité.
+
+### Les rôles portent leur nom
+ORG_ADMIN = **Responsable du club**, MANAGER = **Responsable F&B**,
+OPERATOR = **Équipier buvette**, MARKETING = **Marketing**.
+
+MANAGER et MARKETING n'avaient aucune étiquette : ces comptes s'affichaient comme
+si leur rôle était inconnu. Mêmes libellés des deux côtés — un rôle ne doit pas
+changer de nom selon l'écran.
+
+Un **Client** reste affiché, jamais créé depuis le back-office : il s'inscrit
+lui-même depuis l'app mobile.
+
+### Coordonnées : accepter ce qu'on colle
+Le dashboard manager faisait un simple `Number()`. Coller « 43.296482, 5.369780 »
+depuis Google Maps échouait, comme toute notation DMS. Le back-office possédait
+déjà un parseur complet — il n'avait jamais été porté.
+
+Désormais : décimal à point ou à virgule, DMS, et une **paire collée dans
+n'importe lequel des deux champs se répartit toute seule**. Le geste réel n'est
+pas « je tape une latitude », c'est « je copie et je colle ».
+
+Ajout d'un contrôle de bornes : une latitude hors de [-90, 90] signale surtout
+deux valeurs inversées, ce que le message dit explicitement.
+
+### Doublons de clubs — un échec partiel jamais repris
+La création enchaînait deux écritures sans transaction (organisation, puis lieu)
+et validait les coordonnées **après** la première. Une virgule mal placée
+suffisait : le club était créé, le lieu échouait. La tentative suivante butait
+sur « ce slug existe déjà » — puisqu'il existait. Changer le slug faisait naître
+une **seconde** organisation, laissant la première orpheline.
+
+Tout est désormais validé **avant** la moindre écriture, et la création **reprend
+là où elle s'est arrêtée** au lieu de refabriquer.
+
+### Fichiers
+- `+ backend/src/modules/backoffice/dto/reset-org-data.dto.ts`
+- `~ backend/src/modules/backoffice/backoffice.service.ts` — `resetOrgData`, `deleteUser`
+- `~ backend/src/modules/backoffice/backoffice.controller.ts` — deux routes
+- `+ apps/admin/src/lib/coords.ts` — **jumeau** de celui du back-office
+- `~ apps/{admin,backoffice,operator}/vercel.json` — adresse d'API gravée
+- `~ apps/{admin,backoffice,operator}/src/lib/api/*-client.ts` — filet localhost
+- `~ apps/backoffice/.../organizations/page.tsx` — reprise sur échec partiel
+- `~ apps/backoffice/.../users/page.tsx` — suppression + libellés
+- `~ apps/admin/.../organizations/[id]/page.tsx` — coordonnées tolérantes
+- `~ apps/mobile/PREVIEW.md` — consigne « SDK 53 » périmée, corrigée
+
+### Vérifié
+465 tests backend (11 nouveaux sur les garde-fous), admin 21 pages,
+back-office 10, opérateur 4.
+
+⚠️ Les interfaces n'ont **pas** été vues dans un navigateur : cela demande une
+session authentifiée sur le back-office.
+
+---
+
 ## [0.48.0] — 2026-08-25 — Accès opérateur : un compte perdu pour toujours
 
 ### Le trou

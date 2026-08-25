@@ -1,5 +1,17 @@
 # BREAK EAT — Development Log
 
+> ⚠️ **Ce document s'arrête à la phase 19 (22 juin 2026).** Il n'a pas été tenu
+> au-delà : `CHANGELOG.md` et `brain/TASK_SUMMARY.md` couvrent désormais le même
+> terrain, en plus détaillé et à jour.
+>
+> Il reste utile pour **l'ordre de construction initial** — comprendre dans quel
+> ordre les briques ont été posées, phases 1 à 19. Pour tout ce qui suit
+> (phases 20 à 22, montée SDK 57, correctifs d'accès), lire le `CHANGELOG`.
+>
+> Le signaler plutôt que de le laisser vieillir en silence : un document qu'on
+> croit courant alors qu'il a deux mois de retard trompe plus qu'il n'informe.
+> **Décision à prendre** : le rattraper, ou acter qu'il est historique.
+
 > Fichier de référence chronologique.
 > Chaque phase, chaque bloc, chaque fichier important — dans l'ordre exact de création.
 > Un développeur qui reprend le projet doit pouvoir lire ce fichier de haut en bas et comprendre l'ordre de construction complet.
