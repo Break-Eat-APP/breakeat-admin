@@ -20,6 +20,9 @@ import {
   startPreparingOrder,
   type Order,
   type ResolvedOperatorScreen,
+  fetchSupplier,
+  setSupplierStatus as apiSetSupplierStatus,
+  type SupplierStatus,
 } from '@/lib/api/orders-client';
 import { buildScreenColumns, countScreenOrders } from '@/lib/screens/filter';
 import type { StatusVariant } from '@/components/StatusBadge';
@@ -202,6 +205,12 @@ export default function DashboardPage() {
   const { playNewOrder, playOrderReady } = useSound();
   const prevNotification = useRef<string | null>(null);
 
+  // Ouverture de la buvette — pilotée ici, par l'équipier.
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [supplierStatus, setSupplierStatus] = useState<SupplierStatus | null>(null);
+  const [statusBusy, setStatusBusy] = useState(false);
+  const [statusError, setStatusError] = useState('');
+
   // Read token + supplier assignment from localStorage on mount
   useEffect(() => {
     const stored = localStorage.getItem('operator_token');
@@ -209,7 +218,38 @@ export default function DashboardPage() {
     const sid = localStorage.getItem('operator_supplier_id');
     const sname = localStorage.getItem('operator_supplier_name');
     if (sid) { setSupplierId(sid); setSupplierName(sname); }
+    setOrgId(localStorage.getItem('operator_org_id'));
   }, []);
+
+  // État courant de la buvette : le tableau de commandes ne le renvoie pas.
+  useEffect(() => {
+    if (!token || !orgId || !supplierId) return;
+    fetchSupplier(orgId, supplierId, token)
+      .then((s) => setSupplierStatus(s.status))
+      .catch(() => setSupplierStatus(null));
+  }, [token, orgId, supplierId]);
+
+  /**
+   * Bascule ouvert / fermé.
+   *
+   * Fermer n'efface rien : les commandes déjà passées restent à préparer, seule
+   * la prise de NOUVELLES commandes s'arrête. C'est pour ça que le libellé parle
+   * de prise de commandes et non de fermeture tout court.
+   */
+  async function basculerOuverture() {
+    if (!token || !orgId || !supplierId || !supplierStatus) return;
+    const cible: SupplierStatus = supplierStatus === 'OPEN' ? 'CLOSED' : 'OPEN';
+    setStatusBusy(true);
+    setStatusError('');
+    try {
+      const res = await apiSetSupplierStatus(orgId, supplierId, cible, token);
+      setSupplierStatus(res.status);
+    } catch (err) {
+      setStatusError(err instanceof Error ? err.message : 'Changement refusé');
+    } finally {
+      setStatusBusy(false);
+    }
+  }
 
   const {
     data,
@@ -403,7 +443,58 @@ export default function DashboardPage() {
             <Store size={14} strokeWidth={2} style={{ flexShrink: 0 }} /> {supplierName}
           </span>
         ) : (
+
           <span style={{ color: BRAND.grey, fontSize: 12, fontFamily: 'monospace' }}>{eventId}</span>
+        )}
+
+        {/* Ouverture de la buvette — décidée par l'équipier, à son poste.
+            Lui seul sait s'il a du monde, du stock et de quoi servir : ce
+            réglage n'a rien à faire dans le dashboard du responsable. */}
+        {supplierStatus && (
+          <button
+            type="button"
+            onClick={() => void basculerOuverture()}
+            disabled={statusBusy}
+            title={
+              supplierStatus === 'OPEN'
+                ? 'Arrête la prise de nouvelles commandes. Celles en cours restent à préparer.'
+                : 'Remet la buvette en service : les clients peuvent à nouveau commander.'
+            }
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 7,
+              padding: '5px 13px',
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 700,
+              fontFamily: 'inherit',
+              cursor: statusBusy ? 'wait' : 'pointer',
+              opacity: statusBusy ? 0.6 : 1,
+              border: `1px solid ${supplierStatus === 'OPEN' ? '#6ee7b7' : '#fca5a5'}`,
+              background: supplierStatus === 'OPEN' ? '#ecfdf5' : '#fef2f2',
+              color: supplierStatus === 'OPEN' ? '#047857' : '#b91c1c',
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: 999,
+                background: supplierStatus === 'OPEN' ? '#059669' : '#dc2626',
+              }}
+            />
+            {statusBusy
+              ? '…'
+              : supplierStatus === 'OPEN'
+                ? 'Buvette ouverte — fermer'
+                : 'Buvette fermée — ouvrir'}
+          </button>
+        )}
+
+        {statusError && (
+          <span style={{ color: '#b91c1c', fontSize: 12 }}>{statusError}</span>
         )}
 
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>

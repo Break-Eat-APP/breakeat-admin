@@ -61,6 +61,9 @@ function EventSelector({ token }: { token: string }) {
         }
 
         setOrgName(firstMembership.organization.name);
+        // L'identifiant de l'organisation sert au tableau de bord pour ouvrir
+        // ou fermer la buvette — la route de statut en a besoin.
+        localStorage.setItem('operator_org_id', firstMembership.organization.id);
 
         // Phase 12.9 — store supplier assignment for filtered dashboard
         const sName = firstMembership.supplier?.name ?? null;
