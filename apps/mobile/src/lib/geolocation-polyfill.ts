@@ -30,7 +30,18 @@ export function installGeolocationPolyfill(): void {
     // Require paresseux : le module ne doit être évalué que sur natif.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const geolocation = require('@react-native-community/geolocation');
-    nav['geolocation'] = geolocation.default ?? geolocation;
+    const impl = geolocation.default ?? geolocation;
+
+    // Bride l'autorisation sur « pendant l'utilisation ».
+    //
+    // Par defaut la bibliotheque peut demander l'acces PERMANENT, y compris
+    // en arriere-plan — un niveau que Break Eat n'utilise jamais : la
+    // position ne sert qu'a classer les lieux proches pendant que
+    // l'utilisateur regarde l'ecran. Demander plus serait intrusif, plus
+    // souvent refuse, et exposerait au rejet d'Apple.
+    impl.setRNConfiguration?.({ authorizationLevel: 'whenInUse' });
+
+    nav['geolocation'] = impl;
   } catch {
     // Échec silencieux volontaire : `useUserLocation` sait vivre sans position
     // (l'utilisateur retombe sur la recherche par mot-clé). Faire planter le

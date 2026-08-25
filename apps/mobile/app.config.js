@@ -61,6 +61,20 @@ module.exports = {
       // definitivement muette, sans la moindre erreur visible.
       NSLocationWhenInUseUsageDescription:
         'BREAK EAT utilise votre position pour vous montrer les lieux et buvettes autour de vous.',
+      // Apple reclame AUSSI la variante « Always » : la bibliotheque de
+      // geolocalisation reference les API d'arriere-plan, et l'analyse
+      // statique les voit dans le binaire — meme si l'app ne les appelle
+      // jamais (elle est bridee sur `whenInUse`, voir
+      // src/lib/geolocation-polyfill.ts).
+      //
+      // Le texte le dit franchement : Break Eat n'a aucun usage en arriere-plan.
+      NSLocationAlwaysAndWhenInUseUsageDescription:
+        'BREAK EAT utilise votre position uniquement pendant que vous utilisez l’app, pour vous montrer les lieux autour de vous. Aucun suivi en arriere-plan.',
+      // Cle historique (iOS 10 et anterieur), sans effet a partir de notre
+      // cible 16.4 : presente uniquement pour satisfaire le controle d'Apple,
+      // qui ne revele ses exigences qu'une par envoi.
+      NSLocationAlwaysUsageDescription:
+        'BREAK EAT utilise votre position uniquement pendant que vous utilisez l’app.',
     },
   },
   android: {
