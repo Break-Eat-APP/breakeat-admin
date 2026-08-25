@@ -1,5 +1,5 @@
-import { Platform } from 'react-native';
-import { requireOptionalNativeModule, type EventSubscription } from 'expo-modules-core';
+import { Platform, type EventSubscription } from 'react-native';
+import { requireOptionalNativeModule } from 'expo';
 
 /** État initial envoyé à iOS — même forme que le ContentState du backend. */
 export interface LiveActivityState {

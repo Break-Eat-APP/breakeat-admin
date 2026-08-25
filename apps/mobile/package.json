@@ -6,7 +6,8 @@
   "expo": {
     "install": {
       "exclude": [
-        "@types/react"
+        "@types/react",
+        "typescript"
       ]
     }
   },
@@ -40,7 +41,7 @@
     "expo-build-properties": "~57.0.14",
     "expo-dev-client": "^57.0.15",
     "expo-font": "~57.0.1",
-    "expo-modules-core": "~57.0.13",
+    "expo-splash-screen": "~57.0.8",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.2",
@@ -55,7 +56,6 @@
     "@babel/preset-env": "^7.26.0",
     "@babel/runtime": "^7.26.0",
     "@bacons/apple-targets": "5.0.0",
-    "@expo/config-plugins": "~57.0.9",
     "@react-native/babel-preset": "0.86.2",
     "@react-native/eslint-config": "0.86.2",
     "@react-native/jest-preset": "0.86.2",

@@ -40,11 +40,6 @@ module.exports = {
   orientation: 'portrait',
   scheme: 'breakeat',
   icon: './assets/logo-mark-orange.png',
-  splash: {
-    image: './assets/logo-mark-orange.png',
-    resizeMode: 'contain',
-    backgroundColor: '#ffffff',
-  },
   ios: {
     bundleIdentifier: BUNDLE_ID,
     supportsTablet: false,
@@ -73,6 +68,17 @@ module.exports = {
     // Le SDK 57 exige que tout module a reglages natifs soit declare ici :
     // il ne les deduit plus de la seule presence dans package.json.
     'expo-font',
+    [
+      // Le SDK 57 a retire `splash` de la racine du schema : la clé y est
+      // simplement IGNOREE, sans erreur, et l'app demarre sur l'ecran blanc
+      // par defaut. La configuration ne vit plus que dans ce plugin.
+      'expo-splash-screen',
+      {
+        image: './assets/logo-mark-orange.png',
+        resizeMode: 'contain',
+        backgroundColor: '#ffffff',
+      },
+    ],
     [
       'expo-build-properties',
       {

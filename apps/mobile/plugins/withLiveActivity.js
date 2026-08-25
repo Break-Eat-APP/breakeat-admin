@@ -2,7 +2,7 @@ const {
   withEntitlementsPlist,
   withInfoPlist,
   withXcodeProject,
-} = require('@expo/config-plugins');
+} = require('expo/config-plugins');
 
 /**
  * Config plugin — prérequis iOS de la Live Activity.
