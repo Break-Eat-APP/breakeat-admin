@@ -5,6 +5,77 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.50.0] — 2026-08-25 — L'accès opérateur : ce n'était pas un mot de passe
+
+### La cause, enfin
+`https://breakeat-operator.vercel.app` **est absente de `CORS_ORIGINS`**.
+Vérifié par requête preflight : la réponse ne porte aucun
+`access-control-allow-origin`, alors que l'admin, le back-office et le mobile
+en ont un. Seule l'URL longue `breakeat-operator-git-main-…` est autorisée.
+
+Sur l'adresse courte — la naturelle — le navigateur bloque donc chaque requête
+**avant** qu'elle n'atteigne l'API. Et le code attrapait tout :
+
+```ts
+if (!res.ok) throw new Error('Identifiants incorrects');
+} catch { setError('Identifiants incorrects'); }
+```
+
+Mot de passe faux, panne serveur, coupure réseau, rejet CORS : un seul message,
+et le plus trompeur possible.
+
+**Coût réel de cette imprécision** : une journée de diagnostic, et une
+réinitialisation de mot de passe construite pour un problème qui n'en était pas
+un. La fonctionnalité reste utile — le trou était réel — mais elle ne répondait
+pas à la panne.
+
+### Chaque échec se nomme désormais
+- **401** → « E-mail ou mot de passe incorrect. »
+- **Erreur réseau** → l'adresse visée, l'origine appelante, et `CORS_ORIGINS`
+  cité explicitement comme cause probable.
+- **Autre code** → le statut HTTP et le début de la réponse serveur.
+
+Le formulaire affiche le message **réel** au lieu de le réécrire.
+
+L'e-mail est aussi normalisé (minuscules, sans espaces) : les comptes sont créés
+ainsi côté serveur, une majuscule suffisait à faire échouer la comparaison.
+
+⚠️ **Action requise côté Railway** — ajouter l'adresse à `CORS_ORIGINS`. Le code
+ne peut pas s'auto-autoriser.
+
+### Coordonnées GPS : une seule saisie
+Le formulaire de lieu du back-office avait **deux saisies pour la même donnée** :
+un champ « coller depuis Google Maps », puis deux champs
+« Latitude (décimal) » / « Longitude (décimal) ». Le premier acceptait le DMS,
+les seconds non — taper `43° 16' 6.60" N` dans « Latitude » échouait, alors que
+la même valeur collée juste au-dessus passait.
+
+Latitude et longitude passent en **lecture seule** : elles affichent ce qui sera
+enregistré, avec un bouton pour effacer. La saisie se fait par le champ de
+collage, qui comprend tous les formats.
+
+**Un écran avait été oublié** au passage précédent : le correctif `a8135a4` ne
+touchait que la page de *création* d'organisation ; le formulaire de lieu de la
+page *détail* gardait son `Number()` et son message périmé. Corriger un écran
+sans chercher ses jumeaux — exactement ce que le manuel d'ingénierie reproche.
+
+### Documentation
+- **`brain/ROADMAP.md`** — les **phases 11 à 22 sont reconstituées** après coup.
+  Elles n'existaient jusqu'ici que dans le changelog, par ordre chronologique :
+  un développeur qui reprenait le dossier voyait *ce qui avait été fait*, pas
+  *l'arc du produit*. Les chantiers de mise en service d'août y figurent aussi.
+- **`REPRISE.md`** — une table **« Où trouver quoi »** en tête, et l'action
+  `CORS_ORIGINS` en tête de la reprise immédiate.
+
+### Fichiers
+- `~ apps/operator/src/lib/api/orders-client.ts` — chaque échec se nomme
+- `~ apps/operator/src/components/LoginForm.tsx` — affiche le message réel
+- `~ apps/backoffice/.../organizations/[id]/page.tsx` — saisie GPS unique
+- `~ brain/ROADMAP.md` — phases 11→22
+- `~ REPRISE.md` — table d'orientation, action CORS
+
+---
+
 ## [0.49.0] — 2026-08-25 — Ce qui échoue en silence
 
 ### Le fil commun

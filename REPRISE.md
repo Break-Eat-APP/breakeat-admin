@@ -1,15 +1,34 @@
 # 🔖 POINT DE REPRISE — Break Eat
 
-> Ouvre ce fichier en premier dans une nouvelle session. Tout l'état utile est ici + dans les 4 docs (`CHANGELOG.md`, `DEVELOPMENT_LOG.md`, `brain/ENGINEERING_MANUAL.md`, `brain/TASK_SUMMARY.md`) + le git.
+> **Où trouver quoi** — pour qui reprend le dossier :
+>
+> | Question | Document |
+> |---|---|
+> | Où en est-on, que faire ensuite ? | **ce fichier** |
+> | Qu'a-t-on livré, quand, et pourquoi ? | `CHANGELOG.md` |
+> | Comment le code est-il organisé ? | `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md` |
+> | Pourquoi cette décision technique ? | `brain/ENGINEERING_MANUAL.md` |
+> | Quel était le plan, phase par phase ? | `brain/ROADMAP.md` (1→10 planifiées, 11→22 reconstituées) |
+> | Résumé d'une session de travail | `brain/TASK_SUMMARY.md` |
+> | Ordre de construction initial (phases 1→19) | `DEVELOPMENT_LOG.md` — historique, non tenu au-delà |
+>
+> Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
+> `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
 _Dernière mise à jour : 2026-08-25_
 
 ## ⏭️ REPRISE IMMÉDIATE
 
-1. **`APNS_BUNDLE_ID = com.shapper.breakeat`** sur Railway. La build TestFlight porte l'identifiant réel ; avec une autre valeur, le topic APNs ne correspond pas et **aucune Live Activity ne démarrera**.
-2. **TestFlight** — App Store Connect → onglet TestFlight → remplir les *informations de test* (obligatoire), puis s'ajouter en testeur interne.
-3. **Renseigner les coordonnées GPS des lieux** — sans elles, un lieu n'apparaît jamais par proximité. Il reste trouvable par la recherche.
-4. **Nettoyer les données de test** du wizard et de « Démo Spartiates » : événements d'abord, puis points de retrait, puis comptes.
+1. **`CORS_ORIGINS` — ajouter `https://breakeat-operator.vercel.app`** sur Railway.
+   Vérifié le 25/08 par requête preflight : cette adresse est la SEULE des
+   quatre à ne pas être autorisée. Le navigateur bloque donc tout, et l'app
+   opérateur affichait « Identifiants incorrects » — le mot de passe n'était
+   jamais en cause. En attendant, l'URL longue
+   `breakeat-operator-git-main-…` fonctionne.
+2. **`APNS_BUNDLE_ID = com.shapper.breakeat`** sur Railway. La build TestFlight porte l'identifiant réel ; avec une autre valeur, le topic APNs ne correspond pas et **aucune Live Activity ne démarrera**.
+3. **TestFlight** — App Store Connect → onglet TestFlight → remplir les *informations de test* (obligatoire), puis s'ajouter en testeur interne.
+4. **Renseigner les coordonnées GPS des lieux** — sans elles, un lieu n'apparaît jamais par proximité. Il reste trouvable par la recherche.
+5. **Nettoyer les données de test** du wizard et de « Démo Spartiates » : événements d'abord, puis points de retrait, puis comptes.
 
 ## 🧱 Montée Expo SDK 53 → 57 (25/08)
 

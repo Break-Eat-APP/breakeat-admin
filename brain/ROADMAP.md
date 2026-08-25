@@ -2,14 +2,19 @@
 
 Version: V1 source of truth
 
-> ⚠️ **Ce document couvre les phases 1 a 10** — le plan initial, integralement livre.
+> **Phases 1 à 10** — le plan initial, écrit d'avance et intégralement livré.
+> C'est le corps de ce document.
 >
-> Le projet a continue au-dela, sous la conduite du client plutot que d'un plan
-> ecrit d'avance : phases 11 a 22 (board operateur configurable, dashboard
-> manager, back-office, pivot mobile, plan des buvettes, etat live des
-> commandes, fidelite, Live Activity iOS, lieux ouverts en continu).
+> **Phases 11 à 22** — reconstituées **après coup**, en fin de document. Elles
+> ont émergé des besoins du client, une à une, sans plan préalable : board
+> opérateur configurable, dashboard manager, back-office, pivot mobile, plan des
+> buvettes, état live des commandes, fidélité, Live Activity iOS, lieux ouverts
+> en continu.
 >
-> Pour l'etat reel : `../REPRISE.md`. Pour le detail par phase :
+> **Après les phases** — les chantiers de mise en service d'août 2026 (montée
+> SDK 57, accès, remise à zéro) figurent aussi en fin de document.
+>
+> Pour l'état réel et ce qui reste : `../REPRISE.md`. Pour le détail daté :
 > `../CHANGELOG.md` et `ENGINEERING_MANUAL.md`.
 
 ## Roadmap Rule
@@ -310,3 +315,146 @@ Acceptance criteria:
 - order loss test completed;
 - dashboards tested under reconnect scenarios.
 - `ENGINEERING_MANUAL.md` documents deployment, monitoring and incident debugging flow.
+
+---
+
+# Phases 11 à 22 — reconstituées après coup
+
+> Ces phases n'ont pas été planifiées d'avance : elles ont émergé des besoins du
+> client, une à une. Cette section les remet en ordre **a posteriori**, pour
+> qu'un développeur qui reprend le dossier voie l'arc du produit et pas
+> seulement une suite de correctifs datés.
+>
+> Source : `../CHANGELOG.md`, `ENGINEERING_MANUAL.md`, `TASK_SUMMARY.md`.
+> En cas de désaccord, **le changelog fait foi** — il est écrit au moment du
+> travail, celle-ci a été reconstituée.
+
+## Le fil directeur
+
+Les phases 1 à 10 ont bâti une plateforme de commande complète. Les suivantes
+répondent à trois questions que le plan initial n'avait pas posées :
+
+1. **Comment un client trouve-t-il un lieu ?** (16, 18, 22)
+2. **Comment un club se pilote-t-il seul ?** (11, 15, 17)
+3. **Que se passe-t-il après la commande ?** (19, 20, 21)
+
+## Phase 11 — Admin panel et board opérateur configurable
+
+Le panneau d'administration Next.js, puis sa pièce maîtresse : des **écrans
+opérateur configurables** (11.3), leur rendu en board avec onglets et filtres
+(11.4), et la préparation de l'intégration Flaix (11.5, restée en attente côté
+Flaix).
+
+*Pourquoi* : chaque buvette travaille différemment. Un board figé ne convient ni
+à un stade ni à une cantine.
+
+## Phase 12 — Blocs de consolidation
+
+Reprises transversales sur les modules livrés en 1-10.
+
+## Phase 13 — Mobile V1, parcours client complet
+
+Premier parcours de bout en bout sur React Native : catalogue, panier, créneau,
+commande, suivi.
+
+## Phase 14 — Groupes
+
+Événements **privés** réservés aux membres d'un groupe. Fonde la règle de
+confidentialité : un lieu dont aucun événement n'est accessible reste masqué,
+sans révéler son existence.
+
+## Phase 15 — Dashboard manager
+
+Analytique par organisation et par événement, en lecture seule. Le club voit son
+activité sans pouvoir la fausser.
+
+## Phase 16 — Découverte des lieux
+
+`GET /public/venues` avec distance de Haversine. **Deux chemins, deux
+seulement** : proximité dans 10 km, ou recherche par mot-clé configuré par le
+club. Ni position ni recherche ⇒ liste vide, délibérément.
+
+## Phase 17 — Back-office SUPER_ADMIN
+
+Création de clubs, gestion des utilisateurs, groupes, notifications. Pose le
+**modèle de délégation** : seule la plateforme délivre un accès responsable ; un
+responsable ne peut créer que des accès opérateur.
+
+## Phase 18 — Plan des buvettes
+
+Image du plan portée par le lieu, affichée dans l'app et après la commande.
+Indépendante du catalogue : elle vient du lieu, pas de Flaix.
+
+## Phase 19 — État live et « Je suis arrivé »
+
+Suivi temps réel de la commande, et signal d'arrivée du client — événement
+**dédié**, jamais confondu avec une mise à jour de statut.
+
+## Phase 20 — Programme de fidélité
+
+Activation par lieu, solde par organisation, registre immuable. Les points
+appartiennent au **club**, pas à Break Eat. Le solde est un cache du registre :
+les mouvements passent par `increment` / `decrement`, jamais par une lecture
+suivie d'une écriture absolue.
+
+## Phase 21 — Live Activity iOS
+
+Socle backend (APNs HTTP/2, JWT ES256, webhook Flaix signé) et extension
+WidgetKit native. Compilée et signée pour la première fois le 24/08/2026.
+
+## Phase 22 — Lieux ouverts en continu
+
+`Venue.operatingMode`. Un restaurant ou une cantine n'a aucun événement à créer :
+Break Eat pose un contenant unique et invisible, protégé contre toute
+modification. Le wizard saute alors « Événement » et « Créneaux ».
+
+---
+
+# Après les phases — chantiers de mise en service (août 2026)
+
+Ces travaux ne portent pas de numéro de phase : ils rendent livrable ce qui
+existait déjà.
+
+## Fiabilité de livraison (24/08)
+
+Le parcours de commande était **inatteignable** dans toutes les versions
+livrées : `App.expo.tsx` enregistrait un stub à la place de l'écran d'accueil
+d'événement. Corrigé, avec l'adresse d'API gravée et les alertes rendues
+visibles sur le web.
+
+## Montée Expo SDK 53 → 57 (25/08)
+
+Imposée par Apple : le SDK iOS 26 est obligatoire, et Xcode 26 ne compile pas
+React Native 0.79. Quatre ruptures silencieuses corrigées — dont l'extension
+Live Activity qui aurait disparu de la build sans erreur.
+
+**Validée sur appareil réel**, y compris la géolocalisation native, qui n'avait
+jamais été montée.
+
+## Accès et remise à zéro (25/08)
+
+Réinitialisation de mot de passe (inexistante jusque-là), suppression de compte,
+remise à zéro des données d'une organisation, libellés métier des rôles.
+
+## Ce que ces chantiers ont appris
+
+Une leçon transverse, développée dans `ENGINEERING_MANUAL.md` :
+**du code qui « se débrouille » face à une configuration absente transforme une
+panne en comportement normal.** Repli silencieux vers localhost, `catch` vide,
+validation après écriture, message d'erreur qui réécrit toutes les causes en
+une seule — chaque symptôme rapporté par le client pointait ailleurs que sa
+cause, et chacun a coûté des heures.
+
+---
+
+# Ce qui reste
+
+Voir `../REPRISE.md`, section « Reste à faire » — tenue à jour, contrairement à
+cette section qui fige un état.
+
+Les deux chantiers structurants :
+
+1. **Commande miroir Flaix** — sans elle, fidélité, présence et Live Activity
+   restent éteintes sur les lieux Flaix.
+2. **Wizard et demo-setup idempotents** — ils recréent tout à chaque passage.
+
