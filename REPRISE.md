@@ -37,9 +37,22 @@ module Live Activity référençait le contrat Swift partagé par un chemin
 racine — cela marchait en SDK 53, plus en 57. Le podspec matérialise désormais
 lui-même la copie (voir « Pièges connus »).
 
-✅ **Build EAS iOS n° 5 réussie** (25/08, profil `beta`, SDK 57.0.0, v1.1.0) —
-React Native 0.86 compile avec Xcode 26 : le blocage `fmt`/consteval est levé.
-IPA produite, **pas encore soumise à TestFlight**.
+✅ **SDK 57 validé de bout en bout** (25/08). React Native 0.86 compile avec
+Xcode 26 — le blocage `fmt`/consteval est levé, et le rejet ITMS-90725 ne
+reviendra pas. Builds 5 et 6 livrées sur TestFlight, **1.1.0 (6) installée et
+testée sur iPhone**.
+
+✅ **Géolocalisation native confirmée sur appareil réel.** Elle n'avait JAMAIS
+été montée : `navigator.geolocation` n'existe pas sur natif, donc la découverte
+par proximité — le parcours d'entrée du produit — était morte sur téléphone,
+sans erreur pour l'expliquer. Invisible en test web, où le navigateur fournit
+l'API. Pont posé via `@react-native-community/geolocation`, bridé sur
+`whenInUse`.
+
+⚠️ **Avertissements ITMS-90683 restants** (non bloquants pour les tests
+internes, bloquants pour une mise en ligne publique) : Apple ne révèle ses
+exigences de purpose string **qu'une par envoi**. Les clés `Always` sont
+ajoutées depuis `d573bc6` — une build 7 les soldera.
 
 Vérifié : typecheck, export web, 3 apps Next.js, 449 tests backend,
 `expo-doctor` 20/21. ⚠️ **La compilation native ne se vérifie que sur EAS** :
