@@ -23,8 +23,17 @@ _Dernière mise à jour : 2026-08-25_
    Vérifié le 25/08 par requête preflight : cette adresse est la SEULE des
    quatre à ne pas être autorisée. Le navigateur bloque donc tout, et l'app
    opérateur affichait « Identifiants incorrects » — le mot de passe n'était
-   jamais en cause. En attendant, l'URL longue
-   `breakeat-operator-git-main-…` fonctionne.
+   jamais en cause.
+
+   **La boucle est fermée** : le bouton « Ouvrir le poste opérateur » du
+   dashboard manager pointe précisément vers cette adresse
+   (`OPERATOR_URL`, `apps/admin/src/lib/api/admin-client.ts`). L'opérateur
+   atterrit donc toujours sur le seul front bloqué.
+
+   ⚠️ L'URL longue `breakeat-operator-git-main-…` n'est PAS un contournement :
+   elle est protégée par le SSO Vercel, donc inaccessible à un opérateur qui
+   n'a pas de compte sur l'organisation Vercel. **Seul l'ajout à
+   `CORS_ORIGINS` débloque la situation.**
 2. **`APNS_BUNDLE_ID = com.shapper.breakeat`** sur Railway. La build TestFlight porte l'identifiant réel ; avec une autre valeur, le topic APNs ne correspond pas et **aucune Live Activity ne démarrera**.
 3. **TestFlight** — App Store Connect → onglet TestFlight → remplir les *informations de test* (obligatoire), puis s'ajouter en testeur interne.
 4. **Renseigner les coordonnées GPS des lieux** — sans elles, un lieu n'apparaît jamais par proximité. Il reste trouvable par la recherche.

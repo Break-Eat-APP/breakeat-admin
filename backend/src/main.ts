@@ -38,13 +38,31 @@ async function bootstrap(): Promise<void> {
     }),
   );
 
-  // CORS — origins controlled via env. Défaut couvre les 3 dashboards dev
-  // (admin 3001, opérateur 3002, back office 3003).
-  const corsOrigins = process.env.CORS_ORIGINS?.split(',') ?? [
-    'http://localhost:3001',
-    'http://localhost:3002',
-    'http://localhost:3003',
-  ];
+  // CORS — origines pilotées par l'environnement. Défaut : les 3 dashboards
+  // de développement (admin 3001, opérateur 3002, back office 3003).
+  //
+  // Le découpage NETTOIE chaque entrée. `split(',')` seul laissait passer
+  // l'espace qu'on tape naturellement après une virgule : « a.com, b.com »
+  // donnait « ␣b.com », qui ne correspondait à rien. Le slash final est retiré
+  // pour la même raison — une origine HTTP n'en porte jamais.
+  //
+  // Ce n'est pas de la précaution gratuite : une entrée malformée bloque
+  // SILENCIEUSEMENT toute une app (le navigateur refuse, le serveur ne dit
+  // rien), et c'est arrivé deux fois sur ce projet.
+  const corsOrigins = (
+    process.env.CORS_ORIGINS?.split(',') ?? [
+      'http://localhost:3001',
+      'http://localhost:3002',
+      'http://localhost:3003',
+    ]
+  )
+    .map((o) => o.trim().replace(/\/+$/, ''))
+    .filter(Boolean);
+
+  // Tracé au démarrage : la seule façon de vérifier ce que le serveur a
+  // RÉELLEMENT retenu, sans avoir à deviner depuis un échec côté navigateur.
+  logger.log(`CORS — origines autorisées : ${corsOrigins.join(' | ') || '(aucune)'}`);
+
   app.enableCors({ origin: corsOrigins, credentials: true });
 
   // Global prefix — /health and /webhooks are excluded so they remain at their root paths.
