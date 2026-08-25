@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../../database/prisma.service';
 import { ProductStatus, SlotStatus, FlagScope } from '@prisma/client';
 import { GroupsService } from '../groups/groups.service';
+import { SlotTemplatesService } from '../slots/slot-templates.service';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
@@ -36,6 +37,7 @@ export class PublicEventsController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly groupsService: GroupsService,
+    private readonly slotTemplates: SlotTemplatesService,
   ) {}
 
   /**
@@ -171,8 +173,36 @@ export class PublicEventsController {
     // assertAccessible also covers event existence (404 for unknown events).
     await this.assertAccessible(eventId, user);
 
+    // PHASE 23 — les créneaux récurrents du jour sont matérialisés ICI, à la
+    // première lecture, plutôt que par une tâche planifiée. C'est le seul
+    // endroit qu'un client traverse forcément avant de choisir son heure de
+    // retrait : brancher ailleurs laisserait des lieux sans créneaux jusqu'à ce
+    // que quelqu'un pense à les créer.
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { venueId: true },
+    });
+    if (event?.venueId) {
+      await this.slotTemplates.ensureTodaySlots(eventId, event.venueId);
+    }
+
+    // Journée courante seulement.
+    //
+    // Un lieu ouvert en continu accumule un jeu de créneaux PAR JOUR : sans ce
+    // filtre, le client se verrait proposer le « 17h45 » d'il y a trois
+    // semaines. Les créneaux ponctuels d'un événement (`serviceDate` nul) ne
+    // sont pas datés et restent visibles tant que l'événement dure.
+    const aujourdhui = new Date();
+    const journee = new Date(
+      Date.UTC(aujourdhui.getUTCFullYear(), aujourdhui.getUTCMonth(), aujourdhui.getUTCDate()),
+    );
+
     return this.prisma.slot.findMany({
-      where: { eventId, status: SlotStatus.OPEN },
+      where: {
+        eventId,
+        status: SlotStatus.OPEN,
+        OR: [{ serviceDate: null }, { serviceDate: journee }],
+      },
       orderBy: { startAt: 'asc' },
       select: {
         id: true,

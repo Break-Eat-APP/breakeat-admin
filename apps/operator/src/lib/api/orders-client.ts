@@ -281,6 +281,48 @@ export async function setSupplierStatus(
   );
 }
 
+// ─── Créneaux de récupération ─────────────────────────────────────────────────
+
+export type SlotStatusValue = 'OPEN' | 'FULL' | 'CLOSED';
+
+export interface PickupSlot {
+  id: string;
+  label: string | null;
+  startAt: string;
+  endAt: string;
+  capacity: number;
+  currentLoad: number;
+  status: SlotStatusValue;
+  supplierId: string | null;
+}
+
+/** Les créneaux de l'événement. Ceux du jour sont matérialisés côté serveur. */
+export async function fetchSlots(eventId: string, token: string): Promise<PickupSlot[]> {
+  return apiFetch<PickupSlot[]>(`/events/${eventId}/slots`, token);
+}
+
+/**
+ * Ouvre ou ferme un créneau.
+ *
+ * Route distincte de la configuration : horaires et capacités restent décidés
+ * par le club, mais l'ouverture se juge devant la file d'attente — c'est
+ * l'équipier qui la voit.
+ *
+ * Fermer n'annule rien : les commandes déjà placées sur ce créneau restent
+ * dues, seule la prise de nouvelles s'arrête.
+ */
+export async function setSlotStatus(
+  eventId: string,
+  slotId: string,
+  status: SlotStatusValue,
+  token: string,
+): Promise<PickupSlot> {
+  return apiFetch<PickupSlot>(`/events/${eventId}/slots/${slotId}/status`, token, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export interface LoginResponse {
