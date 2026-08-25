@@ -3,7 +3,7 @@
 import { use, useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { parseCoordsString, fmtCoord } from '@/lib/coords';
+import { parseCoordsString, parseSingleCoord, fmtCoord } from '@/lib/coords';
 import { BRAND } from '@break-eat/brand';
 import {
   apiGetOrganization,
@@ -181,10 +181,25 @@ export default function OrganizationDetailPage({
 
   const saveVenueMut = useMutation({
     mutationFn: () => {
-      const lat = vLat.trim() ? Number(vLat.trim().replace(',', '.')) : null;
-      const lng = vLng.trim() ? Number(vLng.trim().replace(',', '.')) : null;
-      if ((lat !== null && Number.isNaN(lat)) || (lng !== null && Number.isNaN(lng))) {
-        return Promise.reject(new Error('Latitude / longitude invalides (ex. 43.296, 5.370).'));
+      // Parseur tolérant, comme le champ de collage : `Number()` refusait le
+      // DMS, alors que le champ juste au-dessus l'accepte. Deux comportements
+      // contradictoires sur le même écran.
+      const lat = vLat.trim() ? parseSingleCoord(vLat) : null;
+      const lng = vLng.trim() ? parseSingleCoord(vLng) : null;
+      if ((vLat.trim() && lat === null) || (vLng.trim() && lng === null)) {
+        return Promise.reject(
+          new Error(
+            'Coordonnées non reconnues. Collez la paire depuis Google Maps dans le champ prévu.',
+          ),
+        );
+      }
+      if ((lat !== null && Math.abs(lat) > 90) || (lng !== null && Math.abs(lng) > 180)) {
+        return Promise.reject(
+          new Error(
+            'Hors limites : la latitude va de -90 à 90, la longitude de -180 à 180. ' +
+              'Les deux valeurs sont peut-être inversées.',
+          ),
+        );
       }
       const payload = {
         name: vName.trim(),
@@ -414,14 +429,42 @@ export default function OrganizationDetailPage({
                 {vLat && vLng && !vCoordsError && <span style={{ fontSize: 12, color: '#059669', marginTop: 2 }}>→ Lat {vLat} · Lng {vLng}</span>}
               </Field>
 
-              <div style={{ display: 'flex', gap: 16 }}>
-                <Field label="Latitude (décimal)">
-                  <input value={vLat} onChange={(e) => setVLat(e.target.value)} placeholder="43.296482" style={inputStyle} />
-                </Field>
-                <Field label="Longitude (décimal)">
-                  <input value={vLng} onChange={(e) => setVLng(e.target.value)} placeholder="5.404222" style={inputStyle} />
-                </Field>
-              </div>
+              {/* Latitude et longitude en LECTURE SEULE.
+                  Il y avait deux saisies pour la même donnée, et une seule
+                  acceptait le DMS : taper 43° 16' 6.60" N ici échouait, alors
+                  que le champ de collage juste au-dessus le comprenait. Deux
+                  chemins pour une donnée, dont un cassé — mieux vaut un seul.
+                  Ces valeurs affichent ce qui sera enregistré. */}
+              {(vLat || vLng) && (
+                <div
+                  style={{
+                    display: 'flex',
+                    gap: 24,
+                    background: BRAND.bgSubtle,
+                    border: `1px solid ${BRAND.border}`,
+                    borderRadius: 10,
+                    padding: '10px 14px',
+                    fontSize: 13,
+                  }}
+                >
+                  <span style={{ color: BRAND.grey }}>
+                    Latitude <strong style={{ color: BRAND.ink }}>{vLat || '—'}</strong>
+                  </span>
+                  <span style={{ color: BRAND.grey }}>
+                    Longitude <strong style={{ color: BRAND.ink }}>{vLng || '—'}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setVLat(''); setVLng(''); setVCoordsRaw(''); setVCoordsError(''); }}
+                    style={{
+                      marginLeft: 'auto', background: 'none', border: 'none', padding: 0,
+                      color: '#dc2626', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    Effacer
+                  </button>
+                </div>
+              )}
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: BRAND.ink }}>
                 <input type="checkbox" checked={vFlaixOn} onChange={(e) => setVFlaixOn(e.target.checked)} />
                 Flaix activé — la commande passe par Flaix (le club n’utilise pas le dashboard Break Eat)
