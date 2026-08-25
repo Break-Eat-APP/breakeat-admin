@@ -5,6 +5,66 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.48.0] — 2026-08-25 — Accès opérateur : un compte perdu pour toujours
+
+### Le trou
+Aucune réinitialisation de mot de passe n'existait dans le système.
+
+`inviteByEmail` ne pose un mot de passe qu'à la **création** du compte. Dès
+qu'une adresse existait déjà, son mot de passe n'était modifiable nulle part —
+et réinviter la personne échouait sur « déjà membre ». Un opérateur qui
+oubliait son mot de passe devenait définitivement inaccessible, sans aucun
+recours dans l'interface.
+
+### La route
+`POST /organizations/:id/members/:memberId/reset-password`, calquée sur les
+garde-fous de `removeMember` :
+
+- SUPER_ADMIN partout ; sinon ORG_ADMIN de **cette** organisation ;
+- un ORG_ADMIN ne peut viser qu'un rôle délégable (**opérateur**) — sans quoi
+  il prendrait la main sur le compte d'un autre manager ;
+- **jamais sur soi-même**.
+
+Le mot de passe est généré par le **navigateur** et envoyé, comme à
+l'invitation : c'est ce qui permet de l'afficher une fois. Le générer côté
+serveur obligerait à le renvoyer dans la réponse, donc à le faire transiter par
+les journaux en cas de débogage. Le serveur ne renvoie que l'e-mail.
+
+### L'écran qui mentait par omission
+L'accueil opérateur faisait `catch { setEvents([]); }` — un jeton expiré, une
+organisation inaccessible ou un serveur muet produisaient **le même écran
+« aucun événement »**. La panne était indiscernable de la normalité, pour
+l'utilisateur comme pour nous : c'est ce qui a rendu ce diagnostic si long.
+
+Trois états distincts désormais : erreur de chargement **avec son message**,
+compte rattaché à aucune organisation, et liste réellement vide.
+
+### Aussi
+`assertRoleDelegable` accepte une chaîne : le rôle vient tantôt d'un DTO
+(énumération de l'app), tantôt d'une ligne Prisma (énumération générée) —
+mêmes valeurs, types distincts. Un cast aurait masqué un vrai écart le jour où
+elles divergeraient.
+
+### Fichiers
+- `+ backend/src/modules/organizations/dto/reset-member-password.dto.ts`
+- `~ backend/src/modules/organizations/organizations.service.ts` — `resetMemberPassword`
+- `~ backend/src/modules/organizations/organizations.controller.ts` — la route
+- `~ apps/admin/src/lib/api/admin-client.ts` — `apiResetMemberPassword`
+- `~ apps/admin/src/app/(admin)/team/page.tsx` — bouton « Mot de passe »
+- `~ apps/operator/src/app/page.tsx` — trois états au lieu d'un écran vide
+
+### Vérifié
+455 tests backend (6 nouveaux sur les garde-fous), admin 21 pages, operator 4.
+⚠️ Le bouton n'a **pas** été vu dans un navigateur : cela demande une session
+authentifiée sur le back-office.
+
+### Connu, non corrigé
+**Le wizard empile.** Il réutilise le lieu mais **recrée** événement, buvettes,
+points de retrait, catégories et produits à chaque passage. D'où l'impression
+que « rien ne s'enregistre » : les modifications le sont, dans un ensemble neuf,
+pendant que l'app pointe vers l'ancien.
+---
+
 ## [0.47.0] — 2026-08-25 — Expo SDK 53 → 57 (React Native 0.79.6 → 0.86.2)
 
 ### Pourquoi
