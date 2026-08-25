@@ -6,6 +6,7 @@ import {
   apiGetOrgMembers,
   apiInviteMember,
   apiRemoveMember,
+  apiResetMemberPassword,
   apiGetSuppliers,
   getOrgId,
   getStoredUser,
@@ -136,6 +137,7 @@ export default function TeamPage() {
    * seule fois : le mot de passe est haché côté serveur et devient irrécupérable.
    */
   const [newCredentials, setNewCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
 
   // Remove state
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -202,6 +204,33 @@ export default function TeamPage() {
     }
   }
 
+  /**
+   * Redefinit le mot de passe d'un membre et l'affiche UNE fois.
+   *
+   * Le mot de passe est genere ici, dans le navigateur, comme a l'invitation :
+   * c'est le seul moyen de le montrer. Il n'est jamais relu ensuite — ni
+   * l'interface ni le serveur ne savent le restituer.
+   */
+  async function handleResetPassword(memberId: string, email: string) {
+    if (!orgId) return;
+    if (!confirm(`Redefinir le mot de passe de ${email} ?
+
+L'ancien cessera immediatement de fonctionner.`)) return;
+    setResettingId(memberId);
+    setError('');
+    setInviteSuccess('');
+    setNewCredentials(null);
+    const password = generateTemporaryPassword();
+    try {
+      const res = await apiResetMemberPassword(orgId, memberId, password);
+      setNewCredentials({ email: res.email, password });
+      setInviteSuccess(`Nouveau mot de passe genere pour ${res.email}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de la redefinition');
+    } finally {
+      setResettingId(null);
+    }
+  }
   async function handleRemove(memberId: string, email: string) {
     if (!orgId) return;
     if (!confirm(`Retirer ${email} de l'organisation ?`)) return;
@@ -523,6 +552,26 @@ export default function TeamPage() {
 
                   {/* Actions */}
                   <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                    <button
+                      onClick={() => void handleResetPassword(m.id, m.user.email)}
+                      disabled={resettingId === m.id}
+                      title="Genere un nouveau mot de passe et l'affiche une fois"
+                      style={{
+                        background: 'transparent',
+                        border: `1px solid ${BRAND.border}`,
+                        borderRadius: 6,
+                        color: BRAND.inkSoft,
+                        padding: '5px 12px',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: resettingId === m.id ? 'not-allowed' : 'pointer',
+                        opacity: resettingId === m.id ? 0.5 : 1,
+                        fontFamily: 'inherit',
+                        marginRight: 8,
+                      }}
+                    >
+                      {resettingId === m.id ? 'Redefinition…' : 'Mot de passe'}
+                    </button>
                     <button
                       onClick={() => void handleRemove(m.id, m.user.email)}
                       disabled={removingId === m.id}

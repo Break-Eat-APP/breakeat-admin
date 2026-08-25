@@ -58,7 +58,7 @@ describe('OrganizationsService', () => {
               findUnique: jest.fn(),
               create: jest.fn(),
             },
-            user: { findUnique: jest.fn(), create: jest.fn() },
+            user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
             $transaction: jest.fn(),
           },
         },
@@ -275,6 +275,93 @@ describe('OrganizationsService', () => {
         service.inviteByEmail(ORG_ID, CALLER_ID, 'SUPER_ADMIN', EMAIL, OrgRole.MANAGER),
       ).rejects.toThrow(NotFoundException);
       expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- resetMemberPassword -------------------------------------
+
+  describe('resetMemberPassword', () => {
+    const MEMBER_ID = 'member-1';
+
+    // Membre d'ORG_ID, rattache par defaut a un utilisateur AUTRE que l'appelant.
+    const membre = (orgRole: string = OrgRole.OPERATOR, userId = TARGET_ID) => ({
+      id: MEMBER_ID,
+      organizationId: ORG_ID,
+      userId,
+      orgRole,
+      user: { id: userId, email: 'operateur@club.fr' },
+    });
+
+    it('un responsable de club redefinit le mot de passe de son operateur', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock)
+        .mockResolvedValueOnce(membre())
+        .mockResolvedValueOnce({ orgRole: OrgRole.ORG_ADMIN });
+
+      const result = await service.resetMemberPassword(
+        ORG_ID, MEMBER_ID, CALLER_ID, 'CUSTOMER', 'nouveau-mot-de-passe',
+      );
+
+      expect(result.email).toBe('operateur@club.fr');
+      expect(prisma.user.update).toHaveBeenCalledTimes(1);
+      // Ce qui atteint la base doit etre une empreinte, jamais le mot de passe.
+      const arg = (prisma.user.update as jest.Mock).mock.calls[0][0];
+      expect(arg.data.passwordHash).not.toBe('nouveau-mot-de-passe');
+      expect(String(arg.data.passwordHash).startsWith('$argon2')).toBe(true);
+    });
+
+    it('un responsable ne peut PAS viser le compte d un autre responsable', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock)
+        .mockResolvedValueOnce(membre(OrgRole.ORG_ADMIN))
+        .mockResolvedValueOnce({ orgRole: OrgRole.ORG_ADMIN });
+
+      await expect(
+        service.resetMemberPassword(ORG_ID, MEMBER_ID, CALLER_ID, 'CUSTOMER', 'peu-importe'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('nul ne redefinit son propre mot de passe par ce chemin', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock)
+        .mockResolvedValueOnce(membre(OrgRole.OPERATOR, CALLER_ID))
+        .mockResolvedValueOnce({ orgRole: OrgRole.ORG_ADMIN });
+
+      await expect(
+        service.resetMemberPassword(ORG_ID, MEMBER_ID, CALLER_ID, 'CUSTOMER', 'peu-importe'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('un membre d une AUTRE organisation reste introuvable', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValueOnce({
+        ...membre(), organizationId: 'org-2',
+      });
+
+      await expect(
+        service.resetMemberPassword(ORG_ID, MEMBER_ID, CALLER_ID, 'SUPER_ADMIN', 'peu-importe'),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('la plateforme peut redefinir le mot de passe de n importe quel role', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock)
+        .mockResolvedValueOnce(membre(OrgRole.ORG_ADMIN));
+
+      await service.resetMemberPassword(
+        ORG_ID, MEMBER_ID, CALLER_ID, 'SUPER_ADMIN', 'nouveau-mot-de-passe',
+      );
+
+      expect(prisma.user.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('un simple membre ne peut rien redefinir', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock)
+        .mockResolvedValueOnce(membre())
+        .mockResolvedValueOnce({ orgRole: OrgRole.OPERATOR });
+
+      await expect(
+        service.resetMemberPassword(ORG_ID, MEMBER_ID, CALLER_ID, 'CUSTOMER', 'peu-importe'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.user.update).not.toHaveBeenCalled();
     });
   });
 });

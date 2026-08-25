@@ -43,13 +43,22 @@ function EventSelector({ token }: { token: string }) {
   const [supplierName, setSupplierName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [manualId, setManualId] = useState('');
+  // Distingue « rien a afficher » de « ca a echoue » : sans cet etat, les deux
+  // produisaient le meme ecran vide et aucun diagnostic n'etait possible.
+  const [loadError, setLoadError] = useState('');
+  const [noMembership, setNoMembership] = useState(false);
 
   useEffect(() => {
     void (async () => {
       try {
         const me = await fetchMeWithMemberships(token);
         const firstMembership = me.memberships[0];
-        if (!firstMembership) return;
+        if (!firstMembership) {
+          // Compte valide, mais rattache a aucune organisation : c'est une
+          // configuration incomplete, pas une absence d'evenement.
+          setNoMembership(true);
+          return;
+        }
 
         setOrgName(firstMembership.organization.name);
 
@@ -66,8 +75,12 @@ function EventSelector({ token }: { token: string }) {
 
         const evs = await fetchEvents(firstMembership.organization.id, token);
         setEvents(Array.isArray(evs) ? evs : []);
-      } catch {
+      } catch (err) {
+        // Ne JAMAIS retomber en silence sur une liste vide : jeton expire,
+        // organisation inaccessible ou serveur muet produisaient tous le meme
+        // ecran « aucun evenement », rendant la panne indiscernable.
         setEvents([]);
+        setLoadError(err instanceof Error ? err.message : 'Erreur inconnue');
       } finally {
         setLoading(false);
       }
@@ -139,6 +152,23 @@ function EventSelector({ token }: { token: string }) {
         {/* Events list */}
         {loading ? (
           <div style={{ color: BRAND.grey, fontSize: 14 }}>Chargement des événements…</div>
+        ) : loadError ? (
+          <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 12, padding: 24, color: '#991b1b', fontSize: 14, marginBottom: 24 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Impossible de charger vos événements</div>
+            <div style={{ marginBottom: 8 }}>{loadError}</div>
+            <div style={{ fontSize: 12, lineHeight: 1.6 }}>
+              Si le message évoque une session expirée, déconnectez-vous puis reconnectez-vous.
+              Sinon, transmettez ce texte à votre administrateur : il désigne la cause exacte.
+            </div>
+          </div>
+        ) : noMembership ? (
+          <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 12, padding: 24, color: '#92400e', fontSize: 14, marginBottom: 24 }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Votre compte n’est rattaché à aucune organisation</div>
+            <div style={{ fontSize: 13, lineHeight: 1.6 }}>
+              La connexion a réussi, mais aucun club ne vous a encore donné accès.
+              Demandez à votre responsable de vous inviter depuis « Équipe » de son tableau de bord.
+            </div>
+          </div>
         ) : events.length === 0 ? (
           <div style={{ background: BRAND.bgSubtle, border: `1px solid ${BRAND.border}`, borderRadius: 12, padding: 24, color: BRAND.grey, fontSize: 14, marginBottom: 24 }}>
             Aucun événement trouvé. Utilisez l&apos;admin panel pour en créer un.

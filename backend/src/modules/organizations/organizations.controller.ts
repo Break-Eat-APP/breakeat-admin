@@ -14,6 +14,7 @@ import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
+import { ResetMemberPasswordDto } from './dto/reset-member-password.dto';
 import { UpdateOrgBrandingDto } from './dto/update-org-branding.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -103,6 +104,32 @@ export class OrganizationsController {
     );
   }
 
+  /**
+   * POST /organizations/:id/members/:memberId/reset-password
+   *
+   * Redefinit le mot de passe d'un membre. ORG_ADMIN (sur ses operateurs
+   * uniquement) ou SUPER_ADMIN. Jamais sur soi-meme.
+   *
+   * Sans cette route, un compte dont le mot de passe est perdu restait
+   * inaccessible pour toujours : l'invitation ne pose un mot de passe qu'a la
+   * creation, et reinviter un membre existant echoue sur « deja membre ».
+   */
+  @Post(':id/members/:memberId/reset-password')
+  @HttpCode(HttpStatus.OK)
+  resetMemberPassword(
+    @Param('id') organizationId: string,
+    @Param('memberId') memberId: string,
+    @Body() dto: ResetMemberPasswordDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.organizationsService.resetMemberPassword(
+      organizationId,
+      memberId,
+      user.sub,
+      user.globalRole,
+      dto.newPassword,
+    );
+  }
   /**
    * DELETE /organizations/:id/members/:memberId
    * Remove a member. ORG_ADMIN or SUPER_ADMIN only. Cannot remove self.
