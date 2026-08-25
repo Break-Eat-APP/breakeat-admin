@@ -40,11 +40,6 @@ module.exports = {
   orientation: 'portrait',
   scheme: 'breakeat',
   icon: './assets/logo-mark-orange.png',
-  splash: {
-    image: './assets/logo-mark-orange.png',
-    resizeMode: 'contain',
-    backgroundColor: '#ffffff',
-  },
   ios: {
     bundleIdentifier: BUNDLE_ID,
     supportsTablet: false,
@@ -52,6 +47,35 @@ module.exports = {
     // (l'extension doit être signée avec la même équipe que l'app hôte).
     // Même valeur que `submit.production.ios.appleTeamId` dans eas.json.
     appleTeamId: '2A5L298Q4C',
+    infoPlist: {
+      // Repond une fois pour toutes a la question de conformite a
+      // l'exportation, sinon posee a chaque envoi vers App Store Connect.
+      // Break Eat n'utilise que HTTPS : c'est un usage exempte.
+      ITSAppUsesNonExemptEncryption: false,
+      // ITMS-90683 — Apple detecte une reference aux API de localisation dans
+      // le binaire (apportee par une bibliotheque, pas par notre code) et
+      // EXIGE une justification, meme si l'app ne s'en sert pas encore.
+      //
+      // Sans cette cle, iOS n'affiche AUCUNE demande d'autorisation et refuse
+      // la position en silence : la decouverte des lieux par proximite serait
+      // definitivement muette, sans la moindre erreur visible.
+      NSLocationWhenInUseUsageDescription:
+        'BREAK EAT utilise votre position pour vous montrer les lieux et buvettes autour de vous.',
+      // Apple reclame AUSSI la variante « Always » : la bibliotheque de
+      // geolocalisation reference les API d'arriere-plan, et l'analyse
+      // statique les voit dans le binaire — meme si l'app ne les appelle
+      // jamais (elle est bridee sur `whenInUse`, voir
+      // src/lib/geolocation-polyfill.ts).
+      //
+      // Le texte le dit franchement : Break Eat n'a aucun usage en arriere-plan.
+      NSLocationAlwaysAndWhenInUseUsageDescription:
+        'BREAK EAT utilise votre position uniquement pendant que vous utilisez l’app, pour vous montrer les lieux autour de vous. Aucun suivi en arriere-plan.',
+      // Cle historique (iOS 10 et anterieur), sans effet a partir de notre
+      // cible 16.4 : presente uniquement pour satisfaire le controle d'Apple,
+      // qui ne revele ses exigences qu'une par envoi.
+      NSLocationAlwaysUsageDescription:
+        'BREAK EAT utilise votre position uniquement pendant que vous utilisez l’app.',
+    },
   },
   android: {
     package: BUNDLE_ID,
@@ -59,7 +83,13 @@ module.exports = {
       foregroundImage: './assets/logo-mark-orange.png',
       backgroundColor: '#ffffff',
     },
-    permissions: ['android.permission.CAMERA'],
+    permissions: [
+      'android.permission.CAMERA',
+      // Pendant du purpose string iOS : sans elle, la demande de position
+      // n'est jamais presentee et la decouverte par proximite reste muette.
+      'android.permission.ACCESS_FINE_LOCATION',
+      'android.permission.ACCESS_COARSE_LOCATION',
+    ],
   },
   plugins: [
     // PHASE 21 — prérequis Live Activity : NSSupportsLiveActivities + cible iOS
@@ -70,6 +100,32 @@ module.exports = {
     // `targets/live-activity/expo-target.config.js`. Ajouter une cible au
     // .pbxproj à la main serait fragile et disparaîtrait au prochain prebuild.
     '@bacons/apple-targets',
+    // Le SDK 57 exige que tout module a reglages natifs soit declare ici :
+    // il ne les deduit plus de la seule presence dans package.json.
+    'expo-font',
+    [
+      // Le SDK 57 a retire `splash` de la racine du schema : la clé y est
+      // simplement IGNOREE, sans erreur, et l'app demarre sur l'ecran blanc
+      // par defaut. La configuration ne vit plus que dans ce plugin.
+      'expo-splash-screen',
+      {
+        image: './assets/logo-mark-orange.png',
+        resizeMode: 'contain',
+        backgroundColor: '#ffffff',
+      },
+    ],
+    [
+      'expo-build-properties',
+      {
+        // Plancher impose par le SDK 57 : il REFUSE toute valeur sous 16.4.
+        // Cela couvre largement ActivityKit (16.2), et reste sous le minimum
+        // 16.6 de l'app deja publiee : aucun utilisateur n'est exclu.
+        //
+        // Applique AUSSI aux Pods, que la retouche du .pbxproj faite par
+        // ./plugins/withLiveActivity n'atteint pas.
+        ios: { deploymentTarget: '16.4' },
+      },
+    ],
     // Sentry est conditionne au JETON, pas a l'environnement.
     //
     // Son plugin televerse les source maps pendant la compilation Gradle. Sans
@@ -82,7 +138,7 @@ module.exports = {
     ...(process.env.SENTRY_AUTH_TOKEN
       ? [
           [
-            '@sentry/react-native/expo',
+            '@sentry/react-native',
             { organization: 'breakeat', project: 'break-eat-mobile' },
           ],
         ]

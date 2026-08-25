@@ -87,3 +87,10 @@ apps/mobile/.expo
 # jamais entrer dans le depot.
 /eas.json
 /app.json
+
+# Copie generee par modules/live-activity/ios/LiveActivity.podspec a chaque
+# `pod install`. La source de verite est
+# apps/mobile/targets/live-activity/BreakEatOrderAttributes.swift — la commiter
+# ici creerait deux fichiers pouvant diverger, exactement ce que le montage
+# cherche a eviter.
+apps/mobile/modules/live-activity/ios/BreakEatOrderAttributes.swift

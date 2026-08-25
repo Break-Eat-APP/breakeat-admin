@@ -7,6 +7,12 @@
 import React from 'react';
 import { AppRegistry } from 'react-native';
 import { CrashGuard, StartupErrorScreen } from './src/components/crash-guard';
+import { installGeolocationPolyfill } from './src/lib/geolocation-polyfill';
+
+// `navigator.geolocation` n'existe pas sur natif : sans ce pont, la decouverte
+// des lieux par proximite reste muette sur telephone. Pose ici, avant tout
+// ecran, car le hook la lit des son premier montage.
+installGeolocationPolyfill();
 
 let Root;
 try {
