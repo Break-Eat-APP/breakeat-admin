@@ -1184,3 +1184,86 @@ export async function apiGetPeriodStats(
 export async function apiGetEventStats(eventId: string): Promise<EventStats> {
   return req<EventStats>('GET', `/events/${eventId}/stats`);
 }
+
+// ─── Créneaux récurrents (phase 23) ──────────────────────────────────────────
+
+export type SlotKindValue = 'IMMEDIATE' | 'PAUSE_1' | 'PAUSE_2' | 'GENERAL' | 'CUSTOM';
+
+export interface SlotTemplate {
+  id: string;
+  venueId: string;
+  supplierId: string;
+  kind: SlotKindValue;
+  label: string;
+  /** Minutes depuis minuit. 1065 = 17h45. */
+  startMinutes: number;
+  endMinutes: number;
+  capacity: number;
+  isActive: boolean;
+  sortOrder: number;
+  supplier?: { id: string; name: string };
+}
+
+/**
+ * Créneaux de récupération RÉCURRENTS d'un lieu.
+ *
+ * Décrits une fois, rejoués chaque jour : le serveur matérialise le créneau du
+ * jour à la première visite d'un client. Rattachés à une BUVETTE — deux
+ * comptoirs d'un même lieu peuvent servir à des heures différentes.
+ */
+export async function apiGetSlotTemplates(venueId: string): Promise<SlotTemplate[]> {
+  return req<SlotTemplate[]>('GET', `/venues/${venueId}/slot-templates`);
+}
+
+export async function apiCreateSlotTemplate(
+  venueId: string,
+  data: {
+    supplierId: string;
+    label: string;
+    kind: SlotKindValue;
+    startMinutes: number;
+    endMinutes: number;
+    capacity?: number;
+  },
+): Promise<SlotTemplate> {
+  return req<SlotTemplate>('POST', `/venues/${venueId}/slot-templates`, data);
+}
+
+export async function apiUpdateSlotTemplate(
+  venueId: string,
+  id: string,
+  data: Partial<{
+    label: string;
+    kind: SlotKindValue;
+    startMinutes: number;
+    endMinutes: number;
+    capacity: number;
+    isActive: boolean;
+  }>,
+): Promise<SlotTemplate> {
+  return req<SlotTemplate>('PATCH', `/venues/${venueId}/slot-templates/${id}`, data);
+}
+
+/**
+ * Supprime le motif. Les créneaux DÉJÀ engendrés survivent — ils portent
+ * peut-être des commandes. Pour cesser d'en produire sans rien perdre,
+ * préférer `isActive: false`.
+ */
+export async function apiDeleteSlotTemplate(venueId: string, id: string): Promise<void> {
+  return req<void>('DELETE', `/venues/${venueId}/slot-templates/${id}`);
+}
+
+/** « 17:45 » ⇄ 1065 — les deux sens, pour les champs horaires du formulaire. */
+export function minutesVersHeure(m: number): string {
+  const h = Math.floor(m / 60);
+  return `${String(h).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+export function heureVersMinutes(v: string): number | null {
+  const m = /^(\d{1,2})[:h.](\d{2})$/.exec(v.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 24 || min > 59) return null;
+  return h * 60 + min;
+}

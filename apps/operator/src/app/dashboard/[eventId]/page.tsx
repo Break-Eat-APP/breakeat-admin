@@ -8,6 +8,7 @@ import { DashboardColumn } from '@/components/DashboardColumn';
 import { NotificationPopup } from '@/components/NotificationPopup';
 import { RecapPanel } from '@/components/RecapPanel';
 import { LoginForm } from '@/components/LoginForm';
+import { SlotBar } from '@/components/SlotBar';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useSound } from '@/hooks/useSound';
 import {
@@ -540,6 +541,11 @@ export default function DashboardPage() {
           </HeaderButton>
         </div>
       </header>
+
+      {/* Créneaux de récupération — ouverts ou fermés par l’équipier.
+          Placés juste sous l’en-tête : c’est le premier réglage qu’on
+          touche en prenant son poste, avant même de regarder la file. */}
+      {token && <SlotBar eventId={eventId} token={token} supplierId={supplierId} />}
 
       {/* Notification overlay */}
       <NotificationPopup notification={notification} onDismiss={dismissNotification} />
