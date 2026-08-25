@@ -70,6 +70,21 @@ module.exports = {
     // `targets/live-activity/expo-target.config.js`. Ajouter une cible au
     // .pbxproj à la main serait fragile et disparaîtrait au prochain prebuild.
     '@bacons/apple-targets',
+    // Le SDK 57 exige que tout module a reglages natifs soit declare ici :
+    // il ne les deduit plus de la seule presence dans package.json.
+    'expo-font',
+    [
+      'expo-build-properties',
+      {
+        // Plancher impose par le SDK 57 : il REFUSE toute valeur sous 16.4.
+        // Cela couvre largement ActivityKit (16.2), et reste sous le minimum
+        // 16.6 de l'app deja publiee : aucun utilisateur n'est exclu.
+        //
+        // Applique AUSSI aux Pods, que la retouche du .pbxproj faite par
+        // ./plugins/withLiveActivity n'atteint pas.
+        ios: { deploymentTarget: '16.4' },
+      },
+    ],
     // Sentry est conditionne au JETON, pas a l'environnement.
     //
     // Son plugin televerse les source maps pendant la compilation Gradle. Sans
@@ -82,7 +97,7 @@ module.exports = {
     ...(process.env.SENTRY_AUTH_TOKEN
       ? [
           [
-            '@sentry/react-native/expo',
+            '@sentry/react-native',
             { organization: 'breakeat', project: 'break-eat-mobile' },
           ],
         ]

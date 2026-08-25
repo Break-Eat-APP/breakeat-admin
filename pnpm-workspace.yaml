@@ -13,3 +13,18 @@ allowBuilds:
   prisma: true
   sharp: true
   unrs-resolver: true
+
+# Dependance manquante chez un tiers, ajoutee a SON manifeste.
+#
+# @bacons/apple-targets 5.0.0 fait `require('@expo/plist')` sans le declarer :
+# il comptait sur le hoisting de npm/yarn. Le SDK 57 ne le fournit plus par
+# transitivite, et pnpm — qui n'expose que les dependances declarees — le fait
+# echouer avec « Cannot find module '@expo/plist' ». Le plugin est alors ignore
+# en silence : plus de cible Xcode pour l'extension Live Activity.
+#
+# Version calee sur le @expo/config-plugins 55 qu'apple-targets embarque
+# lui-meme (^0.5.4) : les deux manipulent les memes plists.
+packageExtensions:
+  '@bacons/apple-targets':
+    dependencies:
+      '@expo/plist': '^0.5.4'
