@@ -20,8 +20,8 @@ import { ScheduledPushService } from '../notifications/scheduled-push.service';
 describe('BackofficeService', () => {
   let service: BackofficeService;
   let prisma: {
-    order: { aggregate: jest.Mock };
-    user: { count: jest.Mock; findUnique: jest.Mock; update: jest.Mock };
+    order: { aggregate: jest.Mock; count: jest.Mock };
+    user: { count: jest.Mock; findUnique: jest.Mock; update: jest.Mock; delete: jest.Mock };
     organization: {
       count: jest.Mock;
       findMany: jest.Mock;
@@ -35,8 +35,8 @@ describe('BackofficeService', () => {
 
   beforeEach(async () => {
     prisma = {
-      order: { aggregate: jest.fn() },
-      user: { count: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+      order: { aggregate: jest.fn(), count: jest.fn() },
+      user: { count: jest.fn(), findUnique: jest.fn(), update: jest.fn(), delete: jest.fn() },
       organization: {
         count: jest.fn(),
         findMany: jest.fn(),
@@ -297,6 +297,64 @@ describe('BackofficeService', () => {
       await expect(service.setUserActive('inconnu', false, MOI)).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+  });
+
+  // ─── deleteUser ──────────────────────────────────────────────
+
+  describe('deleteUser', () => {
+    const MOI = 'admin-courant';
+    const AUTRE = 'user-2';
+
+    beforeEach(() => {
+      prisma.order.count.mockResolvedValue(0);
+    });
+
+    it('supprime un compte sans commande', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: AUTRE, email: 'test@club.fr', globalRole: 'CUSTOMER',
+      });
+
+      const res = await service.deleteUser(AUTRE, MOI);
+
+      expect(res.deleted).toBe(true);
+      expect(prisma.user.delete).toHaveBeenCalledWith({ where: { id: AUTRE } });
+    });
+
+    it('refuse un compte porteur de commandes — le CA doit survivre', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: AUTRE, email: 'client@club.fr', globalRole: 'CUSTOMER',
+      });
+      prisma.order.count.mockResolvedValue(4);
+
+      await expect(service.deleteUser(AUTRE, MOI)).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+    });
+
+    it('refuse qu’on se supprime soi-même', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: MOI, email: 'moi@breakeat.fr', globalRole: 'SUPER_ADMIN',
+      });
+
+      await expect(service.deleteUser(MOI, MOI)).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+    });
+
+    it('refuse le dernier administrateur plateforme actif', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        id: AUTRE, email: 'admin@breakeat.fr', globalRole: 'SUPER_ADMIN',
+      });
+      prisma.user.count.mockResolvedValue(0);
+
+      await expect(service.deleteUser(AUTRE, MOI)).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.user.delete).not.toHaveBeenCalled();
+    });
+
+    it('refuse un compte inconnu', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await expect(service.deleteUser('inconnu', MOI)).rejects.toBeInstanceOf(NotFoundException);
+      expect(prisma.user.delete).not.toHaveBeenCalled();
     });
   });
 

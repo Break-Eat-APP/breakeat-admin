@@ -403,6 +403,18 @@ export async function apiSetUserArchived(
   );
 }
 
+/**
+ * DELETE /backoffice/users/:id — efface définitivement un compte.
+ *
+ * Pendant de l'archivage : archiver coupe l'accès en gardant tout, supprimer
+ * efface. Le serveur refuse sur soi-même, sur le dernier administrateur
+ * plateforme actif, et sur tout compte portant des commandes — l'effacer
+ * retirerait ce chiffre d'affaires de la comptabilité.
+ */
+export async function apiDeleteUser(userId: string): Promise<{ deleted: boolean; email: string }> {
+  return req<{ deleted: boolean; email: string }>('DELETE', `/backoffice/users/${userId}`);
+}
+
 // ─── Groups (cross-tenant CRUD) ────────────────────────────────────────────────
 
 export interface CreateGroupInput {

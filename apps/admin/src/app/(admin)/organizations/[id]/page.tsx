@@ -16,13 +16,16 @@ import {
   type VenueOperatingMode,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
+import { parseCoordsString, parseSingleCoord, fmtCoord } from '@/lib/coords';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+// Libellés métier, identiques au back-office : un même rôle ne doit pas
+// changer de nom selon l'écran où on le lit.
 const ROLE_LABELS: Record<string, string> = {
-  ORG_ADMIN: 'Admin',
-  MANAGER: 'Manager',
-  OPERATOR: 'Opérateur',
+  ORG_ADMIN: 'Responsable du club',
+  MANAGER: 'Responsable F&B',
+  OPERATOR: 'Équipier buvette',
   MARKETING: 'Marketing',
 };
 
@@ -163,16 +166,50 @@ export default function OrganizationDetailPage() {
     }
   }
 
+  /**
+   * Saisie d'une coordonnée, avec répartition automatique d'une paire collée.
+   *
+   * Le geste réel n'est pas « je tape une latitude » : c'est « je copie depuis
+   * Google Maps et je colle ». Ce qui arrive alors, c'est
+   * « 43.296482, 5.369780 » — deux valeurs dans un champ qui n'en attend
+   * qu'une. Exiger de l'utilisateur qu'il découpe lui-même est un travail que
+   * le formulaire peut faire seul.
+   */
+  function onCoordChange(value: string, setSelf: (v: string) => void) {
+    const paire = parseCoordsString(value);
+    if (paire) {
+      setVenueLat(fmtCoord(paire.lat));
+      setVenueLng(fmtCoord(paire.lng));
+      setVenueError('');
+      return;
+    }
+    setSelf(value);
+  }
+
   async function handleSaveVenue(e: React.FormEvent) {
     e.preventDefault();
     if (!venueName.trim() || !venueAddress.trim()) {
       setVenueError('Le nom et l’adresse du lieu sont requis.');
       return;
     }
-    const lat = venueLat.trim() ? Number(venueLat.trim().replace(',', '.')) : null;
-    const lng = venueLng.trim() ? Number(venueLng.trim().replace(',', '.')) : null;
-    if ((lat !== null && Number.isNaN(lat)) || (lng !== null && Number.isNaN(lng))) {
-      setVenueError('Latitude / longitude invalides (ex. 43.296, 5.370).');
+    // `Number()` seul ne comprenait que le décimal à point : coller depuis
+    // Google Maps (« 43.296482, 5.369780 ») ou une notation DMS
+    // (« 43°17'45.6"N ») échouait sans qu'on sache pourquoi. Le parseur accepte
+    // les deux, plus la virgule décimale française.
+    const lat = venueLat.trim() ? parseSingleCoord(venueLat) : null;
+    const lng = venueLng.trim() ? parseSingleCoord(venueLng) : null;
+    if ((venueLat.trim() && lat === null) || (venueLng.trim() && lng === null)) {
+      setVenueError(
+        'Coordonnées non reconnues. Formats acceptés : 43.296 · 43,296 · 43°17\'45.6"N — ' +
+          'ou collez la paire complète dans un seul champ.',
+      );
+      return;
+    }
+    if ((lat !== null && Math.abs(lat) > 90) || (lng !== null && Math.abs(lng) > 180)) {
+      setVenueError(
+        'Hors limites : la latitude va de -90 à 90, la longitude de -180 à 180. ' +
+          'Les deux valeurs sont peut-être inversées.',
+      );
       return;
     }
     setSavingVenue(true);
@@ -456,7 +493,7 @@ export default function OrganizationDetailPage() {
               <label style={venueFieldLabel}>Latitude</label>
               <input
                 value={venueLat}
-                onChange={(e) => setVenueLat(e.target.value)}
+                onChange={(e) => onCoordChange(e.target.value, setVenueLat)}
                 placeholder="43.296"
                 style={venueFieldInput}
               />
@@ -465,10 +502,15 @@ export default function OrganizationDetailPage() {
               <label style={venueFieldLabel}>Longitude</label>
               <input
                 value={venueLng}
-                onChange={(e) => setVenueLng(e.target.value)}
+                onChange={(e) => onCoordChange(e.target.value, setVenueLng)}
                 placeholder="5.370"
                 style={venueFieldInput}
               />
+            </div>
+            <div style={{ gridColumn: '1 / -1', fontSize: 12, color: BRAND.grey, lineHeight: 1.6 }}>
+              Collez la paire depuis Google Maps dans n&apos;importe lequel des deux champs — elle
+              se répartit toute seule. Formats acceptés : <code>43.296</code>, <code>43,296</code>,{' '}
+              <code>43°17&apos;45.6&quot;N</code>.
             </div>
           </div>
           {venueError && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 10 }}>{venueError}</div>}
