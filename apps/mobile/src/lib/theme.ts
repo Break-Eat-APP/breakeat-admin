@@ -29,15 +29,25 @@ export const THEME = {
   radius: { card: 16, control: 12, pill: 999 },
 } as const;
 
-/** Famille Fredoka (chargée au démarrage). Police de marque — friendly & arrondie. */
+/**
+ * Inter — police de l'interface, alignée sur la marque.
+ *
+ * Remplace Fredoka, dont les formes très arrondies donnaient à l'app un ton
+ * enfantin en décalage avec le reste du produit : `packages/brand` a basculé sur
+ * Inter à la refonte v3 (« chaleureux premium »), les dashboards web l'utilisent
+ * depuis, et le mobile était le dernier à porter l'ancienne identité.
+ *
+ * Les noms de clés ne changent pas : les 31 usages `FONT.*` répartis dans les
+ * écrans suivent sans retouche.
+ */
 export const FONT = {
-  regular: 'Fredoka_400Regular',
-  medium: 'Fredoka_500Medium',
-  semibold: 'Fredoka_600SemiBold',
-  bold: 'Fredoka_700Bold',
+  regular: 'Inter_400Regular',
+  medium: 'Inter_500Medium',
+  semibold: 'Inter_600SemiBold',
+  bold: 'Inter_700Bold',
 } as const;
 
-/** Raleway — police de titres (élégante, contraste avec Fredoka). Titres & noms. */
+/** Raleway — police de titres. Contraste avec Inter sur les noms et gros titres. */
 export const HEAD = {
   medium: 'Raleway_500Medium',
   semibold: 'Raleway_600SemiBold',
