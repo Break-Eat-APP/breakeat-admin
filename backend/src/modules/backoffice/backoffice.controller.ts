@@ -139,6 +139,20 @@ export class BackofficeController {
     return this.backoffice.setUserActive(id, true, user.sub);
   }
 
+  /**
+   * DELETE /users/:id — efface définitivement un compte de la base.
+   *
+   * Pendant de l'archivage : archiver coupe l'accès en gardant tout, supprimer
+   * efface. Refusé sur soi-même, sur le dernier administrateur plateforme
+   * actif, et sur tout compte portant des commandes — l'effacer retirerait ce
+   * chiffre d'affaires de la comptabilité.
+   */
+  @Delete('users/:id')
+  @HttpCode(HttpStatus.OK)
+  deleteUser(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.backoffice.deleteUser(id, user.sub);
+  }
+
   // ─── Groups ───────────────────────────────────────────────────
 
   /** GET /groups — cross-tenant list of all groups. */

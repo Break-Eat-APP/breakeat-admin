@@ -447,6 +447,65 @@ export class BackofficeService {
   // ─── Private helpers ──────────────────────────────────────────
 
   /**
+   * Supprime DÉFINITIVEMENT un compte de la base.
+   *
+   * Pendant de `setUserActive` : archiver coupe l'accès en gardant tout,
+   * supprimer efface. Les deux doivent exister — sans suppression, un compte
+   * créé par erreur ou un test encombre la liste pour toujours.
+   *
+   * Trois refus, dans cet ordre :
+   *  - soi-même : on se fermerait la porte du back-office ;
+   *  - le dernier SUPER_ADMIN actif : plus personne ne pourrait entrer ;
+   *  - un compte qui porte des COMMANDES.
+   *
+   * Ce dernier point n'est pas une précaution de confort : `Order.user` n'a pas
+   * de cascade, la base REFUSERAIT l'écriture. Mieux vaut une phrase claire
+   * qu'une erreur de contrainte illisible — et surtout, effacer un client
+   * effacerait son chiffre d'affaires de la comptabilité. L'archivage est la
+   * bonne réponse dans ce cas.
+   *
+   * Le reste (paniers, jetons, fidélité, appartenances, groupes) cascade.
+   */
+  async deleteUser(id: string, callerId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, globalRole: true },
+    });
+    if (!user) throw new NotFoundException('Compte introuvable');
+
+    if (user.id === callerId) {
+      throw new BadRequestException(
+        'Vous ne pouvez pas supprimer votre propre compte : vous perdriez l’accès au back-office.',
+      );
+    }
+
+    if (user.globalRole === GlobalRole.SUPER_ADMIN) {
+      const autresAdmins = await this.prisma.user.count({
+        where: { globalRole: GlobalRole.SUPER_ADMIN, isActive: true, id: { not: user.id } },
+      });
+      if (autresAdmins === 0) {
+        throw new BadRequestException(
+          'C’est le dernier administrateur plateforme actif : le supprimer rendrait le back-office inaccessible.',
+        );
+      }
+    }
+
+    const commandes = await this.prisma.order.count({ where: { userId: id } });
+    if (commandes > 0) {
+      throw new BadRequestException(
+        `${user.email} porte ${commandes} commande${commandes > 1 ? 's' : ''} : ` +
+          'le supprimer effacerait ce chiffre d’affaires de la comptabilité. ' +
+          'Archivez le compte — l’accès est coupé, les données restent.',
+      );
+    }
+
+    await this.prisma.user.delete({ where: { id } });
+
+    this.logger.warn(`[backoffice] Compte ${user.email} SUPPRIMÉ définitivement par ${callerId}`);
+    return { deleted: true, email: user.email };
+  }
+
+  /**
    * Remet à zéro les données d'EXPLOITATION d'une organisation.
    *
    * Efface : commandes (avec paiements, lignes, journal, mouvements de

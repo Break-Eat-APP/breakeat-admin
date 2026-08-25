@@ -24,14 +24,16 @@ import { BRAND } from '@/lib/brand';
  * autres ici ne ferait que produire un 403 après coup. Seule la plateforme
  * (SUPER_ADMIN) délivre un accès manager ou responsable.
  */
+// Libellés métier, identiques au back-office : un même rôle ne doit pas changer
+// de nom selon l'écran où on le lit.
 const ROLE_OPTIONS_PLATEFORME = [
-  { value: 'OPERATOR', label: 'Opérateur' },
-  { value: 'MANAGER',  label: 'Manager' },
+  { value: 'OPERATOR', label: 'Équipier buvette' },
+  { value: 'MANAGER',  label: 'Responsable F&B' },
   { value: 'MARKETING', label: 'Marketing' },
-  { value: 'ORG_ADMIN', label: 'Admin organisation' },
+  { value: 'ORG_ADMIN', label: 'Responsable du club' },
 ];
 
-const ROLE_OPTIONS_CLUB = [{ value: 'OPERATOR', label: 'Opérateur' }];
+const ROLE_OPTIONS_CLUB = [{ value: 'OPERATOR', label: 'Équipier buvette' }];
 
 // Role badges stay categorical so the four roles read apart at a glance.
 // OPERATOR — the brand's core role — wears the Break Eat orange.

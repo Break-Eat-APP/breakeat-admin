@@ -6,15 +6,29 @@ import { BRAND } from '@break-eat/brand';
 import {
   apiListUsers,
   apiSetUserArchived,
+  apiDeleteUser,
   getStoredUser,
   type BackofficeUserListItem,
 } from '@/lib/api/backoffice-client';
 
+/**
+ * Libellés métier des rôles.
+ *
+ * Les noms techniques (ORG_ADMIN, MANAGER…) ne disent rien à qui lit la liste :
+ * un back-office se lit dans la langue du métier, pas dans celle du schéma.
+ *
+ * MANAGER et MARKETING manquaient : ces comptes s'affichaient sans étiquette,
+ * comme si leur rôle était inconnu.
+ */
 const ROLE_LABEL: Record<string, { label: string; color: string; bg: string }> = {
-  SUPER_ADMIN: { label: 'Super Admin', color: '#7c3aed', bg: '#ede9fe' },
-  ORG_ADMIN:   { label: 'Org Admin',   color: '#0369a1', bg: '#e0f2fe' },
-  OPERATOR:    { label: 'Opérateur',   color: '#0369a1', bg: '#e0f2fe' },
-  CUSTOMER:    { label: 'Client',      color: BRAND.inkSoft, bg: BRAND.bgSubtle },
+  SUPER_ADMIN: { label: 'Super Admin',          color: '#7c3aed', bg: '#ede9fe' },
+  ORG_ADMIN:   { label: 'Responsable du club',  color: '#0369a1', bg: '#e0f2fe' },
+  MANAGER:     { label: 'Responsable F&B',      color: '#0369a1', bg: '#e0f2fe' },
+  OPERATOR:    { label: 'Équipier buvette',     color: '#b45309', bg: '#fef3c7' },
+  MARKETING:   { label: 'Marketing',            color: '#0369a1', bg: '#e0f2fe' },
+  // Un client n'a aucun accès professionnel : il s'inscrit lui-même depuis
+  // l'app mobile. On l'affiche, on ne le crée pas d'ici.
+  CUSTOMER:    { label: 'Client',               color: BRAND.inkSoft, bg: BRAND.bgSubtle },
 };
 
 function fmtDate(iso: string) {
@@ -54,6 +68,28 @@ export default function UsersPage() {
   const actifs = filtered.filter((u) => u.isActive);
   const archives = filtered.filter((u) => !u.isActive);
 
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => apiDeleteUser(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['backoffice', 'users'] }),
+  });
+
+  /**
+   * Suppression définitive.
+   *
+   * Le serveur refuse tout compte portant des commandes — l'effacer retirerait
+   * ce chiffre d'affaires de la comptabilité. La confirmation le rappelle plutôt
+   * que de laisser découvrir le refus après coup.
+   */
+  const supprimer = (u: BackofficeUserListItem) => {
+    const question =
+      `Supprimer définitivement ${u.email} ?\n\n` +
+      'Le compte est effacé de la base : il n’y a pas de retour en arrière.\n\n' +
+      'Un compte ayant déjà commandé sera refusé — archivez-le à la place.';
+    if (window.confirm(question)) {
+      deleteMut.mutate(u.id);
+    }
+  };
+
   const basculer = (u: BackofficeUserListItem) => {
     const question = u.isActive
       ? `Archiver ${u.email} ?\n\nSa session s’arrête tout de suite. Le compte et son historique de commandes sont conservés : tu pourras le réactiver.`
@@ -89,6 +125,14 @@ export default function UsersPage() {
         </div>
       )}
 
+      {/* Le refus le plus fréquent — « ce compte porte des commandes » — est une
+          information utile, pas un échec : il faut la lire, pas la deviner. */}
+      {deleteMut.isError && (
+        <div style={{ ...errorBox, marginBottom: 16 }}>
+          {deleteMut.error instanceof Error ? deleteMut.error.message : 'Suppression refusée.'}
+        </div>
+      )}
+
       {isLoading && <div style={{ color: BRAND.grey, fontSize: 14 }}>Chargement…</div>}
       {isError && (
         <div style={errorBox}>
@@ -113,7 +157,8 @@ export default function UsersPage() {
             users={actifs}
             moiId={moiId}
             onToggle={basculer}
-            pending={archiveMut.isPending}
+            onDelete={supprimer}
+            pending={archiveMut.isPending || deleteMut.isPending}
           />
         </section>
       )}
@@ -146,7 +191,8 @@ export default function UsersPage() {
                 users={archives}
                 moiId={moiId}
                 onToggle={basculer}
-                pending={archiveMut.isPending}
+            onDelete={supprimer}
+                pending={archiveMut.isPending || deleteMut.isPending}
               />
             </>
           )}
@@ -185,11 +231,13 @@ function UserTable({
   users,
   moiId,
   onToggle,
+  onDelete,
   pending,
 }: {
   users: BackofficeUserListItem[];
   moiId: string;
   onToggle: (u: BackofficeUserListItem) => void;
+  onDelete: (u: BackofficeUserListItem) => void;
   pending: boolean;
 }) {
   return (
@@ -255,19 +303,31 @@ function UserTable({
               {fmtDate(u.createdAt)}
             </div>
 
-            {/* Archivage — réversible, jamais sur soi-même */}
-            <div style={{ width: 96, textAlign: 'right' }}>
+            {/* Archivage (réversible) et suppression (définitive). Les deux
+                sont refusés sur soi-même : on se fermerait la porte. */}
+            <div style={{ width: 168, textAlign: 'right', display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
               {u.id === moiId ? (
                 <span style={{ fontSize: 11, color: BRAND.grey }}>toi</span>
               ) : (
-                <button
-                  type="button"
-                  onClick={() => onToggle(u)}
-                  disabled={pending}
-                  style={u.isActive ? archiveBtn : unarchiveBtn}
-                >
-                  {u.isActive ? 'Archiver' : 'Réactiver'}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onToggle(u)}
+                    disabled={pending}
+                    style={u.isActive ? archiveBtn : unarchiveBtn}
+                  >
+                    {u.isActive ? 'Archiver' : 'Réactiver'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(u)}
+                    disabled={pending}
+                    title="Efface le compte de la base — sans retour"
+                    style={deleteBtn}
+                  >
+                    Supprimer
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -316,6 +376,12 @@ const archiveBtn: React.CSSProperties = {
 
 const unarchiveBtn: React.CSSProperties = {
   ...actionBtn, color: '#059669', border: '1px solid #6ee7b7',
+};
+
+// Fond plein, contrairement à « Archiver » qui reste en contour : la
+// suppression est sans retour, elle ne doit pas se confondre au survol.
+const deleteBtn: React.CSSProperties = {
+  ...actionBtn, color: '#fff', background: '#dc2626', border: '1px solid #dc2626',
 };
 
 const errorBox: React.CSSProperties = {
