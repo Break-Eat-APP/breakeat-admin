@@ -446,6 +446,68 @@ export class BackofficeService {
 
   // ─── Private helpers ──────────────────────────────────────────
 
+  /**
+   * Remet à zéro les données d'EXPLOITATION d'une organisation.
+   *
+   * Efface : commandes (avec paiements, lignes, journal, mouvements de
+   * fidélité, Live Activity), paniers, événements, buvettes (avec catégories,
+   * produits, stocks), points de retrait, comptes de fidélité, notifications
+   * programmées.
+   *
+   * CONSERVE, volontairement :
+   *  - l'organisation et son identité visuelle ;
+   *  - le LIEU, avec ses coordonnées GPS et ses mots-clés — les ressaisir coûte
+   *    du temps, et c'est ce qui rend un lieu découvrable ;
+   *  - les ACCÈS (membres), sans quoi plus personne ne pourrait se reconnecter
+   *    pour reconfigurer ;
+   *  - les groupes, qui portent des invitations extérieures.
+   *
+   * Le nom doit être recopié à l'identique — voir `ResetOrgDataDto`.
+   *
+   * Tout se joue dans UNE transaction : un échec à mi-parcours laisserait une
+   * organisation à moitié vidée, état pire que celui de départ et bien plus
+   * difficile à diagnostiquer.
+   */
+  async resetOrgData(organizationId: string, confirmation: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true, name: true },
+    });
+    if (!org) throw new NotFoundException('Organisation introuvable');
+
+    if (confirmation.trim() !== org.name) {
+      throw new BadRequestException(
+        `Confirmation incorrecte. Recopiez exactement le nom de l'organisation : « ${org.name} ».`,
+      );
+    }
+
+    const supprime = await this.prisma.$transaction(async (tx) => {
+      // Ordre imposé par les clés étrangères : ce qui pointe vers autre chose
+      // part en premier. Les cascades déclarées au schéma couvrent le reste
+      // (lignes, paiements, journal, catégories, produits, stocks, créneaux).
+      const commandes = (await tx.order.deleteMany({ where: { organizationId } })).count;
+      // Les paniers ne portent pas d'organisation : ils cascadent depuis
+      // l'événement et la buvette, tous deux effacés plus bas. Les viser
+      // directement échouerait à la compilation — et serait redondant.
+      const fidelite = (await tx.loyaltyAccount.deleteMany({ where: { organizationId } })).count;
+      const notifications = (await tx.scheduledPush.deleteMany({ where: { organizationId } }))
+        .count;
+      const comptoirs = (await tx.pickupPoint.deleteMany({ where: { organizationId } })).count;
+      const evenements = (await tx.event.deleteMany({ where: { organizationId } })).count;
+      const buvettes = (await tx.supplier.deleteMany({ where: { organizationId } })).count;
+
+      return { commandes, fidelite, notifications, comptoirs, evenements, buvettes };
+    });
+
+    this.logger.warn(
+      `Remise à zéro de « ${org.name} » (${organizationId}) : ` +
+        `${supprime.evenements} événement(s), ${supprime.buvettes} buvette(s), ` +
+        `${supprime.comptoirs} comptoir(s), ${supprime.commandes} commande(s).`,
+    );
+
+    return { organization: org.name, supprime };
+  }
+
   /** TTC cents → HT cents using the configured reporting VAT rate. */
   private toHtCents(ttcCents: number): number {
     return Math.round(ttcCents / (1 + this.vatRate));

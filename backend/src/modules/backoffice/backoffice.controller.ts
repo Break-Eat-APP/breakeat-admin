@@ -16,6 +16,7 @@ import { CreateBackofficeOrgDto } from './dto/create-backoffice-org.dto';
 import { UpdateBackofficeOrgDto } from './dto/update-backoffice-org.dto';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import { ScheduleNotificationDto } from './dto/schedule-notification.dto';
+import { ResetOrgDataDto } from './dto/reset-org-data.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -91,6 +92,23 @@ export class BackofficeController {
   @HttpCode(HttpStatus.OK)
   deleteOrganization(@Param('id', ParseUUIDPipe) id: string) {
     return this.backoffice.deleteOrganization(id);
+  }
+
+  /**
+   * POST /organizations/:id/reset-data — remise à zéro des données
+   * d'exploitation, l'organisation elle-même étant conservée.
+   *
+   * Efface événements, buvettes, comptoirs, commandes, paniers et fidélité.
+   * CONSERVE le lieu (GPS, mots-clés), les accès et les groupes : sans eux,
+   * personne ne pourrait se reconnecter pour reconfigurer.
+   *
+   * Le nom de l'organisation doit être recopié dans le corps de la requête —
+   * seule barrière entre un ménage et une perte sèche.
+   */
+  @Post('organizations/:id/reset-data')
+  @HttpCode(HttpStatus.OK)
+  resetOrgData(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ResetOrgDataDto) {
+    return this.backoffice.resetOrgData(id, dto.confirmation);
   }
 
   // ─── Utilisateurs ─────────────────────────────────────────────
