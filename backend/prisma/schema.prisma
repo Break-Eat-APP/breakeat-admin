@@ -146,6 +146,42 @@ enum PickupPointStatus {
 
 // ─── PHASE 7 ENUMS ────────────────────────────────────────────
 
+/// PHASE 23 — Créneau RÉCURRENT d’une buvette.
+///
+/// Un lieu ouvert en continu n’a pas d’événement à créer, mais il a des heures
+/// de retrait : « Immédiat », « 17h15 », « Mi-temps ». Les saisir chaque matin
+/// serait absurde — on décrit ici le motif, et le serveur matérialise le
+/// créneau du jour à la première demande.
+///
+/// Rattaché à une BUVETTE : deux comptoirs d’un même lieu peuvent servir à des
+/// heures différentes.
+model SlotTemplate {
+  id           String   @id @default(uuid())
+  venueId      String   @map("venue_id")
+  supplierId   String   @map("supplier_id")
+  /// Rôle stable du moment de récupération (voir SlotKind).
+  kind         SlotKind @default(CUSTOM)
+  /// Ce que lit le client : « Immédiat », « À la mi-temps », « 17h45 ».
+  label        String
+  /// Heures exprimées en MINUTES depuis minuit, dans le fuseau du lieu.
+  /// Un DateTime porterait une date qui n’a aucun sens pour un motif récurrent.
+  startMinutes Int      @map("start_minutes")
+  endMinutes   Int      @map("end_minutes")
+  capacity     Int      @default(20)
+  /// Désactivé = ne produit plus de créneau, sans perdre l’historique.
+  isActive     Boolean  @default(true) @map("is_active")
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  venue    Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  slots    Slot[]
+
+  @@index([venueId, supplierId])
+  @@map("slot_templates")
+}
+
 /// Availability status of a pickup slot.
 enum SlotStatus {
   OPEN    // accepting orders (currentLoad < capacity)
@@ -334,6 +370,7 @@ model Venue {
   organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   events       Event[]
   pickupPoints PickupPoint[]
+  slotTemplates  SlotTemplate[]
 
   @@map("venues")
 }
@@ -431,6 +468,7 @@ model Supplier {
   slots             Slot[]
   /// PHASE 12.7 — operators assigned to this supplier
   assignedOperators OrganizationMember[] @relation("OperatorAssignments")
+  slotTemplates  SlotTemplate[]
 
   @@map("suppliers")
 }
@@ -786,9 +824,17 @@ model Slot {
   kind          SlotKind   @default(IMMEDIATE)
   /// Human-readable label shown to customers (e.g. "12:00–12:15")
   label         String?
+  /// Modèle récurrent dont ce créneau a été matérialisé. null = créneau ponctuel,
+  /// créé à la main pour un événement donné.
+  templateId    String?    @map("template_id")
+  /// Journée de service (date seule, sans heure). Portée par le créneau plutôt
+  /// que déduite de startAt : c'est elle qui rend la génération quotidienne
+  /// idempotente, via la contrainte unique ci-dessous.
+  serviceDate   DateTime?  @map("service_date") @db.Date
   createdAt     DateTime   @default(now()) @map("created_at")
   updatedAt     DateTime   @updatedAt @map("updated_at")
 
+  template       SlotTemplate?   @relation(fields: [templateId], references: [id], onDelete: SetNull)
   event          Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
   supplier       Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
   pickupPoint    PickupPoint?    @relation(fields: [pickupPointId], references: [id], onDelete: SetNull)
@@ -798,6 +844,10 @@ model Slot {
 
   @@index([eventId, status])
   @@index([eventId, startAt])
+  /// Un modèle ne produit qu’un seul créneau par journée. C’est cette
+  /// contrainte qui autorise la génération à la volée sans verrou : deux
+  /// clients qui ouvrent le lieu en même temps ne créent pas de doublon.
+  @@unique([templateId, serviceDate])
   @@map("slots")
 }
 
