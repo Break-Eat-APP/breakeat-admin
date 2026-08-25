@@ -19,11 +19,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
   useFonts,
-  Fredoka_400Regular,
-  Fredoka_500Medium,
-  Fredoka_600SemiBold,
-  Fredoka_700Bold,
-} from '@expo-google-fonts/fredoka';
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from '@expo-google-fonts/inter';
 import {
   Raleway_500Medium,
   Raleway_600SemiBold,
@@ -56,10 +56,10 @@ import { OrderTrackingScreen } from '@screens/order-tracking.screen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-// Police de marque (Fredoka) par défaut sur tout le texte.
+// Police d'interface (Inter) par défaut sur tout le texte non stylé.
 const RNTextWithDefaults = Text as unknown as { defaultProps?: { style?: unknown } };
 RNTextWithDefaults.defaultProps = RNTextWithDefaults.defaultProps ?? {};
-RNTextWithDefaults.defaultProps.style = { fontFamily: 'Raleway_500Medium' };
+RNTextWithDefaults.defaultProps.style = { fontFamily: 'Inter_400Regular' };
 
 function StubScreen({ icon, title, sub }: { icon: string; title: string; sub: string }) {
   return (
@@ -81,10 +81,10 @@ export default function AppPreview() {
   const { rehydrate, isLoading, token } = useAuthStore();
   const [routeName, setRouteName] = useState<string | undefined>(undefined);
   const [fontsLoaded, fontError] = useFonts({
-    Fredoka_400Regular,
-    Fredoka_500Medium,
-    Fredoka_600SemiBold,
-    Fredoka_700Bold,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
     Raleway_500Medium,
     Raleway_600SemiBold,
     Raleway_700Bold,
