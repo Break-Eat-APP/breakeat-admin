@@ -296,6 +296,29 @@ export async function apiInviteMember(
   return req<InviteResult>('POST', `/organizations/${orgId}/invite`, data);
 }
 
+/**
+ * POST /organizations/:id/members/:memberId/reset-password
+ *
+ * Redefinit le mot de passe d'un membre. Le mot de passe est genere par le
+ * NAVIGATEUR et envoye, exactement comme a l'invitation : c'est ce qui permet
+ * de l'afficher une fois a l'ecran. Le serveur ne renvoie que l'e-mail.
+ *
+ * Comble un trou du modele : l'invitation ne pose un mot de passe qu'a la
+ * creation du compte, et reinviter un membre existant echoue sur « deja
+ * membre ». Un mot de passe perdu rendait donc le compte inaccessible pour
+ * toujours.
+ */
+export async function apiResetMemberPassword(
+  orgId: string,
+  memberId: string,
+  newPassword: string,
+): Promise<{ email: string }> {
+  return req<{ email: string }>(
+    'POST',
+    `/organizations/${orgId}/members/${memberId}/reset-password`,
+    { newPassword },
+  );
+}
 /** DELETE /organizations/:id/members/:memberId */
 export async function apiRemoveMember(orgId: string, memberId: string): Promise<void> {
   return req<void>('DELETE', `/organizations/${orgId}/members/${memberId}`);

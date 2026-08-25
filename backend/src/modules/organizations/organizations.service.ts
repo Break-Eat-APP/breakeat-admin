@@ -102,8 +102,13 @@ export class OrganizationsService {
    * Interdit à un responsable de club de distribuer un rôle plus large que
    * l'opérateur. Appelé seulement quand l'appelant n'est pas SUPER_ADMIN.
    */
-  private assertRoleDelegable(role: OrgRole): void {
-    if (!ROLES_DELEGABLES_PAR_ORG_ADMIN.includes(role)) {
+  //
+  // Accepte une chaine plutot que `OrgRole` : le role peut venir d'un DTO
+  // (enumeration de l'app) ou d'une ligne Prisma (enumeration generee). Les
+  // deux portent les memes valeurs mais restent des types distincts ; forcer
+  // un cast masquerait un vrai ecart le jour ou elles divergeraient.
+  private assertRoleDelegable(role: string): void {
+    if (!(ROLES_DELEGABLES_PAR_ORG_ADMIN as readonly string[]).includes(role)) {
       throw new ForbiddenException(
         'Vous ne pouvez créer que des accès opérateur. Un accès manager ou admin est délivré par Break Eat.',
       );
@@ -351,6 +356,71 @@ export class OrganizationsService {
    * Only ORG_ADMIN (or SUPER_ADMIN) can remove members.
    * Callers cannot remove themselves.
    */
+  /**
+   * Redefinit le mot de passe d'un membre.
+   *
+   * Comble un trou du modele : `inviteByEmail` ne pose un mot de passe qu'a la
+   * CREATION du compte. Des lors qu'un compte existait deja, son mot de passe
+   * n'etait plus modifiable nulle part — et reinviter la personne echouait sur
+   * « deja membre ». Un operateur qui oubliait son mot de passe devenait donc
+   * definitivement inaccessible.
+   *
+   * Le nouveau mot de passe est fourni par l'appelant, comme pour l'invitation :
+   * c'est ce qui permet a l'interface de l'AFFICHER. Le generer ici obligerait a
+   * le renvoyer dans la reponse, donc a le faire transiter par les journaux
+   * serveur en cas de debogage.
+   *
+   * Garde-fous, calques sur `removeMember` :
+   *  - SUPER_ADMIN partout ; sinon ORG_ADMIN de CETTE organisation ;
+   *  - un ORG_ADMIN ne peut viser qu'un role delegable (operateur) : sans cela
+   *    il prendrait la main sur le compte d'un autre manager ;
+   *  - jamais sur soi-meme — ce chemin sert a depanner autrui, et se l'appliquer
+   *    contournerait un futur flux de changement de mot de passe personnel.
+   */
+  async resetMemberPassword(
+    organizationId: string,
+    memberId: string,
+    callerId: string,
+    callerGlobalRole: string,
+    newPassword: string,
+  ): Promise<{ email: string }> {
+    const member = await this.prisma.organizationMember.findUnique({
+      where: { id: memberId },
+      include: { user: { select: { id: true, email: true } } },
+    });
+
+    if (!member || member.organizationId !== organizationId) {
+      throw new NotFoundException('Member not found');
+    }
+
+    if (callerGlobalRole !== GlobalRole.SUPER_ADMIN) {
+      const callerMembership = await this.prisma.organizationMember.findUnique({
+        where: { userId_organizationId: { userId: callerId, organizationId } },
+      });
+      if (!callerMembership || callerMembership.orgRole !== OrgRole.ORG_ADMIN) {
+        throw new ForbiddenException('Only ORG_ADMIN can reset a member password');
+      }
+      this.assertRoleDelegable(member.orgRole);
+    }
+
+    if (member.userId === callerId) {
+      throw new ForbiddenException(
+        'Vous ne pouvez pas redefinir votre propre mot de passe par ce chemin.',
+      );
+    }
+
+    await this.prisma.user.update({
+      where: { id: member.userId },
+      data: { passwordHash: await argon2.hash(newPassword) },
+    });
+
+    // Jamais le mot de passe dans les journaux.
+    this.logger.log(
+      `Mot de passe redefini pour le membre ${memberId} (org ${organizationId}) par ${callerId}`,
+    );
+
+    return { email: member.user.email };
+  }
   async removeMember(
     organizationId: string,
     memberId: string,
