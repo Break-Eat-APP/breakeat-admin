@@ -44,9 +44,19 @@ corepack pnpm --filter @break-eat/mobile preview -- --web
    cd apps/mobile && npx expo start
    ```
 3. Scanner le QR (appareil photo iOS) ou ouvrir le lien `exp://…`.
-- ⚠️ Si Expo Go affiche une erreur de version, aligner les libs sur le SDK 53 :
-  `npx expo install --fix` (peut modifier react/react-native/safe-area/screens).
-  Tester d'abord l'**option Web** qui n'a pas ce souci.
+- ⚠️ **Expo Go ne peut PAS ouvrir cette app.** `react-native-vision-camera` et le
+  module natif Live Activity sont compilés dans le binaire : Expo Go, qui embarque
+  un jeu de modules figé, ne les contient pas. Il faut un **client de
+  développement** :
+  ```
+  eas build --profile development --platform ios
+  ```
+- ⚠️ Le projet est sur **Expo SDK 57 / React Native 0.86.2** depuis le 25/08/2026.
+  Toute consigne d'aligner les dépendances « sur le SDK 53 » est **périmée** et
+  casserait la build. Pour ajouter un paquet : `npx expo install <paquet>`,
+  jamais `pnpm add` — pnpm résout la dernière version publiée, incompatible avec
+  le SDK en place.
+- L'**option Web** reste le chemin le plus rapide pour un aperçu, sans build native.
 
 ---
 

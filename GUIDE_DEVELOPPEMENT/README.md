@@ -15,7 +15,7 @@ pnpm workspaces. Cinq applications + un package partagé :
 | Dossier | C'est quoi | Techno | Port dev |
 |---|---|---|---|
 | `backend/` | API + logique métier + base de données | NestJS 11, Prisma 6, PostgreSQL, Redis | 3000 |
-| `apps/mobile/` | **L'app client** (iOS/Android + web) | React Native 0.79, Expo SDK 53 (bare) | — |
+| `apps/mobile/` | **L'app client** (iOS/Android + web) | React Native 0.86.2, Expo SDK 57 (bare) | — |
 | `apps/admin/` | Dashboard du **club** (manager) | Next.js 15 | 3001 |
 | `apps/operator/` | Écran **buvette** (préparation commandes) | Next.js 15 | 3002 |
 | `apps/backoffice/` | **Super-admin** (gestion des clubs) | Next.js 15 | 3003 |

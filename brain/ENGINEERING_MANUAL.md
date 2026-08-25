@@ -4150,3 +4150,90 @@ C'est `expo-doctor` — pas la compilation — qui a révélé les points 2 et 3
 `expo prebuild -p ios` **refuse de s'exécuter sur Windows**. Typecheck, export
 web, apps Next.js et tests backend se vérifient localement ; l'exécution réelle
 des plugins natifs et la compilation Xcode ne se constatent que sur EAS.
+
+## [2026-08-25] Le repli silencieux — une même faute sous quatre formes
+
+Une journée entière de diagnostic pour des symptômes qui pointaient tous
+ailleurs que leur cause. Le fil commun mérite d'être nommé, parce qu'il se
+reproduira : **du code qui « se débrouille » face à une configuration absente
+transforme une panne en comportement normal.**
+
+### Forme 1 — le repli vers localhost
+
+```ts
+const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+```
+
+Ce repli est raisonnable en développement et catastrophique en production :
+`NEXT_PUBLIC_*` est inlinée **à la compilation**, donc absente ce jour-là, la
+valeur locale part dans le bundle déployé. L'app tape alors sur la machine du
+*visiteur*.
+
+Le formulaire de connexion présentait cet échec réseau comme
+**« identifiant incorrect »** — nous avons cherché du côté des comptes pendant
+des heures. Le mot de passe n'était pas en cause une seconde.
+
+Ce défaut avait **déjà été corrigé côté mobile** (`env.ts` refuse de démarrer
+une build empaquetée sans adresse explicite, `05afc62`). La leçon n'avait pas
+été reportée sur les trois apps Next.js. *Corriger un bug sans chercher ses
+jumeaux, c'est se condamner à le recorriger.*
+
+### Forme 2 — le `catch` vide
+
+```ts
+} catch { setEvents([]); }
+```
+
+Jeton expiré, organisation inaccessible, serveur muet : trois pannes
+distinctes, un seul écran « aucun événement ». Indiscernable de la normalité.
+L'utilisateur ne peut rien rapporter d'utile, et nous ne pouvons rien déduire.
+
+### Forme 3 — la validation après l'écriture
+
+La création d'organisation enchaînait deux écritures sans transaction, et
+validait les coordonnées **après** la première. Une virgule mal placée créait le
+club, faisait échouer le lieu — et la tentative suivante butait sur « ce slug
+existe déjà ». Changer le slug produisait une **seconde** organisation.
+
+Les doublons de clubs signalés par le client n'étaient pas un bug de création :
+c'était **la trace d'échecs partiels jamais repris**.
+
+Deux règles en découlent : **valider intégralement avant la moindre écriture**,
+et **rendre une séquence multi-écritures reprenable** quand aucune transaction
+ne peut les réunir.
+
+### Forme 4 — la fonctionnalité jamais montée
+
+`useUserLocation` lit `globalThis.navigator.geolocation` — présent dans un
+navigateur, **absent sur natif**. Le hook se dégradait proprement, donc rien ne
+signalait l'anomalie : sur téléphone, la découverte par proximité renvoyait une
+liste vide, sans erreur. Invisible en test web, où le navigateur fournit l'API.
+
+Une dégradation gracieuse est une bonne conception ; elle devient un piège
+quand elle masque une brique **jamais installée**. Le commentaire du hook
+documentait pourtant le montage comme « à faire » — personne ne l'avait lu.
+
+### Ce qu'on en retient
+
+- Un repli n'est acceptable que s'il **crie** hors développement. Les trois
+  clients web portent désormais un filet console dès qu'une app servie en ligne
+  vise localhost.
+- Un `catch` doit distinguer **« rien à afficher »** de **« ça a échoué »**.
+- Valider avant d'écrire ; rendre reprenable ce qui ne peut être transactionnel.
+- Chercher les **jumeaux** d'un bug corrigé avant de refermer le sujet.
+
+### Garde-fous d'une opération destructive
+
+La remise à zéro (`resetOrgData`) et la suppression de compte (`deleteUser`)
+suivent le même modèle, à conserver pour toute opération sans retour :
+
+- **Confirmation par recopie** du nom exact. Un bouton seul se clique par
+  accident, ou sur la mauvaise ligne ; recopier oblige à regarder ce qu'on vise.
+- **Une seule transaction.** Un échec à mi-parcours laisserait un état à moitié
+  vidé — pire que le départ, et bien plus difficile à diagnostiquer.
+- **Refus explicite plutôt qu'erreur de contrainte.** `Order.user` et
+  `Order.supplier` n'ont pas de cascade : la base refuserait de toute façon.
+  Mieux vaut une phrase qui explique — et qui oriente vers l'archivage.
+- **Conserver ce qui permet de revenir.** Le lieu (GPS, mots-clés) et les accès
+  survivent à la remise à zéro : sans eux, plus personne ne pourrait se
+  reconnecter pour reconfigurer.

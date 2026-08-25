@@ -145,21 +145,27 @@ L'app Break Eat = **porte d'entrée du click-and-collect Flaix**. Flaix gèrera 
 ## ⏳ Reste à faire
 
 1. **Wizard idempotent** — mettre à jour au lieu d'empiler. Faire l'inventaire des doublons déjà créés avant de corriger.
-2. **Commande miroir Flaix** — conditionne toute la valeur ajoutée sur les lieux Flaix.
-2. **PaymentSheet mobile** — `@stripe/stripe-react-native` n'est pas installé. Le serveur est prêt : Connect en destination charges, webhook signé, idempotence par panier.
-3. **`charge.refunded`** — un remboursement Stripe ne redescend pas dans Break Eat.
-4. **Environnement staging** — service et base Railway séparés.
-5. **Persistance des favoris** — aujourd'hui locaux au téléphone.
-6. **Section « À venir »** — vidée (`9cfc28c`), en attente des données Flaix.
-7. **Restyler `order-tracking.screen.tsx`** — encore en thème sombre.
-8. **Connexions Apple / Google / Facebook** — masquées derrière `SOCIAL_LOGIN_READY`, jamais branchées.
-9. **Comptoirs (`PickupPoint`)** — supprimables uniquement depuis la fiche d'un événement, donc inatteignables sur un lieu permanent.
+2. **Wizard et demo-setup idempotents** — ils recréent événement, buvettes et comptoirs à chaque passage. Seule chose qui fera revenir les doublons après une remise à zéro.
+3. **Commande miroir Flaix** — conditionne toute la valeur ajoutée sur les lieux Flaix.
+4. **PaymentSheet mobile** — `@stripe/stripe-react-native` n'est pas installé. Le serveur est prêt : Connect en destination charges, webhook signé, idempotence par panier.
+5. **`charge.refunded`** — un remboursement Stripe ne redescend pas dans Break Eat.
+6. **Environnement staging** — service et base Railway séparés.
+7. **Persistance des favoris** — aujourd'hui locaux au téléphone.
+8. **Section « À venir »** — vidée (`9cfc28c`), en attente des données Flaix.
+9. **Restyler `order-tracking.screen.tsx`** — encore en thème sombre.
+10. **Connexions Apple / Google / Facebook** — masquées derrière `SOCIAL_LOGIN_READY`, jamais branchées.
+11. **Comptoirs (`PickupPoint`)** — supprimables uniquement depuis la fiche d'un événement, donc inatteignables sur un lieu permanent.
 
 ## ⚠️ Dette technique et pièges connus
 
 - **Mot de passe d'un membre** : `inviteByEmail` ne le pose qu'à la CRÉATION du compte. Pour un compte existant, passer par `POST /organizations/:id/members/:memberId/reset-password` (bouton « Mot de passe » sur la page Équipe). Réinviter un membre existant échoue sur « déjà membre » — ce n'est pas un chemin de secours.
 - **Ne jamais avaler une erreur dans un `catch` vide.** L'accueil opérateur faisait `catch { setEvents([]); }` : jeton expiré, organisation inaccessible et serveur muet produisaient le même écran « aucun événement ». Le diagnostic a coûté une session entière.
 - **Wizard NON idempotent** : il réutilise le lieu mais **recrée** événement, buvettes, points de retrait, catégories et produits à chaque passage. Le relancer empile des doublons et donne l'illusion que « rien ne s'enregistre » — les données le sont, dans un ensemble neuf, pendant que l'app pointe vers l'ancien.
+- **Aucun repli silencieux vers `localhost`.** `NEXT_PUBLIC_API_URL` est gravée dans les trois `vercel.json` ; un filet console se déclenche dès qu'une app servie en ligne vise la machine locale. Sans lui, l'app appelle le poste du visiteur et le formulaire présente cet échec réseau comme « identifiant incorrect » — c'est arrivé, et le diagnostic a coûté une journée.
+- **Jamais de `catch` vide.** L'accueil opérateur faisait `catch { setEvents([]) }` : jeton expiré, organisation inaccessible et serveur muet produisaient le même écran « aucun événement ». Distinguer « rien à afficher » de « ça a échoué ».
+- **Valider AVANT d'écrire.** La création d'organisation validait les coordonnées après avoir créé le club : un échec partiel laissait un club orphelin, et la tentative suivante butait sur « ce slug existe déjà ». Une séquence multi-écritures sans transaction doit être **reprenable**.
+- **Chercher les jumeaux d'un bug corrigé.** Le repli localhost avait déjà été réglé côté mobile en août ; ne pas l'avoir reporté sur les apps Next.js a coûté le même diagnostic une seconde fois.
+- **`coords.ts` existe en DOUBLE** (`apps/admin` et `apps/backoffice`) — pas de paquet d'utilitaires partagé dans le monorepo. Toute correction vaut pour les deux ; chaque fichier signale son jumeau.
 - **Double React (pnpm)** : singletons forcés dans `apps/mobile/metro.config.js`. **NE PAS RETIRER.**
 - **Cache Metro** : `EXPO_PUBLIC_*` est inliné **et mis en cache**. `build:web` porte désormais `--clear` (`74ace4a`) — sans lui, changer une variable ne change rien au bundle, et le déploiement semble réussir tout en servant l'ancienne adresse.
 - **Adresse d'API** : gravée dans `apps/mobile/vercel.json` (`05afc62`), publique par nature. `env.ts` **refuse de démarrer** une build empaquetée sans adresse explicite plutôt que de viser une IP locale.
@@ -195,7 +201,14 @@ Docker (Postgres/Redis) doit tourner. Base = `breakeat_dev`.
 
 **Tester sur téléphone** : `eas build --profile preview --platform android` (APK, vise la production). Expo Go ne peut PAS ouvrir l'app — `react-native-vision-camera` est un module natif ; il faut un client de développement (`--profile development`).
 
+## 🧹 Remise à zéro et suppressions
+
+- **Vider une organisation** : back-office → Organisations → le club → section rouge en bas. Efface événements, buvettes, comptoirs, commandes et fidélité. **Conserve** le lieu (GPS, mots-clés), les accès et les groupes — sans eux, plus personne ne pourrait se reconnecter pour reconfigurer. Le nom doit être recopié à l'identique.
+- **Supprimer un compte** : back-office → Utilisateurs → « Supprimer ». Refusé sur soi-même, sur le dernier SUPER_ADMIN actif, et sur tout compte portant des commandes (`Order.user` n'a pas de cascade — la base refuserait, et le CA disparaîtrait de la comptabilité). Archiver est la réponse dans ce cas.
+- **Buvettes, événements, comptoirs, organisations** ont déjà leur suppression, interface comprise. Chaque suppression est refusée si des commandes existent.
+
 ## 🔑 Connexion
 
 - **Production** : compte SUPER_ADMIN créé par amorçage (`reminotta@breakeatapp.com`). ⚠️ Retirer `ADMIN_BOOTSTRAP_SECRET` de Railway s'il y est encore.
 - **Local** : `admin@breakeat.test` / `BreakEat2026!`
+- **Mot de passe oublié d'un membre** : l'invitation ne pose un mot de passe qu'à la CRÉATION du compte, et réinviter un membre existant échoue sur « déjà membre ». Passer par le bouton **« Mot de passe »** de la page Équipe (dashboard manager) — il le régénère et l'affiche une seule fois.
