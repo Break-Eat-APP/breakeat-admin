@@ -252,8 +252,21 @@ function UserTable({
       </div>
 
       {users.map((u) => {
-        const roleInfo = ROLE_LABEL[u.globalRole] ?? {
-          label: u.globalRole,
+        // Le rôle qui compte est celui exercé dans un CLUB, pas le rôle global.
+        //
+        // Tout compte créé par invitation reçoit `globalRole: CUSTOMER` — c'est
+        // délibéré : les droits viennent de l'appartenance à l'organisation, et
+        // d'elle seule. Afficher ce champ faisait donc passer un responsable de
+        // club ou un équipier buvette pour un simple client.
+        //
+        // Un SUPER_ADMIN garde son rôle global : il n'appartient à aucun club et
+        // c'est bien le rôle plateforme qui le définit.
+        const roleAffiche =
+          u.globalRole === 'SUPER_ADMIN'
+            ? 'SUPER_ADMIN'
+            : (u.memberships[0]?.orgRole ?? u.globalRole);
+        const roleInfo = ROLE_LABEL[roleAffiche] ?? {
+          label: roleAffiche,
           color: BRAND.grey,
           bg: BRAND.bgSubtle,
         };

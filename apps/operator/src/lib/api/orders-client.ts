@@ -38,6 +38,21 @@ async function apiFetch<T>(path: string, token: string, init?: RequestInit): Pro
       ...(init?.headers ?? {}),
     },
   });
+  // Session expirée ou invalidée : le jeton stocké ne vaut plus rien.
+  //
+    // Arrive notamment après une ROTATION de `JWT_SECRET` côté serveur — tous
+  // les jetons émis avant deviennent invalides d'un coup. Jusqu'ici l'app
+  // affichait « API /orders/… → 401 » en travers de l'écran et restait bloquée
+  // là : le jeton mort n'était jamais jeté, donc chaque rechargement échouait
+  // pareil. On le supprime et on renvoie vers la connexion, seule issue réelle.
+  if (res.status === 401) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('operator_token');
+      window.location.reload();
+    }
+    throw new Error('Session expirée — reconnectez-vous.');
+  }
+
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(`API ${path} → ${res.status}: ${body}`);

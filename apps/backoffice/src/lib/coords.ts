@@ -53,9 +53,28 @@ export interface ParsedCoords {
  *   1. Séparateur virgule : "43.296, 5.404" ou DMS avec virgule
  *   2. Séparateur espace  : deux tokens côte à côte
  */
+/**
+ * Une paire plausible : hors de ces bornes, ce n'est pas une coordonnée.
+ * Écarte « 43 2685 », que le découpage sur l'espace produisait sinon.
+ */
+function estTerrestre(lat: number, lng: number): boolean {
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+}
+
 export function parseCoordsString(input: string): ParsedCoords | null {
   const s = input.trim();
   if (!s) return null;
+
+  // L'interprétation SIMPLE l'emporte toujours.
+  //
+  // Sans cette garde, « 43,2685 » — la virgule décimale française, tapée
+  // naturellement — était lu comme une PAIRE : latitude 43, longitude 2685.
+  // Les deux champs étaient alors écrasés et la valeur changeait sous les
+  // doigts de l'utilisateur, en pleine saisie.
+  //
+  // Une chaîne qui se lit déjà comme une coordonnée valable n'est jamais
+  // une paire.
+  if (parseSingleCoord(s) !== null) return null;
 
   // Tente de séparer sur une virgule (hors des degrés/minutes/secondes)
   // On repère les virgules qui ne sont PAS à l'intérieur d'un nombre DMS
@@ -63,7 +82,7 @@ export function parseCoordsString(input: string): ParsedCoords | null {
   if (commaSplit.length >= 2) {
     const lat = parseSingleCoord(commaSplit[0].trim());
     const lng = parseSingleCoord(commaSplit.slice(1).join(',').trim());
-    if (lat !== null && lng !== null) return { lat, lng };
+    if (lat !== null && lng !== null && estTerrestre(lat, lng)) return { lat, lng };
   }
 
   // Tente de séparer sur l'espace entre deux groupes DMS/décimal
@@ -73,7 +92,7 @@ export function parseCoordsString(input: string): ParsedCoords | null {
   if (sm) {
     const lat = parseSingleCoord(sm[1].trim());
     const lng = parseSingleCoord(sm[2].trim());
-    if (lat !== null && lng !== null) return { lat, lng };
+    if (lat !== null && lng !== null && estTerrestre(lat, lng)) return { lat, lng };
   }
 
   return null;
