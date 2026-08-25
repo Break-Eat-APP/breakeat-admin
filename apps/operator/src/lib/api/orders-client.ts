@@ -233,14 +233,43 @@ export interface LoginResponse {
   refreshToken: string;
 }
 
+/**
+ * Connexion opérateur.
+ *
+ * Chaque échec doit se nommer. « Identifiants incorrects » était renvoyé pour
+ * TOUT : mot de passe faux, serveur en panne, et surtout **rejet CORS** — une
+ * adresse absente de `CORS_ORIGINS` fait echouer `fetch` avant même d'atteindre
+ * l'API. C'est arrivé sur l'app opérateur, et le diagnostic a coûté une
+ * journée : on cherchait un mot de passe alors que le navigateur bloquait tout.
+ *
+ * L'e-mail est normalisé ici (minuscules, sans espaces) : les comptes sont
+ * créés ainsi côté serveur, et une majuscule suffisait à faire échouer la
+ * comparaison.
+ */
 export async function login(email: string, password: string): Promise<LoginResponse> {
-  const res = await fetch(`${BASE}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+    });
+  } catch {
+    // `fetch` ne lève que pour un problème RÉSEAU — jamais pour un 401. La
+    // cause la plus fréquente ici est un rejet CORS, invisible autrement.
+    throw new Error(
+      `Impossible de joindre le serveur (${BASE}). ` +
+        `Cette adresse (${typeof window !== 'undefined' ? window.location.origin : '?'}) ` +
+        `est peut-être absente de CORS_ORIGINS, ou l'API est hors ligne.`,
+    );
+  }
+
+  if (res.status === 401) {
+    throw new Error('E-mail ou mot de passe incorrect.');
+  }
   if (!res.ok) {
-    throw new Error('Identifiants incorrects');
+    const detail = await res.text().catch(() => '');
+    throw new Error(`Connexion refusée (HTTP ${res.status}). ${detail.slice(0, 200)}`);
   }
   return res.json() as Promise<LoginResponse>;
 }

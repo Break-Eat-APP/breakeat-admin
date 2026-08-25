@@ -26,8 +26,11 @@ export function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
       const { accessToken } = await login(email, password);
       localStorage.setItem('operator_token', accessToken);
       onLogin(accessToken);
-    } catch {
-      setError('Identifiants incorrects');
+    } catch (err) {
+      // Afficher le message RÉEL. Un `catch` qui réécrit tout en « identifiants
+      // incorrects » a masqué pendant une journée un simple rejet CORS : le
+      // mot de passe n'était pas en cause une seconde.
+      setError(err instanceof Error ? err.message : 'Connexion impossible.');
     } finally {
       setLoading(false);
     }

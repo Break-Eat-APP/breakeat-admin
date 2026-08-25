@@ -104,6 +104,8 @@ hoisted` n'y a rien changé. **Cause non expliquée** — 7 échecs Android cont
 
 `DEMO_MODE=true` en production : les commandes se créent **sans paiement**. À retirer avant tout encaissement réel.
 
+⚠️ **`https://breakeat-operator.vercel.app` est ABSENTE de `CORS_ORIGINS`** (vérifié le 25/08). Seule l'URL longue `breakeat-operator-git-main-…` est autorisée. Résultat : sur l'adresse courte, le navigateur bloque tout et l'app affichait « Identifiants incorrects » — le mot de passe n'était pas en cause. **À ajouter sur Railway.**
+
 **Toute nouvelle adresse doit rejoindre `CORS_ORIGINS`** (Railway → Variables), séparée par des virgules, **sans slash final**. Une entrée malformée bloque silencieusement toute l'app — c'est arrivé le 24/08.
 
 ## 📱 Identifiants de build
