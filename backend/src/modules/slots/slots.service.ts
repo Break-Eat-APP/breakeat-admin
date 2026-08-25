@@ -99,6 +99,40 @@ export class SlotsService {
     return slot;
   }
 
+  /**
+   * Ouvre ou ferme un créneau de récupération.
+   *
+   * Route SÉPARÉE de `update`, et c'est délibéré : configurer un créneau
+   * (horaires, capacité, libellé) reste au responsable, mais l'OUVRIR ou le
+   * FERMER est une décision d'exploitation qui appartient à l'équipier — lui
+   * seul voit la file, le stock et le retard qui s'accumule.
+   *
+   * Élargir `WRITE_ROLES` aurait été plus court et faux : l'équipier aurait pu
+   * changer les horaires et les capacités décidés par le club. Le même
+   * découpage existe déjà sur les buvettes (`suppliers/:id/status`).
+   *
+   * Fermer n'annule rien : les commandes déjà placées sur ce créneau restent
+   * dues, seule la prise de nouvelles s'arrête.
+   */
+  async updateStatus(id: string, status: SlotStatus, callerId: string) {
+    const slot = await this.findOne(id);
+    const event = await this.prisma.event.findUniqueOrThrow({
+      where: { id: slot.eventId },
+    });
+    await requireOrgAccess(this.prisma, callerId, event.organizationId, [
+      ...WRITE_ROLES,
+      OrgRole.OPERATOR,
+    ]);
+
+    const updated = await this.prisma.slot.update({
+      where: { id },
+      data: { status },
+    });
+
+    this.logger.log(`Slot ${id} → ${status} (par ${callerId})`);
+    return updated;
+  }
+
   async update(
     id: string,
     dto: UpdateSlotDto,
