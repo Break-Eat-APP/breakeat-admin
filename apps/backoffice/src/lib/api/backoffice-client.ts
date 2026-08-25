@@ -10,7 +10,29 @@
  *   backoffice_user  — JSON-serialised BackofficeUser
  */
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+const LOCAL_PAR_DEFAUT = 'http://localhost:3000/api/v1';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? LOCAL_PAR_DEFAUT;
+
+// Une app SERVIE en ligne qui vise localhost ne joindra jamais rien : elle
+// tape sur la machine du visiteur. `NEXT_PUBLIC_API_URL` est inlinee a la
+// COMPILATION — absente ce jour-la, le repli local part en production et
+// chaque appel echoue. L'echec se deguise alors en « identifiant
+// incorrect », et on cherche des heures du cote des comptes.
+//
+// L'adresse est gravee dans vercel.json ; ce controle est le filet.
+if (
+  typeof window !== 'undefined' &&
+  API_URL === LOCAL_PAR_DEFAUT &&
+  !['localhost', '127.0.0.1'].includes(window.location.hostname)
+) {
+  // eslint-disable-next-line no-console
+  console.error(
+    `[Break Eat] NEXT_PUBLIC_API_URL est absente de cette build : l'app vise ` +
+      `${LOCAL_PAR_DEFAUT}, injoignable depuis ${window.location.hostname}. ` +
+      `Toute connexion echouera. Definir la variable puis redeployer.`,
+  );
+}
 
 // ─── Storage helpers ──────────────────────────────────────────────────────────
 

@@ -4,5 +4,12 @@
   "buildCommand": "pnpm build",
   "framework": "nextjs",
   "outputDirectory": ".next",
-  "regions": ["cdg1"]
+  "regions": [
+    "cdg1"
+  ],
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1"
+    }
+  }
 }
