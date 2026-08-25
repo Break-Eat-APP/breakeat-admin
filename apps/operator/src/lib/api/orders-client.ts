@@ -241,6 +241,46 @@ export async function cancelOrder(id: string, token: string, reason?: string): P
   });
 }
 
+// ─── Ouverture de la buvette ──────────────────────────────────────────────────
+
+/** Les quatre états d'une buvette. Seuls OPEN et CLOSED se pilotent d'ici. */
+export type SupplierStatus = 'OPEN' | 'CLOSED' | 'PAUSED' | 'OFFLINE';
+
+/** Lit l'état courant de la buvette — le tableau de commandes ne le porte pas. */
+export async function fetchSupplier(
+  organizationId: string,
+  supplierId: string,
+  token: string,
+): Promise<{ id: string; name: string; status: SupplierStatus }> {
+  return apiFetch<{ id: string; name: string; status: SupplierStatus }>(
+    `/organizations/${organizationId}/suppliers/${supplierId}`,
+    token,
+  );
+}
+
+/**
+ * Ouvre ou ferme la buvette.
+ *
+ * C'est l'ÉQUIPIER qui décide, depuis son poste : lui seul sait s'il a du monde,
+ * du stock et de quoi servir. Le backend l'autorise explicitement — `updateStatus`
+ * accepte le rôle OPERATOR au même titre que le responsable.
+ *
+ * Fermer n'efface rien : les commandes déjà passées restent à préparer, seule la
+ * prise de nouvelles commandes s'arrête.
+ */
+export async function setSupplierStatus(
+  organizationId: string,
+  supplierId: string,
+  status: SupplierStatus,
+  token: string,
+): Promise<{ id: string; status: SupplierStatus }> {
+  return apiFetch<{ id: string; status: SupplierStatus }>(
+    `/organizations/${organizationId}/suppliers/${supplierId}/status`,
+    token,
+    { method: 'PATCH', body: JSON.stringify({ status }) },
+  );
+}
+
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export interface LoginResponse {
