@@ -47,6 +47,17 @@ module.exports = {
     // (l'extension doit être signée avec la même équipe que l'app hôte).
     // Même valeur que `submit.production.ios.appleTeamId` dans eas.json.
     appleTeamId: '2A5L298Q4C',
+    infoPlist: {
+      // ITMS-90683 — Apple detecte une reference aux API de localisation dans
+      // le binaire (apportee par une bibliotheque, pas par notre code) et
+      // EXIGE une justification, meme si l'app ne s'en sert pas encore.
+      //
+      // Sans cette cle, iOS n'affiche AUCUNE demande d'autorisation et refuse
+      // la position en silence : la decouverte des lieux par proximite serait
+      // definitivement muette, sans la moindre erreur visible.
+      NSLocationWhenInUseUsageDescription:
+        'BREAK EAT utilise votre position pour vous montrer les lieux et buvettes autour de vous.',
+    },
   },
   android: {
     package: BUNDLE_ID,
