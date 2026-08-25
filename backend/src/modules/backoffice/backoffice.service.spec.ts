@@ -30,6 +30,7 @@ describe('BackofficeService', () => {
       update: jest.Mock;
     };
     group: { findMany: jest.Mock };
+    $transaction: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -44,6 +45,7 @@ describe('BackofficeService', () => {
         update: jest.fn(),
       },
       group: { findMany: jest.fn() },
+      $transaction: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -295,6 +297,82 @@ describe('BackofficeService', () => {
       await expect(service.setUserActive('inconnu', false, MOI)).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+  });
+
+  // ─── resetOrgData ────────────────────────────────────────────
+
+  describe('resetOrgData', () => {
+    const ORG_ID = 'org-1';
+    const NOM = 'Les Spartiates';
+
+    /** Transaction mockée : compte les suppressions demandées. */
+    function transactionQuiCompte(compte = 3) {
+      prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => unknown) =>
+        fn({
+          order: { deleteMany: jest.fn().mockResolvedValue({ count: compte }) },
+          loyaltyAccount: { deleteMany: jest.fn().mockResolvedValue({ count: compte }) },
+          scheduledPush: { deleteMany: jest.fn().mockResolvedValue({ count: compte }) },
+          pickupPoint: { deleteMany: jest.fn().mockResolvedValue({ count: compte }) },
+          event: { deleteMany: jest.fn().mockResolvedValue({ count: compte }) },
+          supplier: { deleteMany: jest.fn().mockResolvedValue({ count: compte }) },
+        }),
+      );
+    }
+
+    it('efface les données quand le nom est recopié exactement', async () => {
+      prisma.organization.findUnique.mockResolvedValue({ id: ORG_ID, name: NOM });
+      transactionQuiCompte(3);
+
+      const res = await service.resetOrgData(ORG_ID, NOM);
+
+      expect(res.organization).toBe(NOM);
+      expect(res.supprime.evenements).toBe(3);
+      expect(res.supprime.buvettes).toBe(3);
+    });
+
+    it('refuse un nom approchant — la confirmation doit être exacte', async () => {
+      prisma.organization.findUnique.mockResolvedValue({ id: ORG_ID, name: NOM });
+
+      await expect(service.resetOrgData(ORG_ID, 'les spartiates')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('refuse une confirmation vide', async () => {
+      prisma.organization.findUnique.mockResolvedValue({ id: ORG_ID, name: NOM });
+
+      await expect(service.resetOrgData(ORG_ID, '   ')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('refuse une organisation inconnue', async () => {
+      prisma.organization.findUnique.mockResolvedValue(null);
+
+      await expect(service.resetOrgData('inconnue', NOM)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('ne touche NI au lieu, NI aux accès, NI aux groupes', async () => {
+      prisma.organization.findUnique.mockResolvedValue({ id: ORG_ID, name: NOM });
+      const tx: Record<string, { deleteMany: jest.Mock }> = {};
+      for (const m of ['order', 'loyaltyAccount', 'scheduledPush', 'pickupPoint', 'event', 'supplier']) {
+        tx[m] = { deleteMany: jest.fn().mockResolvedValue({ count: 0 }) };
+      }
+      // Toute tentative de viser ces tables ferait planter la transaction : le
+      // mock ne les expose pas. C'est l'assertion — le lieu et les accès sont
+      // ce qui permet de se reconnecter et de reconfigurer après le ménage.
+      prisma.$transaction.mockImplementation(async (fn: (t: unknown) => unknown) => fn(tx));
+
+      await service.resetOrgData(ORG_ID, NOM);
+
+      expect(tx.event.deleteMany).toHaveBeenCalledWith({ where: { organizationId: ORG_ID } });
+      expect(tx.supplier.deleteMany).toHaveBeenCalledWith({ where: { organizationId: ORG_ID } });
     });
   });
 });

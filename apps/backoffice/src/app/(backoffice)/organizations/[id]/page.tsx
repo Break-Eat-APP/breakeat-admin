@@ -15,6 +15,8 @@ import {
   apiUpdateVenue,
   apiInviteMember,
   apiRemoveMember,
+  apiResetOrgData,
+  type ResetOrgDataResult,
   VENUE_MODE_OPTIONS,
   type OrgDetail,
   type Venue,
@@ -651,9 +653,118 @@ export default function OrganizationDetailPage({
               </div>
             )}
           </section>
+
+          <ResetDataSection orgId={id} orgName={data.name} />
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Remise à zéro des données d'exploitation.
+ *
+ * Isolée dans son propre composant et placée en dernier : c'est une opération
+ * sans retour, elle ne doit pas voisiner avec les champs qu'on modifie tous les
+ * jours. Le nom doit être recopié à l'identique — un bouton seul se clique par
+ * accident, ou sur la mauvaise organisation.
+ */
+function ResetDataSection({ orgId, orgName }: { orgId: string; orgName: string }) {
+  const qc = useQueryClient();
+  const [confirmation, setConfirmation] = useState('');
+  const [erreur, setErreur] = useState('');
+  const [bilan, setBilan] = useState<ResetOrgDataResult | null>(null);
+
+  const resetMut = useMutation({
+    mutationFn: () => apiResetOrgData(orgId, confirmation),
+    onSuccess: (res) => {
+      setBilan(res);
+      setErreur('');
+      setConfirmation('');
+      void qc.invalidateQueries();
+    },
+    onError: (e: unknown) => {
+      setErreur(e instanceof Error ? e.message : 'Erreur');
+      setBilan(null);
+    },
+  });
+
+  const nomExact = confirmation.trim() === orgName;
+
+  return (
+    <section style={{ ...card, borderColor: '#fca5a5', marginTop: 8 }}>
+      <h2 style={{ ...cardTitle, color: '#dc2626' }}>Remise à zéro des données</h2>
+
+      <p style={{ fontSize: 13.5, color: BRAND.ink, lineHeight: 1.7, margin: '0 0 8px' }}>
+        Efface <strong>événements, buvettes, comptoirs, commandes et fidélité</strong> de
+        cette organisation. Utile pour repartir d&apos;une base vierge après des essais.
+      </p>
+      <p style={{ fontSize: 13, color: BRAND.grey, lineHeight: 1.7, margin: '0 0 16px' }}>
+        Sont <strong>conservés</strong> : le lieu avec ses coordonnées GPS et ses mots-clés,
+        les accès de l&apos;équipe, et les groupes. Sans eux, plus personne ne pourrait se
+        reconnecter pour reconfigurer.
+      </p>
+      <p style={{ fontSize: 13, color: '#dc2626', lineHeight: 1.7, margin: '0 0 16px' }}>
+        Cette opération est <strong>définitive</strong> : le chiffre d&apos;affaires effacé
+        ne se récupère pas.
+      </p>
+
+      {bilan && (
+        <div
+          style={{
+            background: '#ecfdf5',
+            border: '1px solid #a7f3d0',
+            borderRadius: 10,
+            padding: '12px 16px',
+            color: '#065f46',
+            fontSize: 13.5,
+            marginBottom: 16,
+            lineHeight: 1.8,
+          }}
+        >
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>
+            « {bilan.organization} » est repartie de zéro.
+          </div>
+          <div>
+            {bilan.supprime.evenements} événement(s), {bilan.supprime.buvettes} buvette(s),{' '}
+            {bilan.supprime.comptoirs} comptoir(s), {bilan.supprime.commandes} commande(s),{' '}
+            {bilan.supprime.fidelite} compte(s) de fidélité,{' '}
+            {bilan.supprime.notifications} notification(s) programmée(s).
+          </div>
+        </div>
+      )}
+
+      {erreur && <div style={{ ...errorBox, marginBottom: 16 }}>{erreur}</div>}
+
+      <label
+        style={{ display: 'block', fontSize: 13, color: BRAND.ink, marginBottom: 6 }}
+        htmlFor="reset-confirmation"
+      >
+        Pour confirmer, recopiez <strong>{orgName}</strong> :
+      </label>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input
+          id="reset-confirmation"
+          value={confirmation}
+          onChange={(e) => setConfirmation(e.target.value)}
+          placeholder={orgName}
+          autoComplete="off"
+          style={{ ...inputStyle, minWidth: 260 }}
+        />
+        <button
+          type="button"
+          onClick={() => resetMut.mutate()}
+          disabled={!nomExact || resetMut.isPending}
+          style={{
+            ...dangerBtn,
+            opacity: nomExact && !resetMut.isPending ? 1 : 0.45,
+            cursor: nomExact && !resetMut.isPending ? 'pointer' : 'not-allowed',
+          }}
+        >
+          {resetMut.isPending ? 'Effacement…' : 'Tout remettre à zéro'}
+        </button>
+      </div>
+    </section>
   );
 }
 

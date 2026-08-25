@@ -484,6 +484,36 @@ export async function apiDeleteOrganization(id: string): Promise<{ deleted: bool
   return req<{ deleted: boolean }>('DELETE', `/backoffice/organizations/${id}`);
 }
 
+/** Ce que la remise à zéro a effacé, poste par poste. */
+export interface ResetOrgDataResult {
+  organization: string;
+  supprime: {
+    commandes: number;
+    fidelite: number;
+    notifications: number;
+    comptoirs: number;
+    evenements: number;
+    buvettes: number;
+  };
+}
+
+/**
+ * POST /backoffice/organizations/:id/reset-data — vide les données
+ * d'exploitation en conservant l'organisation.
+ *
+ * `confirmation` doit reproduire EXACTEMENT le nom de l'organisation ; le
+ * serveur refuse sinon. Le lieu (GPS, mots-clés), les accès et les groupes
+ * survivent — sans eux, plus personne ne pourrait se reconnecter ensuite.
+ */
+export async function apiResetOrgData(
+  id: string,
+  confirmation: string,
+): Promise<ResetOrgDataResult> {
+  return req<ResetOrgDataResult>('POST', `/backoffice/organizations/${id}/reset-data`, {
+    confirmation,
+  });
+}
+
 // ─── Formatting helpers ────────────────────────────────────────────────────────
 
 /** Integer cents → "1 234,56 €" (French formatting). */
