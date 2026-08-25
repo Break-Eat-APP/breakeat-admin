@@ -4,6 +4,45 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-08-25] Accès opérateur — un compte sans issue, un écran qui se taisait
+
+> Détail dans `CHANGELOG.md` [0.48.0].
+
+### Livré
+- **Réinitialisation de mot de passe** (`POST /organizations/:id/members/
+  :memberId/reset-password`) — elle n'existait nulle part. Le mot de passe
+  n'était posé qu'à la création du compte ; ensuite, plus rien ne pouvait le
+  changer et réinviter échouait sur « déjà membre ».
+- **Trois états dans l'accueil opérateur** au lieu d'un écran vide unique.
+
+### Décisions d'architecture
+- **Garde-fous calqués sur `removeMember`** plutôt qu'inventés : ORG_ADMIN
+  limité aux rôles délégables (opérateur), jamais sur soi-même. Un manager qui
+  pourrait réinitialiser le mot de passe d'un autre manager contournerait toute
+  la délégation posée en phase 17.
+- **Mot de passe généré par le navigateur**, pas par le serveur : le générer
+  côté serveur obligerait à le renvoyer dans la réponse, donc à le faire
+  transiter par les journaux en cas de débogage.
+- **`assertRoleDelegable` accepte une chaîne** — deux énumérations `OrgRole`
+  coexistent (app et Prisma), mêmes valeurs, types distincts. Un cast aurait
+  masqué un vrai écart le jour où elles divergeraient.
+
+### Tests
+455 backend (6 nouveaux), admin 21 pages, operator 4 pages.
+
+### Risques
+- **Le bouton n'a pas été vu dans un navigateur** : vérifier son rendu demande
+  une session authentifiée sur le back-office.
+- **Le wizard reste non idempotent** — il recrée événement, buvettes, points de
+  retrait, catégories et produits à chaque passage. C'est la cause du « rien ne
+  s'enregistre » signalé par le client. Corriger demande de décider quoi
+  apparier : une erreur d'appariement rattacherait des produits à la mauvaise
+  buvette.
+
+### Reste à faire
+- Rendre le wizard idempotent, après inventaire des doublons déjà créés.
+
+---
 ## [2026-08-25] Montée Expo SDK 53 → 57 (React Native 0.79.6 → 0.86.2)
 
 > Imposée par Apple : ITMS-90725 exige le SDK iOS 26, et Xcode 26 ne compile
