@@ -2,7 +2,7 @@
 
 > Ouvre ce fichier en premier dans une nouvelle session. Tout l'état utile est ici + dans les 4 docs (`CHANGELOG.md`, `DEVELOPMENT_LOG.md`, `brain/ENGINEERING_MANUAL.md`, `brain/TASK_SUMMARY.md`) + le git.
 
-_Dernière mise à jour : 2026-08-24 (soir)_
+_Dernière mise à jour : 2026-08-25_
 
 ## ⏭️ REPRISE IMMÉDIATE
 
@@ -10,6 +10,30 @@ _Dernière mise à jour : 2026-08-24 (soir)_
 2. **TestFlight** — App Store Connect → onglet TestFlight → remplir les *informations de test* (obligatoire), puis s'ajouter en testeur interne.
 3. **Renseigner les coordonnées GPS des lieux** — sans elles, un lieu n'apparaît jamais par proximité. Il reste trouvable par la recherche.
 4. **Nettoyer les données de test** du wizard et de « Démo Spartiates » : événements d'abord, puis points de retrait, puis comptes.
+
+## 🧱 Montée Expo SDK 53 → 57 (25/08)
+
+**React Native 0.79.6 → 0.86.2.** Apple a rejeté la soumission (ITMS-90725) :
+le SDK iOS 26 est obligatoire. Or Xcode 26 ne compile pas le `fmt` embarqué
+par RN 0.79. Aucun contournement — monter le SDK était la seule voie.
+
+Trois ruptures, **toutes silencieuses** (rien n'échouait à la compilation) :
+
+1. `@bacons/apple-targets` fait `require('@expo/plist')` **sans le déclarer**.
+   Le SDK 57 ne le fournit plus par transitivité ; pnpm n'expose que le
+   déclaré. Le plugin échouait *sans casser la build* → **plus de cible Xcode
+   pour l'extension Live Activity**. Réparé par `packageExtensions` dans
+   `pnpm-workspace.yaml`. **NE PAS RETIRER.**
+2. `splash` a été retiré de la racine du schéma Expo → clé ignorée en silence,
+   écran de démarrage blanc. Passe désormais par le plugin
+   `expo-splash-screen`.
+3. `@react-native/typescript-config` 0.86 masque le chemin profond
+   `/tsconfig.json` derrière une carte `exports` → l'`extends` échouait sans
+   bruit et `tsc` repartait sur ses défauts.
+
+Vérifié : typecheck, export web, 3 apps Next.js, 449 tests backend,
+`expo-doctor` 20/21. ⚠️ **La compilation native ne se vérifie que sur EAS** :
+Windows refuse de générer un projet iOS.
 
 ## 🚀 Livraison (24/08 au soir)
 
@@ -113,7 +137,12 @@ L'app Break Eat = **porte d'entrée du click-and-collect Flaix**. Flaix gèrera 
 - **Cache Metro** : `EXPO_PUBLIC_*` est inliné **et mis en cache**. `build:web` porte désormais `--clear` (`74ace4a`) — sans lui, changer une variable ne change rien au bundle, et le déploiement semble réussir tout en servant l'ancienne adresse.
 - **Adresse d'API** : gravée dans `apps/mobile/vercel.json` (`05afc62`), publique par nature. `env.ts` **refuse de démarrer** une build empaquetée sans adresse explicite plutôt que de viser une IP locale.
 - **Sentry** : conditionné au **jeton** (`SENTRY_AUTH_TOKEN`), pas à `APP_ENV` (`a75b1cf`). Se fier à l'environnement faisait échouer toute build « production » sans jeton.
-- **Versions Expo** : toujours `npx expo install <paquet>`, jamais `pnpm add` — pnpm résout la dernière publiée, incompatible avec le SDK 53. A déjà cassé le build deux fois.
+- **Versions Expo** : toujours `npx expo install <paquet>`, jamais `pnpm add` — pnpm résout la dernière publiée, incompatible avec le SDK en place. A déjà cassé le build deux fois.
+- **`packageExtensions` (pnpm-workspace.yaml)** : ajoute `@expo/plist` au manifeste de `@bacons/apple-targets`, qui l'utilise sans le déclarer. **NE PAS RETIRER** — sans lui le plugin est ignoré *en silence* et l'extension Live Activity disparaît de la build.
+- **`splash`** ne vit plus à la racine d'`app.config.js` (retiré du schéma en SDK 57) mais dans le plugin `expo-splash-screen`. L'y remettre serait ignoré sans avertissement.
+- **`expo-modules-core` / `@expo/config-plugins`** ne doivent PAS être des dépendances directes : le SDK les réexporte (`expo`, `expo/config-plugins`). Une copie à part diverge du SDK au premier décalage.
+- **TypeScript 5.8.3 volontairement conservé** face aux 6.0.3 recommandés par Expo : les 7 paquets du monorepo la partagent. Acté dans `expo.install.exclude`.
+- **`expo prebuild -p ios` échoue sur Windows** : la validation des plugins natifs passe obligatoirement par une build EAS.
 - **`Alert.alert` = no-op sur react-native-web** → utiliser `src/lib/alert.ts`. Corrigé partout dans les écrans (`320e72d`), mais le piège reste pour tout nouveau code.
 - **Découverte des lieux** : deux chemins, deux seulement — proximité dans 10 km, ou recherche par mot-clé configuré sur le dashboard. Ni position ni recherche ⇒ **liste vide** (`0b67ff7`). Ne pas rouvrir un troisième chemin.
 - **Catégories** : elles appartiennent à une **buvette**, pas à l'organisation (`/organizations/:orgId/suppliers/:supplierId/categories`).

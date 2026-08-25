@@ -4080,3 +4080,73 @@ Le client tentait depuis plusieurs sessions de tester son application et n'y par
 - `Failed to fetch` depuis l'app : vérifier **dans cet ordre** l'adresse gravée dans le bundle (`grep` de l'URL attendue dans `dist/_expo/static/js/web/*.js`), puis l'en-tête `access-control-allow-origin` renvoyé par le backend pour cette origine exacte.
 - Un bouton qui « ne fait rien » sur le web : chercher un `Alert.alert` non migré.
 - Écran « Lieux » vide : c'est désormais le comportement attendu sans position **et** sans recherche.
+
+## [2026-08-25] Montée Expo SDK 53 → 57 — quand un plugin échoue sans rien casser
+
+### Le déclencheur
+Apple a rejeté la soumission TestFlight (ITMS-90725) : le SDK iOS 26 est
+obligatoire depuis 2026. Xcode 26 ne compile pas le `fmt` embarqué par React
+Native 0.79 (`call to consteval function … is not a constant expression`).
+Aucun contournement côté projet. React Native 0.79.6 → 0.86.2.
+
+SDK 57 plutôt qu'un saut minimal en 54 : chaque étape intermédiaire aurait
+coûté la même campagne de vérification, pour atterrir sur un socle déjà ancien.
+
+### La leçon : trois ruptures, aucune erreur de compilation
+
+Le danger d'une montée de SDK n'est pas ce qui casse bruyamment — c'est ce qui
+continue de « marcher » en ayant cessé de faire son travail.
+
+**1. Une dépendance non déclarée, et une extension qui disparaît.**
+`@bacons/apple-targets` fait `require('@expo/plist')` sans le déclarer dans son
+manifeste : il comptait sur le hoisting à plat de npm/yarn. Le SDK 53 le
+fournissait par transitivité ; le 57 ne le fournit plus. pnpm, qui n'expose que
+les dépendances déclarées, le fait échouer — et Expo **ignore un plugin qui
+lève** en affichant un simple `Skipping config plugin check`. La build aurait
+réussi, sans la cible Xcode de l'extension Live Activity.
+
+Le correctif idiomatique est `packageExtensions` (pnpm-workspace.yaml) : il
+ajoute la dépendance manquante au manifeste du tiers, donc dans SON dossier du
+magasin. Un hoisting global (`nodeLinker: hoisted`) aurait « marché » aussi —
+et c'est précisément ce qui avait cassé Vercel la veille en remontant React
+19.0.0 à la racine. Réparer une résolution de module par un aplatissement
+global déplace le problème ailleurs.
+
+**2. Une clé de configuration retirée du schéma.**
+`splash` n'existe plus à la racine de la config Expo. La clé n'est pas
+rejetée : elle est ignorée. L'app aurait démarré sur l'écran blanc par défaut,
+logo compris. La configuration ne vit plus que dans le plugin
+`expo-splash-screen` — qui n'était même pas installé.
+
+**3. Un `extends` qui ne résout plus.**
+`@react-native/typescript-config` 0.86 publie une carte `exports` qui n'expose
+plus le chemin profond `/tsconfig.json`. L'`extends` échoue **sans bruit** et
+`tsc` repart sur ses défauts : ni `jsx`, ni `esModuleInterop`, ni `lib`. Le
+symptôme est spectaculaire (`Cannot find global value 'Promise'`, `--jsx is not
+set` partout) mais la cause n'a rien à voir avec le code. Le spécificateur nu
+(`"extends": "@react-native/typescript-config"`) passe par `exports["."]`.
+
+C'est `expo-doctor` — pas la compilation — qui a révélé les points 2 et 3.
+**Sur une montée de SDK, le diagnostic vaut la suite de tests.**
+
+### Décisions
+
+- **Plancher iOS 16.4**, imposé par le SDK 57 qui refuse toute valeur en deçà.
+  Il couvre ActivityKit (16.2) et reste sous le minimum 16.6 de l'app publiée :
+  aucun utilisateur n'est exclu. Fixé dans `expo-build-properties`, qui
+  l'applique AUSSI aux Pods — ce que la retouche du `.pbxproj` faite par
+  `plugins/withLiveActivity.js` n'atteint pas.
+- **TypeScript reste en 5.8.3** malgré la 6.0.3 recommandée : les 7 paquets du
+  monorepo la partagent, et en faire diverger le seul mobile créerait deux
+  versions concurrentes. Le typage passe sans erreur. Acté dans
+  `expo.install.exclude` pour que ce soit lu comme un choix, pas un oubli.
+- **`expo-modules-core` et `@expo/config-plugins` retirés des dépendances
+  directes.** Le SDK réexporte les deux (`expo`, `expo/config-plugins`) ; une
+  copie installée à part diverge du SDK au premier décalage de version.
+  `requireOptionalNativeModule` vient d'`expo`, le type `EventSubscription` de
+  `react-native`, qui l'expose depuis la 0.86.
+
+### Limite de vérification
+`expo prebuild -p ios` **refuse de s'exécuter sur Windows**. Typecheck, export
+web, apps Next.js et tests backend se vérifient localement ; l'exécution réelle
+des plugins natifs et la compilation Xcode ne se constatent que sur EAS.

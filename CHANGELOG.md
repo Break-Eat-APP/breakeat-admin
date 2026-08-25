@@ -5,6 +5,70 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.47.0] — 2026-08-25 — Expo SDK 53 → 57 (React Native 0.79.6 → 0.86.2)
+
+### Pourquoi
+Apple a rejeté la soumission TestFlight (ITMS-90725) : le SDK iOS 26 est
+désormais obligatoire. Or Xcode 26 ne compile pas le `fmt` embarqué par React
+Native 0.79 — `call to consteval function … is not a constant expression`.
+Aucun contournement côté projet : monter le SDK était la seule voie.
+
+SDK 57 plutôt qu'un saut minimal en 54 : les étapes intermédiaires auraient
+coûté la même vérification, pour un socle déjà ancien.
+
+### Trois ruptures, toutes silencieuses
+
+**`@bacons/apple-targets` perdait `@expo/plist`.** Le paquet fait
+`require('@expo/plist')` sans le déclarer — il comptait sur le hoisting de
+npm/yarn. Le SDK 57 ne le fournit plus par transitivité, et pnpm n'expose que
+le déclaré. Le plugin échouait alors **sans casser la build** : plus de cible
+Xcode pour l'extension Live Activity, écrite en phase 21. Réparé via
+`packageExtensions` dans `pnpm-workspace.yaml`, qui ajoute la dépendance au
+manifeste du tiers.
+
+**`@react-native/typescript-config` 0.86** publie une carte `exports` qui
+n'expose plus le chemin profond `/tsconfig.json`. L'`extends` échouait sans
+bruit et `tsc` repartait sur ses défauts — ni `jsx`, ni `esModuleInterop`, ni
+`lib`. Le spécificateur nu passe par `exports["."]`.
+
+**Le preset Jest de React Native** a déménagé dans `@react-native/jest-preset`.
+
+### Ce que le SDK 57 a invalidé sans prévenir
+
+`splash` a été **retiré de la racine du schéma**. La clé était ignorée sans le
+moindre avertissement : l'app aurait démarré sur l'écran blanc par défaut,
+logo compris. La configuration passe par le plugin `expo-splash-screen`, qui
+n'était même pas installé.
+
+`expo-modules-core` et `@expo/config-plugins` ne doivent plus être des
+dépendances directes — le SDK les réexporte, et une copie à part diverge du SDK
+au premier décalage. `requireOptionalNativeModule` vient d'`expo`, le type
+`EventSubscription` de `react-native` qui l'expose depuis la 0.86.
+
+### Décisions
+- **Plancher iOS 16.4** — imposé par le SDK 57, qui refuse toute valeur en
+  deçà. Reste sous le minimum 16.6 de l'app publiée : aucun utilisateur exclu.
+- **TypeScript reste en 5.8.3.** Expo recommande la 6.0.3, mais les 7 paquets
+  du monorepo la partagent ; en faire diverger le seul mobile créerait deux
+  versions concurrentes. Ajouté à `expo.install.exclude` pour acter le choix.
+- **`app.json` laissé en place** — il ne sert qu'à la CLI React Native
+  (`name`/`displayName`) et n'est pas lu par `app.config.js`. Même famille de
+  piège qu'`App.tsx` : présent, mais absent de tout ce qui est livré. Seul
+  avertissement `expo-doctor` restant, assumé.
+
+### Fichiers
+- `~ apps/mobile/package.json` — SDK 57, RN 0.86.2, React 19.2.3, `@react-native/*` alignés en 0.86.2
+- `~ apps/mobile/app.config.js` — plugins `expo-font` / `expo-splash-screen` / `expo-build-properties`, plancher iOS 16.4
+- `~ apps/mobile/tsconfig.json` — `extends` via le spécificateur nu
+- `~ apps/mobile/plugins/withLiveActivity.js` — `expo/config-plugins`
+- `~ apps/mobile/modules/live-activity/index.ts` — imports rebranchés
+- `~ pnpm-workspace.yaml` — `packageExtensions` pour `@expo/plist`
+
+### Vérifié
+Typecheck mobile, export web (1,5 Mo), admin 21 pages, backoffice 10 pages,
+operator 4 pages, 449 tests backend, `expo-doctor` 20/21.
+---
+
 ## [0.46.0] — 2026-08-24 — Test réel : rendre le parcours atteignable
 
 ### Objectif

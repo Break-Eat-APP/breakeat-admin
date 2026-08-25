@@ -4,6 +4,58 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-08-25] Montée Expo SDK 53 → 57 (React Native 0.79.6 → 0.86.2)
+
+> Imposée par Apple : ITMS-90725 exige le SDK iOS 26, et Xcode 26 ne compile
+> pas le `fmt` embarqué par RN 0.79. Détail fichiers dans `CHANGELOG.md`
+> [0.47.0] ; analyse dans `ENGINEERING_MANUAL.md` [2026-08-25].
+
+### Livré
+- **SDK 57 / RN 0.86.2 / React 19.2.3**, toutes dépendances alignées, y compris
+  les `@react-native/*` restés en 0.79.2.
+- **Trois ruptures silencieuses réparées** — aucune ne faisait échouer la
+  compilation :
+  1. `@bacons/apple-targets` perdait `@expo/plist` (dépendance non déclarée,
+     ex-hoisting npm). Le plugin était ignoré *en silence* → **l'extension
+     Live Activity aurait disparu de la build**. Réparé par
+     `packageExtensions`.
+  2. `splash` retiré de la racine du schéma Expo → clé ignorée, écran de
+     démarrage blanc. Migré vers le plugin `expo-splash-screen`, absent du
+     projet.
+  3. `@react-native/typescript-config` 0.86 masque `/tsconfig.json` derrière
+     une carte `exports` → `extends` mort, `tsc` sur ses défauts.
+- **Preset Jest** déplacé vers `@react-native/jest-preset`.
+- **Dépendances directes retirées** : `expo-modules-core`,
+  `@expo/config-plugins` — le SDK les réexporte.
+
+### Décisions d'architecture
+- **SDK 57 plutôt que 54** : les étapes intermédiaires auraient coûté la même
+  vérification, pour un socle déjà ancien.
+- **Plancher iOS 16.4** (imposé par le SDK), sous le minimum 16.6 de l'app
+  publiée : aucun utilisateur exclu.
+- **TypeScript maintenu en 5.8.3** : les 7 paquets du monorepo la partagent.
+  Acté dans `expo.install.exclude`.
+- **`packageExtensions` plutôt que `nodeLinker: hoisted`** : l'aplatissement
+  global avait cassé Vercel la veille en remontant React 19.0.0 à la racine.
+
+### Tests
+Typecheck mobile, export web (1,5 Mo), admin 21 pages, backoffice 10 pages,
+operator 4 pages, 449 tests backend, `expo-doctor` 20/21.
+
+### Risques
+- **`expo prebuild -p ios` refuse de tourner sur Windows** : l'exécution réelle
+  des plugins natifs et la compilation Xcode ne se vérifient que sur EAS.
+- Android n'a pas été retesté ; l'échec d'autolinking
+  (`expo.core.ExpoModulesPackage`) reste inexpliqué et peut avoir changé de
+  nature avec le SDK 57.
+- `@bacons/apple-targets` 5.0.0 embarque `@expo/prebuild-config ~55.0.6`,
+  soit deux SDK de retard. Sans incidence constatée, à surveiller.
+
+### Reste à faire
+- Valider la build EAS iOS, puis soumettre à TestFlight.
+- Fusionner `montee-sdk-57` dans `main` une fois la build native confirmée.
+
+---
 ## [2026-08-24] Rendre l'app testable en réel — parcours, découverte, gestion
 
 > Session de terrain : le client tentait de tester son application et n'y parvenait pas. Détail fichiers dans `CHANGELOG.md` [0.46.0] ; références de code dans `ENGINEERING_MANUAL.md`.
