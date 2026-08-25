@@ -321,4 +321,50 @@ describe('SlotsService', () => {
         .rejects.toThrow(ConflictException);
     });
   });
+
+  // --- updateStatus : la frontiere de roles ---------------------
+
+  describe('updateStatus', () => {
+    beforeEach(() => {
+      mockPrisma.slotFindUnique.mockResolvedValue(makeSlot());
+      mockPrisma.eventFindUniqueOrThrow.mockResolvedValue(mockEvent);
+      mockPrisma.slotUpdate.mockResolvedValue(makeSlot({ status: SlotStatus.CLOSED }));
+    });
+
+    it('un equipier peut fermer un creneau — c’est sa decision', async () => {
+      mockPrisma.orgMemberFindUnique.mockResolvedValue({ orgRole: 'OPERATOR' });
+
+      await service.updateStatus(SLOT_ID, SlotStatus.CLOSED, USER_ID);
+
+      expect(mockPrisma.slotUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: SlotStatus.CLOSED } }),
+      );
+    });
+
+    it('le responsable le peut aussi', async () => {
+      mockPrisma.orgMemberFindUnique.mockResolvedValue({ orgRole: 'MANAGER' });
+
+      await service.updateStatus(SLOT_ID, SlotStatus.OPEN, USER_ID);
+
+      expect(mockPrisma.slotUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    it('un non-membre est refuse', async () => {
+      mockPrisma.orgMemberFindUnique.mockResolvedValue(null);
+
+      await expect(
+        service.updateStatus(SLOT_ID, SlotStatus.CLOSED, USER_ID),
+      ).rejects.toThrow();
+      expect(mockPrisma.slotUpdate).not.toHaveBeenCalled();
+    });
+
+    it('ne touche QUE le statut — horaires et capacite restent au club', async () => {
+      mockPrisma.orgMemberFindUnique.mockResolvedValue({ orgRole: 'OPERATOR' });
+
+      await service.updateStatus(SLOT_ID, SlotStatus.FULL, USER_ID);
+
+      const arg = mockPrisma.slotUpdate.mock.calls[0][0];
+      expect(Object.keys(arg.data)).toEqual(['status']);
+    });
+  });
 });

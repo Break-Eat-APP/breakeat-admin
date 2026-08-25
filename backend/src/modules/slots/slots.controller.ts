@@ -13,6 +13,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { SlotsService } from './slots.service';
 import { CreateSlotDto } from './dto/create-slot.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
+import { UpdateSlotStatusDto } from './dto/update-slot-status.dto';
 
 interface JwtUser {
   sub: string;
@@ -71,6 +72,24 @@ export class SlotsController {
     @CurrentUser() user: JwtUser,
   ) {
     return this.slotsService.update(id, dto, user.sub);
+  }
+
+  /**
+   * PATCH /api/v1/events/:eventId/slots/:id/status
+   *
+   * Ouvre ou ferme un créneau. Accessible à l'ÉQUIPIER, en plus du responsable :
+   * c'est une décision d'exploitation, prise devant la file d'attente.
+   *
+   * Séparée de `PATCH /slots/:id` à dessein — configurer horaires et capacités
+   * reste au club.
+   */
+  @Patch(':id/status')
+  updateStatus(
+    @Param('id') id: string,
+    @Body() dto: UpdateSlotStatusDto,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.slotsService.updateStatus(id, dto.status, user.sub);
   }
 
   /**
