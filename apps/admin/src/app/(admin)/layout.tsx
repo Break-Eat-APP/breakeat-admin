@@ -61,9 +61,9 @@ const NAV_GROUPS: NavGroup[] = [
       // « rien ne s’enregistre ». Deux portes pour un même objet, dont une
       // qui empile des doublons.
       { href: '/organizations', icon: Building2, label: 'Mon lieu' },
-      // Le wizard reste accessible, nommé pour ce qu’il est : une aide au
-      // PREMIER paramétrage, pas l’écran où l’on revient modifier.
-      { href: '/wizard', icon: Wand2, label: 'Assistant de démarrage' },
+      // Le wizard reste accessible, nommé pour ce qu’il est : la mise en place
+      // INITIALE, pas l’écran où l’on revient modifier.
+      { href: '/wizard', icon: Wand2, label: 'Configuration de démarrage' },
       // L'apparence décrit ce que le client voit DE CE LIEU : sa place est ici,
       // pas dans un groupe « communication » avec les campagnes push.
       { href: '/appearance', icon: Palette, label: "Apparence de l'app" },
