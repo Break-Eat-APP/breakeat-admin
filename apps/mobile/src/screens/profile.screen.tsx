@@ -7,13 +7,16 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 import { useAuthStore } from '@store/auth.store';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { PageHeader } from '@components/page-header';
-import { BOTTOM_BAR_SPACE } from '@components/app-bottom-bar';
+import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { showAlert, confirmAction } from '@lib/alert';
 import { THEME, shadowCard, FONT } from '@lib/theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export function ProfileScreen() {
+  // Espace sous le contenu : la barre flottante ne doit rien recouvrir.
+  // Calcule a l'execution car il depend de la zone sure de l'appareil.
+  const espaceBas = useBottomBarSpace();
   const navigation = useNavigation<Nav>();
   const { user, token, clearAuth } = useAuthStore();
   const { status: locStatus, optedOut, request: requestLocation, disable: disableLocation } = useUserLocation();
@@ -33,7 +36,7 @@ export function ProfileScreen() {
   return (
     <View style={styles.root}>
       <PageHeader title="Profil" />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: espaceBas }]}>
 
       {token && user ? (
         <View style={[styles.card, shadowCard]}>
@@ -237,7 +240,7 @@ function LocationMenuItem({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
-  content: { padding: 16, paddingBottom: BOTTOM_BAR_SPACE + 24 },
+  content: { padding: 16 },
 
   card: {
     backgroundColor: THEME.surface,

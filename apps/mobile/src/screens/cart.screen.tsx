@@ -6,12 +6,15 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 import { formatPrice } from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
 import { PageHeader } from '@components/page-header';
-import { BOTTOM_BAR_SPACE } from '@components/app-bottom-bar';
+import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { THEME, shadowCard, FONT } from '@lib/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Cart'>;
 
 export function CartScreen({ navigation }: Props) {
+  // Espace sous le contenu : la barre flottante ne doit rien recouvrir.
+  // Calcule a l'execution car il depend de la zone sure de l'appareil.
+  const espaceBas = useBottomBarSpace();
   const {
     items,
     incrementItem,
@@ -114,7 +117,7 @@ export function CartScreen({ navigation }: Props) {
           />
 
           {/* CTA */}
-          <View style={styles.cta}>
+          <View style={[styles.cta, { paddingBottom: espaceBas }]}>
             <Pressable
               style={[styles.ctaBtn, !supplierId && styles.ctaBtnDisabled]}
               onPress={handleContinue}
@@ -206,7 +209,7 @@ const styles = StyleSheet.create({
   cta: {
     paddingHorizontal: 18,
     paddingTop: 16,
-    paddingBottom: BOTTOM_BAR_SPACE,
+    
     backgroundColor: THEME.bg,
     borderTopWidth: 1,
     borderTopColor: THEME.border,

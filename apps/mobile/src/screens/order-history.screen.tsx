@@ -18,7 +18,7 @@ import { apiGetMyOrders, apiMarkArrived, formatPrice, formatTime, type Order } f
 import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
-import { BOTTOM_BAR_SPACE } from '@components/app-bottom-bar';
+import { useBottomBarSpace } from '@components/app-bottom-bar';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -78,6 +78,9 @@ const STEPS: { phase: Phase; label: string; color: string }[] = [
 ];
 
 export function OrderHistoryScreen() {
+  // Espace sous le contenu : la barre flottante ne doit rien recouvrir.
+  // Calcule a l'execution car il depend de la zone sure de l'appareil.
+  const espaceBas = useBottomBarSpace();
   const navigation = useNavigation<Nav>();
   const { token } = useAuthStore();
 
@@ -169,7 +172,7 @@ export function OrderHistoryScreen() {
         <FlatList
           data={orders}
           keyExtractor={(o) => o.id}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: espaceBas }]}
           refreshControl={
             <RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={THEME.orange} />
           }
@@ -320,7 +323,7 @@ const styles = StyleSheet.create({
   },
   ctaText: { color: '#fff', fontFamily: HEAD.bold, fontSize: 15 },
 
-  list: { padding: 16, gap: 12, paddingBottom: BOTTOM_BAR_SPACE + 16 },
+  list: { padding: 16, gap: 12 },
 
   card: { backgroundColor: THEME.surface, borderRadius: THEME.radius.card, padding: 14, gap: 10 },
   pressed: { opacity: 0.85 },

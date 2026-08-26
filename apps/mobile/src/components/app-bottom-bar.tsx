@@ -14,8 +14,32 @@ import type { RootStackParamList } from '@navigation/root-navigator';
  * bouton central) · Panier. Toujours accessible pour revenir à l'accueil.
  */
 
-/** Hauteur réservée sous le contenu des écrans pour ne pas passer sous la barre. */
+/**
+ * Hauteur reservee sous le contenu pour ne pas passer sous la barre.
+ *
+ * Valeur PLANCHER, sans zone sure : la barre flotte a `insets.bottom + 16` et
+ * mesure 70 (le bouton central, 72, deborde legerement). Sur un ecran sans
+ * encoche, 104 suffit.
+ *
+ * Sur un iPhone a encoche, `insets.bottom` vaut ~34 : la barre monte alors
+ * jusqu'a ~122, et un bouton cale a 104 se retrouve recouvert sur sa moitie
+ * basse. C'est exactement ce qui arrivait au bouton « Choisir un creneau ».
+ *
+ * Preferer `useBottomBarSpace()`, qui ajoute la zone sure.
+ */
 export const BOTTOM_BAR_SPACE = 104;
+
+/**
+ * Espace a reserver sous un contenu ou un bouton fixe, zone sure comprise.
+ *
+ * A utiliser partout ou un element doit rester AU-DESSUS de la barre. La
+ * constante seule ne suffit pas : elle ignore l’encoche, et le defaut ne se
+ * voit que sur les appareils qui en ont un.
+ */
+export function useBottomBarSpace(): number {
+  const insets = useSafeAreaInsets();
+  return insets.bottom + BOTTOM_BAR_SPACE;
+}
 
 /** Écrans où la barre est masquée (plein écran / parcours bloquant). */
 const HIDDEN_ON: Array<keyof RootStackParamList> = ['Login', 'QRScanner'];

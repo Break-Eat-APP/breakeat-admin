@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { THEME } from '@lib/theme';
 import {
   ActivityIndicator,
   FlatList,
@@ -73,7 +74,7 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
       <View style={styles.root}>
         <PageHeader title="Choisir un créneau" />
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color={THEME.orange} />
           <Text style={styles.loadingText}>Chargement des créneaux…</Text>
         </View>
       </View>
@@ -157,20 +158,20 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0f172a' },
+  root: { flex: 1, backgroundColor: THEME.bg },
 
   centered: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: THEME.bg,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
     gap: 12,
   },
-  loadingText: { color: '#9ca3af', fontSize: 14, marginTop: 12 },
+  loadingText: { color: THEME.inkSoft, fontSize: 14, marginTop: 12 },
   errorText: { color: '#f87171', fontSize: 14, textAlign: 'center' },
   retryBtn: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.orange,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 10,
@@ -183,15 +184,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 56,
     paddingBottom: 16,
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     gap: 12,
   },
   back: { padding: 4 },
-  backArrow: { color: '#94a3b8', fontSize: 20 },
-  headerTitle: { color: '#f1f5f9', fontSize: 18, fontWeight: '700' },
+  backArrow: { color: THEME.inkSoft, fontSize: 20 },
+  headerTitle: { color: THEME.ink, fontSize: 18, fontWeight: '700' },
 
   subtitle: {
-    color: '#94a3b8',
+    color: THEME.inkSoft,
     fontSize: 14,
     paddingHorizontal: 20,
     paddingVertical: 16,
@@ -201,27 +202,27 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, gap: 10, paddingBottom: 40 },
 
   slotCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     borderRadius: 14,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#334155',
+    borderColor: THEME.bgSubtle,
   },
   slotCardSelected: {
-    borderColor: '#2563eb',
-    backgroundColor: '#1e3a5f',
+    borderColor: THEME.orange,
+    backgroundColor: THEME.orangeTint,
   },
   slotCardFull: {
     opacity: 0.4,
   },
 
   slotLeft: { flex: 1 },
-  slotTime: { color: '#f1f5f9', fontSize: 22, fontWeight: '800' },
-  slotTimeFull: { color: '#6b7280' },
-  slotEnd: { color: '#64748b', fontSize: 14 },
-  slotSubLabel: { color: '#94a3b8', fontSize: 12, marginTop: 2 },
+  slotTime: { color: THEME.ink, fontSize: 22, fontWeight: '800' },
+  slotTimeFull: { color: THEME.grey },
+  slotEnd: { color: THEME.inkSoft, fontSize: 14 },
+  slotSubLabel: { color: THEME.inkSoft, fontSize: 12, marginTop: 2 },
 
   slotRight: { alignItems: 'flex-end', gap: 8 },
   availBadge: {
@@ -233,7 +234,7 @@ const styles = StyleSheet.create({
   capacityBar: {
     width: 80,
     height: 4,
-    backgroundColor: '#334155',
+    backgroundColor: THEME.bgSubtle,
     borderRadius: 2,
     overflow: 'hidden',
   },
@@ -241,14 +242,14 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 2,
   },
-  selectedCheck: { color: '#2563eb', fontSize: 18, fontWeight: '800' },
+  selectedCheck: { color: THEME.orange, fontSize: 18, fontWeight: '800' },
 
   emptyBox: {
     margin: 20,
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     borderRadius: 12,
     padding: 24,
     alignItems: 'center',
   },
-  emptyText: { color: '#6b7280', fontSize: 14, textAlign: 'center' },
+  emptyText: { color: THEME.grey, fontSize: 14, textAlign: 'center' },
 });
