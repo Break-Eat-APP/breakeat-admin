@@ -640,7 +640,7 @@ function Card({ title, action, children }: { title: string; action?: React.React
   return (
     <div style={{ background: BRAND.surface, borderRadius: BRAND.radius.card, padding: 22, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.orange, margin: 0 }}>{title}</h2>
+        <h2 style={{ ...BRAND.sectionTitle, margin: 0 }}>{title}</h2>
         {action}
       </div>
       {children}

@@ -193,7 +193,7 @@ export default function NotificationsPage() {
 function Section({ title, children, style }: { title: string; children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <section style={{ background: '#fff', border: `1px solid ${BRAND.border}`, borderRadius: 16, padding: 24, ...style }}>
-      <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.orange, margin: '0 0 18px' }}>{title}</h2>
+      <h2 style={{ ...BRAND.sectionTitle, margin: '0 0 18px' }}>{title}</h2>
       {children}
     </section>
   );

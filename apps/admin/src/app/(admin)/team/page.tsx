@@ -281,7 +281,7 @@ L'ancien cessera immediatement de fonctionner.`)) return;
           border: `1px solid ${BRAND.border}`,
         }}
       >
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.orange, margin: '0 0 6px' }}>
+        <h2 style={{ ...BRAND.sectionTitle, margin: '0 0 6px' }}>
           Inviter un membre
         </h2>
         <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 16px', lineHeight: 1.55, maxWidth: 620 }}>
@@ -466,7 +466,7 @@ L'ancien cessera immediatement de fonctionner.`)) return;
             justifyContent: 'space-between',
           }}
         >
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.orange, margin: 0 }}>
+          <h2 style={{ ...BRAND.sectionTitle, margin: 0 }}>
             Membres ({loading ? '…' : members.length})
           </h2>
         </div>

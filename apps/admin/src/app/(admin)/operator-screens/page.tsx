@@ -153,7 +153,7 @@ export default function OperatorScreensPage() {
           sa place. */}
       {suppliers.length > 0 && (
         <div style={{ background: BRAND.surface, borderRadius: 12, padding: 20, boxShadow: BRAND.shadowSoft, marginBottom: 24 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.orange, margin: '0 0 6px' }}>
+          <h2 style={{ ...BRAND.sectionTitle, margin: '0 0 6px' }}>
             Postes operateur
           </h2>
           <p style={{ color: BRAND.grey, fontSize: 13, margin: '0 0 14px' }}>
@@ -214,7 +214,7 @@ export default function OperatorScreensPage() {
             border: `2px solid ${BRAND.orange}`,
           }}
         >
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.orange, margin: '0 0 18px' }}>
+          <h2 style={{ ...BRAND.sectionTitle, margin: '0 0 18px' }}>
             Nouvel écran
           </h2>
           <ScreenConditionsForm

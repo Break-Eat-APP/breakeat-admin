@@ -46,7 +46,7 @@ function Card({
           marginBottom: 16,
         }}
       >
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.orange, margin: 0 }}>{title}</h2>
+        <h2 style={{ ...BRAND.sectionTitle, margin: 0 }}>{title}</h2>
         {action}
       </div>
       {children}

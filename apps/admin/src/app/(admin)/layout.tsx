@@ -225,12 +225,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div key={group.title} style={{ marginTop: gi === 0 ? 4 : 14 }}>
               <div
                 style={{
-                  padding: '0 22px 6px',
-                  fontSize: 10.5,
-                  fontWeight: 600,
-                  letterSpacing: 0.8,
+                  padding: '0 22px 7px',
+                  // ORANGE et Raleway : un titre de groupe qui ne se distingue
+                  // pas de ses entrees ne structure rien — il devient une ligne
+                  // de plus. La couleur ET la famille le separent, sans avoir a
+                  // grossir le texte dans un menu deja dense.
+                  fontFamily: BRAND.fontDisplay,
+                  fontSize: 11,
+                  fontWeight: 800,
+                  letterSpacing: '0.1em',
                   textTransform: 'uppercase',
-                  color: BRAND.grey,
+                  color: BRAND.orange,
                 }}
               >
                 {group.title}

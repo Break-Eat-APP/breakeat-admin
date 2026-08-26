@@ -232,7 +232,7 @@ function Card({ title, children }: { title: string; children: React.ReactNode })
         marginBottom: 24,
       }}
     >
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.orange, margin: '0 0 18px' }}>{title}</h2>
+      <h2 style={{ ...BRAND.sectionTitle, margin: '0 0 18px' }}>{title}</h2>
       {children}
     </div>
   );
