@@ -47,7 +47,21 @@ const MOMENTS: { value: SlotKindValue; label: string }[] = [
  * Rattachés à une buvette : deux comptoirs d'un même lieu peuvent servir à des
  * heures différentes.
  */
-export function SlotTemplatesPanel({ orgId, venueId }: { orgId: string; venueId: string }) {
+export function SlotTemplatesPanel({
+  orgId,
+  venueId,
+  supplierId: buvetteFixee,
+}: {
+  orgId: string;
+  venueId: string;
+  /**
+   * Quand il est fourni, le panneau se limite a CETTE buvette : plus de
+   * regroupement, plus de choix a refaire a chaque ajout. C'est la forme
+   * utilisee dans la fiche d'une buvette, ou l'on sait deja de laquelle on
+   * parle.
+   */
+  supplierId?: string;
+}) {
   const [templates, setTemplates] = useState<SlotTemplate[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [chargement, setChargement] = useState(true);
@@ -79,7 +93,8 @@ export function SlotTemplatesPanel({ orgId, venueId }: { orgId: string; venueId:
       setTemplates(Array.isArray(tpl) ? tpl : []);
       const liste = Array.isArray(sup) ? sup : [];
       setSuppliers(liste);
-      if (!supplierId && liste[0]) setSupplierId(liste[0].id);
+      if (buvetteFixee) setSupplierId(buvetteFixee);
+      else if (!supplierId && liste[0]) setSupplierId(liste[0].id);
       setErreur('');
     } catch (e) {
       setErreur(e instanceof Error ? e.message : 'Chargement impossible');
@@ -88,7 +103,7 @@ export function SlotTemplatesPanel({ orgId, venueId }: { orgId: string; venueId:
     }
     // `supplierId` volontairement hors dépendances : il n'est initialisé qu'une
     // fois, et l'inclure relancerait le chargement à chaque choix de buvette.
-  }, [venueId, orgId]);
+  }, [venueId, orgId, buvetteFixee]);
 
   useEffect(() => { void charger(); }, [charger]);
 
@@ -185,15 +200,16 @@ export function SlotTemplatesPanel({ orgId, venueId }: { orgId: string; venueId:
 
   // Regroupés par buvette : c'est ainsi qu'on les pense sur le terrain.
   const parBuvette = suppliers
+    .filter((s) => !buvetteFixee || s.id === buvetteFixee)
     .map((s) => ({ supplier: s, items: templates.filter((t) => t.supplierId === s.id) }))
     .filter((g) => g.items.length > 0);
 
   return (
     <div>
       <p style={{ fontSize: 13.5, color: BRAND.grey, lineHeight: 1.7, margin: '0 0 18px' }}>
-        Décrivez vos heures de retrait <strong>une seule fois</strong> : elles se rejouent chaque
-        jour, sans rien ressaisir. Vos équipiers ouvrent ou ferment chaque créneau depuis leur
-        poste, selon la file du moment.
+        Décrivez les heures de retrait de {buvetteFixee ? 'cette buvette' : 'chaque buvette'}{' '}
+        <strong>une seule fois</strong> : elles se rejouent chaque jour, sans rien ressaisir.
+        Votre équipier ouvre ou ferme chaque créneau depuis son poste, selon la file du moment.
       </p>
 
       {erreur && (
@@ -212,9 +228,11 @@ export function SlotTemplatesPanel({ orgId, venueId }: { orgId: string; venueId:
 
       {parBuvette.map(({ supplier, items }) => (
         <div key={supplier.id} style={{ marginBottom: 22 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.ink, marginBottom: 8 }}>
-            {supplier.name}
-          </div>
+          {!buvetteFixee && (
+            <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.ink, marginBottom: 8 }}>
+              {supplier.name}
+            </div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {items.map((t) => (
               <div
@@ -303,13 +321,15 @@ export function SlotTemplatesPanel({ orgId, venueId }: { orgId: string; venueId:
           </div>
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-            <Champ label="Buvette">
-              <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} style={champStyle}>
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
-                ))}
-              </select>
-            </Champ>
+            {!buvetteFixee && (
+              <Champ label="Buvette">
+                <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} style={champStyle}>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </Champ>
+            )}
 
             {mode === 'heure' ? (
               <>

@@ -8,6 +8,7 @@ import {
   apiUpdateSupplierStatus,
   apiRegenerateReferral,
   apiGetCategories,
+  apiGetVenues,
   apiCreateCategory,
   apiGetProducts,
   apiCreateProduct,
@@ -21,6 +22,7 @@ import {
   getOrgId,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
+import { SlotTemplatesPanel } from '@/components/slot-templates-panel';
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
   OPEN: { bg: '#d1fae5', color: '#065f46', label: 'Ouverte' },
@@ -62,6 +64,7 @@ function Card({ title, children, action }: {
 export default function SupplierDetailPage() {
   const params = useParams();
   const supplierId = params.id as string;
+  const [venueId, setVenueId] = useState<string | null>(null);
   const orgId = getOrgId();
 
   const [supplier, setSupplier] = useState<Supplier | null>(null);
@@ -103,12 +106,15 @@ export default function SupplierDetailPage() {
     setLoading(true);
     setError('');
     try {
-      const [sups, cats, prods, evs] = await Promise.all([
+      const [sups, venues, cats, prods, evs] = await Promise.all([
         apiGetSuppliers(orgId),
+        apiGetVenues(orgId),
         apiGetCategories(orgId, supplierId),
         apiGetProducts(orgId, supplierId),
         apiGetEvents(orgId),
       ]);
+      // Un club = un lieu : le premier fait autorite.
+      setVenueId((Array.isArray(venues) ? venues : [])[0]?.id ?? null);
       const found = (Array.isArray(sups) ? sups : []).find((s) => s.id === supplierId);
       setSupplier(found ?? null);
       setSettingsName(found?.name ?? '');
@@ -327,6 +333,16 @@ export default function SupplierDetailPage() {
           </button>
         </form>
       </Card>
+
+      {/* Créneaux de récupération — leur place est ICI.
+          Ils appartiennent a une buvette : les configurer sur la page du lieu
+          obligeait a re-choisir la buvette a chaque ajout, alors qu'on sait
+          deja de laquelle on parle. */}
+      {venueId && (
+        <Card title="Créneaux de récupération">
+          <SlotTemplatesPanel orgId={orgId} venueId={venueId} supplierId={supplierId} />
+        </Card>
+      )}
 
       {/* Rattacher à un événement */}
       <Card title="Rattacher à un événement">
