@@ -24,9 +24,6 @@ CREATE TABLE "slot_templates" (
   -- porterait une date, qui n'a aucun sens pour un motif qui se rejoue.
   "start_minutes" INTEGER      NOT NULL,
   "end_minutes"   INTEGER      NOT NULL,
-  -- Limite de commandes : desactivee par defaut. La plupart des clubs n'en
-  -- veulent pas au demarrage, et une limite subie est pire qu'aucune limite.
-  "capacity_enabled" BOOLEAN   NOT NULL DEFAULT false,
   "capacity"      INTEGER      NOT NULL DEFAULT 20,
   -- Désactivé = ne produit plus de créneau, sans perdre l'historique des
   -- commandes déjà rattachées aux créneaux qu'il a engendrés.
