@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { THEME } from '@lib/theme';
 import {
   ActivityIndicator,
   Pressable,
@@ -64,7 +65,7 @@ export function SupplierCatalogScreen({ route, navigation }: Props) {
       <View style={styles.root}>
         <PageHeader title="Catalogue" />
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color={THEME.orange} />
           <Text style={styles.loadingText}>Chargement du catalogue…</Text>
         </View>
       </View>
@@ -166,20 +167,20 @@ export function SupplierCatalogScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0f172a' },
+  root: { flex: 1, backgroundColor: THEME.bg },
 
   centered: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: THEME.bg,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
     gap: 12,
   },
-  loadingText: { color: '#9ca3af', fontSize: 14, marginTop: 12 },
+  loadingText: { color: THEME.inkSoft, fontSize: 14, marginTop: 12 },
   errorText: { color: '#f87171', fontSize: 14, textAlign: 'center' },
   retryBtn: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.orange,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 10,
@@ -192,23 +193,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 56,
     paddingBottom: 16,
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     gap: 12,
   },
   backBtn: { padding: 4 },
-  backArrow: { color: '#94a3b8', fontSize: 20 },
-  headerTitle: { color: '#f1f5f9', fontSize: 18, fontWeight: '700' },
+  backArrow: { color: THEME.inkSoft, fontSize: 20 },
+  headerTitle: { color: THEME.ink, fontSize: 18, fontWeight: '700' },
 
   list: { paddingBottom: 120 },
 
   sectionHeader: {
-    backgroundColor: '#0f172a',
+    backgroundColor: THEME.bg,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: THEME.surface,
   },
-  sectionTitle: { color: '#2563eb', fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
+  sectionTitle: { color: THEME.orange, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
 
   productCard: {
     flexDirection: 'row',
@@ -216,19 +217,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: THEME.surface,
     gap: 12,
   },
   productInfo: { flex: 1 },
-  productName: { color: '#f1f5f9', fontSize: 15, fontWeight: '600' },
-  productDesc: { color: '#94a3b8', fontSize: 13, marginTop: 2, lineHeight: 18 },
-  productPrice: { color: '#2563eb', fontSize: 15, fontWeight: '700', marginTop: 4 },
+  productName: { color: THEME.ink, fontSize: 15, fontWeight: '600' },
+  productDesc: { color: THEME.inkSoft, fontSize: 13, marginTop: 2, lineHeight: 18 },
+  productPrice: { color: THEME.orange, fontSize: 15, fontWeight: '700', marginTop: 4 },
 
   addBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.orange,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -243,21 +244,21 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.bgSubtle,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  qtyBtnText: { color: '#f1f5f9', fontSize: 18, fontWeight: '700', lineHeight: 22 },
-  qtyValue: { color: '#f1f5f9', fontSize: 16, fontWeight: '700', minWidth: 24, textAlign: 'center' },
+  qtyBtnText: { color: THEME.ink, fontSize: 18, fontWeight: '700', lineHeight: 22 },
+  qtyValue: { color: THEME.ink, fontSize: 16, fontWeight: '700', minWidth: 24, textAlign: 'center' },
 
   cartBar: {
     position: 'absolute',
     bottom: 32,
     left: 20,
     right: 20,
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.orange,
     borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
@@ -278,7 +279,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cartBadgeText: { color: '#2563eb', fontSize: 13, fontWeight: '800' },
+  cartBadgeText: { color: THEME.orange, fontSize: 13, fontWeight: '800' },
   cartBarText: { flex: 1, color: '#ffffff', fontSize: 16, fontWeight: '700' },
-  cartBarTotal: { color: '#bfdbfe', fontSize: 15, fontWeight: '600' },
+  cartBarTotal: { color: THEME.orangeSoft, fontSize: 15, fontWeight: '600' },
 });

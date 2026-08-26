@@ -20,7 +20,7 @@ import { useUserLocation } from '@lib/hooks/use-user-location';
 import { useNotifStore } from '@store/notif.store';
 import { apiSearchVenues, type PublicVenue } from '@lib/api/mobile-api';
 import { showAlert } from '@lib/alert';
-import { BOTTOM_BAR_SPACE } from '@components/app-bottom-bar';
+import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
 
@@ -48,6 +48,9 @@ type Up = { id: string; title: string; date: string; venue: string; image: strin
 const UPCOMING: Up[] = [];
 
 export function VenueDiscoveryScreen() {
+  // Espace sous le contenu : la barre flottante ne doit rien recouvrir.
+  // Calcule a l'execution car il depend de la zone sure de l'appareil.
+  const espaceBas = useBottomBarSpace();
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const { hasUnread, markRead } = useNotifStore();
@@ -132,7 +135,7 @@ export function VenueDiscoveryScreen() {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: espaceBas }]} showsVerticalScrollIndicator={false}>
         {/* Recherche */}
         <View style={[styles.searchBox, shadowCard]}>
           <Ionicons name="search" size={18} color={THEME.grey} />
@@ -335,7 +338,7 @@ function SectionHeader({
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
-  scroll: { paddingBottom: BOTTOM_BAR_SPACE + 16 },
+  scroll: {},
 
   band: { backgroundColor: THEME.orange, paddingBottom: 16, paddingHorizontal: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 6 },

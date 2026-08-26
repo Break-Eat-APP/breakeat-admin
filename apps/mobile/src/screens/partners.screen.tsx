@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PageHeader } from '@components/page-header';
 import { BreakEatLogo } from '@components/break-eat-logo';
-import { BOTTOM_BAR_SPACE } from '@components/app-bottom-bar';
+import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { THEME, shadowCard, FONT } from '@lib/theme';
 
 /** Partenaires Break Eat (clubs, salles & restaurateurs). */
@@ -19,10 +19,13 @@ const PARTNERS: string[] = [
 ];
 
 export function PartnersScreen() {
+  // Espace sous le contenu : la barre flottante ne doit rien recouvrir.
+  // Calcule a l'execution car il depend de la zone sure de l'appareil.
+  const espaceBas = useBottomBarSpace();
   return (
     <View style={styles.root}>
       <PageHeader title="Nos lieux" />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: espaceBas }]}>
         <Text style={styles.intro}>
           Ils nous font confiance — clubs, salles et restaurateurs qui proposent Break Eat.
         </Text>
@@ -49,7 +52,7 @@ export function PartnersScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
-  content: { padding: 16, paddingBottom: BOTTOM_BAR_SPACE + 24 },
+  content: { padding: 16 },
 
   intro: { color: THEME.inkSoft, fontSize: 14, lineHeight: 20, fontFamily: FONT.medium, marginBottom: 16 },
 

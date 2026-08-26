@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { THEME } from '@lib/theme';
 import {
   ActivityIndicator,
   Pressable,
@@ -226,7 +227,7 @@ export function CheckoutScreen({ navigation }: Props) {
                 <Switch
                   value={usePoints}
                   onValueChange={setUsePoints}
-                  trackColor={{ false: '#334155', true: '#FC4002' }}
+                  trackColor={{ false: THEME.bgSubtle, true: '#FC4002' }}
                   thumbColor="#fff"
                 />
               </View>
@@ -301,20 +302,20 @@ export function CheckoutScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0f172a' },
+  root: { flex: 1, backgroundColor: THEME.bg },
 
   centered: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: THEME.bg,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
     gap: 16,
   },
-  authTitle: { color: '#f1f5f9', fontSize: 20, fontWeight: '700' },
-  authText: { color: '#9ca3af', fontSize: 14, textAlign: 'center' },
+  authTitle: { color: THEME.ink, fontSize: 20, fontWeight: '700' },
+  authText: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center' },
   authBtn: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.orange,
     paddingHorizontal: 24,
     paddingVertical: 14,
     borderRadius: 12,
@@ -327,65 +328,65 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 56,
     paddingBottom: 16,
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     gap: 12,
   },
   back: { padding: 4 },
-  backArrow: { color: '#94a3b8', fontSize: 20 },
-  headerTitle: { color: '#f1f5f9', fontSize: 18, fontWeight: '700' },
+  backArrow: { color: THEME.inkSoft, fontSize: 20 },
+  headerTitle: { color: THEME.ink, fontSize: 18, fontWeight: '700' },
 
   content: { padding: 20, gap: 12, paddingBottom: 40 },
 
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     borderRadius: 14,
     padding: 16,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.bgSubtle,
   },
-  cardTitle: { color: '#64748b', fontSize: 12, fontWeight: '600', letterSpacing: 0.5 },
-  cardValue: { color: '#f1f5f9', fontSize: 15, fontWeight: '700' },
-  cardSub: { color: '#94a3b8', fontSize: 13 },
+  cardTitle: { color: THEME.inkSoft, fontSize: 12, fontWeight: '600', letterSpacing: 0.5 },
+  cardValue: { color: THEME.ink, fontSize: 15, fontWeight: '700' },
+  cardSub: { color: THEME.inkSoft, fontSize: 13 },
 
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
-  itemQty: { color: '#94a3b8', fontSize: 14, minWidth: 24 },
-  itemName: { color: '#f1f5f9', fontSize: 14, flex: 1 },
-  itemTotal: { color: '#f1f5f9', fontSize: 14, fontWeight: '600' },
+  itemQty: { color: THEME.inkSoft, fontSize: 14, minWidth: 24 },
+  itemName: { color: THEME.ink, fontSize: 14, flex: 1 },
+  itemTotal: { color: THEME.ink, fontSize: 14, fontWeight: '600' },
 
-  totalCard: { borderColor: '#2563eb44' },
+  totalCard: { borderColor: THEME.orangeSoft },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  subLine: { color: '#94a3b8', fontSize: 14 },
+  subLine: { color: THEME.inkSoft, fontSize: 14 },
   discountLine: { color: '#22c55e', fontSize: 14, fontWeight: '600' },
-  totalDivider: { height: 1, backgroundColor: '#334155', marginVertical: 4 },
+  totalDivider: { height: 1, backgroundColor: THEME.bgSubtle, marginVertical: 4 },
 
   loyaltyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
-  loyaltyLabel: { color: '#f1f5f9', fontSize: 14, fontWeight: '600' },
-  loyaltyHint: { color: '#94a3b8', fontSize: 12.5, marginTop: 2, lineHeight: 17 },
+  loyaltyLabel: { color: THEME.ink, fontSize: 14, fontWeight: '600' },
+  loyaltyHint: { color: THEME.inkSoft, fontSize: 12.5, marginTop: 2, lineHeight: 17 },
   loyaltyEarn: { color: '#FC4002', fontSize: 12.5, marginTop: 8, fontWeight: '600' },
-  totalLabel: { color: '#f1f5f9', fontSize: 16, fontWeight: '700' },
-  totalValue: { color: '#2563eb', fontSize: 22, fontWeight: '800' },
+  totalLabel: { color: THEME.ink, fontSize: 16, fontWeight: '700' },
+  totalValue: { color: THEME.orange, fontSize: 22, fontWeight: '800' },
 
   demoBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: THEME.bg,
     borderRadius: 10,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#4b5563',
+    borderColor: THEME.grey,
   },
   demoIcon: { fontSize: 18 },
-  demoText: { color: '#6b7280', fontSize: 12, flex: 1, lineHeight: 16 },
+  demoText: { color: THEME.grey, fontSize: 12, flex: 1, lineHeight: 16 },
 
   fakeCard: {
-    backgroundColor: '#1e3a5f',
+    backgroundColor: THEME.orangeTint,
     borderRadius: 16,
     padding: 20,
     gap: 8,
     borderWidth: 1,
-    borderColor: '#2563eb44',
+    borderColor: THEME.orangeSoft,
   },
   fakeCardChip: {
     width: 36,
@@ -393,17 +394,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#d97706',
     borderRadius: 6,
   },
-  fakeCardNum: { color: '#bfdbfe', fontSize: 16, letterSpacing: 2, fontWeight: '600' },
-  fakeCardLabel: { color: '#93c5fd', fontSize: 12 },
+  fakeCardNum: { color: THEME.orangeSoft, fontSize: 16, letterSpacing: 2, fontWeight: '600' },
+  fakeCardLabel: { color: THEME.orangeSoft, fontSize: 12 },
 
   cta: {
     padding: 20,
-    backgroundColor: '#0f172a',
+    backgroundColor: THEME.bg,
     borderTopWidth: 1,
-    borderTopColor: '#1e293b',
+    borderTopColor: THEME.surface,
   },
   ctaBtn: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.orange,
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
@@ -416,5 +417,5 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 16,
   },
-  ctaLoadingText: { color: '#94a3b8', fontSize: 14 },
+  ctaLoadingText: { color: THEME.inkSoft, fontSize: 14 },
 });

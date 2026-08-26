@@ -1,4 +1,5 @@
 import React from 'react';
+import { THEME } from '@lib/theme';
 import { View, Text, StyleSheet } from 'react-native';
 
 /**
@@ -19,7 +20,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0f0f0f',
+    backgroundColor: THEME.bg,
   },
   title: {
     fontSize: 28,
@@ -29,7 +30,7 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
-    color: '#666666',
+    color: THEME.inkSoft,
     marginTop: 8,
   },
 });

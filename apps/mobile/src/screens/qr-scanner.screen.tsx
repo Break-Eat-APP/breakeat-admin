@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { THEME } from '@lib/theme';
 import {
   Linking,
   Platform,
@@ -211,7 +212,7 @@ export function QRScannerScreen({ navigation }: Props) {
 
 const CORNER = 24;
 const CORNER_W = 3;
-const BLUE = '#2563eb';
+const BLUE = THEME.orange;
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#000' },
@@ -227,7 +228,7 @@ const styles = StyleSheet.create({
 
   centered: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: THEME.bg,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
@@ -283,7 +284,7 @@ const styles = StyleSheet.create({
   scannedText: { color: '#fff', fontWeight: '700', fontSize: 16 },
 
   permTitle: { fontSize: 20, fontWeight: '700', color: '#ffffff', textAlign: 'center' },
-  permText: { fontSize: 14, color: '#9ca3af', textAlign: 'center', lineHeight: 20 },
+  permText: { fontSize: 14, color: THEME.inkSoft, textAlign: 'center', lineHeight: 20 },
 
   btn: {
     backgroundColor: BLUE,
@@ -297,7 +298,7 @@ const styles = StyleSheet.create({
   btnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 
   altBtn: { paddingVertical: 10, alignItems: 'center' },
-  altText: { color: '#6b7280', fontSize: 13 },
+  altText: { color: THEME.grey, fontSize: 13 },
 
   manualBox: {
     width: '100%',
@@ -307,15 +308,15 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 10,
   },
-  manualLabel: { color: '#d1d5db', fontSize: 13, fontWeight: '600' },
+  manualLabel: { color: THEME.border, fontSize: 13, fontWeight: '600' },
   manualInput: {
-    backgroundColor: '#1f2937',
+    backgroundColor: THEME.surface,
     color: '#fff',
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderRadius: 8,
     fontSize: 13,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: THEME.inkSoft,
   },
 });

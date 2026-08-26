@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { THEME } from '@lib/theme';
 import {
   Animated,
   Pressable,
@@ -124,7 +125,7 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: THEME.bg,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 28,
@@ -147,26 +148,26 @@ const styles = StyleSheet.create({
   icon: { color: '#fff', fontSize: 48, fontWeight: '900', lineHeight: 54 },
 
   textBlock: { width: '100%', alignItems: 'center', gap: 12 },
-  title: { color: '#f1f5f9', fontSize: 26, fontWeight: '800', textAlign: 'center' },
-  subtitle: { color: '#94a3b8', fontSize: 15, textAlign: 'center' },
+  title: { color: THEME.ink, fontSize: 26, fontWeight: '800', textAlign: 'center' },
+  subtitle: { color: THEME.inkSoft, fontSize: 15, textAlign: 'center' },
 
   orderCard: {
     width: '100%',
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     borderRadius: 16,
     padding: 20,
     gap: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.bgSubtle,
     marginTop: 8,
   },
   orderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  orderLabel: { color: '#94a3b8', fontSize: 13 },
-  orderNumber: { color: '#f1f5f9', fontSize: 15, fontWeight: '700', letterSpacing: 1 },
-  orderAmount: { color: '#2563eb', fontSize: 18, fontWeight: '800' },
-  divider: { height: 1, backgroundColor: '#334155' },
+  orderLabel: { color: THEME.inkSoft, fontSize: 13 },
+  orderNumber: { color: THEME.ink, fontSize: 15, fontWeight: '700', letterSpacing: 1 },
+  orderAmount: { color: THEME.orange, fontSize: 18, fontWeight: '800' },
+  divider: { height: 1, backgroundColor: THEME.bgSubtle },
   statusBadge: {
-    backgroundColor: '#166534',
+    backgroundColor: '#ecfdf5',
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 20,
@@ -176,15 +177,15 @@ const styles = StyleSheet.create({
   infoBox: {
     flexDirection: 'row',
     gap: 10,
-    backgroundColor: '#1a1a2e',
+    backgroundColor: THEME.bg,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.bgSubtle,
     width: '100%',
   },
   infoIcon: { fontSize: 16 },
-  infoText: { color: '#94a3b8', fontSize: 13, flex: 1, lineHeight: 18 },
+  infoText: { color: THEME.inkSoft, fontSize: 13, flex: 1, lineHeight: 18 },
 
   actions: { width: '100%', gap: 12 },
   planBtn: {
@@ -198,7 +199,7 @@ const styles = StyleSheet.create({
   },
   planBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   primaryBtn: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.orange,
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: 'center',
@@ -208,5 +209,5 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
   },
-  secondaryBtnText: { color: '#6b7280', fontSize: 14 },
+  secondaryBtnText: { color: THEME.grey, fontSize: 14 },
 });

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { THEME } from '@lib/theme';
 import {
   ActivityIndicator,
   FlatList,
@@ -84,7 +85,7 @@ export function EventHomeScreen({ route, navigation }: Props) {
       <View style={styles.root}>
         <PageHeader />
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#2563eb" />
+          <ActivityIndicator size="large" color={THEME.orange} />
           <Text style={styles.loadingText}>Chargement de l'événement…</Text>
         </View>
       </View>
@@ -113,10 +114,10 @@ export function EventHomeScreen({ route, navigation }: Props) {
         <PageHeader />
         <View style={styles.centered}>
           <Text style={{ fontSize: 48, marginBottom: 16 }}>🏟️</Text>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: '#1c1917', textAlign: 'center', marginBottom: 8 }}>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: THEME.ink, textAlign: 'center', marginBottom: 8 }}>
             Plan du lieu
           </Text>
-          <Text style={{ fontSize: 14, color: '#78716c', textAlign: 'center', maxWidth: 260, lineHeight: 20 }}>
+          <Text style={{ fontSize: 14, color: THEME.inkSoft, textAlign: 'center', maxWidth: 260, lineHeight: 20 }}>
             L'intégration Flaix est active. Sélectionne ton emplacement sur le plan du stade pour commander.
           </Text>
           <Text style={{ fontSize: 11, color: '#a8a29e', marginTop: 24 }}>
@@ -177,7 +178,7 @@ export function EventHomeScreen({ route, navigation }: Props) {
             <RefreshControl
               refreshing={loading}
               onRefresh={() => void load()}
-              tintColor="#2563eb"
+              tintColor={THEME.orange}
             />
           }
           renderItem={({ item }) => (
@@ -314,7 +315,7 @@ function AppearanceHome({
                   justifyContent: 'center',
                   alignItems: 'center',
                   padding: c.imageUrl ? 0 : 16,
-                  shadowColor: '#1c1917',
+                  shadowColor: THEME.ink,
                   shadowOpacity: 0.12,
                   shadowRadius: 12,
                   shadowOffset: { width: 0, height: 6 },
@@ -341,22 +342,22 @@ function AppearanceHome({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#0f172a' },
+  root: { flex: 1, backgroundColor: THEME.bg },
 
   centered: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: THEME.bg,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
     gap: 12,
   },
 
-  loadingText: { color: '#9ca3af', fontSize: 14, marginTop: 12 },
+  loadingText: { color: THEME.inkSoft, fontSize: 14, marginTop: 12 },
   errorTitle: { color: '#f87171', fontSize: 18, fontWeight: '700' },
-  errorText: { color: '#9ca3af', fontSize: 14, textAlign: 'center' },
+  errorText: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center' },
   retryBtn: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.orange,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 10,
@@ -369,14 +370,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 56,
     paddingBottom: 16,
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     gap: 12,
   },
   backBtn: { padding: 4 },
-  backArrow: { color: '#94a3b8', fontSize: 20 },
-  backText: { color: '#2563eb', fontSize: 14 },
+  backArrow: { color: THEME.inkSoft, fontSize: 20 },
+  backText: { color: THEME.orange, fontSize: 14 },
   headerInfo: { flex: 1 },
-  eventName: { color: '#f1f5f9', fontSize: 18, fontWeight: '700', lineHeight: 24 },
+  eventName: { color: THEME.ink, fontSize: 18, fontWeight: '700', lineHeight: 24 },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { fontSize: 12, fontWeight: '600' },
@@ -386,71 +387,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: THEME.bgSubtle,
     gap: 8,
   },
   venueIcon: { fontSize: 14 },
-  venueName: { color: '#94a3b8', fontSize: 13, flex: 1 },
-  venueTime: { color: '#64748b', fontSize: 12 },
+  venueName: { color: THEME.inkSoft, fontSize: 13, flex: 1 },
+  venueTime: { color: THEME.inkSoft, fontSize: 12 },
 
   section: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 8 },
-  sectionTitle: { color: '#f1f5f9', fontSize: 16, fontWeight: '700' },
-  sectionSub: { color: '#64748b', fontSize: 13, marginTop: 2 },
+  sectionTitle: { color: THEME.ink, fontSize: 16, fontWeight: '700' },
+  sectionSub: { color: THEME.inkSoft, fontSize: 13, marginTop: 2 },
 
   list: { paddingHorizontal: 16, paddingBottom: 120, gap: 12 },
 
   supplierCard: {
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     borderRadius: 14,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: THEME.bgSubtle,
   },
   pressed: { opacity: 0.75 },
   supplierAvatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.orange,
     justifyContent: 'center',
     alignItems: 'center',
   },
   supplierInitial: { color: '#fff', fontSize: 20, fontWeight: '800' },
   supplierInfo: { flex: 1 },
-  supplierName: { color: '#f1f5f9', fontSize: 16, fontWeight: '700' },
-  supplierDesc: { color: '#94a3b8', fontSize: 13, marginTop: 2, lineHeight: 18 },
-  arrow: { color: '#4b5563', fontSize: 18 },
+  supplierName: { color: THEME.ink, fontSize: 16, fontWeight: '700' },
+  supplierDesc: { color: THEME.inkSoft, fontSize: 13, marginTop: 2, lineHeight: 18 },
+  arrow: { color: THEME.grey, fontSize: 18 },
 
   emptyBox: {
     margin: 20,
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     borderRadius: 12,
     padding: 24,
     alignItems: 'center',
   },
-  emptyText: { color: '#6b7280', fontSize: 14, textAlign: 'center' },
+  emptyText: { color: THEME.grey, fontSize: 14, textAlign: 'center' },
 
   loginHint: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#1e293b',
+    backgroundColor: THEME.surface,
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: THEME.bgSubtle,
   },
-  loginHintText: { color: '#94a3b8', fontSize: 13, flex: 1 },
+  loginHintText: { color: THEME.inkSoft, fontSize: 13, flex: 1 },
   loginHintBtn: {
-    backgroundColor: '#2563eb',
+    backgroundColor: THEME.orange,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
