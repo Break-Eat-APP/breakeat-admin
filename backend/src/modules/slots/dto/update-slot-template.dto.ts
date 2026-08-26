@@ -36,11 +36,6 @@ export class UpdateSlotTemplateDto {
   @IsOptional()
   endMinutes?: number;
 
-  /** Limite active ou non. Fausse par defaut : pas de limite subie. */
-  @IsBoolean()
-  @IsOptional()
-  capacityEnabled?: boolean;
-
   @IsInt()
   @Min(1)
   @Max(10000)

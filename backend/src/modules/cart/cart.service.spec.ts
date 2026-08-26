@@ -387,3 +387,29 @@ describe('CartService', () => {
     await expect(service.findOne('bad-id', USER_ID)).rejects.toThrow(NotFoundException);
   });
 });
+
+// --- Stock : suivi explicite, pas obligatoire ------------------
+
+describe('CartService — produit sans ligne de stock', () => {
+  it('resolveStock renvoie null quand aucune ligne n existe', async () => {
+    // Regle : absence de ligne = produit NON SUIVI, donc commandable.
+    //
+    // L'inverse bloquait tout le parcours : ni la creation d'un produit ni
+    // l'assistant de demarrage ne posent de ligne de stock, si bien qu'aucun
+    // produit cree normalement n'etait commandable.
+    //
+    // Ce test fige l'intention. S'il tombe, c'est qu'on est revenu a exiger
+    // une ligne de stock — et le parcours de commande sera casse.
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const faux = { stock: { findFirst } } as unknown as PrismaService;
+
+    const resolve = (
+      CartService.prototype as unknown as {
+        resolveStock: (this: unknown, p: string, pp: string | null) => Promise<unknown>;
+      }
+    ).resolveStock;
+
+    const res = await resolve.call({ prisma: faux }, 'prod-1', null);
+    expect(res).toBeNull();
+  });
+});

@@ -787,11 +787,27 @@ export class CartService {
       throw new BadRequestException('Product availability window has ended');
     }
 
-    // Stock lookup: per-pickup-point first, fall back to global
+    // Stock lookup: per-pickup-point first, fall back to global.
+    //
+    // ABSENCE de ligne de stock = produit NON SUIVI, donc commandable.
+    //
+    // L'inverse bloquait tout : ni la création d'un produit, ni l'assistant de
+    // démarrage ne posent de ligne de stock, si bien qu'AUCUN produit créé par
+    // le parcours normal n'était commandable. Le client se voyait refuser son
+    // panier avec « No stock entry configured for this product » — un message
+    // qui décrit une table vide, pas un problème qu'il puisse résoudre.
+    //
+    // Le suivi de stock devient donc explicite : une buvette qui vend des
+    // nachos à un match n'en fait pas, et n'a pas à en déclarer pour vendre.
+    // Celle qui en veut crée la ligne, et les contrôles ci-dessous s'appliquent.
+    // Aucune ligne = aucune intention de suivre.
+    //
+    // `assertCumulativeQuantityWithinStock` traitait déjà l'absence ainsi
+    // (`if (!stock) return`) : les deux contrôles se contredisaient dans le
+    // même fichier.
     const stock = await this.resolveStock(productId, pickupPointId);
-    if (!stock) {
-      throw new BadRequestException('No stock entry configured for this product');
-    }
+    if (!stock) return;
+
     if (!stock.isAvailable) {
       throw new BadRequestException('Product is currently unavailable');
     }
