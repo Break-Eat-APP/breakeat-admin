@@ -167,6 +167,10 @@ model SlotTemplate {
   /// Un DateTime porterait une date qui n’a aucun sens pour un motif récurrent.
   startMinutes Int      @map("start_minutes")
   endMinutes   Int      @map("end_minutes")
+  /// Limite de commandes ACTIVE ou non. Faux par defaut : la plupart des clubs
+  /// n'en veulent pas au depart, et une limite subie est pire qu'aucune.
+  capacityEnabled Boolean @default(false) @map("capacity_enabled")
+  /// Nombre de commandes quand la limite est active. Ignore sinon.
   capacity     Int      @default(20)
   /// Désactivé = ne produit plus de créneau, sans perdre l’historique.
   isActive     Boolean  @default(true) @map("is_active")

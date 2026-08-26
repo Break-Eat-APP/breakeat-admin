@@ -1198,6 +1198,8 @@ export interface SlotTemplate {
   /** Minutes depuis minuit. 1065 = 17h45. */
   startMinutes: number;
   endMinutes: number;
+  /** Limite active ou non. Fausse par defaut : pas de limite subie. */
+  capacityEnabled: boolean;
   capacity: number;
   isActive: boolean;
   sortOrder: number;
@@ -1223,6 +1225,7 @@ export async function apiCreateSlotTemplate(
     kind: SlotKindValue;
     startMinutes: number;
     endMinutes: number;
+    capacityEnabled?: boolean;
     capacity?: number;
   },
 ): Promise<SlotTemplate> {
@@ -1237,6 +1240,7 @@ export async function apiUpdateSlotTemplate(
     kind: SlotKindValue;
     startMinutes: number;
     endMinutes: number;
+    capacityEnabled: boolean;
     capacity: number;
     isActive: boolean;
   }>,
