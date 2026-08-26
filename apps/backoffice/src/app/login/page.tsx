@@ -78,10 +78,9 @@ export default function LoginPage() {
           padding: '44px 40px 30px',
           width: 420,
           maxWidth: '100%',
-          border: `1px solid ${BORDER}`,
           // Contour ORANGE complet plutot qu'une bande en haut : la bande
           // paraissait collee, comme un bandeau d'alerte. Un cadre entier
-          // designe le bloc lui-meme, et tient sans depasser.
+          // designe le bloc lui-meme.
           border: `2px solid ${BRAND.orange}`,
           boxShadow: BRAND.shadowSoft,
           display: 'flex',
