@@ -24,18 +24,59 @@ export const BRAND = {
   orangeTint: 'rgba(252, 64, 2, 0.08)', // faint background wash (use sparingly)
 
   // Neutrals (warm) — "chaleureux premium"
-  ink: '#2d2926', // primary text — anthracite chaud
-  inkSoft: '#57514c', // labels / secondary text (un cran plus doux que l'ancien #44403c)
-  grey: '#a8a29e', // muted hints
-  border: '#ece3dd', // hairline borders (warm)
-  bg: '#fcfaf8', // canevas — blanc cassé chaud (était #ffffff pur)
-  bgSubtle: '#f5efe9', // insets / chips / surfaces secondaires (un peu plus profond)
-  surface: '#ffffff', // cartes — blanc franc, ressort sur le canevas cassé
+  //
+  // Contraste RELEVÉ (26/08) : les dashboards paraissaient éteints. Un texte
+  // secondaire trop pâle ne se lit pas comme « discret », il se lit comme
+  // « délavé » — et c'est ce qui vieillit une interface. Chaque cran gagné se
+  // voit immédiatement sur des écrans denses en données.
+  ink: '#241f1d', // titres & texte principal — plus profond, plus net
+  inkSoft: '#4d4641', // labels / texte secondaire — lisible, pas fantomatique
+  grey: '#776e68', // hints — 4.7:1 sur le canevas, seuil WCAG du petit texte
+  border: '#eee7e1', // filets — chauds, presque invisibles
+  bg: '#fbf8f5', // canevas — blanc cassé chaud
+  bgSubtle: '#f5efe9', // remplissages, chips, en-têtes de tableau
+  surface: '#ffffff', // cartes — blanc franc, ressort sur le canevas
 
-  // Shadows — douces, NEUTRES, en couches (profondeur premium, sans teinte orange)
-  shadowCard: '0 1px 2px rgba(45, 41, 38, 0.04), 0 4px 14px rgba(45, 41, 38, 0.05)', // carte au repos
-  shadowSoft: '0 1px 2px rgba(45, 41, 38, 0.04), 0 12px 32px rgba(45, 41, 38, 0.07)', // élévation modale / survol
-  shadowButton: '0 6px 18px rgba(252, 64, 2, 0.22)', // CTA orange (lueur douce, conservée pour la marque)
+  // Shadows — douces, NEUTRES, en couches.
+  //
+  // Renforcées (26/08) : à 0.04 d'opacité elles étaient invisibles, et une carte
+  // sans relief se confond avec le canevas. Une interface « vivante » se
+  // reconnaît d'abord à ses plans — ce qui est posé sur quoi.
+  shadowCard: '0 1px 2px rgba(36, 31, 29, 0.05), 0 4px 16px rgba(36, 31, 29, 0.07)',
+  shadowSoft: '0 2px 4px rgba(36, 31, 29, 0.05), 0 14px 36px rgba(36, 31, 29, 0.10)',
+  shadowButton: '0 6px 18px rgba(252, 64, 2, 0.26)', // CTA orange — lueur de marque
+
+  // Couleurs d'ÉTAT. Séparées de l'accent : l'orange dit « la marque », le vert
+  // et le rouge disent « ce qui se passe ». Les confondre rend un tableau de
+  // bord illisible d'un coup d'œil.
+  //
+  // Rassemblées ici parce qu'elles étaient réécrites à la main dans chaque
+  // écran — plus de 100 occurrences de '#dc2626' à travers les trois apps.
+  success: '#15803d',
+  successBg: '#e8f6ed',
+  warning: '#a16207',
+  warningBg: '#fdf5e3',
+  danger: '#c2251f',
+  dangerBg: '#fdecea',
+  info: '#1d6f8f',
+  infoBg: '#e6f1f6',
+
+  /**
+   * Titre de section — orange vif, en capitales espacées.
+   *
+   * Ce n'est pas de la décoration : sur un écran dense, l'œil cherche d'abord
+   * la structure. Un titre qui se distingue du contenu par sa COULEUR et sa
+   * FORME se repère sans être lu, et donne à l'ensemble un rythme de logiciel
+   * plutôt que de document.
+   */
+  sectionTitle: {
+    color: '#FC4002',
+    fontFamily: 'var(--font-display), var(--font-sans), sans-serif',
+    fontSize: 12,
+    fontWeight: 700,
+    letterSpacing: '0.09em',
+    textTransform: 'uppercase',
+  },
 
   // Arrondis (cohérence — le nouveau code s'y réfère)
   radius: {
@@ -47,6 +88,15 @@ export const BRAND = {
   // Typography
   //  • font → Inter, pour TOUTE l'UI. Chaque app définit --font-sans dans son
   //    app/layout.tsx (next/font/google). Fallback : stack système (Arial-like).
+  /**
+   * Police de TITRE — Raleway, cablee sur --font-display par chaque app.
+   *
+   * Reservee aux titres de section et aux groupes de menu. Une seconde
+   * famille employee sur un seul role donne du rythme sans disperser : la
+   * structure se reconnait a sa forme avant d etre lue.
+   */
+  fontDisplay: 'var(--font-display), var(--font-sans), Helvetica, Arial, sans-serif',
+
   font: 'var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
 } as const;
 

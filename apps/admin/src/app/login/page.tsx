@@ -97,6 +97,10 @@ export default function LoginPage() {
           width: 420,
           maxWidth: '100%',
           border: `1px solid ${BORDER}`,
+          // Contour ORANGE complet plutot qu'une bande en haut : la bande
+          // paraissait collee, comme un bandeau d'alerte. Un cadre entier
+          // designe le bloc lui-meme, et tient sans depasser.
+          border: `2px solid ${BRAND.orange}`,
           boxShadow: BRAND.shadowSoft,
           display: 'flex',
           flexDirection: 'column',
@@ -104,18 +108,6 @@ export default function LoginPage() {
           overflow: 'hidden',
         }}
       >
-        {/* Top accent bar (solid orange) */}
-        <div
-          aria-hidden
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 5,
-            background: ORANGE,
-          }}
-        />
 
         {/* Brand — the B + éclair logo (single source: BreakEatLogo) */}
         <div
@@ -137,7 +129,7 @@ export default function LoginPage() {
               textTransform: 'uppercase',
             }}
           >
-            Panneau d&apos;administration
+            Backoffice manager
           </div>
         </div>
 

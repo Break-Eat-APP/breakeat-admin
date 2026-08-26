@@ -155,7 +155,7 @@ Cette action est definitive.`)) return;
             border: `2px solid ${BRAND.orange}`,
           }}
         >
-          <h2 style={{ fontSize: 16, fontWeight: 700, color: BRAND.orange, margin: '0 0 16px' }}>Créer une buvette</h2>
+          <h2 style={{ ...BRAND.sectionTitle, margin: '0 0 16px' }}>Créer une buvette</h2>
           <div>
             <label style={labelStyle}>Nom de la buvette *</label>
             <input

@@ -57,7 +57,10 @@ export function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
           padding: '44px 40px 30px',
           width: 380,
           maxWidth: '100%',
-          border: `1px solid ${BRAND.border}`,
+          // Contour ORANGE complet plutot qu'une bande en haut : la bande
+          // paraissait collee, comme un bandeau d'alerte. Un cadre entier
+          // designe le bloc lui-meme.
+          border: `2px solid ${BRAND.orange}`,
           boxShadow: BRAND.shadowSoft,
           display: 'flex',
           flexDirection: 'column',
@@ -65,14 +68,12 @@ export function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
           overflow: 'hidden',
         }}
       >
-        {/* Top accent bar (solid orange) */}
-        <div aria-hidden style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 5, background: BRAND.orange }} />
 
         {/* Brand — official logo with wording */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginBottom: 6 }}>
           <BreakEatLogo size={54} showWordmark />
           <div style={{ fontSize: 12, color: BRAND.grey, fontWeight: 500, letterSpacing: 1.5, textTransform: 'uppercase' }}>
-            Portail opérateur
+            Dashboard opérateur
           </div>
         </div>
 

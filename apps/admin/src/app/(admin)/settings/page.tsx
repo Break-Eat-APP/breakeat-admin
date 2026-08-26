@@ -152,7 +152,7 @@ export default function SettingsPage() {
           onSubmit={handleSave}
           style={{ background: BRAND.surface, borderRadius: 12, padding: 24, boxShadow: BRAND.shadowSoft, marginBottom: 24, border: `2px solid ${BRAND.orange}` }}
         >
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.orange, margin: '0 0 16px' }}>
+          <h2 style={{ ...BRAND.sectionTitle, margin: '0 0 16px' }}>
             Créer / mettre à jour un paramètre
           </h2>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
