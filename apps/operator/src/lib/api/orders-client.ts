@@ -29,6 +29,12 @@ if (
   );
 }
 
+/**
+ * Emis quand le serveur refuse le jeton. La page ecoute et revient au
+ * formulaire de connexion — une seule fois, sans rechargement.
+ */
+export const SESSION_EXPIREE = 'breakeat:session-expiree';
+
 async function apiFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
@@ -40,15 +46,21 @@ async function apiFetch<T>(path: string, token: string, init?: RequestInit): Pro
   });
   // Session expirée ou invalidée : le jeton stocké ne vaut plus rien.
   //
-    // Arrive notamment après une ROTATION de `JWT_SECRET` côté serveur — tous
-  // les jetons émis avant deviennent invalides d'un coup. Jusqu'ici l'app
-  // affichait « API /orders/… → 401 » en travers de l'écran et restait bloquée
-  // là : le jeton mort n'était jamais jeté, donc chaque rechargement échouait
-  // pareil. On le supprime et on renvoie vers la connexion, seule issue réelle.
+  // Arrive notamment après une rotation de `JWT_SECRET` côté serveur — tous les
+  // jetons émis avant deviennent invalides d'un coup.
+  //
+  // ⚠️ SURTOUT PAS de `window.location.reload()` ici. La version précédente le
+  // faisait, et se déconnectait en boucle : le tableau lance plusieurs appels au
+  // montage, le premier 401 rechargeait la page, qui relançait les mêmes appels,
+  // qui rechargeaient encore. L'écran paraissait « se connecter puis sauter »,
+  // sans jamais laisser le temps de rien.
+  //
+  // On signale par un événement : la page décide, une seule fois, de revenir au
+  // formulaire de connexion.
   if (res.status === 401) {
     if (typeof window !== 'undefined') {
       localStorage.removeItem('operator_token');
-      window.location.reload();
+      window.dispatchEvent(new Event(SESSION_EXPIREE));
     }
     throw new Error('Session expirée — reconnectez-vous.');
   }

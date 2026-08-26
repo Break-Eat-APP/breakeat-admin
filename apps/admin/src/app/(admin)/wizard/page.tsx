@@ -694,11 +694,41 @@ export default function WizardPage() {
   return (
     <div style={{ padding: 32, fontFamily: BRAND.font, maxWidth: 860 }}>
       <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: '0 0 6px', letterSpacing: -0.3 }}>
-        Configurer mon lieu
+        Assistant de démarrage
       </h1>
-      <p style={{ color: BRAND.grey, fontSize: 14, marginBottom: 24 }}>
-        {'Un parcours guidé, étape par étape : template, produits & prix, créneaux, notifications et campagne push. Tout est pré-rempli — modifiez ce que vous voulez, puis lancez la configuration.'}
+      <p style={{ color: BRAND.grey, fontSize: 14, marginBottom: 16 }}>
+        {'Un parcours guidé pour tout mettre en place d’un coup : buvettes, produits & prix, créneaux, notifications. Tout est pré-rempli — modifiez ce que vous voulez, puis lancez.'}
       </p>
+
+      {/*
+        Avertissement franc plutôt qu'un piège silencieux.
+
+        Cet assistant réutilise le lieu, mais CRÉE un événement, des buvettes,
+        des comptoirs et des produits neufs à chaque passage. Relancé pour
+        « corriger » une configuration, il empile un second ensemble pendant que
+        l'app continue d'afficher le premier — et le club conclut, à tort, que
+        rien ne s'enregistre. C'est exactement ce qui est arrivé.
+
+        À retirer le jour où l'assistant saura mettre à jour au lieu d'ajouter.
+      */}
+      <div
+        style={{
+          background: '#fffbeb',
+          border: '1px solid #fcd34d',
+          borderRadius: 10,
+          padding: '13px 16px',
+          color: '#92400e',
+          fontSize: 13.5,
+          lineHeight: 1.65,
+          marginBottom: 24,
+        }}
+      >
+        <strong>À utiliser pour un premier paramétrage.</strong> Chaque passage{' '}
+        <strong>ajoute</strong> un nouvel ensemble (événement, buvettes, comptoirs,
+        produits) au lieu de modifier l’existant. Pour corriger une configuration déjà
+        en place, passez par <strong>Mon lieu</strong>, <strong>Points de retrait</strong>{' '}
+        et <strong>Événements</strong>.
+      </div>
 
       {/* Stepper */}
       {!done && <Stepper current={step} steps={visibleSteps} />}
