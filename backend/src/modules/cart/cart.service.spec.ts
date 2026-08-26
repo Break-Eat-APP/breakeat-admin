@@ -12,6 +12,7 @@ import {
   StripeAccountStatus,
 } from '@prisma/client';
 import { CartService } from './cart.service';
+import { SlotsService } from '../slots/slots.service';
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
 import { GroupsService } from '../groups/groups.service';
@@ -84,6 +85,13 @@ describe('CartService', () => {
       providers: [
         CartService,
         loyaltyDisabledProvider,
+        {
+          // Le paiement remplit desormais le creneau choisi (phase 23).
+          // Les cas testes ici partent d’un panier SANS creneau : le service
+          // n’est jamais sollicite, un mock vide suffit a l’injection.
+          provide: SlotsService,
+          useValue: { assignOrderToSlot: jest.fn() },
+        },
         {
           provide: PrismaService,
           useValue: {

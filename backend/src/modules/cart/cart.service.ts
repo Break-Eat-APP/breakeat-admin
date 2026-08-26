@@ -19,6 +19,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
 import { GroupsService } from '../groups/groups.service';
 import { LoyaltyService, MIN_PAYABLE_CENTS } from '../loyalty/loyalty.service';
+import { SlotsService } from '../slots/slots.service';
 import type { CreateCartDto } from './dto/create-cart.dto';
 import type { UpdateCartDto } from './dto/update-cart.dto';
 import type { AddCartItemDto } from './dto/add-cart-item.dto';
@@ -93,6 +94,7 @@ export class CartService {
     private readonly stripe: StripeService,
     private readonly groups: GroupsService,
     private readonly loyaltyService: LoyaltyService,
+    private readonly slotsService: SlotsService,
   ) {}
 
   // ─── Create / Read ───────────────────────────────────────────
@@ -540,6 +542,28 @@ export class CartService {
           items: { create: itemSnapshots },
         },
       });
+
+      // 3ter. PHASE 23 — rattacher la commande au CRÉNEAU choisi.
+      //
+      // Le panier portait `selectedSlotId` depuis le début, mais la commande se
+      // créait sans lui : le créneau ne se remplissait jamais, sa capacité ne
+      // servait qu'à afficher un nombre, et il ne passait jamais « complet ».
+      //
+      // `assignOrderToSlot` incrémente de façon sûre en concurrence (WHERE
+      // currentLoad < capacity) et bascule en FULL à la limite. Dans la MÊME
+      // transaction que la commande : jamais de place consommée sans commande,
+      // ni de commande sur un créneau plein.
+      //
+      // Un créneau devenu complet ou fermé entre le choix et le paiement fait
+      // échouer la transaction — c'est le comportement voulu : mieux vaut un
+      // refus clair qu'une commande que personne ne pourra servir.
+      if (cart.selectedSlotId) {
+        await this.slotsService.assignOrderToSlot(
+          createdOrder.id,
+          cart.selectedSlotId,
+          tx,
+        );
+      }
 
       // 3bis. PHASE 20 — débit des points DANS la même transaction que la
       // commande : jamais de points perdus sans commande, ni de remise accordée
