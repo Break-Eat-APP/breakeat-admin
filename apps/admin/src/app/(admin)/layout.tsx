@@ -17,9 +17,6 @@ import {
   Building2,
   Users,
   Settings,
-  Flag,
-  Rocket,
-  FlaskConical,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -93,14 +90,6 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Système',
     items: [
       { href: '/settings', icon: Settings, label: 'Paramètres' },
-      { href: '/feature-flags', icon: Flag, label: 'Feature Flags' },
-    ],
-  },
-  {
-    title: 'Outils',
-    items: [
-      { href: '/simulator', icon: Rocket, label: 'Simulateur' },
-      { href: '/demo-setup', icon: FlaskConical, label: 'Démo Spartiates' },
     ],
   },
 ];
