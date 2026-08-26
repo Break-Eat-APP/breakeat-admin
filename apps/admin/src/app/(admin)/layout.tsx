@@ -20,7 +20,6 @@ import {
   Flag,
   Rocket,
   FlaskConical,
-  ExternalLink,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -29,7 +28,6 @@ import {
   getOrgName,
   getStoredUser,
   clearSession,
-  OPERATOR_URL,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 import { BreakEatLogo } from '@/components/brand/BreakEatLogo';
@@ -75,7 +73,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/suppliers', icon: Store, label: 'Points de retrait' },
       { href: '/operator-screens', icon: MonitorSmartphone, label: 'Écrans opérateur' },
-      { href: OPERATOR_URL, icon: ExternalLink, label: 'Ouvrir le poste opérateur', external: true },
     ],
   },
   {

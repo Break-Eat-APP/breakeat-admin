@@ -23,6 +23,14 @@ import {
  * le créneau est régénéré. Choisir « À la mi-temps » ici, c'est ce qui permet à
  * un écran de rester juste demain.
  */
+/**
+ * Duree d'un creneau horaire, deduite plutot que demandee.
+ *
+ * Le club pense « 17h45 », pas « de 17h45 a 18h00 ». Lui faire saisir une fin
+ * serait une question sans interet, a laquelle il repondrait au hasard.
+ */
+const DUREE_CRENEAU_MIN = 15;
+
 const MOMENTS: { value: SlotKindValue; label: string }[] = [
   { value: 'IMMEDIATE', label: 'Immédiat' },
   { value: 'PAUSE_1', label: 'Mi-temps' },
@@ -48,10 +56,19 @@ export function SlotTemplatesPanel({ orgId, venueId }: { orgId: string; venueId:
 
   // Formulaire d'ajout
   const [supplierId, setSupplierId] = useState('');
+  /**
+   * Deux façons d'ajouter un créneau, parce qu'il en existe deux dans la vraie
+   * vie : une HEURE (« 17h45 ») ou un MOMENT (« mi-temps », « entracte »).
+   *
+   * Un moment n'a pas d'heure connue d'avance — la mi-temps tombe quand elle
+   * tombe. Demander une plage horaire pour ça n'aurait aucun sens : c'est
+   * l'équipier qui l'ouvre depuis son poste quand le moment arrive.
+   */
+  const [mode, setMode] = useState<'heure' | 'moment'>('heure');
   const [label, setLabel] = useState('');
-  const [kind, setKind] = useState<SlotKindValue>('CUSTOM');
-  const [debut, setDebut] = useState('17:45');
-  const [fin, setFin] = useState('18:00');
+  const [kind, setKind] = useState<SlotKindValue>('PAUSE_1');
+  const [debut, setDebut] = useState('');
+  const [limiteActive, setLimiteActive] = useState(false);
   const [capacite, setCapacite] = useState('20');
   const [ajoutEnCours, setAjoutEnCours] = useState(false);
 
@@ -77,32 +94,57 @@ export function SlotTemplatesPanel({ orgId, venueId }: { orgId: string; venueId:
 
   async function ajouter(e: React.FormEvent) {
     e.preventDefault();
-    const d = heureVersMinutes(debut);
-    const f = heureVersMinutes(fin);
-    if (d === null || f === null) {
-      setErreur('Horaires attendus au format 17:45.');
-      return;
-    }
-    if (f <= d) {
-      setErreur('La fin du créneau doit suivre son début.');
-      return;
-    }
     if (!supplierId) {
       setErreur('Choisissez la buvette concernée.');
       return;
     }
+
+    let startMinutes: number;
+    let endMinutes: number;
+    let nom: string;
+    let moment: SlotKindValue;
+
+    if (mode === 'heure') {
+      const d = heureVersMinutes(debut);
+      if (d === null) {
+        setErreur('Heure attendue au format 17h45.');
+        return;
+      }
+      // La plage est DÉDUITE, pas demandée. Le club pense « 17h45 », pas
+      // « de 17h45 à 18h00 » — lui faire saisir une fin serait une question
+      // sans intérêt, à laquelle il répondrait au hasard.
+      startMinutes = d;
+      endMinutes = Math.min(d + DUREE_CRENEAU_MIN, 1440);
+      nom = label.trim() || minutesVersHeure(d);
+      moment = 'CUSTOM';
+    } else {
+      nom = label.trim();
+      if (!nom) {
+        setErreur('Donnez un nom au moment (mi-temps, entracte…).');
+        return;
+      }
+      // Un moment n'a pas d'heure : il court sur la journée, et c'est
+      // l'équipier qui l'ouvre quand il arrive. Les bornes ne servent qu'à
+      // satisfaire le modèle, elles ne sont jamais montrées au client.
+      startMinutes = 0;
+      endMinutes = 1440;
+      moment = kind;
+    }
+
     setAjoutEnCours(true);
     setErreur('');
     try {
       await apiCreateSlotTemplate(venueId, {
         supplierId,
-        label: label.trim() || minutesVersHeure(d),
-        kind,
-        startMinutes: d,
-        endMinutes: f,
+        label: nom,
+        kind: moment,
+        startMinutes,
+        endMinutes,
+        capacityEnabled: limiteActive,
         capacity: Math.max(1, Number(capacite) || 20),
       });
       setLabel('');
+      setDebut('');
       await charger();
     } catch (err) {
       setErreur(err instanceof Error ? err.message : 'Création refusée');
@@ -190,14 +232,16 @@ export function SlotTemplatesPanel({ orgId, venueId }: { orgId: string; venueId:
                 }}
               >
                 <strong style={{ fontSize: 14, color: BRAND.ink, minWidth: 120 }}>{t.label}</strong>
+                {/* Un moment couvre la journee entiere (0 a 1440) : afficher
+                    « 00:00 - 24:00 » n'apprendrait rien. On dit plutot QUI
+                    l'ouvre, ce qui est l'information utile. */}
                 <span style={{ fontSize: 13, color: BRAND.grey, fontVariantNumeric: 'tabular-nums' }}>
-                  {minutesVersHeure(t.startMinutes)} – {minutesVersHeure(t.endMinutes)}
+                  {estUnMoment(t)
+                    ? 'ouvert par l’equipier'
+                    : minutesVersHeure(t.startMinutes)}
                 </span>
                 <span style={{ fontSize: 12.5, color: BRAND.grey }}>
-                  {t.capacity} commandes max
-                </span>
-                <span style={{ fontSize: 12, color: BRAND.grey }}>
-                  {MOMENTS.find((m) => m.value === t.kind)?.label ?? t.kind}
+                  {t.capacityEnabled ? `${t.capacity} commandes max` : 'sans limite'}
                 </span>
 
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
@@ -230,6 +274,34 @@ export function SlotTemplatesPanel({ orgId, venueId }: { orgId: string; venueId:
           <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.ink, marginBottom: 12 }}>
             Ajouter un créneau
           </div>
+          {/* Deux facons d'ajouter, parce qu'il en existe deux sur le terrain.
+              Un onglet plutot qu'un menu deroulant : le choix change les champs
+              affiches, il doit se voir avant d'etre fait. */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+            {([['heure', 'A une heure precise'], ['moment', 'A un moment du match']] as const).map(
+              ([v, lbl]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setMode(v)}
+                  style={{
+                    padding: '7px 15px',
+                    borderRadius: 8,
+                    fontSize: 13.5,
+                    fontWeight: 600,
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    border: `1px solid ${mode === v ? BRAND.orange : BRAND.border}`,
+                    background: mode === v ? BRAND.orange : '#fff',
+                    color: mode === v ? '#fff' : BRAND.inkSoft,
+                  }}
+                >
+                  {lbl}
+                </button>
+              ),
+            )}
+          </div>
+
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <Champ label="Buvette">
               <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} style={champStyle}>
@@ -238,25 +310,53 @@ export function SlotTemplatesPanel({ orgId, venueId }: { orgId: string; venueId:
                 ))}
               </select>
             </Champ>
-            <Champ label="Nom affiché au client">
-              <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="17h45" style={champStyle} />
-            </Champ>
-            <Champ label="Moment">
-              <select value={kind} onChange={(e) => setKind(e.target.value as SlotKindValue)} style={champStyle}>
-                {MOMENTS.map((m) => (
-                  <option key={m.value} value={m.value}>{m.label}</option>
-                ))}
-              </select>
-            </Champ>
-            <Champ label="De">
-              <input value={debut} onChange={(e) => setDebut(e.target.value)} placeholder="17:45" style={{ ...champStyle, width: 90 }} />
-            </Champ>
-            <Champ label="À">
-              <input value={fin} onChange={(e) => setFin(e.target.value)} placeholder="18:00" style={{ ...champStyle, width: 90 }} />
-            </Champ>
-            <Champ label="Capacité">
-              <input value={capacite} onChange={(e) => setCapacite(e.target.value)} style={{ ...champStyle, width: 90 }} />
-            </Champ>
+
+            {mode === 'heure' ? (
+              <>
+                <Champ label="Heure de retrait">
+                  <input
+                    value={debut}
+                    onChange={(e) => setDebut(e.target.value)}
+                    placeholder="17h45"
+                    style={{ ...champStyle, width: 110 }}
+                  />
+                </Champ>
+                <Champ label="Nom affiche (optionnel)">
+                  <input
+                    value={label}
+                    onChange={(e) => setLabel(e.target.value)}
+                    placeholder="reprend l'heure"
+                    style={champStyle}
+                  />
+                </Champ>
+              </>
+            ) : (
+              <>
+                <Champ label="Nom du moment">
+                  <input
+                    value={label}
+                    onChange={(e) => setLabel(e.target.value)}
+                    placeholder="Mi-temps, entracte, pause..."
+                    list="moments-courants"
+                    style={champStyle}
+                  />
+                  <datalist id="moments-courants">
+                    <option value="Mi-temps" />
+                    <option value="Entracte" />
+                    <option value="Pause" />
+                    <option value="Immediat" />
+                  </datalist>
+                </Champ>
+                <Champ label="Type">
+                  <select value={kind} onChange={(e) => setKind(e.target.value as SlotKindValue)} style={champStyle}>
+                    {MOMENTS.map((m) => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+                </Champ>
+              </>
+            )}
+
             <button
               type="submit"
               disabled={ajoutEnCours}
@@ -273,13 +373,39 @@ export function SlotTemplatesPanel({ orgId, venueId }: { orgId: string; venueId:
                 opacity: ajoutEnCours ? 0.6 : 1,
               }}
             >
-              {ajoutEnCours ? 'Ajout…' : 'Ajouter'}
+              {ajoutEnCours ? 'Ajout...' : 'Ajouter'}
             </button>
           </div>
+
+          {/* Limite de commandes : eteinte par defaut.
+              Une limite subie est pire qu'aucune limite — le club l'active
+              quand il en a besoin, pas parce qu'un champ la reclamait. */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 16, fontSize: 13.5, color: BRAND.ink, cursor: 'pointer' }}>
+            <input type="checkbox" checked={limiteActive} onChange={(e) => setLimiteActive(e.target.checked)} />
+            Limiter le nombre de commandes sur ce creneau
+          </label>
+          {limiteActive && (
+            <div style={{ marginTop: 10 }}>
+              <Champ label="Commandes maximum">
+                <input value={capacite} onChange={(e) => setCapacite(e.target.value)} style={{ ...champStyle, width: 110 }} />
+              </Champ>
+            </div>
+          )}
+
+          <p style={{ fontSize: 12.5, color: BRAND.grey, margin: '14px 0 0', lineHeight: 1.6 }}>
+            {mode === 'heure'
+              ? 'Le client verra cette heure dans la liste des retraits possibles.'
+              : 'Un moment n’a pas d’heure fixe : c’est votre equipier qui l’ouvre depuis son poste quand il arrive.'}
+          </p>
         </form>
       )}
     </div>
   );
+}
+
+/** Un moment n'a pas d'heure : il couvre la journee entiere. */
+function estUnMoment(t: SlotTemplate): boolean {
+  return t.startMinutes === 0 && t.endMinutes === 1440;
 }
 
 function Champ({ label, children }: { label: string; children: React.ReactNode }) {

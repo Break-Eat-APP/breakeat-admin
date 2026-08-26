@@ -217,8 +217,15 @@ export default function DashboardPage() {
   useEffect(() => {
     const stored = localStorage.getItem('operator_token');
     if (stored) setToken(stored);
-    const sid = localStorage.getItem('operator_supplier_id');
-    const sname = localStorage.getItem('operator_supplier_name');
+    // Buvette transmise dans l'adresse (bouton « Ouvrir le poste » du dashboard
+    // manager) : elle l'emporte sur celle memorisee. Un responsable qui ouvre le
+    // poste de la buvette Sud doit voir le Sud, meme si son navigateur garde le
+    // souvenir du Nord.
+    const depuisUrl = new URLSearchParams(window.location.search).get('supplierId');
+    const sid = depuisUrl ?? localStorage.getItem('operator_supplier_id');
+    const sname = depuisUrl
+      ? null
+      : localStorage.getItem('operator_supplier_name');
     if (sid) { setSupplierId(sid); setSupplierName(sname); }
     setOrgId(localStorage.getItem('operator_org_id'));
   }, []);
@@ -239,7 +246,12 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!token || !orgId || !supplierId) return;
     fetchSupplier(orgId, supplierId, token)
-      .then((s) => setSupplierStatus(s.status))
+      .then((s) => {
+        setSupplierStatus(s.status);
+        // Le nom arrive avec le statut : inutile de le deviner quand la
+        // buvette vient de l’adresse plutot que du stockage local.
+        setSupplierName((prec) => prec ?? s.name);
+      })
       .catch(() => setSupplierStatus(null));
   }, [token, orgId, supplierId]);
 

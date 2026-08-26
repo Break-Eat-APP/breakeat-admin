@@ -12,6 +12,17 @@ const CONFIG_ROLES: OrgRole[] = [OrgRole.ORG_ADMIN, OrgRole.MANAGER];
 const MINUTES_PAR_JOUR = 24 * 60;
 
 /**
+ * Capacité posée quand le club n'a PAS activé de limite.
+ *
+ * Le compteur du créneau repose sur un incrément conditionnel sûr en
+ * concurrence (`currentLoad < capacity`). Le rendre nullable obligerait à
+ * remanier ce code — on ne touche pas à de la logique de concurrence pour une
+ * case à cocher. Un plafond hors d'atteinte produit le même résultat, et
+ * `capacityEnabled` reste la source de vérité pour l'affichage.
+ */
+export const SANS_LIMITE = 1_000_000;
+
+/**
  * SlotTemplatesService — créneaux de récupération RÉCURRENTS (phase 23).
  *
  * Un lieu ouvert en continu n'a pas d'événement à créer, mais il a des heures de
@@ -79,6 +90,7 @@ export class SlotTemplatesService {
         label: dto.label.trim(),
         startMinutes: dto.startMinutes,
         endMinutes: dto.endMinutes,
+        capacityEnabled: dto.capacityEnabled ?? false,
         capacity: dto.capacity ?? 20,
         sortOrder: dto.sortOrder ?? 0,
       },
@@ -104,6 +116,7 @@ export class SlotTemplatesService {
         ...(dto.kind !== undefined && { kind: dto.kind }),
         ...(dto.startMinutes !== undefined && { startMinutes: dto.startMinutes }),
         ...(dto.endMinutes !== undefined && { endMinutes: dto.endMinutes }),
+        ...(dto.capacityEnabled !== undefined && { capacityEnabled: dto.capacityEnabled }),
         ...(dto.capacity !== undefined && { capacity: dto.capacity }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
@@ -168,7 +181,7 @@ export class SlotTemplatesService {
             serviceDate: journee,
             startAt,
             endAt,
-            capacity: t.capacity,
+            capacity: t.capacityEnabled ? t.capacity : SANS_LIMITE,
             status: SlotStatus.OPEN,
             source: SlotSource.DEFAULT,
             kind: t.kind,

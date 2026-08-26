@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { BRAND } from '@break-eat/brand';
+
+/** Miroir de la constante serveur : au-dela, aucune limite n’a ete posee. */
+const SANS_LIMITE = 1_000_000;
 import {
   fetchSlots,
   setSlotStatus,
@@ -134,9 +137,14 @@ export function SlotBar({
               }}
             />
             {slot.label ?? heure(slot.startAt)}
-            <span style={{ fontWeight: 500, opacity: 0.75, fontVariantNumeric: 'tabular-nums' }}>
-              {slot.currentLoad}/{slot.capacity}
-            </span>
+            {/* Compteur affiche SEULEMENT si le club a pose une limite.
+                Sans limite, la capacite porte un plafond hors d’atteinte :
+                montrer « 3/1000000 » n’apprendrait rien et inquieterait. */}
+            {slot.capacity < SANS_LIMITE && (
+              <span style={{ fontWeight: 500, opacity: 0.75, fontVariantNumeric: 'tabular-nums' }}>
+                {slot.currentLoad}/{slot.capacity}
+              </span>
+            )}
           </button>
         );
       })}

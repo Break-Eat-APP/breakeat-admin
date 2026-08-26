@@ -7,6 +7,8 @@ import {
   apiGetOperatorScreens,
   apiCreateOperatorScreen,
   apiGetSuppliers,
+  apiGetEvents,
+  operatorDashboardUrl,
   apiGetAllCategories,
   getOrgId,
   type OperatorScreenTemplate,
@@ -53,20 +55,25 @@ export default function OperatorScreensPage() {
   const [draft, setDraft] = useState<ScreenDraft>(EMPTY_DRAFT);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [eventId, setEventId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!orgId) return;
     setLoading(true);
     setError('');
     try {
-      const [tpls, sups, cats] = await Promise.all([
+      const [tpls, sups, cats, evs] = await Promise.all([
         apiGetOperatorScreens(orgId),
         apiGetSuppliers(orgId),
         apiGetAllCategories(orgId),
+        apiGetEvents(orgId),
       ]);
       setTemplates(Array.isArray(tpls) ? tpls : []);
       setSuppliers(Array.isArray(sups) ? sups : []);
       setCategories(Array.isArray(cats) ? cats : []);
+      // L'evenement en cours : c'est lui que le poste operateur affiche.
+      const liste = Array.isArray(evs) ? evs : [];
+      setEventId((liste.find((e) => e.status === 'ACTIVE') ?? liste[0])?.id ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de chargement');
     } finally {
@@ -138,6 +145,61 @@ export default function OperatorScreensPage() {
         événement depuis sa page. Les conditions d&apos;affichage (créneaux, statuts, fournisseurs,
         catégories) déterminent les commandes visibles sur le board opérateur.
       </p>
+
+      {/* Postes operateur — un par buvette.
+          Le lien vivait dans le menu lateral, unique pour toute
+          l'organisation : il ouvrait un poste sans dire lequel. Or un poste
+          appartient a UNE buvette — c'est ici, en face de chacune, qu'il a
+          sa place. */}
+      {suppliers.length > 0 && (
+        <div style={{ background: BRAND.surface, borderRadius: 12, padding: 20, boxShadow: BRAND.shadowSoft, marginBottom: 24 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.orange, margin: '0 0 6px' }}>
+            Postes operateur
+          </h2>
+          <p style={{ color: BRAND.grey, fontSize: 13, margin: '0 0 14px' }}>
+            {eventId
+              ? 'Ouvrez le tableau de commandes d’une buvette, tel que le voit son equipier.'
+              : 'Creez un evenement actif pour pouvoir ouvrir un poste.'}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {suppliers.map((sup) => (
+              <div
+                key={sup.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '10px 14px',
+                  border: `1px solid ${BRAND.border}`,
+                  borderRadius: 10,
+                }}
+              >
+                <span style={{ fontSize: 14, fontWeight: 600, color: BRAND.ink }}>{sup.name}</span>
+                <a
+                  href={eventId ? `${operatorDashboardUrl(eventId)}?supplierId=${sup.id}` : undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-disabled={!eventId}
+                  style={{
+                    marginLeft: 'auto',
+                    padding: '6px 14px',
+                    borderRadius: 8,
+                    fontSize: 13,
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    border: `1px solid ${eventId ? BRAND.orange : BRAND.border}`,
+                    color: eventId ? BRAND.orange : BRAND.grey,
+                    pointerEvents: eventId ? 'auto' : 'none',
+                    opacity: eventId ? 1 : 0.5,
+                  }}
+                >
+                  Ouvrir le poste
+                </a>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Create form */}
       {showForm && (
