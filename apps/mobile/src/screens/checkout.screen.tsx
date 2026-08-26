@@ -147,9 +147,22 @@ export function CheckoutScreen({ navigation }: Props) {
       });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erreur inconnue';
-      showAlert('Erreur', msg.includes('409')
-        ? 'Un panier est déjà ouvert. Réessayez dans 30 min.'
-        : `Impossible de passer la commande : ${msg}`);
+
+      // Session expirée : dire quoi faire, pas afficher un code.
+      //
+      // « Impossible de passer la commande : status 401 » ne mène nulle part.
+      // La session vient d'être vidée par la couche réseau ; l'app rebascule
+      // sur l'écran de connexion, et le panier est conservé côté serveur.
+      if (msg.includes('401') || msg.includes('Session expirée')) {
+        showAlert(
+          'Session expirée',
+          'Reconnectez-vous pour finaliser votre commande. Votre panier est conservé.',
+        );
+      } else {
+        showAlert('Erreur', msg.includes('409')
+          ? 'Un panier est déjà ouvert. Réessayez dans 30 min.'
+          : `Impossible de passer la commande : ${msg}`);
+      }
     } finally {
       setLoading(false);
       setStep('');

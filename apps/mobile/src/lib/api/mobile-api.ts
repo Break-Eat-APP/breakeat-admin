@@ -32,6 +32,24 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
     },
   });
 
+  // Jeton refusé : la session est morte, il faut la jeter.
+  //
+  // Sans ça, l'app restait « connectée » avec un jeton que le serveur ne
+  // reconnaît plus : chaque appel authentifié échouait, y compris le paiement,
+  // et rien ne ramenait vers l'écran de connexion. Le client voyait un
+  // « status 401 » au moment de payer, sans aucun moyen d'en sortir.
+  //
+  // Arrive typiquement après une rotation de `JWT_SECRET` côté serveur — tous
+  // les jetons émis avant deviennent invalides d'un coup — ou simplement à
+  // l'expiration (7 jours par défaut).
+  //
+  // On ne nettoie QUE si un jeton était présent : un 401 sur une route publique
+  // ne concerne pas la session.
+  if (res.status === 401 && token) {
+    await useAuthStore.getState().clearAuth();
+    throw new ApiError(401, 'Session expirée. Reconnectez-vous pour continuer.');
+  }
+
   if (!res.ok) {
     const body = await res.text().catch(() => res.statusText);
     throw new ApiError(res.status, body);
