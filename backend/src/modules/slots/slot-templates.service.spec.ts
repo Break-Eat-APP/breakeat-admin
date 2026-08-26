@@ -37,7 +37,8 @@ describe('SlotTemplatesService', () => {
       update: jest.Mock;
       delete: jest.Mock;
     };
-    slot: { create: jest.Mock; findMany: jest.Mock };
+    slot: { create: jest.Mock; findMany: jest.Mock; deleteMany: jest.Mock };
+    $transaction: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -53,7 +54,12 @@ describe('SlotTemplatesService', () => {
         update: jest.fn(),
         delete: jest.fn(),
       },
-      slot: { create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]) },
+      slot: {
+        create: jest.fn().mockResolvedValue({}),
+        findMany: jest.fn().mockResolvedValue([]),
+        deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
+      },
+      $transaction: jest.fn().mockResolvedValue([{ count: 2 }, {}]),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -163,6 +169,29 @@ describe('SlotTemplatesService', () => {
       prisma.slot.create.mockRejectedValue(new Error('connexion perdue'));
 
       await expect(service.ensureTodaySlots(EVENT_ID, VENUE_ID)).rejects.toThrow('connexion perdue');
+    });
+  });
+
+  // --- remove : ne pas laisser d'orphelins visibles ---------------
+
+  describe('remove', () => {
+    it('efface aussi les creneaux engendres que personne n a reserves', async () => {
+      // La relation est en SetNull : supprimer le modele laissait vivre le
+      // creneau du jour, qui continuait de s'afficher au client. Le club
+      // supprimait, rechargeait, et le voyait revenir.
+      //
+      // Un creneau PORTEUR de commandes survit — quelqu'un a reserve.
+      prisma.slotTemplate.findUnique.mockResolvedValue({
+        ...gabarit(),
+        venue: { organizationId: ORG_ID },
+      });
+
+      await service.remove('tpl-1', USER_ID);
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.slot.deleteMany).toHaveBeenCalledWith({
+        where: { templateId: 'tpl-1', currentLoad: 0 },
+      });
     });
   });
 });

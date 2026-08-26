@@ -182,14 +182,31 @@ describe('CartService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('rejects when an OPEN cart already exists for the same event+supplier', async () => {
+    it('REUTILISE un panier deja ouvert au lieu de bloquer le client', async () => {
+      // Le code levait un conflit ici, alors que son propre commentaire disait
+      // « reuse ». Un client dont le paiement echouait restait bloque 30 min
+      // sur « Un panier est deja ouvert », sans pouvoir ni le reprendre ni en
+      // ouvrir un autre.
+      //
+      // Un panier ouvert sur le MEME evenement et la MEME buvette est
+      // exactement celui qu'il veut reprendre.
       (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
       (prisma.eventSupplier.findFirst as jest.Mock).mockResolvedValue(mockEventSupplier());
       (prisma.cart.findFirst as jest.Mock).mockResolvedValue(mockCart());
+      (prisma.cart.update as jest.Mock).mockResolvedValue(mockCart());
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue({
+        ...mockCart(),
+        items: [],
+        event: mockEvent(),
+      });
 
-      await expect(
-        service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID }),
-      ).rejects.toThrow(ConflictException);
+      await service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID });
+
+      // Aucun panier neuf : on reprend l'existant et on repousse son echeance.
+      expect(prisma.cart.create).not.toHaveBeenCalled();
+      expect(prisma.cart.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: mockCart().id } }),
+      );
     });
 
     it('rejects with 404 when the event is PRIVATE and the caller is not a member (Phase 14.4)', async () => {
