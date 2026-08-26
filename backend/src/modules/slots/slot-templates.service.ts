@@ -144,8 +144,28 @@ export class SlotTemplatesService {
     if (!existing) throw new NotFoundException('Créneau type introuvable');
     await requireOrgAccess(this.prisma, callerId, existing.venue.organizationId, CONFIG_ROLES);
 
-    await this.prisma.slotTemplate.delete({ where: { id: templateId } });
-    this.logger.log(`Créneau type supprimé : ${templateId} (par ${callerId})`);
+    // Effacer AUSSI les créneaux déjà engendrés que personne n'a réservés.
+    //
+    // La relation est en `SetNull` : supprimer le modèle laissait vivre le
+    // créneau du jour, qui continuait de s'afficher au client. Le club
+    // supprimait, rechargeait, et le voyait revenir — « la configuration
+    // supprimée ne s'enregistre pas ».
+    //
+    // Un créneau qui porte des commandes (`currentLoad > 0`) SURVIT : quelqu'un
+    // a réservé, et son retrait doit rester possible. Le lien vers le modèle
+    // tombe alors à null, ce qui suffit : plus rien ne le régénérera.
+    //
+    // Les deux dans une transaction — un modèle supprimé sans ses créneaux
+    // laisserait des orphelins impossibles à retrouver.
+    const [supprimes] = await this.prisma.$transaction([
+      this.prisma.slot.deleteMany({ where: { templateId, currentLoad: 0 } }),
+      this.prisma.slotTemplate.delete({ where: { id: templateId } }),
+    ]);
+
+    this.logger.log(
+      `Créneau type supprimé : ${templateId} (par ${callerId}) — ` +
+        `${supprimes.count} créneau(x) sans commande effacé(s)`,
+    );
   }
 
   // ─── Matérialisation quotidienne ────────────────────────────────────

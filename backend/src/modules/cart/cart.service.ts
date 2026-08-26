@@ -151,10 +151,29 @@ export class CartService {
         status: CartStatus.OPEN,
       },
     });
+    // RÉUTILISER, et non refuser.
+    //
+    // Le commentaire ci-dessus disait « reuse » depuis l'origine, mais le code
+    // levait un conflit : un client dont le paiement échouait — pour une
+    // rupture de stock, une session expirée, n'importe quoi — restait bloqué
+    // 30 minutes sur « Un panier est déjà ouvert », sans aucun recours. Il ne
+    // pouvait ni reprendre ce panier, ni en ouvrir un autre.
+    //
+    // Or un panier ouvert sur le MÊME événement et la MÊME buvette, c'est
+    // exactement celui que le client veut reprendre. On le lui rend, et on
+    // repousse son échéance puisqu'il s'en sert à l'instant.
+    //
+    // Le point de retrait est actualisé s'il en a choisi un autre entre-temps.
     if (existingOpen) {
-      throw new ConflictException(
-        `An OPEN cart already exists for this event/supplier (id=${existingOpen.id})`,
-      );
+      await this.prisma.cart.update({
+        where: { id: existingOpen.id },
+        data: {
+          expiresAt: new Date(Date.now() + CART_TTL_MS),
+          ...(dto.pickupPointId !== undefined && { pickupPointId: dto.pickupPointId ?? null }),
+        },
+      });
+      this.logger.log(`Cart reused: ${existingOpen.id} user=${userId} event=${dto.eventId}`);
+      return this.computeView(existingOpen.id);
     }
 
     const expiresAt = new Date(Date.now() + CART_TTL_MS);
