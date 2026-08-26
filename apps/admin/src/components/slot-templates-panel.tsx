@@ -82,8 +82,6 @@ export function SlotTemplatesPanel({
   const [label, setLabel] = useState('');
   const [kind, setKind] = useState<SlotKindValue>('PAUSE_1');
   const [debut, setDebut] = useState('');
-  const [limiteActive, setLimiteActive] = useState(false);
-  const [capacite, setCapacite] = useState('20');
   const [ajoutEnCours, setAjoutEnCours] = useState(false);
 
   const charger = useCallback(async () => {
@@ -155,8 +153,6 @@ export function SlotTemplatesPanel({
         kind: moment,
         startMinutes,
         endMinutes,
-        capacityEnabled: limiteActive,
-        capacity: Math.max(1, Number(capacite) || 20),
       });
       setLabel('');
       setDebut('');
@@ -257,9 +253,6 @@ export function SlotTemplatesPanel({
                   {estUnMoment(t)
                     ? 'ouvert par l’equipier'
                     : minutesVersHeure(t.startMinutes)}
-                </span>
-                <span style={{ fontSize: 12.5, color: BRAND.grey }}>
-                  {t.capacityEnabled ? `${t.capacity} commandes max` : 'sans limite'}
                 </span>
 
                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
@@ -397,20 +390,6 @@ export function SlotTemplatesPanel({
             </button>
           </div>
 
-          {/* Limite de commandes : eteinte par defaut.
-              Une limite subie est pire qu'aucune limite — le club l'active
-              quand il en a besoin, pas parce qu'un champ la reclamait. */}
-          <label style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 16, fontSize: 13.5, color: BRAND.ink, cursor: 'pointer' }}>
-            <input type="checkbox" checked={limiteActive} onChange={(e) => setLimiteActive(e.target.checked)} />
-            Limiter le nombre de commandes sur ce creneau
-          </label>
-          {limiteActive && (
-            <div style={{ marginTop: 10 }}>
-              <Champ label="Commandes maximum">
-                <input value={capacite} onChange={(e) => setCapacite(e.target.value)} style={{ ...champStyle, width: 110 }} />
-              </Champ>
-            </div>
-          )}
 
           <p style={{ fontSize: 12.5, color: BRAND.grey, margin: '14px 0 0', lineHeight: 1.6 }}>
             {mode === 'heure'

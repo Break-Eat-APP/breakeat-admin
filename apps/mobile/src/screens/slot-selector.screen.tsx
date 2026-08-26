@@ -15,18 +15,25 @@ import { PageHeader } from '@components/page-header';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SlotSelector'>;
 
-function slotLabel(slot: PublicSlot): string {
-  const start = formatTime(slot.startAt);
-  const end = formatTime(slot.endAt);
-  const label = slot.label ? ` — ${slot.label}` : '';
-  return `${start} – ${end}${label}`;
+/**
+ * Un créneau « moment » (mi-temps, entracte) court sur toute la journée : il n'a
+ * pas d'heure. Afficher ses bornes donnait « 02:00 – 02:00 », qui n'apprenait
+ * rien et faisait douter de tout l'écran.
+ *
+ * On le reconnaît à sa durée : 24 h pile ne décrit pas un retrait.
+ */
+function estUnMoment(slot: PublicSlot): boolean {
+  const duree = new Date(slot.endAt).getTime() - new Date(slot.startAt).getTime();
+  return duree >= 23 * 3600 * 1000;
 }
 
-function slotAvailability(slot: PublicSlot): { text: string; color: string } {
-  const remaining = slot.capacity - slot.currentLoad;
-  if (remaining <= 0) return { text: 'Complet', color: '#dc2626' };
-  if (remaining <= 5) return { text: `${remaining} places`, color: '#d97706' };
-  return { text: `${remaining} places`, color: '#16a34a' };
+function slotLabel(slot: PublicSlot): string {
+  if (estUnMoment(slot)) return slot.label ?? 'Moment';
+  const plage = `${formatTime(slot.startAt)} – ${formatTime(slot.endAt)}`;
+  // Le libellé ne se répète pas quand il redit l'heure.
+  return slot.label && slot.label !== formatTime(slot.startAt)
+    ? `${plage} — ${slot.label}`
+    : plage;
 }
 
 export function SlotSelectorScreen({ route, navigation }: Props) {
@@ -105,8 +112,6 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
           keyExtractor={(s) => s.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => {
-            const avail = slotAvailability(item);
-            const isFull = item.currentLoad >= item.capacity;
             const isSelected = selectedSlotId === item.id;
 
             return (
@@ -114,39 +119,32 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
                 style={[
                   styles.slotCard,
                   isSelected && styles.slotCardSelected,
-                  isFull && styles.slotCardFull,
                 ]}
                 onPress={() => handleSelect(item)}
-                disabled={isFull}
               >
                 <View style={styles.slotLeft}>
-                  <Text style={[styles.slotTime, isFull && styles.slotTimeFull]}>
-                    {formatTime(item.startAt)}
-                  </Text>
-                  <Text style={styles.slotEnd}>– {formatTime(item.endAt)}</Text>
-                  {item.label && <Text style={styles.slotSubLabel}>{item.label}</Text>}
+                  {estUnMoment(item) ? (
+                    /* Pas d'heure : le nom du moment EST l'information. */
+                    <Text style={[styles.slotTime]}>
+                      {item.label ?? 'Moment'}
+                    </Text>
+                  ) : (
+                    <>
+                      <Text style={[styles.slotTime]}>
+                        {formatTime(item.startAt)}
+                      </Text>
+                      <Text style={styles.slotEnd}>– {formatTime(item.endAt)}</Text>
+                      {item.label && item.label !== formatTime(item.startAt) && (
+                        <Text style={styles.slotSubLabel}>{item.label}</Text>
+                      )}
+                    </>
+                  )}
                 </View>
 
+                {/* Plus de compteur de places : le club n'en gere pas, et
+                    « 1000000 places » ne voulait rien dire. Reste ce qui
+                    compte — le creneau choisi. */}
                 <View style={styles.slotRight}>
-                  <View style={[styles.availBadge, { backgroundColor: avail.color + '22' }]}>
-                    <Text style={[styles.availText, { color: avail.color }]}>
-                      {avail.text}
-                    </Text>
-                  </View>
-
-                  {/* Capacity bar */}
-                  <View style={styles.capacityBar}>
-                    <View
-                      style={[
-                        styles.capacityFill,
-                        {
-                          width: `${Math.min(100, (item.currentLoad / item.capacity) * 100)}%`,
-                          backgroundColor: avail.color,
-                        },
-                      ]}
-                    />
-                  </View>
-
                   {isSelected && <Text style={styles.selectedCheck}>✓</Text>}
                 </View>
               </Pressable>

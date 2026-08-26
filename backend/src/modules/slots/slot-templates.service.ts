@@ -12,13 +12,19 @@ const CONFIG_ROLES: OrgRole[] = [OrgRole.ORG_ADMIN, OrgRole.MANAGER];
 const MINUTES_PAR_JOUR = 24 * 60;
 
 /**
- * Capacité posée quand le club n'a PAS activé de limite.
+ * Plafond hors d'atteinte : les créneaux ne limitent PAS le nombre de commandes.
+ *
+ * La limite avait été proposée, puis retirée à la demande du client — elle
+ * n'apportait rien à son exploitation et polluait l'interface (« 1000000
+ * places » s'affichait au client).
  *
  * Le compteur du créneau repose sur un incrément conditionnel sûr en
- * concurrence (`currentLoad < capacity`). Le rendre nullable obligerait à
- * remanier ce code — on ne touche pas à de la logique de concurrence pour une
- * case à cocher. Un plafond hors d'atteinte produit le même résultat, et
- * `capacityEnabled` reste la source de vérité pour l'affichage.
+ * concurrence (`currentLoad < capacity`) : retirer la colonne obligerait à
+ * remanier ce code, ce qui ne se justifie pas. Un plafond que rien n'atteint
+ * neutralise la contrainte sans y toucher.
+ *
+ * `currentLoad` continue de compter — l'information reste disponible le jour où
+ * une limite redeviendrait utile.
  */
 export const SANS_LIMITE = 1_000_000;
 
@@ -90,7 +96,6 @@ export class SlotTemplatesService {
         label: dto.label.trim(),
         startMinutes: dto.startMinutes,
         endMinutes: dto.endMinutes,
-        capacityEnabled: dto.capacityEnabled ?? false,
         capacity: dto.capacity ?? 20,
         sortOrder: dto.sortOrder ?? 0,
       },
@@ -116,7 +121,6 @@ export class SlotTemplatesService {
         ...(dto.kind !== undefined && { kind: dto.kind }),
         ...(dto.startMinutes !== undefined && { startMinutes: dto.startMinutes }),
         ...(dto.endMinutes !== undefined && { endMinutes: dto.endMinutes }),
-        ...(dto.capacityEnabled !== undefined && { capacityEnabled: dto.capacityEnabled }),
         ...(dto.capacity !== undefined && { capacity: dto.capacity }),
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
@@ -181,7 +185,7 @@ export class SlotTemplatesService {
             serviceDate: journee,
             startAt,
             endAt,
-            capacity: t.capacityEnabled ? t.capacity : SANS_LIMITE,
+            capacity: SANS_LIMITE,
             status: SlotStatus.OPEN,
             source: SlotSource.DEFAULT,
             kind: t.kind,

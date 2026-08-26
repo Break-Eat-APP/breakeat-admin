@@ -38,11 +38,6 @@ export class CreateSlotTemplateDto {
   endMinutes!: number;
 
   /** Commandes acceptées sur ce créneau. Au-delà, il passe en FULL. */
-  /** Limite active ou non. Fausse par defaut : pas de limite subie. */
-  @IsBoolean()
-  @IsOptional()
-  capacityEnabled?: boolean;
-
   @IsInt()
   @Min(1)
   @Max(10000)
