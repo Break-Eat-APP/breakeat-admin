@@ -22,6 +22,7 @@ import {
   type Order,
   type ResolvedOperatorScreen,
   fetchSupplier,
+  SESSION_EXPIREE,
   setSupplierStatus as apiSetSupplierStatus,
   type SupplierStatus,
 } from '@/lib/api/orders-client';
@@ -220,6 +221,18 @@ export default function DashboardPage() {
     const sname = localStorage.getItem('operator_supplier_name');
     if (sid) { setSupplierId(sid); setSupplierName(sname); }
     setOrgId(localStorage.getItem('operator_org_id'));
+  }, []);
+
+  // Le serveur a refusé le jeton : on revient au formulaire, UNE fois.
+  //
+  // Un écouteur plutôt qu’un rechargement dans la couche réseau : le tableau
+  // lance plusieurs appels au montage, et recharger au premier 401 relançait
+  // les mêmes appels, donc le même 401 — l’écran « sautait » en boucle sans
+  // jamais laisser reprendre la main.
+  useEffect(() => {
+    const surExpiration = () => setToken(null);
+    window.addEventListener(SESSION_EXPIREE, surExpiration);
+    return () => window.removeEventListener(SESSION_EXPIREE, surExpiration);
   }, []);
 
   // État courant de la buvette : le tableau de commandes ne le renvoie pas.

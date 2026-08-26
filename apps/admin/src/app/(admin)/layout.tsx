@@ -53,8 +53,17 @@ const NAV_GROUPS: NavGroup[] = [
     // retrait », « mon équipe ». Le club cherche une chose, pas une page.
     title: 'Mon lieu',
     items: [
-      { href: '/wizard', icon: Wand2, label: 'Configurer mon lieu' },
-      { href: '/organizations', icon: Building2, label: 'Fiche du lieu' },
+      // UNE entrée pour le lieu, et une seule.
+      //
+      // « Configurer mon lieu » pointait vers le wizard, « Fiche du lieu »
+      // vers le vrai formulaire. Le club configurait donc dans un écran qui
+      // CRÉE un ensemble neuf à chaque passage, puis relisait l'autre — d'où
+      // « rien ne s’enregistre ». Deux portes pour un même objet, dont une
+      // qui empile des doublons.
+      { href: '/organizations', icon: Building2, label: 'Mon lieu' },
+      // Le wizard reste accessible, nommé pour ce qu’il est : une aide au
+      // PREMIER paramétrage, pas l’écran où l’on revient modifier.
+      { href: '/wizard', icon: Wand2, label: 'Assistant de démarrage' },
       // L'apparence décrit ce que le client voit DE CE LIEU : sa place est ici,
       // pas dans un groupe « communication » avec les campagnes push.
       { href: '/appearance', icon: Palette, label: "Apparence de l'app" },
