@@ -16,7 +16,6 @@ import {
   type VenueOperatingMode,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
-import { SlotTemplatesPanel } from '@/components/slot-templates-panel';
 import { parseCoordsString, parseSingleCoord, fmtCoord } from '@/lib/coords';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -554,14 +553,6 @@ export default function OrganizationDetailPage() {
           </div>
         )}
       </SectionCard>
-
-      {/* Créneaux de récupération — n’a de sens qu’une fois le lieu créé,
-          puisqu’ils s’y rattachent. */}
-      {venue && (
-        <SectionCard title="Créneaux de récupération">
-          <SlotTemplatesPanel orgId={orgId} venueId={venue.id} />
-        </SectionCard>
-      )}
 
       {/* Membres — invitation par e-mail, le compte est créé au passage */}
       <SectionCard title={`Membres (${members.length})`}>
