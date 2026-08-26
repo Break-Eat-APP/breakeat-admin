@@ -184,19 +184,29 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         >
           <BreakEatLogo size={30} />
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
-            <span style={{ fontWeight: 700, fontSize: 15, color: BRAND.ink, letterSpacing: -0.2 }}>
+            {/* Le nom de marque en ORANGE : c'est lui qu'on doit reconnaitre
+                d'un coup d'oeil, pas la mention qui le suit. */}
+            <span
+              style={{
+                fontFamily: BRAND.fontDisplay,
+                fontWeight: 800,
+                fontSize: 15,
+                color: BRAND.orange,
+                letterSpacing: -0.2,
+              }}
+            >
               BREAKEAT
             </span>
             <span
               style={{
                 fontSize: 10,
-                color: BRAND.grey,
+                color: BRAND.inkSoft,
                 marginTop: 1,
                 textTransform: 'uppercase',
                 letterSpacing: 1,
               }}
             >
-              Administration
+              Backoffice manager
             </span>
           </div>
         </div>
