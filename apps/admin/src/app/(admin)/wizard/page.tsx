@@ -694,10 +694,10 @@ export default function WizardPage() {
   return (
     <div style={{ padding: 32, fontFamily: BRAND.font, maxWidth: 860 }}>
       <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: '0 0 6px', letterSpacing: -0.3 }}>
-        Assistant de démarrage
+        Configuration de démarrage
       </h1>
       <p style={{ color: BRAND.grey, fontSize: 14, marginBottom: 16 }}>
-        {'Un parcours guidé pour tout mettre en place d’un coup : buvettes, produits & prix, créneaux, notifications. Tout est pré-rempli — modifiez ce que vous voulez, puis lancez.'}
+        {'Pour un lieu tout neuf : ce parcours crée vos buvettes, vos produits et prix, vos créneaux et vos notifications en une fois. Tout est pré-rempli — ajustez, puis lancez.'}
       </p>
 
       {/*
@@ -723,11 +723,21 @@ export default function WizardPage() {
           marginBottom: 24,
         }}
       >
-        <strong>À utiliser pour un premier paramétrage.</strong> Chaque passage{' '}
-        <strong>ajoute</strong> un nouvel ensemble (événement, buvettes, comptoirs,
-        produits) au lieu de modifier l’existant. Pour corriger une configuration déjà
-        en place, passez par <strong>Mon lieu</strong>, <strong>Points de retrait</strong>{' '}
-        et <strong>Événements</strong>.
+        <div style={{ fontWeight: 700, marginBottom: 6 }}>
+          À lancer une seule fois, au tout début.
+        </div>
+        <p style={{ margin: '0 0 8px' }}>
+          Cet écran <strong>ne modifie pas</strong> votre lieu : il crée tout à neuf.
+          Si vous le relancez alors que votre buvette « Nord » existe déjà, vous vous
+          retrouverez avec <strong>deux buvettes « Nord »</strong>, deux séries de
+          produits et deux événements — et l’app continuera d’afficher les anciens.
+        </p>
+        <p style={{ margin: 0 }}>
+          Votre lieu est déjà configuré&nbsp;? Ne passez pas par ici. Allez dans{' '}
+          <strong>Mon lieu</strong> pour l’adresse et les horaires,{' '}
+          <strong>Points de retrait</strong> pour les buvettes et les produits,{' '}
+          <strong>Événements</strong> pour les matchs.
+        </p>
       </div>
 
       {/* Stepper */}
