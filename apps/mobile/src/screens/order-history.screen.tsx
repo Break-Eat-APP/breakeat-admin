@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   FlatList,
   Pressable,
   RefreshControl,
@@ -11,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiGetMyOrders, apiMarkArrived, formatPrice, formatTime, type Order } from '@lib/api/mobile-api';
@@ -104,10 +105,6 @@ export function OrderHistoryScreen() {
     }
   }, [token]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   /** « Je suis arrivé » — prévient la buvette que le client attend au retrait. */
   const markArrived = useCallback(async (orderId: string) => {
     // Mise à jour optimiste : le retour visuel doit être immédiat même en réseau
@@ -131,6 +128,27 @@ export function OrderHistoryScreen() {
     const t = setInterval(() => void load(), LIVE_POLL_MS);
     return () => clearInterval(t);
   }, [token, hasLive, load]);
+
+  // Le minuteur ci-dessus ne suffit pas : iOS SUSPEND les minuteurs JavaScript
+  // dès que l'app passe en arrière-plan ou que l'écran se verrouille. Au retour,
+  // la liste affiche donc l'état d'il y a dix minutes jusqu'au prochain tic —
+  // c'est exactement ce qu'on voyait : « je dois actualiser à la main ».
+  //
+  // On recharge donc à chaque REPRISE réelle : retour au premier plan, et
+  // retour sur l'écran depuis un autre onglet.
+  useEffect(() => {
+    if (!token) return;
+    const sub = AppState.addEventListener('change', (etat) => {
+      if (etat === 'active') void load();
+    });
+    return () => sub.remove();
+  }, [token, load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
 
   if (!token) {
     return (

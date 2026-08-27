@@ -3,6 +3,7 @@ import { THEME } from '@lib/theme';
 import {
   ActivityIndicator,
   Animated,
+  AppState,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -126,6 +127,20 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [fetchOrder]);
+
+  // Reprise apres verrouillage de l'ecran.
+  //
+  // iOS gele les minuteurs JavaScript en arriere-plan : au deverrouillage, le
+  // suivi reprend la ou il s'etait arrete et n'affiche l'avancee qu'au tic
+  // suivant. On recharge donc des le retour au premier plan.
+  const estFinal = order ? STATUS_MAP[order.status]?.isFinal === true : false;
+  useEffect(() => {
+    if (estFinal) return;
+    const sub = AppState.addEventListener('change', (etat) => {
+      if (etat === 'active') void fetchOrder();
+    });
+    return () => sub.remove();
+  }, [estFinal, fetchOrder]);
 
   // Stop polling once order reaches a final state
   useEffect(() => {

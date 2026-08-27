@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { connect, constants, type ClientHttp2Session } from 'http2';
 import { createSign } from 'crypto';
@@ -60,7 +60,7 @@ const DEAD_TOKEN_REASONS = new Set([
  * plus d'une heure. On le renouvelle donc toutes les ~50 minutes.
  */
 @Injectable()
-export class ApnsService implements OnModuleDestroy {
+export class ApnsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ApnsService.name);
 
   private session: ClientHttp2Session | null = null;
@@ -70,6 +70,35 @@ export class ApnsService implements OnModuleDestroy {
   private static readonly JWT_TTL_MS = 50 * 60 * 1000;
 
   constructor(private readonly config: ConfigService) {}
+
+  /**
+   * Annonce l'hote APNs vise au demarrage.
+   *
+   * `APNS_ENV` vaut « sandbox » par defaut — pratique en developpement, PIEGE en
+   * production : une build TestFlight ou App Store porte un jeton de PRODUCTION,
+   * qu'Apple refuse sur l'hote sandbox. L'activite demarre quand meme (iOS s'en
+   * charge localement), mais aucune mise a jour n'arrive jamais.
+   *
+   * Le symptome ne ressemble pas a une panne : la Live Activity s'affiche,
+   * figee sur son etat initial. Sans cette trace, rien ne pointe vers la cause.
+   */
+  onModuleInit(): void {
+    if (!this.isConfigured()) {
+      this.logger.log('APNs non configure — aucune Live Activity ne sera notifiee.');
+      return;
+    }
+    const cible = this.host === APNS_HOST_PROD ? 'PRODUCTION' : 'SANDBOX';
+    this.logger.log(
+      `APNs — hote ${cible} (${this.host}), bundle ${this.bundleId}. ` +
+        `Doit correspondre au profil de signature de la build : une build ` +
+        `TestFlight ou App Store exige PRODUCTION.`,
+    );
+  }
+
+  /** « production » ou « sandbox » — pour nommer le réglage dans un diagnostic. */
+  environmentLabel(): string {
+    return this.host === APNS_HOST_PROD ? 'production' : 'sandbox';
+  }
 
   /** Le programme est-il configurable ? (sinon on n'essaie même pas d'émettre) */
   isConfigured(): boolean {

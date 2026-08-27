@@ -255,8 +255,18 @@ export class LiveActivityService {
           where: { id: activity.id },
           data: { status: LiveActivityStatus.STALE, endedAt: new Date() },
         });
+        // `BadDeviceToken` ne veut presque jamais dire « token corrompu » : il
+        // veut dire « ce token n'appartient pas à cet environnement ». Une build
+        // TestFlight est signée en PRODUCTION ; si `APNS_ENV` reste sur sa
+        // valeur par défaut (sandbox), Apple refuse chaque mise à jour et
+        // l'activité reste figée sur son état de départ. Le message doit
+        // désigner ce réglage, sinon on cherche du côté du téléphone.
+        const piste =
+          result.reason === 'BadDeviceToken'
+            ? ` — vérifiez APNS_ENV (${this.apns.environmentLabel()}) : il doit correspondre à la signature de la build (TestFlight/App Store = production)`
+            : '';
         this.logger.warn(
-          `Token de Live Activity invalide (${result.reason}) — activité ${activity.id} marquée STALE`,
+          `Token de Live Activity invalide (${result.reason}) — activité ${activity.id} marquée STALE${piste}`,
         );
       } else {
         this.logger.warn(
