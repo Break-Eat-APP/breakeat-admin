@@ -89,6 +89,7 @@ export default function SupplierDetailPage() {
   // Réglages de la buvette (nom / statut)
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [settingsName, setSettingsName] = useState('');
+  const [settingsPlan, setSettingsPlan] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState('');
   const [statusSaving, setStatusSaving] = useState(false);
@@ -118,6 +119,7 @@ export default function SupplierDetailPage() {
       const found = (Array.isArray(sups) ? sups : []).find((s) => s.id === supplierId);
       setSupplier(found ?? null);
       setSettingsName(found?.name ?? '');
+      setSettingsPlan(found?.planUrl ?? '');
       setCategories(Array.isArray(cats) ? cats : []);
       setProducts(Array.isArray(prods) ? prods : []);
       setEvents(Array.isArray(evs) ? evs : []);
@@ -189,7 +191,11 @@ export default function SupplierDetailPage() {
     setSavingSettings(true);
     setSettingsMsg('');
     try {
-      await apiUpdateSupplier(orgId, supplierId, { name: settingsName.trim() });
+      await apiUpdateSupplier(orgId, supplierId, {
+        name: settingsName.trim(),
+        // Chaîne vide = « retirer » : le client retombe alors sur le plan du lieu.
+        planUrl: settingsPlan.trim(),
+      });
       setSettingsMsg('✓ Buvette mise à jour.');
       await load();
     } catch (err) {
@@ -289,6 +295,22 @@ export default function SupplierDetailPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label style={fieldLabel}>Nom *</label>
               <input value={settingsName} onChange={(e) => setSettingsName(e.target.value)} style={fieldInput} placeholder="Buvette Nord" />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={fieldLabel}>Plan d&apos;accès (URL de l&apos;image)</label>
+              <input
+                value={settingsPlan}
+                onChange={(e) => setSettingsPlan(e.target.value)}
+                style={fieldInput}
+                placeholder="https://…/plan-buvette-nord.png"
+              />
+              <span style={{ fontSize: 12, color: BRAND.grey, lineHeight: 1.5 }}>
+                Le client voit ce plan depuis « Mes commandes » quand il vient retirer ici.
+                Laissez vide pour utiliser le plan général du lieu.
+              </span>
             </div>
           </div>
 

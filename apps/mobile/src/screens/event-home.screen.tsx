@@ -64,10 +64,14 @@ export function EventHomeScreen({ route, navigation }: Props) {
       navigation.navigate('Login', { pendingEventId: eventId });
       return;
     }
+    // Le plan emporte dans le panier est celui de LA buvette choisie ; le
+    // serveur y a deja mis le plan du lieu en repli quand elle n'en a pas.
+    // Sans cela, un stade a plusieurs comptoirs montrait la meme image a tous.
+    const buvette = event?.suppliers.find((sup) => sup.id === supplierId);
     initCart(
       eventId,
       supplierId,
-      event?.venue?.buvettePlanUrl ?? null,
+      buvette?.planUrl ?? event?.venue?.buvettePlanUrl ?? null,
       event?.venue?.id ?? null,
     );
     navigation.navigate('SupplierCatalog', { eventId, supplierId });

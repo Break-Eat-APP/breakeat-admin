@@ -124,6 +124,8 @@ describe('OrdersService', () => {
               findMany: jest.fn(),
               update: jest.fn(),
             },
+            supplier: { findMany: jest.fn() },
+            venue: { findMany: jest.fn() },
             orderAuditTrail: {
               create: jest.fn(),
               findMany: jest.fn(),
@@ -139,6 +141,55 @@ describe('OrdersService', () => {
     prisma = module.get(PrismaService);
     realtime = module.get(RealtimeService);
     slotsService = module.get(SlotsService);
+  });
+
+  // ─── withPickupGuidance ───────────────────────────────────────
+
+  describe('withPickupGuidance — le plan de LA buvette', () => {
+    const commande = (id: string, supplierId: string) => ({
+      id,
+      supplierId,
+      venueId: 'venue-1',
+    });
+
+    beforeEach(() => {
+      (prisma.supplier.findMany as jest.Mock).mockResolvedValue([
+        { id: 'sup-nord', name: 'Buvette Nord', planUrl: 'https://cdn/nord.png' },
+        { id: 'sup-sud', name: 'Buvette Sud', planUrl: null },
+      ]);
+      (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+        { id: 'venue-1', buvettePlanUrl: 'https://cdn/stade.png' },
+      ]);
+    });
+
+    it('donne à chaque commande le plan de SA buvette', async () => {
+      const [nord, sud] = await service.withPickupGuidance([
+        commande('o1', 'sup-nord'),
+        commande('o2', 'sup-sud'),
+      ]);
+
+      expect(nord.supplierName).toBe('Buvette Nord');
+      expect(nord.pickupPlanUrl).toBe('https://cdn/nord.png');
+      // Sans plan propre, la buvette Sud retombe sur celui du lieu — et surtout
+      // PAS sur celui du Nord : deux commandes du même lieu ne partagent plus
+      // automatiquement la même image.
+      expect(sud.pickupPlanUrl).toBe('https://cdn/stade.png');
+    });
+
+    it('ne lit la base qu’une fois par table, quelle que soit la longueur', async () => {
+      await service.withPickupGuidance([
+        commande('o1', 'sup-nord'),
+        commande('o2', 'sup-nord'),
+        commande('o3', 'sup-sud'),
+      ]);
+      expect(prisma.supplier.findMany).toHaveBeenCalledTimes(1);
+      expect(prisma.venue.findMany).toHaveBeenCalledTimes(1);
+    });
+
+    it('ne touche pas la base pour une liste vide', async () => {
+      expect(await service.withPickupGuidance([])).toEqual([]);
+      expect(prisma.supplier.findMany).not.toHaveBeenCalled();
+    });
   });
 
   // ─── createFromPaymentIntent ──────────────────────────────────

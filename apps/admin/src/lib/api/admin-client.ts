@@ -208,6 +208,8 @@ export interface Supplier {
   slug?: string;
   status: string;
   preparationZone?: string | null;
+  /** Plan d'accès propre à cette buvette (null ⇒ plan général du lieu). */
+  planUrl?: string | null;
   isExternal?: boolean;
   referralCode?: string | null;
   organizationId: string;
@@ -465,7 +467,7 @@ export async function apiCancelScheduledPush(orgId: string, id: string): Promise
 export async function apiUpdateSupplier(
   orgId: string,
   supplierId: string,
-  data: { name?: string; preparationZone?: string },
+  data: { name?: string; preparationZone?: string; planUrl?: string | null },
 ): Promise<Supplier> {
   return req<Supplier>('PATCH', `/organizations/${orgId}/suppliers/${supplierId}`, data);
 }

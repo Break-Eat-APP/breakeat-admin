@@ -63,13 +63,14 @@ export class OrdersController {
    */
   @Get()
   async findMine(@CurrentUser() user: JwtPayload) {
-    return this.prisma.order.findMany({
+    const orders = await this.prisma.order.findMany({
       where: { userId: user.sub },
       orderBy: { createdAt: 'desc' },
       // `slot` : l'app affiche le créneau de retrait à côté du statut, et il doit
       // refléter une éventuelle réassignation (cf. PATCH /orders/:id/slot).
       include: { items: true, slot: CUSTOMER_SLOT_SELECT },
     });
+    return this.ordersService.withPickupGuidance(orders);
   }
 
   /** GET /api/v1/orders/:id — caller must own the order. */
@@ -83,7 +84,8 @@ export class OrdersController {
     if (order.userId !== user.sub) {
       throw new ForbiddenException('You do not own this order');
     }
-    return order;
+    const [enrichi] = await this.ordersService.withPickupGuidance([order]);
+    return enrichi;
   }
 
   /**

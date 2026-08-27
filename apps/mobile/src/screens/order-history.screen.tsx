@@ -21,6 +21,7 @@ import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
+import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { endTrackingForFinishedOrders } from '@lib/live-activity-tracking';
 import { EVT_COMMANDES_A_RECHARGER } from '@lib/hooks/use-deep-links';
 
@@ -89,6 +90,9 @@ export function OrderHistoryScreen() {
   const { token } = useAuthStore();
 
   const [orders, setOrders] = useState<Order[]>([]);
+  // Commande dont on regarde le plan — porte le plan ET le nom de la buvette,
+  // pour que le titre dise devant laquelle se presenter.
+  const [planAffiche, setPlanAffiche] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -213,10 +217,17 @@ export function OrderHistoryScreen() {
               order={item}
               onPress={() => navigation.navigate('OrderTracking', { orderId: item.id })}
               onArrived={markArrived}
+              onPlan={setPlanAffiche}
             />
           )}
         />
       )}
+      <BuvettePlanViewer
+        visible={planAffiche !== null}
+        url={planAffiche?.pickupPlanUrl}
+        title={planAffiche?.supplierName ?? 'Plan des buvettes'}
+        onClose={() => setPlanAffiche(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -248,10 +259,12 @@ function OrderCard({
   order,
   onPress,
   onArrived,
+  onPlan,
 }: {
   order: Order;
   onPress: () => void;
   onArrived: (orderId: string) => void;
+  onPlan: (order: Order) => void;
 }) {
   const cfg = ui(order.status);
   const live = isLive(order.status);
@@ -265,6 +278,15 @@ function OrderCard({
         <Text style={styles.orderNumber}>Commande n°{order.publicOrderNumber}</Text>
         <Text style={styles.price}>{formatPrice(order.totalCents)}</Text>
       </View>
+
+      {/* La buvette de retrait — un lieu peut en avoir plusieurs, et le client
+          doit savoir DEVANT LAQUELLE se présenter. */}
+      {order.supplierName ? (
+        <View style={styles.supplierRow}>
+          <Ionicons name="storefront-outline" size={14} color={THEME.inkSoft} />
+          <Text style={styles.supplierText}>{order.supplierName}</Text>
+        </View>
+      ) : null}
 
       {/* Statut coloré */}
       <View style={[styles.statusPill, { backgroundColor: cfg.tint }]}>
@@ -299,6 +321,18 @@ function OrderCard({
       </View>
 
       <Text style={styles.dateLine}>{formatDate(order.createdAt)}</Text>
+
+      {/* « Y aller » — le plan de CETTE buvette, pas celui du lieu entier. */}
+      {live && order.pickupPlanUrl ? (
+        <Pressable
+          style={({ pressed }) => [styles.planBtn, pressed && styles.pressed]}
+          onPress={() => onPlan(order)}
+          hitSlop={4}
+        >
+          <Ionicons name="map-outline" size={16} color={THEME.orange} />
+          <Text style={styles.planBtnText}>Y aller — voir le plan</Text>
+        </Pressable>
+      ) : null}
 
       {/* « Je suis arrivé » — uniquement tant que la commande est en cours. */}
       {live &&
@@ -381,6 +415,21 @@ const styles = StyleSheet.create({
   timeSoft: { color: THEME.inkSoft, fontSize: 12, fontFamily: HEAD.medium },
   dateLine: { color: THEME.grey, fontSize: 11.5, fontFamily: HEAD.medium },
 
+  supplierRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, marginBottom: 8 },
+  supplierText: { color: THEME.inkSoft, fontSize: 13, fontFamily: HEAD.semibold },
+  planBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 10,
+    paddingVertical: 11,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: THEME.orange,
+    backgroundColor: THEME.orangeTint,
+  },
+  planBtnText: { color: THEME.orange, fontSize: 14, fontFamily: HEAD.bold },
   arrivedBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
     backgroundColor: THEME.orange, borderRadius: THEME.radius.pill,

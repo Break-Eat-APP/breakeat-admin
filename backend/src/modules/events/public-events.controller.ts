@@ -74,6 +74,7 @@ export class PublicEventsController {
                 name: true,
                 preparationZone: true,
                 status: true,
+                planUrl: true,
               },
             },
           },
@@ -117,6 +118,8 @@ export class PublicEventsController {
         name: es.supplier.name,
         description: es.supplier.preparationZone ?? null,
         status: es.supplier.status,
+        // Plan propre à cette buvette ; à défaut, celui du lieu.
+        planUrl: es.supplier.planUrl ?? event.venue?.buvettePlanUrl ?? null,
       })),
     };
   }

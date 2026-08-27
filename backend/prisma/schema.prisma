@@ -446,6 +446,12 @@ model Supplier {
   name            String
   status          SupplierStatus @default(CLOSED)
   preparationZone String?        @map("preparation_zone")
+  /// PHASE 24 — plan d'accès PROPRE à cette buvette (image hébergée).
+  ///
+  /// Null ⇒ on retombe sur `Venue.buvettePlanUrl`, le plan général du lieu.
+  /// C'est ce qui permet à un stade à plusieurs comptoirs de guider chaque
+  /// client vers LE sien, sans obliger les clubs à tout re-paramétrer.
+  planUrl         String?        @map("plan_url")
   /// Exploitant externe (food-truck, traiteur tiers…) référencé via code de parrainage.
   isExternal      Boolean        @default(false) @map("is_external")
   /// Code de parrainage unique — partagé à l'exploitant externe pour le rattacher au club.

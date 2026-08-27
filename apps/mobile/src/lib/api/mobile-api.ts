@@ -149,6 +149,8 @@ export interface PublicEvent {
     name: string;
     description: string | null; // maps to preparationZone
     status: string;
+    /** Plan de CETTE buvette ; le serveur retombe sur celui du lieu si elle n'en a pas. */
+    planUrl?: string | null;
   }>;
 }
 
@@ -240,6 +242,10 @@ export interface Order {
   slot?: OrderSlot | null;
   /** Horodatage du « Je suis arrivé » (null tant que le client n'a rien signalé). */
   customerArrivedAt?: string | null;
+  /** Buvette où la commande attend — le client doit savoir laquelle. */
+  supplierName?: string | null;
+  /** Plan menant à CETTE buvette (à défaut, plan général du lieu). */
+  pickupPlanUrl?: string | null;
   items: Array<{
     productId: string;
     productNameSnapshot: string;

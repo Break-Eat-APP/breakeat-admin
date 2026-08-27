@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MinLength, MaxLength } from 'class-validator';
+import { IsString, IsOptional, MinLength, MaxLength, IsUrl, ValidateIf } from 'class-validator';
 
 export class UpdateSupplierDto {
   @IsString()
@@ -11,4 +11,15 @@ export class UpdateSupplierDto {
   @IsOptional()
   @MaxLength(100)
   preparationZone?: string;
+
+  /**
+   * Plan d'acces propre a cette buvette (URL d'image hebergee).
+   *
+   * Chaine vide = « effacer » : le client retombe alors sur le plan du lieu.
+   */
+  @IsOptional()
+  @ValidateIf((_o: unknown, valeur: unknown) => valeur !== null && valeur !== '')
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true },
+    { message: 'planUrl doit etre une URL http(s) valide' })
+  planUrl?: string | null;
 }

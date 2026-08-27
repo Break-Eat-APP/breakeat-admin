@@ -470,6 +470,48 @@ export class OrdersService {
   }
 
   /**
+   * PHASE 24 — de quoi guider le client jusqu'à SON comptoir.
+   *
+   * Ajoute à chaque commande le nom de la buvette et le plan à lui montrer.
+   * Le plan retenu est celui de la BUVETTE ; à défaut, celui du lieu. Un stade
+   * à quatre comptoirs affichait jusqu'ici la même image à tout le monde, à
+   * charge pour le client d'y retrouver le bon — alors que le seul plan utile
+   * est celui qui mène là où sa commande attend.
+   *
+   * Résolu ici et non par une relation Prisma : `Order` ne porte que des
+   * identifiants bruts (ni `supplier`, ni `venue`), et une lecture groupée
+   * suffit — deux requêtes pour toute la liste, quel qu'en soit la longueur.
+   */
+  async withPickupGuidance<T extends { supplierId: string; venueId: string }>(
+    orders: T[],
+  ): Promise<(T & { supplierName: string | null; pickupPlanUrl: string | null })[]> {
+    if (orders.length === 0) return [];
+
+    const [suppliers, venues] = await Promise.all([
+      this.prisma.supplier.findMany({
+        where: { id: { in: [...new Set(orders.map((o) => o.supplierId))] } },
+        select: { id: true, name: true, planUrl: true },
+      }),
+      this.prisma.venue.findMany({
+        where: { id: { in: [...new Set(orders.map((o) => o.venueId))] } },
+        select: { id: true, buvettePlanUrl: true },
+      }),
+    ]);
+    const parBuvette = new Map(suppliers.map((s) => [s.id, s]));
+    const parLieu = new Map(venues.map((v) => [v.id, v]));
+
+    return orders.map((order) => {
+      const buvette = parBuvette.get(order.supplierId);
+      const lieu = parLieu.get(order.venueId);
+      return {
+        ...order,
+        supplierName: buvette?.name ?? null,
+        pickupPlanUrl: buvette?.planUrl ?? lieu?.buvettePlanUrl ?? null,
+      };
+    });
+  }
+
+  /**
    * PHASE 19 — « Je suis arrivé » : le client signale sa présence au retrait.
    *
    * Ne change PAS le statut de la commande (c'est la buvette qui pilote le cycle

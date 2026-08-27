@@ -58,6 +58,7 @@ export class SuppliersService {
         organizationId,
         name: dto.name,
         preparationZone: dto.preparationZone,
+        planUrl: dto.planUrl || null,
         isExternal: dto.isExternal ?? false,
         // Un exploitant externe reçoit d'emblée un code de parrainage unique.
         referralCode: dto.isExternal ? await this.generateUniqueReferralCode() : null,
@@ -171,6 +172,9 @@ export class SuppliersService {
       data: {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.preparationZone !== undefined && { preparationZone: dto.preparationZone }),
+        // Chaine vide ⇒ null : « je retire le plan de cette buvette », et le
+        // client retombe sur le plan general du lieu.
+        ...(dto.planUrl !== undefined && { planUrl: dto.planUrl || null }),
       },
     });
 
