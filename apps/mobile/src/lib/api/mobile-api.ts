@@ -132,6 +132,13 @@ export interface PublicEvent {
   id: string;
   name: string;
   status: string;
+  /**
+   * Contenant technique d’un lieu ouvert en continu (phase 22).
+   *
+   * Ses dates n’ont aucun sens pour le client : sa fin est fixee en 2099.
+   * L’app doit le savoir pour ne pas afficher d’horaires inventes.
+   */
+  isPermanentContainer?: boolean;
   startAt: string;
   endAt: string;
   venue: { id: string; name: string; address: string; buvettePlanUrl?: string | null } | null;

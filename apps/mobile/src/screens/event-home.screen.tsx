@@ -151,11 +151,16 @@ export function EventHomeScreen({ route, navigation }: Props) {
         <View style={styles.venueBar}>
           <Text style={styles.venueIcon}>📍</Text>
           <Text style={styles.venueName}>{event.venue.name}</Text>
-          {event.startAt && (
+          {/* Un lieu ouvert en continu n'a pas d'horaires a montrer : son
+              contenant technique se termine en 2099, ce qui s'affichait
+              « 22:35 – 00:59 ». On dit ce qui est vrai, ou rien. */}
+          {event.isPermanentContainer ? (
+            <Text style={styles.venueTime}>Ouvert en continu</Text>
+          ) : event.startAt ? (
             <Text style={styles.venueTime}>
               {formatTime(event.startAt)} – {formatTime(event.endAt)}
             </Text>
-          )}
+          ) : null}
         </View>
       )}
 

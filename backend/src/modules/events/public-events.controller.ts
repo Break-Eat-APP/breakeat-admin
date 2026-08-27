@@ -97,6 +97,11 @@ export class PublicEventsController {
       id: event.id,
       name: event.name,
       status: event.status,
+      // PHASE 22/23 — un lieu ouvert en continu est porte par un contenant
+      // invisible dont les dates n'ont AUCUN sens pour le client : sa fin est
+      // fixee en 2099. L'app affichait « 22:35 – 00:59 », des horaires qui ne
+      // decrivaient rien. Elle doit pouvoir distinguer les deux cas.
+      isPermanentContainer: event.isPermanentContainer,
       startAt: event.startAt,
       endAt: event.endAt,
       venue: event.venue,
