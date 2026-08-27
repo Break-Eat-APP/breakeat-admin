@@ -246,6 +246,8 @@ export interface Order {
   supplierName?: string | null;
   /** Plan menant à CETTE buvette (à défaut, plan général du lieu). */
   pickupPlanUrl?: string | null;
+  /** Non nul ⇒ commande passée à plusieurs (cf. invitation entre amis). */
+  orderGroupId?: string | null;
   items: Array<{
     productId: string;
     productNameSnapshot: string;
@@ -324,11 +326,39 @@ export const apiGetPublicSlots = (eventId: string, supplierId?: string | null) =
 
 // ─── Cart (authenticated) ──────────────────────────────────────
 
-export const apiCreateCart = (eventId: string, supplierId: string) =>
+export const apiCreateCart = (
+  eventId: string,
+  supplierId: string,
+  orderGroupCode?: string | null,
+) =>
   req<BackendCart>('/carts', {
+    method: 'POST',
+    body: JSON.stringify({ eventId, supplierId, ...(orderGroupCode ? { orderGroupCode } : {}) }),
+  });
+
+// ─── Commander à plusieurs ────────────────────────────────────
+
+/** Invitation partagée à un ami : il commande à la même buvette, et paie sa part. */
+export interface OrderGroup {
+  code: string;
+  eventId: string;
+  supplierId: string;
+  supplierName: string | null;
+  /** Commandes déjà passées dans ce groupe (la sienne comprise, une fois payée). */
+  orderCount: number;
+  expiresAt: string;
+}
+
+/** Ouvre (ou retrouve) mon invitation pour cette buvette. Deux appuis, un seul code. */
+export const apiOpenOrderGroup = (eventId: string, supplierId: string) =>
+  req<OrderGroup>('/order-groups', {
     method: 'POST',
     body: JSON.stringify({ eventId, supplierId }),
   });
+
+/** Où mène ce code ? Lisible sans être connecté. */
+export const apiJoinOrderGroup = (code: string) =>
+  req<OrderGroup>(`/public/order-groups/${encodeURIComponent(code)}`);
 
 export const apiAddCartItem = (cartId: string, productId: string, quantity: number) =>
   req<BackendCart>(`/carts/${cartId}/items`, {

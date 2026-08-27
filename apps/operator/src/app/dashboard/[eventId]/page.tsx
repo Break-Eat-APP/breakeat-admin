@@ -268,6 +268,17 @@ export default function DashboardPage() {
   if (!token) return <LoginForm onLogin={setToken} />;
 
   // Map an Order to OrderCard props (actions + loading flag bound per order).
+  // Taille de chaque groupe d'amis, calculee sur TOUT le board : les commandes
+  // d'un meme groupe peuvent etre a des etapes differentes (l'un a paye avant
+  // l'autre), donc compter par colonne donnerait un nombre faux.
+  const taillesGroupes = new Map<string, number>();
+  for (const liste of Object.values(data?.orders ?? {})) {
+    for (const o of liste) {
+      if (!o.orderGroupId) continue;
+      taillesGroupes.set(o.orderGroupId, (taillesGroupes.get(o.orderGroupId) ?? 0) + 1);
+    }
+  }
+
   const toCardProps = (order: Order) => ({
     id: order.id,
     orderNumber: order.publicOrderNumber,
@@ -276,6 +287,7 @@ export default function DashboardPage() {
     createdAt: order.createdAt,
     // Phase 19 — fait pulser la carte quand le client s'est annoncé au retrait.
     customerArrivedAt: order.customerArrivedAt ?? null,
+    groupSize: order.orderGroupId ? (taillesGroupes.get(order.orderGroupId) ?? 1) : 1,
     isLoading: isOrderLoading(order.id),
     ...makeActions(order.id, token),
   });

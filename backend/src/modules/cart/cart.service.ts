@@ -20,6 +20,7 @@ import { StripeService } from '../payments/stripe.service';
 import { GroupsService } from '../groups/groups.service';
 import { LoyaltyService, MIN_PAYABLE_CENTS } from '../loyalty/loyalty.service';
 import { SlotsService } from '../slots/slots.service';
+import { OrderGroupsService } from '../order-groups/order-groups.service';
 import type { CreateCartDto } from './dto/create-cart.dto';
 import type { UpdateCartDto } from './dto/update-cart.dto';
 import type { AddCartItemDto } from './dto/add-cart-item.dto';
@@ -95,6 +96,7 @@ export class CartService {
     private readonly groups: GroupsService,
     private readonly loyaltyService: LoyaltyService,
     private readonly slotsService: SlotsService,
+    private readonly orderGroups: OrderGroupsService,
   ) {}
 
   // ─── Create / Read ───────────────────────────────────────────
@@ -164,12 +166,24 @@ export class CartService {
     // repousse son échéance puisqu'il s'en sert à l'instant.
     //
     // Le point de retrait est actualisé s'il en a choisi un autre entre-temps.
+    // PHASE 24 — rattachement a une invitation entre amis, s'il y en a une.
+    const orderGroupId = dto.orderGroupCode
+      ? await this.orderGroups.resoudrePourPanier({
+          code: dto.orderGroupCode,
+          eventId: dto.eventId,
+          supplierId: dto.supplierId,
+        })
+      : null;
+
     if (existingOpen) {
       await this.prisma.cart.update({
         where: { id: existingOpen.id },
         data: {
           expiresAt: new Date(Date.now() + CART_TTL_MS),
           ...(dto.pickupPointId !== undefined && { pickupPointId: dto.pickupPointId ?? null }),
+          // On ne DETACHE jamais un panier deja rattache : revenir sur l'ecran
+          // sans le code ne doit pas sortir le client du groupe a son insu.
+          ...(orderGroupId ? { orderGroupId } : {}),
         },
       });
       this.logger.log(`Cart reused: ${existingOpen.id} user=${userId} event=${dto.eventId}`);
@@ -184,6 +198,7 @@ export class CartService {
         eventId: dto.eventId,
         supplierId: dto.supplierId,
         pickupPointId: dto.pickupPointId ?? null,
+        orderGroupId,
         expiresAt,
       },
     });

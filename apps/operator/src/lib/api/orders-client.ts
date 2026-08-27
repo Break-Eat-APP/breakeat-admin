@@ -110,6 +110,11 @@ export interface Order {
    * Non nul ⇒ il attend au point de retrait, la carte est mise en évidence.
    */
   customerArrivedAt?: string | null;
+  /**
+   * PHASE 24 — commandes passees ensemble par des amis, chacun ayant paye la
+   * sienne. Elles doivent etre preparees et remises d'un bloc.
+   */
+  orderGroupId?: string | null;
   items: OrderItem[];
 }
 

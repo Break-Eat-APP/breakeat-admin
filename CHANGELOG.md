@@ -5,6 +5,51 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.53.0] — 2026-08-28 — Le bon plan, et commander à plusieurs
+
+### Un plan par buvette
+`venues.buvette_plan_url` portait un plan unique pour tout le lieu : un stade à
+quatre comptoirs montrait la même image à tous, à charge pour le client d'y
+retrouver le bon. Le seul plan utile est celui qui mène AU comptoir où sa
+commande attend.
+
+`suppliers.plan_url` s'ajoute ; le champ du lieu devient le plan par défaut, donc
+aucune configuration existante ne casse. « Mes commandes » affiche le nom de la
+buvette et un bouton « Y aller — voir le plan ».
+
+### Commander à plusieurs — chacun paie sa part
+Le convive partage un code (et un lien `breakeat://join/<code>`). Son ami ouvre
+la même buvette, compose sa commande et **la paie lui-même**. Les deux commandes
+arrivent rattachées : la buvette voit « À remettre ensemble · n commandes ».
+
+Ce partage-là a été préféré à un panier commun à addition partagée. Un vrai
+multi-paiement obligerait à garder une commande en attente tant que tout le monde
+n'a pas payé — avec délais, abandons et remboursements à gérer **pendant la
+mi-temps**. Ici, un ami qui renonce ne bloque personne : il n'y a jamais de
+panier à moitié réglé.
+
+Détails qui comptent :
+- le code évite I, O, 0 et 1 — il se dit à voix haute dans un stade bruyant ;
+- deux appuis sur « Inviter » rendent le MÊME code : en émettre un second
+  invaliderait celui déjà partagé ;
+- un code n'ouvre que la buvette pour laquelle il a été émis, sinon le groupe
+  arriverait coupé entre deux comptoirs ;
+- un code périmé ou mal saisi est ignoré, jamais bloquant : le client commande
+  alors seul plutôt que de se voir refuser son panier.
+
+Le QR code reste à faire : il demande une dépendance native (`react-native-svg`
++ un générateur), à décider avant une build.
+
+- `+ backend/src/modules/order-groups/` (service, contrôleur, 8 tests)
+- `+ backend/prisma/migrations/20260828_supplier_plan_url`, `20260828b_order_groups`
+- `~ backend/src/modules/{orders,cart}/` — le rattachement suit panier → commande
+- `~ apps/mobile/src/screens/{cart,order-history,event-home,checkout}.screen.tsx`
+- `~ apps/mobile/src/lib/hooks/use-deep-links.ts` — `breakeat://join/<code>`
+- `~ apps/operator/src/components/OrderCard.tsx` — « À remettre ensemble »
+- `~ apps/admin/.../suppliers/[id]` — champ « Plan d'accès »
+
+---
+
 ## [0.52.0] — 2026-08-28 — Trois colonnes, et plus rien a configurer
 
 ### Le board opérateur passe de cinq colonnes à trois

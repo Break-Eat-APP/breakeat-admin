@@ -46,6 +46,7 @@ export function CheckoutScreen({ navigation }: Props) {
     totalCents,
     venueBuvettePlanUrl,
     venueId,
+    orderGroupCode,
     setBackendCartId,
     resetCart,
   } = useCartStore();
@@ -117,7 +118,9 @@ export function CheckoutScreen({ navigation }: Props) {
     try {
       // 1. Create backend cart
       setStep('Création du panier…');
-      const cart = await apiCreateCart(eventId, supplierId);
+      // Le code d'invitation voyage jusqu'ici : c'est a la creation du panier
+      // que le rattachement se fait, et le panier le transmet a la commande.
+      const cart = await apiCreateCart(eventId, supplierId, orderGroupCode);
       setBackendCartId(cart.id);
 
       // 2. Add items

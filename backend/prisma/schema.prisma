@@ -623,6 +623,36 @@ model Stock {
 /// V1 = single-vendor: one cart targets exactly one supplier.
 /// Items, totals and pickup point are persisted on the cart;
 /// snapshots are taken later, on Order creation.
+/// PHASE 24 — commander a plusieurs : « chacun paie sa part ».
+///
+/// Le groupe ne porte AUCUN argent. Chaque convive passe une commande normale,
+/// qu'il paie lui-meme ; le groupe ne fait que les rattacher entre elles pour
+/// que la buvette les prepare et les remette ensemble.
+///
+/// C'est ce qui rend la fonction sure : si un ami renonce, se trompe de buvette
+/// ou n'a plus de batterie, les commandes des autres restent valides. Rien n'est
+/// « en attente de paiement de quelqu'un d'autre ».
+///
+/// Pas de relations Prisma : `Order` ne porte deja que des identifiants bruts
+/// (supplierId, venueId, pickupPointId) et resout ses libelles par lecture
+/// dediee. On reste dans le meme style plutot que d'ouvrir quatre relations.
+model OrderGroup {
+  id         String   @id @default(uuid())
+  /// Code court partage a l'ami (sans I/O/0/1, illisibles a l'oral).
+  code       String   @unique
+  eventId    String   @map("event_id")
+  supplierId String   @map("supplier_id")
+  /// Le convive qui a lance l'invitation.
+  createdBy  String   @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  /// Un groupe vaut pour UN service : passe ce delai, le code ne joint plus rien.
+  expiresAt  DateTime @map("expires_at")
+
+  @@index([eventId])
+  @@index([createdBy, expiresAt])
+  @@map("order_groups")
+}
+
 model Cart {
   id             String     @id @default(uuid())
   userId         String     @map("user_id")
@@ -638,6 +668,8 @@ model Cart {
   redeemedPoints Int        @default(0) @map("redeemed_points")
   /// Idempotency safeguard for /checkout — same key returns the same PaymentIntent.
   paymentIntentId String?   @map("payment_intent_id")
+  /// PHASE 24 — commande passee dans le cadre d'une invitation entre amis.
+  orderGroupId   String?    @map("order_group_id")
   expiresAt      DateTime   @map("expires_at")
   createdAt      DateTime   @default(now()) @map("created_at")
   updatedAt      DateTime   @updatedAt @map("updated_at")
@@ -690,6 +722,9 @@ model Order {
   venueId           String        @map("venue_id")
   supplierId        String        @map("supplier_id")
   pickupPointId     String        @map("pickup_point_id")
+  /// PHASE 24 — rattachement a une commande de groupe (cf. OrderGroup).
+  /// La buvette les remet ensemble ; chacun a paye la sienne.
+  orderGroupId      String?       @map("order_group_id")
   /// Phase 7 — slot assignment.
   slotId            String?       @map("slot_id")
   status            OrderStatus   @default(PAID)
@@ -728,6 +763,7 @@ model Order {
   @@index([userId])
   @@index([eventId, status])
   @@index([supplierId, status])
+  @@index([orderGroupId])
   @@index([slotId])
   @@index([organizationId])
   @@map("orders")

@@ -1,9 +1,10 @@
-import React from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
-import { formatPrice } from '@lib/api/mobile-api';
+import { apiOpenOrderGroup, formatPrice } from '@lib/api/mobile-api';
+import { showAlert } from '@lib/alert';
 import { useCartStore } from '@store/cart.store';
 import { PageHeader } from '@components/page-header';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
@@ -25,7 +26,49 @@ export function CartScreen({ navigation }: Props) {
     supplierId,
     selectedSlotLabel,
     clearSlot,
+    orderGroupCode,
+    setOrderGroupCode,
   } = useCartStore();
+
+  const [invitationEnCours, setInvitationEnCours] = useState(false);
+
+  /**
+   * « Inviter un ami » — chacun paie sa part.
+   *
+   * L'ami reçoit un code et un lien vers CETTE buvette ; il compose sa commande
+   * et la paie lui-même. Les deux commandes arrivent liées à la buvette, qui
+   * les prépare et les remet ensemble.
+   *
+   * Le message porte le code EN CLAIR autant que le lien : un lien `breakeat://`
+   * ne s'ouvre que si l'app est déjà installée. Le code, lui, reste utilisable
+   * après l'installation.
+   */
+  const handleInviter = async () => {
+    if (!eventId || !supplierId) return;
+    setInvitationEnCours(true);
+    try {
+      const groupe = await apiOpenOrderGroup(eventId, supplierId);
+      setOrderGroupCode(groupe.code);
+      const ou = groupe.supplierName ? ` à ${groupe.supplierName}` : '';
+      await Share.share({
+        message:
+          `Rejoins ma commande Break Eat${ou} !
+
+` +
+          `Code : ${groupe.code}
+` +
+          `breakeat://join/${groupe.code}
+
+` +
+          `Tu choisis ce que tu veux et tu paies ta part — on récupère tout ensemble.`,
+      });
+    } catch (e: unknown) {
+      console.warn('Ouverture de l’invitation échouée:', e);
+      showAlert('Invitation impossible', "Le lien n'a pas pu être créé. Réessaie dans un instant.");
+    } finally {
+      setInvitationEnCours(false);
+    }
+  };
 
   const handleContinue = () => {
     if (!eventId) return;
@@ -98,6 +141,35 @@ export function CartScreen({ navigation }: Props) {
                     </Pressable>
                   </View>
                 ) : null}
+
+                {/* Commander a plusieurs — chacun paie sa part. */}
+                {orderGroupCode ? (
+                  <View style={styles.groupeBox}>
+                    <Ionicons name="people" size={18} color={THEME.orange} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.groupeTitre}>Commande à plusieurs</Text>
+                      <Text style={styles.groupeSub}>
+                        Code {orderGroupCode} · chacun paie sa part
+                      </Text>
+                    </View>
+                    <Pressable onPress={() => void handleInviter()} hitSlop={8}>
+                      <Text style={styles.changeSlot}>Partager</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Pressable
+                    style={({ pressed }) => [styles.inviteBtn, pressed && { opacity: 0.85 }]}
+                    onPress={() => void handleInviter()}
+                    disabled={invitationEnCours || !supplierId}
+                  >
+                    {invitationEnCours ? (
+                      <ActivityIndicator size="small" color={THEME.orange} />
+                    ) : (
+                      <Ionicons name="person-add-outline" size={18} color={THEME.orange} />
+                    )}
+                    <Text style={styles.inviteBtnText}>Inviter un ami à commander</Text>
+                  </Pressable>
+                )}
 
                 {/* Récapitulatif */}
                 <View style={styles.summary}>
@@ -172,6 +244,32 @@ const styles = StyleSheet.create({
 
   footer: { paddingHorizontal: 18, paddingTop: 16, gap: 12 },
 
+  inviteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 13,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: THEME.orange,
+    backgroundColor: THEME.orangeTint,
+    marginBottom: 14,
+  },
+  inviteBtnText: { color: THEME.orange, fontSize: 14.5, fontFamily: FONT.bold },
+  groupeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: THEME.orange,
+    backgroundColor: THEME.orangeTint,
+    marginBottom: 14,
+  },
+  groupeTitre: { color: THEME.ink, fontSize: 14.5, fontFamily: FONT.bold },
+  groupeSub: { color: THEME.inkSoft, fontSize: 12.5, fontFamily: FONT.regular, marginTop: 1 },
   slotBox: {
     flexDirection: 'row',
     alignItems: 'center',

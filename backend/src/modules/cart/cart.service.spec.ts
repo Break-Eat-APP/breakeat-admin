@@ -13,6 +13,7 @@ import {
 } from '@prisma/client';
 import { CartService } from './cart.service';
 import { SlotsService } from '../slots/slots.service';
+import { OrderGroupsService } from '../order-groups/order-groups.service';
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
 import { GroupsService } from '../groups/groups.service';
@@ -91,6 +92,11 @@ describe('CartService', () => {
           // n’est jamais sollicite, un mock vide suffit a l’injection.
           provide: SlotsService,
           useValue: { assignOrderToSlot: jest.fn() },
+        },
+        {
+          // Phase 24 — sans code d'invitation, le service n'est pas appele.
+          provide: OrderGroupsService,
+          useValue: { resoudrePourPanier: jest.fn().mockResolvedValue(null) },
         },
         {
           provide: PrismaService,

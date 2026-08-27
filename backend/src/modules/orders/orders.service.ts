@@ -177,6 +177,9 @@ export class OrdersService {
           venueId: cart.event.venueId,
           supplierId: cart.supplierId,
           pickupPointId,
+          // PHASE 24 — le rattachement suit le panier : la buvette verra les
+          // commandes du groupe ensemble, chacune deja payee par son convive.
+          orderGroupId: cart.orderGroupId,
           status: OrderStatus.PAID,
           paymentStatus: PaymentStatus.SUCCEEDED,
           subtotalCents,
@@ -621,6 +624,9 @@ export class OrdersService {
         slotId: true,
         estimatedReadyAt: true,
         customerArrivedAt: true,
+        // PHASE 24 — commandes passees ensemble : la buvette doit les preparer
+        // et les remettre d'un bloc, sinon un convive repart sans les autres.
+        orderGroupId: true,
         totalCents: true,
         currency: true,
         createdAt: true,
