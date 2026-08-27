@@ -144,22 +144,27 @@ export function EventHomeScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.root}>
+      {/* Le titre dit l'ETAPE, pas le nom de l'objet technique.
+          « Service continu » est le nom du contenant invisible d'un lieu ouvert
+          en permanence : il ne veut rien dire pour le client, qui, lui, est en
+          train de choisir son stand. */}
       <PageHeader
-        title={event.name}
+        title="Choisir un stand"
         onBack={() => navigation.navigate('QRScanner')}
       />
 
-      {/* Venue info */}
+      {/* Ou l'on se trouve */}
       {event.venue && (
         <View style={styles.venueBar}>
           <Text style={styles.venueIcon}>📍</Text>
-          <Text style={styles.venueName}>{event.venue.name}</Text>
-          {/* Un lieu ouvert en continu n'a pas d'horaires a montrer : son
-              contenant technique se termine en 2099, ce qui s'affichait
-              « 22:35 – 00:59 ». On dit ce qui est vrai, ou rien. */}
-          {event.isPermanentContainer ? (
-            <Text style={styles.venueTime}>Ouvert en continu</Text>
-          ) : event.startAt ? (
+          <Text style={styles.venueName}>
+            {event.venue.name}
+            {!event.isPermanentContainer ? ` · ${event.name}` : ''}
+          </Text>
+          {/* Horaires : seulement quand ils existent VRAIMENT. Le contenant
+              d'un lieu ouvert en continu se termine en 2099 — il s'affichait
+              « 22:35 – 00:59 », une plage que personne n'a jamais saisie. */}
+          {!event.isPermanentContainer && event.startAt ? (
             <Text style={styles.venueTime}>
               {formatTime(event.startAt)} – {formatTime(event.endAt)}
             </Text>
@@ -167,9 +172,7 @@ export function EventHomeScreen({ route, navigation }: Props) {
         </View>
       )}
 
-      {/* Suppliers */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Choisir un stand</Text>
         <Text style={styles.sectionSub}>{event.suppliers.length} stand(s) disponible(s)</Text>
       </View>
 
@@ -405,7 +408,6 @@ const styles = StyleSheet.create({
   venueTime: { color: THEME.inkSoft, fontSize: 12 },
 
   section: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 8 },
-  sectionTitle: { color: THEME.ink, fontSize: 16, fontWeight: '700' },
   sectionSub: { color: THEME.inkSoft, fontSize: 13, marginTop: 2 },
 
   list: { paddingHorizontal: 16, paddingBottom: 120, gap: 12 },

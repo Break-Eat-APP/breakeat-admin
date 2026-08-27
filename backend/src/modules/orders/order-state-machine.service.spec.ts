@@ -17,15 +17,26 @@ describe('OrderStateMachineService', () => {
         (sum, arr) => sum + (arr?.length ?? 0),
         0,
       );
-      expect(count).toBe(15);
+      expect(count).toBe(17);
     });
 
-    it('PAID has 3 outgoing transitions', () => {
-      expect(ALLOWED_TRANSITIONS[OrderStatus.PAID]).toHaveLength(3);
+    it('PAID has 4 outgoing transitions', () => {
+      expect(ALLOWED_TRANSITIONS[OrderStatus.PAID]).toHaveLength(4);
     });
 
-    it('ACCEPTED has 3 outgoing transitions', () => {
-      expect(ALLOWED_TRANSITIONS[OrderStatus.ACCEPTED]).toHaveLength(3);
+    it('ACCEPTED has 4 outgoing transitions', () => {
+      expect(ALLOWED_TRANSITIONS[OrderStatus.ACCEPTED]).toHaveLength(4);
+    });
+
+    // Le board opérateur n'a que trois colonnes : ces deux raccourcis SONT le
+    // parcours normal. Les casser rendrait le bouton « En préparation »
+    // inopérant sur une commande neuve — sans autre signe qu'un refus 400.
+    it('PAID → PREPARING : « En préparation » depuis une commande neuve', () => {
+      expect(ALLOWED_TRANSITIONS[OrderStatus.PAID]).toContain(OrderStatus.PREPARING);
+    });
+
+    it('ACCEPTED → READY : une commande acceptée peut être marquée prête', () => {
+      expect(ALLOWED_TRANSITIONS[OrderStatus.ACCEPTED]).toContain(OrderStatus.READY);
     });
 
     it('PREPARING has 3 outgoing transitions', () => {
@@ -93,11 +104,11 @@ describe('OrderStateMachineService', () => {
       [OrderStatus.COMPLETED, OrderStatus.PREPARING],
       [OrderStatus.CANCELLED, OrderStatus.ACCEPTED],
       [OrderStatus.CANCELLED, OrderStatus.PAID],
-      // Skipping states
-      [OrderStatus.PAID, OrderStatus.PREPARING],    // must go PAID → ACCEPTED first
+      // Sauts INTERDITS. PAID → PREPARING et ACCEPTED → READY n'y sont plus :
+      // le board a trois colonnes, ces deux-la sont le parcours normal.
       [OrderStatus.PAID, OrderStatus.READY],
       [OrderStatus.PAID, OrderStatus.COMPLETED],
-      [OrderStatus.ACCEPTED, OrderStatus.READY],
+      [OrderStatus.PREPARING, OrderStatus.PICKED_UP],
       // READY cannot be cancelled (missed that window)
       [OrderStatus.READY, OrderStatus.CANCELLED],
       // Going backwards without recovery
@@ -141,9 +152,10 @@ describe('OrderStateMachineService', () => {
   // ─── allowedFrom ──────────────────────────────────────────────
 
   describe('allowedFrom', () => {
-    it('returns all 3 allowed states from PAID', () => {
+    it('returns all 4 allowed states from PAID', () => {
       const allowed = service.allowedFrom(OrderStatus.PAID);
-      expect(allowed).toHaveLength(3);
+      expect(allowed).toHaveLength(4);
+      expect(allowed).toContain(OrderStatus.PREPARING);
       expect(allowed).toContain(OrderStatus.ACCEPTED);
       expect(allowed).toContain(OrderStatus.CANCELLED);
       expect(allowed).toContain(OrderStatus.RECOVERED);

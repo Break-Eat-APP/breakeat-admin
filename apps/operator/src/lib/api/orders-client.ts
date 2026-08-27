@@ -72,6 +72,9 @@ async function apiFetch<T>(path: string, token: string, init?: RequestInit): Pro
   return res.json() as Promise<T>;
 }
 
+/** Nature du créneau de retrait, aplatie par le serveur (IMMEDIATE sans créneau). */
+export type SlotKind = 'IMMEDIATE' | 'PAUSE_1' | 'PAUSE_2' | 'GENERAL' | 'CUSTOM';
+
 export interface OrderItem {
   id: string;
   productId: string;
@@ -116,44 +119,6 @@ export interface DashboardData {
   orders: Record<string, Order[]>;
 }
 
-// ─── Operator screens (Phase 11.4) ─────────────────────────────────────────────
-
-export type OperatorScreenKind = 'ORDERS_QUEUE' | 'READY' | 'RECOVERED' | 'GENERAL';
-export type SlotKind = 'IMMEDIATE' | 'PAUSE_1' | 'PAUSE_2' | 'GENERAL' | 'CUSTOM';
-
-export interface ScreenFilters {
-  categoryIds?: string[];
-  excludeCategoryIds?: string[];
-  productIds?: string[];
-  excludeProductIds?: string[];
-  showRecap?: boolean;
-}
-
-/**
- * A fully-resolved operator screen for one event, as returned by
- * GET /events/:eventId/operator-screens/resolved.
- * Defaults (statuses, sortOrder, enabled) are already merged server-side.
- */
-export interface ResolvedOperatorScreen {
-  eventScreenId: string;
-  templateId: string;
-  name: string;
-  kind: OperatorScreenKind;
-  icon: string | null;
-  sortOrder: number;
-  enabled: boolean;
-  slotKinds: SlotKind[];
-  statuses: string[];
-  supplierIds: string[];
-  filters: ScreenFilters;
-}
-
-export interface ResolvedScreensResponse {
-  eventId: string;
-  supplierId: string | null;
-  screens: ResolvedOperatorScreen[];
-}
-
 // ─── Me + memberships ─────────────────────────────────────────────────────────
 
 export interface OperatorMembership {
@@ -192,31 +157,7 @@ export async function fetchDashboard(
   return apiFetch<DashboardData>(`/orders/event/${eventId}/dashboard${qs}`, token);
 }
 
-/**
- * Fetches the configurable operator screens resolved for this event.
- * When the operator's membership is pinned to a supplier the backend ignores
- * the supplierId param and scopes to the pinned supplier automatically.
- */
-export async function fetchResolvedScreens(
-  eventId: string,
-  token: string,
-  supplierId?: string | null,
-): Promise<ResolvedScreensResponse> {
-  const qs = supplierId ? `?supplierId=${encodeURIComponent(supplierId)}` : '';
-  return apiFetch<ResolvedScreensResponse>(
-    `/events/${eventId}/operator-screens/resolved${qs}`,
-    token,
-  );
-}
-
 // ─── Transitions ─────────────────────────────────────────────────────────────
-
-export async function acceptOrder(id: string, token: string, reason?: string): Promise<Order> {
-  return apiFetch<Order>(`/orders/${id}/accept`, token, {
-    method: 'PATCH',
-    body: JSON.stringify({ reason }),
-  });
-}
 
 export async function startPreparingOrder(id: string, token: string, reason?: string): Promise<Order> {
   return apiFetch<Order>(`/orders/${id}/start-preparing`, token, {
@@ -234,13 +175,6 @@ export async function markOrderReady(id: string, token: string, reason?: string)
 
 export async function markOrderPickedUp(id: string, token: string, reason?: string): Promise<Order> {
   return apiFetch<Order>(`/orders/${id}/mark-picked-up`, token, {
-    method: 'PATCH',
-    body: JSON.stringify({ reason }),
-  });
-}
-
-export async function recoverOrder(id: string, token: string, reason?: string): Promise<Order> {
-  return apiFetch<Order>(`/orders/${id}/recover`, token, {
     method: 'PATCH',
     body: JSON.stringify({ reason }),
   });

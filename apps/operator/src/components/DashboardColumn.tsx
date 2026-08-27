@@ -12,11 +12,13 @@ import { groupSimilarOrders } from '@/lib/screens/grouping';
  * Shows a header with status label + count, then stacked OrderCards.
  */
 
+// Le board n'affiche que PAID / PREPARING / READY : les autres libellés ne
+// servent qu'aux cartes isolées (récap, historique).
 const COLUMN_HEADERS: Record<StatusVariant, string> = {
   PAID:      'Nouvelles',
-  ACCEPTED:  'Acceptées',
+  ACCEPTED:  'En préparation',
   PREPARING: 'En préparation',
-  READY:     'Prêtes',
+  READY:     'Prêtes à remettre',
   PICKED_UP: 'Récupérées',
   COMPLETED: 'Terminées',
   CANCELLED: 'Annulées',

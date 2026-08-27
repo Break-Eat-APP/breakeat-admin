@@ -29,11 +29,9 @@ export interface OrderCardProps {
    */
   customerArrivedAt?: string | null;
   isLoading?: boolean;
-  onAccept?: () => void;
   onPrepare?: () => void;
   onReady?: () => void;
   onPickedUp?: () => void;
-  onRecover?: () => void;
   onCancel?: () => void;
 }
 
@@ -56,11 +54,9 @@ export function OrderCard({
   createdAt,
   customerArrivedAt = null,
   isLoading = false,
-  onAccept,
   onPrepare,
   onReady,
   onPickedUp,
-  onRecover,
   onCancel,
 }: OrderCardProps) {
   const color = STATUS_COLORS[status] ?? '#6b7280';
@@ -142,29 +138,29 @@ export function OrderCard({
         ))}
       </ul>
 
-      {/* Action buttons */}
+      {/* Un seul geste par carte : celui que l'etape appelle. */}
       <div style={{ display: 'flex', gap: 6 }}>
-        {status === 'PAID' && (
-          <ActionButton color={STATUS_COLORS.ACCEPTED} label="Accepter" onClick={onAccept} disabled={isLoading} />
+        {(status === 'PAID' || status === 'RECOVERED') && (
+          <ActionButton
+            color={STATUS_COLORS.PREPARING}
+            label="En préparation"
+            onClick={onPrepare}
+            disabled={isLoading}
+          />
         )}
-        {status === 'ACCEPTED' && (
-          <ActionButton color={STATUS_COLORS.PREPARING} label="Préparer" onClick={onPrepare} disabled={isLoading} />
-        )}
-        {status === 'PREPARING' && (
+        {(status === 'ACCEPTED' || status === 'PREPARING') && (
           <ActionButton color={STATUS_COLORS.READY} label="Prête ✓" onClick={onReady} disabled={isLoading} />
         )}
         {status === 'READY' && (
-          <ActionButton color={STATUS_COLORS.PICKED_UP} label="Récupérée" onClick={onPickedUp} disabled={isLoading} />
+          <ActionButton
+            color={STATUS_COLORS.PICKED_UP}
+            label="Remise au client"
+            onClick={onPickedUp}
+            disabled={isLoading}
+          />
         )}
-        {status === 'RECOVERED' && (
-          <ActionButton color={STATUS_COLORS.ACCEPTED} label="Ré-accepter" onClick={onAccept} disabled={isLoading} />
-        )}
-        {/* Recovery button for PAID/ACCEPTED/PREPARING */}
-        {['PAID', 'ACCEPTED', 'PREPARING'].includes(status) && (
-          <SmallButton color={STATUS_COLORS.RECOVERED} label="↩" title="Récupérer" onClick={onRecover} disabled={isLoading} />
-        )}
-        {/* Cancel button for PAID/ACCEPTED/PREPARING */}
-        {['PAID', 'ACCEPTED', 'PREPARING'].includes(status) && (
+        {/* Annulation — tant que la commande n'attend pas au comptoir. */}
+        {['PAID', 'RECOVERED', 'ACCEPTED', 'PREPARING'].includes(status) && (
           <SmallButton color={STATUS_COLORS.CANCELLED} label="✕" title="Annuler" onClick={onCancel} disabled={isLoading} />
         )}
       </div>

@@ -20,11 +20,6 @@ import {
   apiCreateSlot,
   apiDeleteSlot,
   apiGetGroups,
-  apiGetEventScreens,
-  apiGetOperatorScreens,
-  apiApplyEventScreen,
-  apiUpdateEventScreen,
-  apiRemoveEventScreen,
   apiGetEventStats,
   type AdminEvent,
   type Supplier,
@@ -33,15 +28,12 @@ import {
   type Venue,
   type Group,
   type EventVisibility,
-  type EventOperatorScreen,
-  type OperatorScreenTemplate,
   type EventStats,
   type OperatorOrderStatus,
   getOrgId,
   operatorDashboardUrl,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
-import { KIND_LABELS } from '@/components/operator-screens/screen-form';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -137,13 +129,6 @@ export default function EventDetailPage() {
   const [accessError, setAccessError] = useState('');
   const [accessSuccess, setAccessSuccess] = useState('');
 
-  // Operator screens (Phase 11) — per-event application of org templates
-  const [eventScreens, setEventScreens] = useState<EventOperatorScreen[]>([]);
-  const [orgTemplates, setOrgTemplates] = useState<OperatorScreenTemplate[]>([]);
-  const [applyTemplateId, setApplyTemplateId] = useState('');
-  const [applyingScreen, setApplyingScreen] = useState(false);
-  const [screenError, setScreenError] = useState('');
-
   // Stats (Phase 15) — fetched independently so a manager-only 403 (revenue is
   // gated to MANAGE_ROLES) degrades gracefully without breaking the rest of the page.
   const [stats, setStats] = useState<EventStats | null>(null);
@@ -155,14 +140,12 @@ export default function EventDetailPage() {
     setLoading(true);
     setError('');
     try {
-      const [ev, orgSups, pps, sls, grps, evScreens, orgTpls] = await Promise.all([
+      const [ev, orgSups, pps, sls, grps] = await Promise.all([
         apiGetEvent(orgId, eventId),
         apiGetSuppliers(orgId),
         apiGetPickupPoints(orgId, { eventId }),
         apiGetSlots(eventId),
         apiGetGroups(orgId),
-        apiGetEventScreens(eventId),
-        apiGetOperatorScreens(orgId),
       ]);
       setEvent(ev);
       setNewStatus(ev.status);
@@ -176,9 +159,6 @@ export default function EventDetailPage() {
       setOrgGroups(Array.isArray(grps) ? grps : []);
       setVisibility(ev.visibility ?? 'PUBLIC');
       setSelectedGroupIds(new Set((ev.groups ?? []).map((g) => g.groupId)));
-      // Operator screens — applied links + full org template catalogue.
-      setEventScreens(Array.isArray(evScreens) ? evScreens : []);
-      setOrgTemplates(Array.isArray(orgTpls) ? orgTpls : []);
       // Get suppliers attached to this event
       const evWithSuppliers = ev as AdminEvent & { eventSuppliers?: Array<{ supplier: Supplier }> };
       if (evWithSuppliers.eventSuppliers) {
@@ -419,86 +399,12 @@ export default function EventDetailPage() {
     }
   }
 
-  // ── Operator screens (Phase 11) ───────────────────────────────────────────────
-
-  async function handleApplyScreen(e: React.FormEvent) {
-    e.preventDefault();
-    if (!applyTemplateId) return;
-    setApplyingScreen(true);
-    setScreenError('');
-    try {
-      await apiApplyEventScreen(eventId, { templateId: applyTemplateId });
-      setApplyTemplateId('');
-      await load();
-    } catch (err) {
-      setScreenError(err instanceof Error ? err.message : 'Erreur');
-    } finally {
-      setApplyingScreen(false);
-    }
-  }
-
-  async function handleToggleScreen(linkId: string, enabled: boolean) {
-    setScreenError('');
-    try {
-      await apiUpdateEventScreen(eventId, linkId, { enabled });
-      await load();
-    } catch (err) {
-      setScreenError(err instanceof Error ? err.message : 'Erreur');
-    }
-  }
-
-  async function handleRemoveScreen(linkId: string) {
-    if (!confirm('Retirer cet écran de l’événement ? Le modèle reste disponible pour d’autres événements.')) {
-      return;
-    }
-    setScreenError('');
-    try {
-      await apiRemoveEventScreen(eventId, linkId);
-      await load();
-    } catch (err) {
-      setScreenError(err instanceof Error ? err.message : 'Erreur');
-    }
-  }
-
-  // Persist an explicit 0..n-1 ordering for the rows whose sortOrder drifted.
-  async function persistScreenOrder(ordered: EventOperatorScreen[]) {
-    setScreenError('');
-    try {
-      await Promise.all(
-        ordered
-          .map((s, i) => (s.sortOrder === i ? null : apiUpdateEventScreen(eventId, s.id, { sortOrder: i })))
-          .filter((p): p is Promise<EventOperatorScreen> => p !== null),
-      );
-      await load();
-    } catch (err) {
-      setScreenError(err instanceof Error ? err.message : 'Erreur');
-    }
-  }
-
-  function moveScreen(ordered: EventOperatorScreen[], index: number, dir: -1 | 1) {
-    const j = index + dir;
-    if (j < 0 || j >= ordered.length) return;
-    const next = [...ordered];
-    [next[index], next[j]] = [next[j], next[index]];
-    void persistScreenOrder(next);
-  }
-
   if (loading) return <Shell>Chargement…</Shell>;
   if (error) return <Shell><ErrBanner msg={error} /></Shell>;
   if (!event) return null;
 
   const st = STATUS_STYLE[event.status] ?? { bg: BRAND.bgSubtle, color: BRAND.inkSoft };
   const attachedIds = new Set(suppliers.map((s) => s.id));
-
-  // Operator screens: order by effective sortOrder (per-event override ?? template default).
-  const sortedScreens = [...eventScreens].sort((a, b) => {
-    const oa = a.sortOrder ?? a.template?.sortOrder ?? 0;
-    const ob = b.sortOrder ?? b.template?.sortOrder ?? 0;
-    if (oa !== ob) return oa - ob;
-    return (a.template?.name ?? '').localeCompare(b.template?.name ?? '');
-  });
-  const appliedTemplateIds = new Set(eventScreens.map((s) => s.templateId));
-  const availableTemplates = orgTemplates.filter((t) => !appliedTemplateIds.has(t.id));
 
   return (
     <div style={{ padding: 32, fontFamily: BRAND.font }}>
@@ -1287,131 +1193,6 @@ export default function EventDetailPage() {
         </form>
       </Card>
 
-      {/* Operator screens (Phase 11) */}
-      <Card
-        title="Écrans opérateur"
-        action={
-          <Link
-            href="/operator-screens"
-            style={{ fontSize: 12, fontWeight: 600, color: BRAND.orange, textDecoration: 'none' }}
-          >
-            Gérer les modèles →
-          </Link>
-        }
-      >
-        <p style={{ color: BRAND.grey, fontSize: 13, margin: '0 0 16px', maxWidth: 620 }}>
-          Appliquez des <strong>modèles d&apos;écran</strong> de l&apos;organisation à cet
-          événement. L&apos;ordre et l&apos;activation ci-dessous sont propres à l&apos;événement ;
-          les conditions d&apos;affichage (créneaux, statuts, fournisseurs) restent définies sur le
-          modèle.
-        </p>
-
-        {/* Apply a template */}
-        <form onSubmit={handleApplyScreen} style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <select
-            value={applyTemplateId}
-            onChange={(e) => setApplyTemplateId(e.target.value)}
-            disabled={availableTemplates.length === 0}
-            style={{ flex: 1, minWidth: 220, padding: '8px 10px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 13, background: BRAND.surface, fontFamily: 'inherit' }}
-          >
-            <option value="">
-              {availableTemplates.length === 0
-                ? 'Tous les modèles sont déjà appliqués'
-                : 'Sélectionner un modèle à appliquer…'}
-            </option>
-            {availableTemplates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {(t.icon ? `${t.icon} ` : '') + t.name} · {KIND_LABELS[t.kind]}
-              </option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            disabled={applyingScreen || !applyTemplateId}
-            onMouseEnter={(e) => { if (!(applyingScreen || !applyTemplateId)) e.currentTarget.style.background = BRAND.orangeDark; }}
-            onMouseLeave={(e) => { if (!(applyingScreen || !applyTemplateId)) e.currentTarget.style.background = BRAND.orange; }}
-            style={{ background: applyingScreen || !applyTemplateId ? BRAND.grey : BRAND.orange, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 600, fontSize: 13, cursor: applyingScreen || !applyTemplateId ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s ease' }}
-          >
-            {applyingScreen ? 'Application…' : 'Appliquer'}
-          </button>
-        </form>
-
-        {screenError && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 12 }}>{screenError}</div>}
-
-        {/* Applied screens */}
-        {sortedScreens.length === 0 ? (
-          <p style={{ color: BRAND.grey, fontSize: 14, margin: 0 }}>
-            {orgTemplates.length === 0
-              ? 'Aucun modèle d’écran dans cette organisation. Créez-en un d’abord.'
-              : 'Aucun écran appliqué à cet événement.'}
-          </p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {sortedScreens.map((s, i) => {
-              const tpl = s.template;
-              return (
-                <div
-                  key={s.id}
-                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: BRAND.bgSubtle, borderRadius: 8, border: `1px solid ${BRAND.border}`, opacity: s.enabled ? 1 : 0.6 }}
-                >
-                  {/* Reorder */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <button
-                      onClick={() => moveScreen(sortedScreens, i, -1)}
-                      disabled={i === 0}
-                      title="Monter"
-                      style={{ ...reorderBtn, cursor: i === 0 ? 'not-allowed' : 'pointer', color: i === 0 ? BRAND.border : BRAND.inkSoft }}
-                    >
-                      ▲
-                    </button>
-                    <button
-                      onClick={() => moveScreen(sortedScreens, i, 1)}
-                      disabled={i === sortedScreens.length - 1}
-                      title="Descendre"
-                      style={{ ...reorderBtn, cursor: i === sortedScreens.length - 1 ? 'not-allowed' : 'pointer', color: i === sortedScreens.length - 1 ? BRAND.border : BRAND.inkSoft }}
-                    >
-                      ▼
-                    </button>
-                  </div>
-
-                  <span style={{ fontSize: 20, width: 26, textAlign: 'center' }}>{tpl?.icon || '🖥️'}</span>
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontWeight: 600, fontSize: 14, color: BRAND.ink }}>
-                        {tpl?.name ?? 'Modèle supprimé'}
-                      </span>
-                      {!s.enabled && <span style={screenDisabledBadge}>désactivé</span>}
-                    </div>
-                    {tpl && (
-                      <div style={{ fontSize: 12, color: BRAND.grey, marginTop: 2 }}>
-                        {KIND_LABELS[tpl.kind]}
-                        {tpl.slotKinds.length > 0 && ` · ${tpl.slotKinds.length} créneau${tpl.slotKinds.length > 1 ? 'x' : ''}`}
-                        {tpl.supplierIds.length > 0
-                          ? ` · ${tpl.supplierIds.length} fournisseur${tpl.supplierIds.length > 1 ? 's' : ''}`
-                          : ' · tous fournisseurs'}
-                      </div>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => void handleToggleScreen(s.id, !s.enabled)}
-                    style={{ background: BRAND.surface, border: `1px solid ${BRAND.border}`, color: BRAND.inkSoft, borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
-                    {s.enabled ? 'Désactiver' : 'Activer'}
-                  </button>
-                  <button
-                    onClick={() => void handleRemoveScreen(s.id)}
-                    style={{ background: 'none', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
-                    Retirer
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
 
       {/* Operator Dashboard shortcut */}
       <Card title="Dashboard opérateur">
@@ -1543,5 +1324,3 @@ function StatTile({ label, value, sub, accent = false }: {
 const slotLbl: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 600, color: BRAND.inkSoft, marginBottom: 4 };
 const slotInp: React.CSSProperties = { width: '100%', padding: '7px 10px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 13, boxSizing: 'border-box', fontFamily: 'inherit' };
 
-const reorderBtn: React.CSSProperties = { background: 'none', border: 'none', fontSize: 10, lineHeight: 1, padding: 0, fontFamily: 'inherit' };
-const screenDisabledBadge: React.CSSProperties = { background: BRAND.border, color: BRAND.inkSoft, borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 600 };

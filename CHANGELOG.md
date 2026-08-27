@@ -5,6 +5,49 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.52.0] — 2026-08-28 — Trois colonnes, et plus rien a configurer
+
+### Le board opérateur passe de cinq colonnes à trois
+Nouvelles → En préparation → Prêtes à remettre, puis « Remise au client » fait
+sortir la commande du board. « Acceptées » n'était pas un geste réel : accepter
+une commande et s'y mettre sont le même mouvement au comptoir, et la colonne
+imposait deux clics pour un seul.
+
+Deux transitions rejoignent la machine à états (`PAID → PREPARING`,
+`ACCEPTED → READY`). Ce ne sont pas des exceptions : c'est le parcours normal
+du board à trois colonnes. Les anciennes restent ouvertes — une commande déjà
+en `ACCEPTED` doit continuer d'avancer.
+
+Chaque colonne regroupe plusieurs statuts, à dessein : **un statut sans colonne
+est une commande invisible**. `ACCEPTED` s'affiche dans « En préparation »,
+`RECOVERED` revient dans « Nouvelles ».
+
+### Le configurateur d'écrans opérateur disparaît
+Il permettait de composer des écrans (statuts, créneaux, fournisseurs,
+catégories) — beaucoup de réglages pour un board qui n'en demande aucun. Le
+board est désormais fixe : 1 038 lignes d'interface de configuration en moins,
+l'entrée de menu retirée, et le bouton « Récap produits » enfin toujours
+visible (il ne s'affichait que si un écran était configuré, donc jamais).
+
+L'API `operator-screens` du serveur reste en place, sans appelant.
+
+### Deux textes qui décrivaient un manque
+« Aucun créneau sélectionné » s'affichait dans le panier **avant** l'étape de
+choix du créneau : il présentait le parcours normal comme un défaut. Et
+l'accueil d'un lieu affichait « Service continu » — le nom du contenant
+technique — au-dessus d'horaires que personne n'avait saisis. Le titre nomme
+maintenant l'étape (« Choisir un stand ») et les horaires ne s'affichent que
+lorsqu'ils existent.
+
+- `~ backend/src/modules/orders/order-state-machine.service.ts` — deux raccourcis
+- `~ apps/operator/src/app/dashboard/[eventId]/page.tsx` — trois voies fixes
+- `~ apps/operator/src/components/{OrderCard,DashboardColumn}.tsx` — un geste par carte
+- `- apps/operator/src/lib/screens/filter.ts`
+- `- apps/admin/src/app/(admin)/operator-screens/`, `- apps/admin/src/components/operator-screens/`
+- `~ apps/mobile/src/screens/{cart,event-home}.screen.tsx`
+
+---
+
 ## [0.51.0] — 2026-08-27 — La Live Activity répond enfin
 
 ### Trois symptômes, trois causes différentes

@@ -82,7 +82,10 @@ export function CartScreen({ navigation }: Props) {
             )}
             ListFooterComponent={
               <View style={styles.footer}>
-                {/* Créneau */}
+                {/* Creneau — affiche UNIQUEMENT une fois choisi.
+                    Avant, un encart « Aucun creneau selectionne » annoncait un
+                    manque alors que l'etape suivante est justement de le
+                    choisir : il decrivait le parcours normal comme un defaut. */}
                 {selectedSlotLabel ? (
                   <View style={[styles.slotBox, styles.slotBoxActive]}>
                     <Ionicons name="time-outline" size={20} color={THEME.orange} />
@@ -94,12 +97,7 @@ export function CartScreen({ navigation }: Props) {
                       <Text style={styles.changeSlot}>Changer</Text>
                     </Pressable>
                   </View>
-                ) : (
-                  <View style={styles.slotBox}>
-                    <Ionicons name="time-outline" size={20} color={THEME.grey} />
-                    <Text style={styles.noSlotText}>Aucun créneau sélectionné</Text>
-                  </View>
-                )}
+                ) : null}
 
                 {/* Récapitulatif */}
                 <View style={styles.summary}>
@@ -188,7 +186,6 @@ const styles = StyleSheet.create({
   slotLabel: { color: THEME.inkSoft, fontSize: 12, fontFamily: FONT.regular },
   slotValue: { color: THEME.ink, fontSize: 14, fontFamily: FONT.semibold },
   changeSlot: { color: THEME.orange, fontSize: 13, fontFamily: FONT.bold },
-  noSlotText: { color: THEME.inkSoft, fontSize: 13, fontFamily: FONT.regular },
 
   summary: {
     backgroundColor: THEME.surface,

@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Store } from 'lucide-react';
 import { BRAND, BreakEatLogo } from '@break-eat/brand';
 import { DashboardColumn } from '@/components/DashboardColumn';
@@ -12,27 +12,37 @@ import { SlotBar } from '@/components/SlotBar';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useSound } from '@/hooks/useSound';
 import {
-  acceptOrder,
   cancelOrder,
-  fetchResolvedScreens,
   markOrderPickedUp,
   markOrderReady,
-  recoverOrder,
   startPreparingOrder,
   type Order,
-  type ResolvedOperatorScreen,
   fetchSupplier,
   SESSION_EXPIREE,
   setSupplierStatus as apiSetSupplierStatus,
   type SupplierStatus,
 } from '@/lib/api/orders-client';
-import { buildScreenColumns, countScreenOrders } from '@/lib/screens/filter';
 import type { StatusVariant } from '@/components/StatusBadge';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 
-// Fallback board used only when no operator screens are configured for the event.
-const FALLBACK_COLUMNS: StatusVariant[] = ['PAID', 'ACCEPTED', 'PREPARING', 'READY', 'RECOVERED'];
+/**
+ * Le board, en trois colonnes — et rien d'autre a choisir.
+ *
+ * Le geste reel au comptoir tient en trois temps : la commande arrive, on la
+ * prepare, on la remet. « Acceptee » n'en etait pas un : accepter et s'y mettre
+ * sont le meme mouvement, et la colonne obligeait a cliquer deux fois.
+ *
+ * Chaque colonne REGROUPE plusieurs statuts. C'est deliberé : un statut sans
+ * colonne est une commande invisible. Une commande restee en ACCEPTED (passee
+ * par l'ancien parcours) s'affiche donc dans « En preparation », et une
+ * commande remise en circulation (RECOVERED) revient dans « Nouvelles ».
+ */
+const LANES: { key: StatusVariant; statuses: string[] }[] = [
+  { key: 'PAID', statuses: ['PAID', 'RECOVERED'] },
+  { key: 'PREPARING', statuses: ['ACCEPTED', 'PREPARING'] },
+  { key: 'READY', statuses: ['READY'] },
+];
 
 // ─── Connection status indicator ─────────────────────────────────────────────
 
@@ -113,84 +123,6 @@ function HeaderButton({
     >
       {children}
     </button>
-  );
-}
-
-// ─── Screen tab bar (Phase 11.4) ─────────────────────────────────────────────
-
-function ScreenTabBar({
-  screens,
-  activeScreenId,
-  dashboardOrders,
-  onSelect,
-}: {
-  screens: ResolvedOperatorScreen[];
-  activeScreenId: string | null;
-  dashboardOrders: Record<string, Order[]>;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        gap: 8,
-        padding: '10px 16px 0',
-        overflowX: 'auto',
-        flexShrink: 0,
-        alignItems: 'center',
-      }}
-    >
-      {screens.map((screen) => {
-        const isActive = screen.eventScreenId === activeScreenId;
-        const count = countScreenOrders(dashboardOrders, screen);
-        return (
-          <button
-            key={screen.eventScreenId}
-            onClick={() => onSelect(screen.eventScreenId)}
-            title={screen.name}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 7,
-              background: isActive ? BRAND.orange : '#fff',
-              color: isActive ? '#fff' : BRAND.inkSoft,
-              border: `1px solid ${isActive ? BRAND.orange : BRAND.border}`,
-              borderRadius: 10,
-              padding: '8px 14px',
-              cursor: 'pointer',
-              fontSize: 14,
-              fontWeight: 700,
-              fontFamily: 'inherit',
-              whiteSpace: 'nowrap',
-              transition: 'background 0.12s, border-color 0.12s, color 0.12s',
-            }}
-            onMouseEnter={(e) => {
-              if (!isActive) e.currentTarget.style.borderColor = BRAND.orange;
-            }}
-            onMouseLeave={(e) => {
-              if (!isActive) e.currentTarget.style.borderColor = BRAND.border;
-            }}
-          >
-            {screen.icon && <span aria-hidden>{screen.icon}</span>}
-            <span>{screen.name}</span>
-            <span
-              style={{
-                background: isActive ? 'rgba(255,255,255,0.25)' : BRAND.bgSubtle,
-                color: isActive ? '#fff' : BRAND.grey,
-                borderRadius: 999,
-                padding: '1px 8px',
-                fontSize: 12,
-                fontWeight: 800,
-                minWidth: 22,
-                textAlign: 'center',
-              }}
-            >
-              {count}
-            </span>
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
@@ -289,42 +221,8 @@ export default function DashboardPage() {
     isOrderLoading,
   } = useDashboard({ eventId, token: token ?? '', apiUrl: API_URL, supplierId });
 
-  // Phase 11.4 — configurable operator screens (static config, fetched once).
-  const [screens, setScreens] = useState<ResolvedOperatorScreen[]>([]);
-  const [activeScreenId, setActiveScreenId] = useState<string | null>(null);
-
-  const loadScreens = useCallback(async () => {
-    if (!token) return;
-    try {
-      const res = await fetchResolvedScreens(eventId, token, supplierId);
-      const enabled = res.screens.filter((s) => s.enabled);
-      setScreens(enabled);
-      setActiveScreenId((prev) =>
-        prev && enabled.some((s) => s.eventScreenId === prev)
-          ? prev
-          : (enabled[0]?.eventScreenId ?? null),
-      );
-    } catch {
-      // No screens configured / endpoint unavailable → fall back to legacy board.
-      setScreens([]);
-    }
-  }, [eventId, token, supplierId]);
-
-  useEffect(() => {
-    void loadScreens();
-  }, [loadScreens]);
-
-  const activeScreen = useMemo(
-    () => screens.find((s) => s.eventScreenId === activeScreenId) ?? screens[0] ?? null,
-    [screens, activeScreenId],
-  );
-
-  // Récap produits panel — defaults to the active screen's showRecap flag, but
-  // the operator can toggle it on/off freely during service.
+  // Récap produits — masqué par défaut, ouvert à la demande pendant le service.
   const [recapOpen, setRecapOpen] = useState(false);
-  useEffect(() => {
-    setRecapOpen(activeScreen?.filters?.showRecap ?? false);
-  }, [activeScreen]);
 
   // Phase 11.4c — stack identical baskets into grouped cards (off by default so
   // the board behaves exactly as before until the operator opts in).
@@ -360,11 +258,9 @@ export default function DashboardPage() {
   // Build callbacks for each order action
   function makeActions(orderId: string, tok: string) {
     return {
-      onAccept:   withLoading(orderId, () => acceptOrder(orderId, tok).then(() => undefined)),
       onPrepare:  withLoading(orderId, () => startPreparingOrder(orderId, tok).then(() => undefined)),
       onReady:    withLoading(orderId, () => markOrderReady(orderId, tok).then(() => undefined)),
       onPickedUp: withLoading(orderId, () => markOrderPickedUp(orderId, tok).then(() => undefined)),
-      onRecover:  withLoading(orderId, () => recoverOrder(orderId, tok).then(() => undefined)),
       onCancel:   withLoading(orderId, () => cancelOrder(orderId, tok).then(() => undefined)),
     };
   }
@@ -390,11 +286,11 @@ export default function DashboardPage() {
   const batchAdvance = async (orders: Order[]) => {
     if (orders.length === 0) return;
     const advance: Record<string, (id: string, t: string) => Promise<unknown>> = {
-      PAID: acceptOrder,
-      ACCEPTED: startPreparingOrder,
+      PAID: startPreparingOrder,
+      RECOVERED: startPreparingOrder,
+      ACCEPTED: markOrderReady,
       PREPARING: markOrderReady,
       READY: markOrderPickedUp,
-      RECOVERED: acceptOrder,
     };
     const fn = advance[orders[0].status];
     if (!fn) return;
@@ -412,16 +308,10 @@ export default function DashboardPage() {
     }
   };
 
-  // Phase 11.4 — the board renders the active configured screen's columns when
-  // screens exist, otherwise it falls back to the legacy fixed Kanban.
-  const useScreens = screens.length > 0 && activeScreen !== null;
-  const boardColumns =
-    data && useScreens && activeScreen
-      ? buildScreenColumns(data.orders, activeScreen)
-      : FALLBACK_COLUMNS.map((status) => ({
-          status: status as string,
-          orders: data?.orders[status] ?? [],
-        }));
+  const boardColumns = LANES.map((lane) => ({
+    status: lane.key as string,
+    orders: lane.statuses.flatMap((st) => data?.orders[st] ?? []),
+  }));
 
   return (
     <main
@@ -539,15 +429,15 @@ export default function DashboardPage() {
               {grouped ? '🧩 Groupé ✓' : '🧩 Grouper'}
             </HeaderButton>
           )}
-          {useScreens && (
-            <HeaderButton
-              onClick={() => setRecapOpen((v) => !v)}
-              title="Récap produits"
-              fontSize={13}
-            >
-              {recapOpen ? '📊 Récap ✓' : '📊 Récap'}
-            </HeaderButton>
-          )}
+          {/* Le recap ne dependait que d'un ecran configure : il etait donc
+              invisible ici, alors qu'il sert a chaque service. */}
+          <HeaderButton
+            onClick={() => setRecapOpen((v) => !v)}
+            title="Récap produits"
+            fontSize={13}
+          >
+            {recapOpen ? '📊 Récap ✓' : '📊 Récap'}
+          </HeaderButton>
           <HeaderButton onClick={() => void loadSnapshot()} title="Actualiser">
             ↺
           </HeaderButton>
@@ -597,15 +487,6 @@ export default function DashboardPage() {
       )}
 
       {/* Screen tabs (Phase 11.4) — only when screens are configured */}
-      {data && useScreens && (
-        <ScreenTabBar
-          screens={screens}
-          activeScreenId={activeScreen?.eventScreenId ?? null}
-          dashboardOrders={data.orders}
-          onSelect={setActiveScreenId}
-        />
-      )}
-
       {/* Kanban board (active screen, or legacy fallback) + Récap panel */}
       {data && (
         <div
@@ -642,10 +523,10 @@ export default function DashboardPage() {
           </div>
 
           {/* Récap produits — derived from the active screen's visible orders */}
-          {recapOpen && useScreens && activeScreen && (
+          {recapOpen && (
             <RecapPanel
               orders={boardColumns.flatMap((c) => c.orders)}
-              screenName={activeScreen.name}
+              screenName={supplierName ?? 'Commandes en cours'}
               onHide={() => setRecapOpen(false)}
             />
           )}

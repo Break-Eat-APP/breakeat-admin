@@ -13,7 +13,6 @@ import {
   Palette,
   Bell,
   Megaphone,
-  MonitorSmartphone,
   Building2,
   Users,
   Settings,
@@ -69,7 +68,6 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Points de retrait',
     items: [
       { href: '/suppliers', icon: Store, label: 'Points de retrait' },
-      { href: '/operator-screens', icon: MonitorSmartphone, label: 'Écrans opérateur' },
     ],
   },
   {
