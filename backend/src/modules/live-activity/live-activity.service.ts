@@ -24,6 +24,14 @@ export interface LiveActivityContentState {
   slotEndAt: string | null;
   /** Horodatage de la mise à jour — permet à l'app d'ignorer un message tardif. */
   updatedAt: string;
+  /**
+   * Le client a-t-il annoncé sa présence au comptoir ?
+   *
+   * Porté par l'état plutôt que déduit côté widget : c'est ce qui fait
+   * disparaître le bouton « Je suis au comptoir » et le remplace par une
+   * confirmation, sans que l'extension ait à interroger quoi que ce soit.
+   */
+  customerArrived: boolean;
 }
 
 /**
@@ -181,6 +189,7 @@ export class LiveActivityService {
         status: true,
         estimatedReadyAt: true,
         pickupPointId: true,
+        customerArrivedAt: true,
         slot: { select: { startAt: true, endAt: true } },
       },
     });
@@ -204,6 +213,7 @@ export class LiveActivityService {
       slotStartAt: order.slot?.startAt.toISOString() ?? null,
       slotEndAt: order.slot?.endAt.toISOString() ?? null,
       updatedAt: new Date().toISOString(),
+      customerArrived: Boolean(order.customerArrivedAt),
     };
   }
 

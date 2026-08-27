@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   AppState,
+  DeviceEventEmitter,
   FlatList,
   Pressable,
   RefreshControl,
@@ -20,6 +21,8 @@ import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
+import { endTrackingForFinishedOrders } from '@lib/live-activity-tracking';
+import { EVT_COMMANDES_A_RECHARGER } from '@lib/hooks/use-deep-links';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -96,7 +99,11 @@ export function OrderHistoryScreen() {
     }
     setError(null);
     try {
-      setOrders(await apiGetMyOrders());
+      const recues = await apiGetMyOrders();
+      setOrders(recues);
+      // Une commande remise n'a plus rien a suivre : on ferme sa carte sur
+      // l'ecran verrouille, sans dependre d'une poussee APNs qui peut manquer.
+      void endTrackingForFinishedOrders(recues);
     } catch (e: unknown) {
       console.warn('apiGetMyOrders a échoué:', e);
       setError('Impossible de charger tes commandes pour le moment.');
@@ -149,6 +156,13 @@ export function OrderHistoryScreen() {
       void load();
     }, [load]),
   );
+
+  // Arrivee signalee depuis l'ecran verrouille : recharger tout de suite plutot
+  // que d'attendre le sondage — le client vient d'appuyer, il attend la preuve.
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(EVT_COMMANDES_A_RECHARGER, () => void load());
+    return () => sub.remove();
+  }, [load]);
 
   if (!token) {
     return (

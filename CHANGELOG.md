@@ -5,6 +5,61 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.51.0] — 2026-08-27 — La Live Activity répond enfin
+
+### Trois symptômes, trois causes différentes
+
+**1. Les étapes n'avancent pas.** `APNS_ENV` vaut « sandbox » par défaut, alors
+qu'une build TestFlight porte un jeton de **production**. Apple refuse chaque
+mise à jour (`BadDeviceToken`) — mais l'activité, elle, démarre : iOS la crée
+localement, sans réseau. D'où un symptôme qui ne ressemble pas à une panne, une
+carte figée sur son premier état. Le réglage est côté Railway ; le code, lui,
+trace désormais l'hôte visé au démarrage et nomme ce réglage dans le rejet.
+
+**2. « Mes commandes » ne se met pas à jour seul.** iOS **suspend les minuteurs
+JavaScript** dès que l'écran se verrouille. Le sondage de 10 s était correct :
+il ne tournait simplement plus. Les deux écrans rechargent maintenant au retour
+au premier plan, et la liste aussi au retour sur l'onglet.
+
+**3. La notification ne disparaît jamais.** La fin est poussée par le serveur
+(`end` + date de retrait). Si cette poussée n'arrive pas — cause n° 1 — rien ne
+conclut l'activité. L'app balaie donc elle-même, à chaque lecture de
+« Mes commandes », les activités dont la commande est terminée. Prudence
+assumée : seule une commande **présente dans la liste ET terminée** ferme son
+activité ; une commande absente n'est pas une commande finie.
+
+### « Je suis arrivé » depuis l'écran verrouillé
+Un bouton vert apparaît sur la carte quand la commande attend au comptoir, et
+seulement là. Il ouvre l'app par `breakeat://order/<id>/arrived` ; l'app signale
+la présence, le serveur repousse l'état, la carte affiche « Le stand sait que tu
+es là ».
+
+Pourquoi un lien et non un bouton interactif (`Button(intent:)`) : une intention
+s'exécute hors de l'app, sans sa session. Il faudrait convoyer un jeton
+d'authentification jusqu'à l'extension — un secret de plus à faire vivre, pour
+gagner une seconde.
+
+`breakeat://` n'était en réalité géré nulle part : le commentaire du widget
+affirmait le contraire. Les liens entrants sont maintenant traités pour de bon,
+ce qui répare aussi l'appui sur la carte (il ouvre le suivi de la commande).
+
+### Refonte visuelle
+Rail de progression continu à dégradé (au lieu de trois segments), icône d'état
+dans un disque teinté, numéro de commande en pastille, heure de retrait en
+chiffres alignés, action pleine largeur. L'île dynamique reprend le bouton.
+
+- `~ backend/src/config` — rien : `APNS_ENV` est un réglage d'environnement
+- `~ backend/src/modules/live-activity/apns.service.ts` — hôte tracé, `environmentLabel()`
+- `~ backend/src/modules/live-activity/live-activity.service.ts` — `customerArrived` au contrat
+- `~ backend/src/modules/orders/orders.service.ts` — l'arrivée repousse l'état
+- `~ apps/mobile/targets/live-activity/*` — contrat + refonte de la carte
+- `~ apps/mobile/modules/live-activity/*` — le drapeau traverse le pont natif
+- `+ apps/mobile/src/lib/hooks/use-deep-links.ts` — liens `breakeat://`
+- `~ apps/mobile/src/screens/order-history.screen.tsx` — reprise + balayage
+- `~ apps/mobile/src/screens/order-tracking.screen.tsx` — reprise au premier plan
+
+---
+
 ## [0.50.0] — 2026-08-25 — L'accès opérateur : ce n'était pas un mot de passe
 
 ### La cause, enfin

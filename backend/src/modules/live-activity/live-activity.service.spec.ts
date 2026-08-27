@@ -161,6 +161,40 @@ describe('LiveActivityService', () => {
       );
     });
 
+    it('porte l’arrivée du client — c’est elle qui pilote le bouton du widget', async () => {
+      prisma.liveActivity.findMany.mockResolvedValue([
+        { id: 'la-1', pushToken: 'tok-1', orderId: ORDER_A },
+      ]);
+
+      // Personne au comptoir : le widget doit proposer « Je suis arrivé ».
+      prisma.order.findUnique.mockResolvedValueOnce({
+        publicOrderNumber: 'BE-1024',
+        status: OrderStatus.READY,
+        estimatedReadyAt: null,
+        pickupPointId: 'pp-1',
+        customerArrivedAt: null,
+        slot: null,
+      });
+      await service.pushOrderUpdate(ORDER_A);
+      expect(apns.sendLiveActivityUpdate.mock.calls[0][2]).toMatchObject({
+        customerArrived: false,
+      });
+
+      // Présence annoncée : le bouton cède la place à la confirmation.
+      prisma.order.findUnique.mockResolvedValueOnce({
+        publicOrderNumber: 'BE-1024',
+        status: OrderStatus.READY,
+        estimatedReadyAt: null,
+        pickupPointId: 'pp-1',
+        customerArrivedAt: new Date('2026-08-27T18:10:00Z'),
+        slot: null,
+      });
+      await service.pushOrderUpdate(ORDER_A);
+      expect(apns.sendLiveActivityUpdate.mock.calls[1][2]).toMatchObject({
+        customerArrived: true,
+      });
+    });
+
     it('diffuse à TOUTES les activités actives (plusieurs appareils)', async () => {
       prisma.liveActivity.findMany.mockResolvedValueOnce([
         { id: 'la-1', pushToken: 'tok-1', orderId: ORDER_A },

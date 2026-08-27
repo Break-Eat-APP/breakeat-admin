@@ -53,6 +53,7 @@ import { SlotSelectorScreen } from '@screens/slot-selector.screen';
 import { CheckoutScreen } from '@screens/checkout.screen';
 import { OrderConfirmationScreen } from '@screens/order-confirmation.screen';
 import { OrderTrackingScreen } from '@screens/order-tracking.screen';
+import { useDeepLinks } from '@lib/hooks/use-deep-links';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -80,6 +81,9 @@ export default function AppPreview() {
   const setReady = useAppStore((s) => s.setReady);
   const { rehydrate, isLoading, token } = useAuthStore();
   const [routeName, setRouteName] = useState<string | undefined>(undefined);
+  // Les liens entrants ne sont traites qu'une fois la navigation prete : plus
+  // tot, `navigate` n'aurait aucun effet et l'app s'ouvrirait sur l'accueil.
+  const [navigationPrete, setNavigationPrete] = useState(false);
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
@@ -99,6 +103,9 @@ export default function AppPreview() {
     void rehydrate();
   }, [setReady, rehydrate]);
 
+  // « Je suis arrive » depuis l'ecran verrouille, et appui sur la Live Activity.
+  useDeepLinks(navigationPrete);
+
   // Ne pas rester bloqué sur écran blanc si une police échoue à charger.
   if (!fontsLoaded && !fontError) return null;
   if (isLoading) return null;
@@ -108,7 +115,10 @@ export default function AppPreview() {
       <QueryClientProvider client={queryClient}>
         <NavigationContainer
           ref={navigationRef}
-          onReady={() => setRouteName(navigationRef.getCurrentRoute()?.name)}
+          onReady={() => {
+            setRouteName(navigationRef.getCurrentRoute()?.name);
+            setNavigationPrete(true);
+          }}
           onStateChange={() => setRouteName(navigationRef.getCurrentRoute()?.name)}
         >
           <View style={{ flex: 1, backgroundColor: THEME.bg }}>

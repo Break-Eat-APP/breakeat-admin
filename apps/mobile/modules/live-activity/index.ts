@@ -11,6 +11,8 @@ export interface LiveActivityState {
   slotStartAt?: string | null;
   slotEndAt?: string | null;
   updatedAt: string;
+  /** Presence annoncee au comptoir — faux au demarrage, le serveur pousse la suite. */
+  customerArrived?: boolean;
 }
 
 /** Émis au démarrage puis à chaque rotation décidée par iOS. */

@@ -25,6 +25,13 @@ struct BreakEatOrderAttributes: ActivityAttributes {
     var slotStartAt: String?
     var slotEndAt: String?
     var updatedAt: String
+    /// Le client a-t-il annonce sa presence au comptoir ?
+    ///
+    /// OPTIONNEL a dessein : une activite demarree par une version anterieure de
+    /// l'app, ou une charge utile plus ancienne, ne porte pas cette cle. Un champ
+    /// obligatoire ferait echouer le decodage — et iOS ignore SILENCIEUSEMENT une
+    /// mise a jour qui ne se decode pas : l'activite paraitrait simplement figee.
+    var customerArrived: Bool?
   }
 
   /// Identifiant de la commande suivie. Fixe pendant toute la vie de l'activité.
@@ -43,6 +50,11 @@ extension BreakEatOrderAttributes.ContentState {
   }
 
   var isReady: Bool { status == "READY" }
+  var hasArrived: Bool { customerArrived == true }
+
+  /// Le client peut-il signaler sa presence ? Uniquement quand la commande
+  /// l'attend au comptoir et qu'il ne l'a pas deja fait.
+  var canAnnounceArrival: Bool { isReady && !hasArrived }
   var isCancelled: Bool { status == "CANCELLED" }
   var isFinished: Bool { status == "COLLECTED" || status == "CANCELLED" }
 

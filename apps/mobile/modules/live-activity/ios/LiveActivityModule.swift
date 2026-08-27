@@ -12,6 +12,7 @@ struct ContentStateRecord: Record {
   @Field var slotStartAt: String?
   @Field var slotEndAt: String?
   @Field var updatedAt: String = ""
+  @Field var customerArrived: Bool = false
 }
 
 /// Pont ActivityKit ↔ React Native.
@@ -154,7 +155,8 @@ private extension ContentStateRecord {
       estimatedReadyAt: estimatedReadyAt,
       slotStartAt: slotStartAt,
       slotEndAt: slotEndAt,
-      updatedAt: updatedAt.isEmpty ? ISO8601DateFormatter().string(from: Date()) : updatedAt
+      updatedAt: updatedAt.isEmpty ? ISO8601DateFormatter().string(from: Date()) : updatedAt,
+      customerArrived: customerArrived
     )
   }
 }

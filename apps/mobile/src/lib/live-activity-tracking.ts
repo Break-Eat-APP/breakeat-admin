@@ -1,4 +1,5 @@
 import {
+  endLiveActivity,
   isLiveActivitySupported,
   listLiveActivities,
   onPushToken,
@@ -98,4 +99,43 @@ export async function stopOrderTracking(activityId: string): Promise<void> {
   } catch (e: unknown) {
     console.warn('Fin de Live Activity non signalée au serveur:', e);
   }
+}
+
+/** Statuts de commande après lesquels il n'y a plus rien à suivre. */
+const STATUTS_TERMINES = new Set(['PICKED_UP', 'COMPLETED', 'CANCELLED', 'RECOVERED']);
+
+/**
+ * Ferme les activités dont la commande est terminée.
+ *
+ * Le cas nominal reste la fin poussée par le serveur (`end` + date de retrait
+ * via APNs). Mais si cette poussée n'arrive jamais — clé APNs mal réglée,
+ * token perdu, appareil hors ligne au mauvais moment — la carte reste sur
+ * l'écran verrouillé pendant des heures, sans rien à suivre. C'est le symptôme
+ * qu'on a observé : « la notif reste affichée sans disparaître ».
+ *
+ * L'app est le seul acteur capable de conclure SANS réseau. On balaie donc à
+ * chaque lecture de « Mes commandes ».
+ *
+ * Prudence volontaire : on ne ferme QUE les activités dont la commande figure
+ * dans la liste reçue ET s'y trouve terminée. Une commande absente de la liste
+ * (pagination, filtre, chargement partiel) n'est pas une commande finie.
+ */
+export async function endTrackingForFinishedOrders(
+  orders: Array<{ id: string; status: string }>,
+): Promise<number> {
+  const activities = await listLiveActivities();
+  if (activities.length === 0) return 0;
+
+  const terminees = new Set(
+    orders.filter((o) => STATUTS_TERMINES.has(o.status)).map((o) => o.id),
+  );
+
+  let fermees = 0;
+  for (const activity of activities) {
+    if (!terminees.has(activity.orderId)) continue;
+    await endLiveActivity(activity.activityId);
+    await stopOrderTracking(activity.activityId);
+    fermees++;
+  }
+  return fermees;
 }

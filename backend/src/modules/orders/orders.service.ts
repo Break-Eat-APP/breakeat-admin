@@ -517,6 +517,12 @@ export class OrdersService {
       arrivedAt: (updated.customerArrivedAt ?? new Date()).toISOString(),
     });
 
+    // L'annonce doit REMONTER sur l'écran verrouillé : le client vient d'appuyer
+    // sur « Je suis au comptoir » depuis la Live Activity, il attend une preuve
+    // que le message est passé. Sans cette poussée, le bouton resterait affiché
+    // comme si rien ne s'était produit. Fire-and-forget, comme les transitions.
+    void this.liveActivityService.pushOrderUpdate(updated.id);
+
     this.logger.log(`Client présent pour la commande ${updated.publicOrderNumber}`);
     return updated;
   }
