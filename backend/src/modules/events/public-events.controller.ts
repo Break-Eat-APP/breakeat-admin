@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Query,
   NotFoundException,
   Param,
   ParseUUIDPipe,
@@ -168,6 +169,7 @@ export class PublicEventsController {
   @Get(':eventId/slots')
   async findSlots(
     @Param('eventId', ParseUUIDPipe) eventId: string,
+    @Query('supplierId') supplierId?: string,
     @CurrentUser() user?: JwtPayload,
   ) {
     // assertAccessible also covers event existence (404 for unknown events).
@@ -197,11 +199,20 @@ export class PublicEventsController {
       Date.UTC(aujourdhui.getUTCFullYear(), aujourdhui.getUTCMonth(), aujourdhui.getUTCDate()),
     );
 
+    // Créneaux de LA buvette choisie, et d'elle seule.
+    //
+    // Sans ce filtre, un lieu à plusieurs comptoirs montrait au client les
+    // créneaux de tous : il pouvait réserver « Mi-temps » au comptoir Sud pour
+    // une commande passée au Nord. Un créneau sans buvette (`supplierId` nul)
+    // vaut pour tout le lieu et reste donc visible.
     return this.prisma.slot.findMany({
       where: {
         eventId,
         status: SlotStatus.OPEN,
         OR: [{ serviceDate: null }, { serviceDate: journee }],
+        ...(supplierId
+          ? { AND: [{ OR: [{ supplierId }, { supplierId: null }] }] }
+          : {}),
       },
       orderBy: { startAt: 'asc' },
       select: {
@@ -212,6 +223,7 @@ export class PublicEventsController {
         capacity: true,
         currentLoad: true,
         status: true,
+        supplierId: true,
       },
     });
   }

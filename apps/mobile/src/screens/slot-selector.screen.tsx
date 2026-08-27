@@ -39,7 +39,7 @@ function slotLabel(slot: PublicSlot): string {
 
 export function SlotSelectorScreen({ route, navigation }: Props) {
   const { eventId } = route.params;
-  const { setSlot, selectedSlotId } = useCartStore();
+  const { setSlot, selectedSlotId, supplierId } = useCartStore();
 
   const [slots, setSlots] = useState<PublicSlot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,7 +49,7 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const data = await apiGetPublicSlots(eventId);
+      const data = await apiGetPublicSlots(eventId, supplierId);
       setSlots(data);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erreur de chargement');

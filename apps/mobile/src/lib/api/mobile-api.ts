@@ -301,8 +301,13 @@ export const apiGetPublicEvent = (eventId: string) =>
 export const apiGetPublicProducts = (eventId: string, supplierId: string) =>
   req<ProductsResponse>(`/public/events/${eventId}/suppliers/${supplierId}/products`);
 
-export const apiGetPublicSlots = (eventId: string) =>
-  req<PublicSlot[]>(`/public/events/${eventId}/slots`);
+export const apiGetPublicSlots = (eventId: string, supplierId?: string | null) =>
+  req<PublicSlot[]>(
+    // La buvette est transmise : sans elle, le serveur renvoie les creneaux de
+    // TOUS les comptoirs du lieu, et le client pouvait choisir « Mi-temps » au
+    // Sud pour une commande passee au Nord.
+    `/public/events/${eventId}/slots` + (supplierId ? `?supplierId=${encodeURIComponent(supplierId)}` : ''),
+  );
 
 // ─── Cart (authenticated) ──────────────────────────────────────
 
