@@ -14,31 +14,47 @@ import type { RootStackParamList } from '@navigation/root-navigator';
  * bouton central) · Panier. Toujours accessible pour revenir à l'accueil.
  */
 
-/**
- * Hauteur reservee sous le contenu pour ne pas passer sous la barre.
- *
- * Valeur PLANCHER, sans zone sure : la barre flotte a `insets.bottom + 16` et
- * mesure 70 (le bouton central, 72, deborde legerement). Sur un ecran sans
- * encoche, 104 suffit.
- *
- * Sur un iPhone a encoche, `insets.bottom` vaut ~34 : la barre monte alors
- * jusqu'a ~122, et un bouton cale a 104 se retrouve recouvert sur sa moitie
- * basse. C'est exactement ce qui arrivait au bouton « Choisir un creneau ».
- *
- * Preferer `useBottomBarSpace()`, qui ajoute la zone sure.
- */
-export const BOTTOM_BAR_SPACE = 104;
+// Geometrie REELLE de la barre — a lire avec `styles`, en bas de ce fichier.
+// Ces trois nombres sont la seule source des calculs ci-dessous : les modifier
+// dans `styles` sans les reporter ici remettrait un bouton sous la barre.
+const ECART_BAS = 16; // `wrap` : bottom = insets.bottom + 16
+const HAUTEUR_BARRE = 70; // `bar`
+const DEBORD_PASTILLE = 37; // `fab` : 72 de haut, marginTop -38 → deborde vers le haut
 
 /**
- * Espace a reserver sous un contenu ou un bouton fixe, zone sure comprise.
+ * Hauteur occupee par la barre, hors zone sure.
  *
- * A utiliser partout ou un element doit rester AU-DESSUS de la barre. La
- * constante seule ne suffit pas : elle ignore l’encoche, et le defaut ne se
- * voit que sur les appareils qui en ont un.
+ * La pastille centrale COMPTE : elle deborde de 37 px au-dessus de la barre.
+ * Une valeur qui l'ignore laisse le bouton « Mes commandes » mordre sur ce qui
+ * se trouve dessous — c'est ce qui arrivait au bouton « Choisir un creneau »,
+ * dont la moitie basse disparaissait.
+ *
+ * Valeur PLANCHER : preferer `useBottomBarSpace()`, qui ajoute l'encoche.
+ */
+export const BOTTOM_BAR_SPACE = ECART_BAS + HAUTEUR_BARRE + DEBORD_PASTILLE;
+
+/**
+ * Espace a reserver SOUS un contenu ou un bouton en flux, zone sure comprise.
+ *
+ * A utiliser partout ou un element doit rester au-dessus de la barre. La
+ * constante seule ne suffit pas : elle ignore l'encoche, et le defaut ne se
+ * voit que sur les appareils qui en ont une.
  */
 export function useBottomBarSpace(): number {
   const insets = useSafeAreaInsets();
   return insets.bottom + BOTTOM_BAR_SPACE;
+}
+
+/**
+ * Position basse d'un element FLOTTANT (`position: 'absolute'`) pose au-dessus
+ * de la barre — barre de panier, bandeau de connexion.
+ *
+ * Meme calcul que ci-dessus, plus un ecart : un `bottom` fixe, lui, ne connait
+ * ni la hauteur de la barre ni l'encoche. « Voir mon panier » etait cale a 32 —
+ * soit derriere la barre entiere.
+ */
+export function useFloatingBarBottom(ecart = 12): number {
+  return useBottomBarSpace() + ecart;
 }
 
 /** Écrans où la barre est masquée (plein écran / parcours bloquant). */

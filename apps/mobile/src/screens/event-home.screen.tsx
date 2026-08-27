@@ -24,12 +24,15 @@ import {
 import { useCartStore } from '@store/cart.store';
 import { useAuthStore } from '@store/auth.store';
 import { PageHeader } from '@components/page-header';
+import { useFloatingBarBottom } from '@components/app-bottom-bar';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EventHome'>;
 
 export function EventHomeScreen({ route, navigation }: Props) {
   const { eventId } = route.params;
   const { token } = useAuthStore();
+  // Le bandeau de connexion doit rester au-dessus de la barre du bas flottante.
+  const basFlottant = useFloatingBarBottom();
   const { initCart, resetCart } = useCartStore();
 
   const [event, setEvent] = useState<PublicEvent | null>(null);
@@ -212,7 +215,7 @@ export function EventHomeScreen({ route, navigation }: Props) {
 
       {/* Login hint if not authenticated */}
       {!token && (
-        <View style={styles.loginHint}>
+        <View style={[styles.loginHint, { bottom: basFlottant }]}>
           <Text style={styles.loginHintText}>
             Connectez-vous pour passer une commande
           </Text>
@@ -442,8 +445,8 @@ const styles = StyleSheet.create({
   emptyText: { color: THEME.grey, fontSize: 14, textAlign: 'center' },
 
   loginHint: {
+    // `bottom` est fourni a l'usage (cf. useFloatingBarBottom).
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
     backgroundColor: THEME.surface,

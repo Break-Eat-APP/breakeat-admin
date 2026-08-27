@@ -43,6 +43,16 @@ gagner une seconde.
 affirmait le contraire. Les liens entrants sont maintenant traités pour de bon,
 ce qui répare aussi l'appui sur la carte (il ouvre le suivi de la commande).
 
+### Les barres flottantes passaient sous le menu
+« Voir mon panier » etait cale a `bottom: 32`. La barre du bas, elle, flotte a
+`insets.bottom + 16`, mesure 70 et sa pastille centrale deborde de 37 : elle
+occupe donc jusqu'a `insets.bottom + 123`. Le bouton etait entierement dedans.
+
+La geometrie n'est plus recopiee a la main : trois constantes decrivent la barre
+(`ECART_BAS`, `HAUTEUR_BARRE`, `DEBORD_PASTILLE`) et alimentent `BOTTOM_BAR_SPACE`
+et `useFloatingBarBottom()`. La pastille y est enfin comptee — elle ne l'etait
+pas, et mordait la moitie basse du bouton « Choisir un creneau ».
+
 ### Refonte visuelle
 Rail de progression continu à dégradé (au lieu de trois segments), icône d'état
 dans un disque teinté, numéro de commande en pastille, heure de retrait en
@@ -57,6 +67,9 @@ chiffres alignés, action pleine largeur. L'île dynamique reprend le bouton.
 - `+ apps/mobile/src/lib/hooks/use-deep-links.ts` — liens `breakeat://`
 - `~ apps/mobile/src/screens/order-history.screen.tsx` — reprise + balayage
 - `~ apps/mobile/src/screens/order-tracking.screen.tsx` — reprise au premier plan
+- `~ apps/mobile/src/components/app-bottom-bar.tsx` — geometrie unique de la barre
+- `~ apps/mobile/src/screens/supplier-catalog.screen.tsx` — barre de panier remontee
+- `~ apps/mobile/src/screens/event-home.screen.tsx` — bandeau de connexion remonte
 
 ---
 

@@ -18,6 +18,7 @@ import {
 } from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
 import { PageHeader } from '@components/page-header';
+import { useFloatingBarBottom } from '@components/app-bottom-bar';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SupplierCatalog'>;
 
@@ -86,6 +87,10 @@ export function SupplierCatalogScreen({ route, navigation }: Props) {
     );
   }
 
+  // La barre du bas flotte : « Voir mon panier » doit se poser au-dessus d'elle,
+  // pastille centrale comprise. Un `bottom` fixe la laissait recouverte.
+  const basFlottant = useFloatingBarBottom();
+
   return (
     <View style={styles.root}>
       <PageHeader title="Catalogue" />
@@ -94,7 +99,12 @@ export function SupplierCatalogScreen({ route, navigation }: Props) {
         sections={sections}
         keyExtractor={(item) => item.id}
         stickySectionHeadersEnabled
-        contentContainerStyle={styles.list}
+        contentContainerStyle={[
+          styles.list,
+          // De quoi lire le dernier produit sans qu'il passe sous la barre de
+          // panier — laquelle n'existe que si le panier n'est pas vide.
+          { paddingBottom: basFlottant + (totalItems() > 0 ? 76 : 0) },
+        ]}
         renderSectionHeader={({ section }) => (
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
@@ -152,7 +162,7 @@ export function SupplierCatalogScreen({ route, navigation }: Props) {
       {/* Floating cart bar */}
       {totalItems() > 0 && (
         <Pressable
-          style={styles.cartBar}
+          style={[styles.cartBar, { bottom: basFlottant }]}
           onPress={() => navigation.navigate('Cart')}
         >
           <View style={styles.cartBadge}>
@@ -200,7 +210,7 @@ const styles = StyleSheet.create({
   backArrow: { color: THEME.inkSoft, fontSize: 20 },
   headerTitle: { color: THEME.ink, fontSize: 18, fontWeight: '700' },
 
-  list: { paddingBottom: 120 },
+  list: {},
 
   sectionHeader: {
     backgroundColor: THEME.bg,
@@ -254,8 +264,8 @@ const styles = StyleSheet.create({
   qtyValue: { color: THEME.ink, fontSize: 16, fontWeight: '700', minWidth: 24, textAlign: 'center' },
 
   cartBar: {
+    // `bottom` est fourni a l'usage : il depend de la zone sure de l'appareil.
     position: 'absolute',
-    bottom: 32,
     left: 20,
     right: 20,
     backgroundColor: THEME.orange,
