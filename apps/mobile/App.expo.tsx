@@ -53,6 +53,7 @@ import { SlotSelectorScreen } from '@screens/slot-selector.screen';
 import { CheckoutScreen } from '@screens/checkout.screen';
 import { OrderConfirmationScreen } from '@screens/order-confirmation.screen';
 import { OrderTrackingScreen } from '@screens/order-tracking.screen';
+import { SplitScreen } from '@screens/split.screen';
 import { useDeepLinks } from '@lib/hooks/use-deep-links';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -76,6 +77,29 @@ function StubScreen({ icon, title, sub }: { icon: string; title: string; sub: st
 const QRScannerStub = (_: NativeStackScreenProps<RootStackParamList, 'QRScanner'>) => (
   <StubScreen icon="qrcode-scan" title="Scanner un QR code" sub="La caméra n'est pas disponible dans la prévisualisation web." />
 );
+
+/**
+ * Liens entrants pris en charge par la navigation elle-meme.
+ *
+ * `split/:code` est le SEUL a passer par ici, et pour une raison precise : un
+ * convive ouvre ce lien dans son NAVIGATEUR, sans avoir installe l'app. Il faut
+ * donc que l'adresse web resolve vers un ecran — ce que `useDeepLinks`, branche
+ * sur le schema `breakeat://`, ne saurait pas faire.
+ *
+ * Les autres liens (`order/...`, `join/...`) restent traites a la main : ils
+ * declenchent des actions, pas seulement une navigation.
+ */
+const origineWeb = (): string[] => {
+  // `window` n'existe pas en natif, et le tsconfig de l'app ne declare pas le
+  // DOM : on le lit via globalThis plutot que d'elargir les types pour trois mots.
+  const g = globalThis as { location?: { origin?: string } };
+  return g.location?.origin ? [g.location.origin] : [];
+};
+
+const LIENS = {
+  prefixes: ['breakeat://', ...origineWeb()],
+  config: { screens: { Split: 'split/:code' } },
+};
 
 export default function AppPreview() {
   const setReady = useAppStore((s) => s.setReady);
@@ -115,6 +139,7 @@ export default function AppPreview() {
       <QueryClientProvider client={queryClient}>
         <NavigationContainer
           ref={navigationRef}
+          linking={LIENS}
           onReady={() => {
             setRouteName(navigationRef.getCurrentRoute()?.name);
             setNavigationPrete(true);
@@ -142,6 +167,7 @@ export default function AppPreview() {
               <Stack.Screen name="SlotSelector" component={SlotSelectorScreen} />
               <Stack.Screen name="Checkout" component={CheckoutScreen} />
               <Stack.Screen name="OrderConfirmation" component={OrderConfirmationScreen} />
+              <Stack.Screen name="Split" component={SplitScreen} />
 
               {/* Stubs (caméra / événement live) */}
               <Stack.Screen name="EventHome" component={EventHomeScreen} />

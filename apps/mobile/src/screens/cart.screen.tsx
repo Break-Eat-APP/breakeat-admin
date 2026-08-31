@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
-import { apiOpenOrderGroup, formatPrice } from '@lib/api/mobile-api';
+import {
+  apiAddCartItem,
+  apiCreateCart,
+  apiOpenSplit,
+  apiSplitEnabled,
+  formatPrice,
+} from '@lib/api/mobile-api';
 import { showAlert } from '@lib/alert';
 import { useCartStore } from '@store/cart.store';
 import { PageHeader } from '@components/page-header';
@@ -27,44 +33,41 @@ export function CartScreen({ navigation }: Props) {
     selectedSlotLabel,
     clearSlot,
     orderGroupCode,
-    setOrderGroupCode,
   } = useCartStore();
 
   const [invitationEnCours, setInvitationEnCours] = useState(false);
+  // L'interrupteur est cote serveur : on n'affiche pas un bouton qui refuserait.
+  const [ardoisePossible, setArdoisePossible] = useState(false);
+
+  useEffect(() => {
+    void apiSplitEnabled()
+      .then((r) => setArdoisePossible(r.enabled))
+      .catch(() => setArdoisePossible(false));
+  }, []);
 
   /**
-   * « Inviter un ami » — chacun paie sa part.
+   * « Partager l'addition » — l'ardoise.
    *
-   * L'ami reçoit un code et un lien vers CETTE buvette ; il compose sa commande
-   * et la paie lui-même. Les deux commandes arrivent liées à la buvette, qui
-   * les prépare et les remet ensemble.
-   *
-   * Le message porte le code EN CLAIR autant que le lien : un lien `breakeat://`
-   * ne s'ouvre que si l'app est déjà installée. Le code, lui, reste utilisable
-   * après l'installation.
+   * On matérialise d'abord le panier côté serveur (il ne vivait que dans le
+   * téléphone), puis on ouvre l'ardoise : c'est elle qui porte les articles
+   * réclamables. Les convives n'auront rien à installer.
    */
-  const handleInviter = async () => {
-    if (!eventId || !supplierId) return;
+  const handlePartagerAddition = async () => {
+    if (!eventId || !supplierId || items.length === 0) return;
     setInvitationEnCours(true);
     try {
-      const groupe = await apiOpenOrderGroup(eventId, supplierId);
-      setOrderGroupCode(groupe.code);
-      const ou = groupe.supplierName ? ` à ${groupe.supplierName}` : '';
-      await Share.share({
-        message:
-          `Rejoins ma commande Break Eat${ou} !
-
-` +
-          `Code : ${groupe.code}
-` +
-          `breakeat://join/${groupe.code}
-
-` +
-          `Tu choisis ce que tu veux et tu paies ta part — on récupère tout ensemble.`,
-      });
+      const cart = await apiCreateCart(eventId, supplierId);
+      for (const item of items) {
+        await apiAddCartItem(cart.id, item.productId, item.quantity);
+      }
+      const split = await apiOpenSplit(cart.id);
+      navigation.navigate('Split', { code: split.code });
     } catch (e: unknown) {
-      console.warn('Ouverture de l’invitation échouée:', e);
-      showAlert('Invitation impossible', "Le lien n'a pas pu être créé. Réessaie dans un instant.");
+      console.warn('Ouverture de l’ardoise échouée:', e);
+      showAlert(
+        'Partage impossible',
+        e instanceof Error ? e.message : "L'addition n'a pas pu être partagée.",
+      );
     } finally {
       setInvitationEnCours(false);
     }
@@ -142,34 +145,23 @@ export function CartScreen({ navigation }: Props) {
                   </View>
                 ) : null}
 
-                {/* Commander a plusieurs — chacun paie sa part. */}
-                {orderGroupCode ? (
-                  <View style={styles.groupeBox}>
-                    <Ionicons name="people" size={18} color={THEME.orange} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.groupeTitre}>Commande à plusieurs</Text>
-                      <Text style={styles.groupeSub}>
-                        Code {orderGroupCode} · chacun paie sa part
-                      </Text>
-                    </View>
-                    <Pressable onPress={() => void handleInviter()} hitSlop={8}>
-                      <Text style={styles.changeSlot}>Partager</Text>
-                    </Pressable>
-                  </View>
-                ) : (
+                {/* L'ardoise : un seul installe l'app, chacun regle sa part. */}
+                {ardoisePossible && !orderGroupCode ? (
                   <Pressable
                     style={({ pressed }) => [styles.inviteBtn, pressed && { opacity: 0.85 }]}
-                    onPress={() => void handleInviter()}
+                    onPress={() => void handlePartagerAddition()}
                     disabled={invitationEnCours || !supplierId}
                   >
                     {invitationEnCours ? (
                       <ActivityIndicator size="small" color={THEME.orange} />
                     ) : (
-                      <Ionicons name="person-add-outline" size={18} color={THEME.orange} />
+                      <Ionicons name="people-outline" size={18} color={THEME.orange} />
                     )}
-                    <Text style={styles.inviteBtnText}>Inviter un ami à commander</Text>
+                    <Text style={styles.inviteBtnText}>Partager l’addition</Text>
                   </Pressable>
-                )}
+                ) : null}
+
+
 
                 {/* Récapitulatif */}
                 <View style={styles.summary}>

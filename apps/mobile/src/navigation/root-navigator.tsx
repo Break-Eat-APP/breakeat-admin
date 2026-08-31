@@ -53,6 +53,8 @@ export type RootStackParamList = {
   SlotSelector: { eventId: string };
   Checkout: undefined;
   OrderConfirmation: { orderId: string; publicOrderNumber: string; totalCents: number; buvettePlanUrl?: string | null };
+  /** PHASE 25 — l'ardoise partagee. Ouverte aussi depuis un navigateur, sans compte. */
+  Split: { code: string };
   OrderTracking: { orderId: string };
 };
 

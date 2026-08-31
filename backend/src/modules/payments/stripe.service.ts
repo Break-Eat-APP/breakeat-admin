@@ -129,6 +129,82 @@ export class StripeService implements OnModuleInit {
   }
 
   /**
+   * Page de paiement HÉBERGÉE par Stripe, en AUTORISATION SEULE.
+   *
+   * Deux propriétés en font le cœur de « l'ardoise » :
+   *
+   *  1. Hébergée : le convive n'installe rien. Il ouvre un lien dans son
+   *     navigateur, paie avec Apple Pay ou sa carte, c'est fini. Nous n'avons
+   *     ni page de paiement à écrire, ni numéro de carte à faire transiter.
+   *
+   *  2. `capture_method: 'manual'` : la somme est BLOQUÉE sur la carte, pas
+   *     prélevée. On encaisse au départ de la commande. Si la tournée capote,
+   *     il n'y a rien à rembourser — une autorisation non capturée se libère
+   *     d'elle-même (7 jours pour une carte en ligne).
+   *
+   * `payment_method_types: ['card']` est explicite : la capture différée n'est
+   * pas supportée par tous les moyens de paiement (ni SEPA, ni iDEAL). Laisser
+   * Stripe en proposer un ferait échouer l'autorisation au pire moment.
+   * Apple Pay et Google Pay passent par `card` — ils restent disponibles.
+   */
+  async createHostedCheckout(params: {
+    amountCents: number;
+    currency: string;
+    destinationAccountId: string;
+    productName: string;
+    successUrl: string;
+    cancelUrl: string;
+    idempotencyKey: string;
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Checkout.Session> {
+    const applicationFeeAmount = Math.floor((params.amountCents * this.platformFeeBps) / 10_000);
+
+    return this.stripe.checkout.sessions.create(
+      {
+        mode: 'payment',
+        payment_method_types: ['card'],
+        line_items: [
+          {
+            quantity: 1,
+            price_data: {
+              currency: params.currency,
+              unit_amount: params.amountCents,
+              product_data: { name: params.productName },
+            },
+          },
+        ],
+        payment_intent_data: {
+          capture_method: 'manual',
+          application_fee_amount: applicationFeeAmount,
+          transfer_data: { destination: params.destinationAccountId },
+          metadata: params.metadata,
+        },
+        metadata: params.metadata,
+        success_url: params.successUrl,
+        cancel_url: params.cancelUrl,
+      },
+      { idempotencyKey: params.idempotencyKey },
+    );
+  }
+
+  /**
+   * Encaisse une autorisation. Appelé au DÉPART de la commande, jamais avant :
+   * c'est ce qui garantit qu'on ne prélève personne pour une tournée qui
+   * n'aura pas lieu.
+   */
+  async capturePaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+    return this.stripe.paymentIntents.capture(paymentIntentId);
+  }
+
+  /**
+   * Libère une autorisation non capturée (convive qui se retire, hôte qui
+   * annule). Rien n'a été prélevé : ce n'est pas un remboursement.
+   */
+  async cancelPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
+    return this.stripe.paymentIntents.cancel(paymentIntentId);
+  }
+
+  /**
    * Retrieves a PaymentIntent. Used by webhook handlers and reconciliation jobs.
    */
   async retrievePaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {

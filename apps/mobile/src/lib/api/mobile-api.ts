@@ -441,6 +441,56 @@ export const apiGetMyOrders = () =>
 export const apiMarkArrived = (orderId: string) =>
   req<Order>(`/orders/${orderId}/arrived`, { method: 'POST' });
 
+// ─── L'ardoise : composer a plusieurs, chacun regle sa part ───
+
+/** Une case a cocher : « une » biere, pas « trois bieres ». */
+export interface SplitUnit {
+  id: string;
+  productName: string;
+  unitPriceCents: number;
+  status: 'FREE' | 'RESERVED' | 'PAID';
+  /** Prenom du convive qui l'a prise, s'il en a donne un. */
+  claimantName: string | null;
+}
+
+export interface OrderSplit {
+  code: string;
+  status: 'OPEN' | 'SENT' | 'CANCELLED';
+  supplierName: string | null;
+  eventId: string;
+  supplierId: string;
+  totalCents: number;
+  paidCents: number;
+  units: SplitUnit[];
+}
+
+/** La fonction est-elle ouverte ? On ne montre pas un bouton qui refuserait. */
+export const apiSplitEnabled = () =>
+  req<{ enabled: boolean }>('/public/order-splits/enabled');
+
+/** Ouvre l'ardoise a partir de mon panier (hote, connecte). */
+export const apiOpenSplit = (cartId: string) =>
+  req<OrderSplit>('/order-splits', { method: 'POST', body: JSON.stringify({ cartId }) });
+
+/** La liste, telle qu'elle est. Lisible sans compte : c'est la page des convives. */
+export const apiGetSplit = (code: string) =>
+  req<OrderSplit>(`/public/order-splits/${encodeURIComponent(code)}`);
+
+/** Je prends ces articles → renvoie l'adresse de la page de paiement Stripe. */
+export const apiClaimSplitUnits = (code: string, unitIds: string[], claimantName?: string) =>
+  req<{ shareId: string; checkoutUrl: string; amountCents: number }>(
+    `/public/order-splits/${encodeURIComponent(code)}/claim`,
+    { method: 'POST', body: JSON.stringify({ unitIds, claimantName }) },
+  );
+
+/** L'hote encaisse tout et envoie au comptoir. */
+export const apiSendSplit = (code: string) =>
+  req<Order>(`/order-splits/${encodeURIComponent(code)}/send`, { method: 'POST' });
+
+/** L'hote renonce : toutes les autorisations sont liberees. */
+export const apiCancelSplit = (code: string) =>
+  req<{ liberees: number }>(`/order-splits/${encodeURIComponent(code)}/cancel`, { method: 'POST' });
+
 // ─── Helpers ──────────────────────────────────────────────────
 
 /** Format cents to readable price string (e.g. 250 → "2,50 €") */

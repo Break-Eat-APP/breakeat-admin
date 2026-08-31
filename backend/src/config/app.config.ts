@@ -77,6 +77,23 @@ export default registerAs('app', () => ({
   },
 
   /**
+   * PHASE 25 — « l'ardoise » : composer a plusieurs, chacun regle sa part.
+   */
+  split: {
+    /**
+     * Interrupteur. A `false`, le bouton « Partager l'addition » disparait de
+     * l'app et les routes refusent : le parcours normal, lui, ne change pas
+     * d'une ligne. C'est ce qui permet de retirer la fonction sans deployer.
+     */
+    enabled: process.env.GROUP_SPLIT_ENABLED === 'true',
+    /**
+     * Adresse publique de l'app web — c'est la que les convives ouvrent leur
+     * part, sans rien installer. Sert aussi de retour apres paiement Stripe.
+     */
+    webUrl: (process.env.PUBLIC_WEB_URL ?? 'http://localhost:8081').replace(/\/+$/, ''),
+  },
+
+  /**
    * Back-office reporting parameters.
    * vatRate: the VAT rate used to derive CA HT from the TTC totals stored on
    * orders (Order.totalCents is tax-inclusive — there is no tax field in the

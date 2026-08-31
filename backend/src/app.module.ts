@@ -16,6 +16,7 @@ import { StockModule } from './modules/stock/stock.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { CartModule } from './modules/cart/cart.module';
 import { OrderGroupsModule } from './modules/order-groups/order-groups.module';
+import { OrderSplitsModule } from './modules/order-splits/order-splits.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
 import { SimulatorModule } from './modules/simulator/simulator.module';
@@ -63,6 +64,7 @@ import appConfig from './config/app.config';
     PaymentsModule,
     CartModule,
     OrderGroupsModule,
+    OrderSplitsModule,
     OrdersModule,
     WebhooksModule,
     // Phase 6

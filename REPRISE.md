@@ -15,7 +15,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-08-28_
+_Dernière mise à jour : 2026-08-29_
 
 ## ⏭️ REPRISE IMMÉDIATE
 
@@ -29,13 +29,18 @@ _Dernière mise à jour : 2026-08-28_
    démarrage : la ligne `APNs — hôte …` dit lequel est utilisé.
 3. **TestFlight** — App Store Connect → onglet TestFlight → remplir les *informations de test* (obligatoire), puis s'ajouter en testeur interne.
 4. **Renseigner les coordonnées GPS des lieux** — sans elles, un lieu n'apparaît jamais par proximité. Il reste trouvable par la recherche.
-5. **Décider du sort des tables `operator_screen_templates` et
+5. **Activer l'ardoise pour la tester** : `GROUP_SPLIT_ENABLED=true` et
+   `PUBLIC_WEB_URL=https://breakeat-admin-mobile-rho.vercel.app` sur Railway.
+   Exige aussi des clés Stripe valides et une buvette avec un compte Connect
+   actif — sans compte, la page de paiement ne peut pas s'ouvrir. À `false`,
+   le bouton disparaît et le parcours normal ne change pas.
+6. **Décider du sort des tables `operator_screen_templates` et
    `event_operator_screens`.** Le board opérateur est passé à trois colonnes
    fixes : l'interface et l'API de configuration ont été retirées, mais les
    TABLES restent. Les supprimer effacerait les écrans déjà enregistrés par les
    clubs — ça se décide, ça ne se fait pas en passant. Tant qu'elles existent,
    elles ne coûtent rien.
-6. **Nettoyer les données de test** du wizard et de « Démo Spartiates » : événements d'abord, puis points de retrait, puis comptes.
+7. **Nettoyer les données de test** du wizard et de « Démo Spartiates » : événements d'abord, puis points de retrait, puis comptes.
 
 ## 🧱 Montée Expo SDK 53 → 57 (25/08)
 

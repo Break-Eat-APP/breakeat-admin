@@ -3,6 +3,7 @@ import type Stripe from 'stripe';
 import { StripeWebhooksService } from './stripe-webhooks.service';
 import { PrismaService } from '../../database/prisma.service';
 import { OrdersService } from '../orders/orders.service';
+import { OrderSplitsService } from '../order-splits/order-splits.service';
 
 const STRIPE_EVENT_ID = 'evt_test_123';
 const PAYMENT_INTENT_ID = 'pi_test_456';
@@ -45,6 +46,11 @@ describe('StripeWebhooksService', () => {
             createFromPaymentIntent: jest.fn(),
             recordFailedPayment: jest.fn(),
           },
+        },
+        {
+          // Phase 25 — les parts d'ardoise sont ecartees avant tout appel.
+          provide: OrderSplitsService,
+          useValue: { marquerPartAutorisee: jest.fn() },
         },
       ],
     }).compile();

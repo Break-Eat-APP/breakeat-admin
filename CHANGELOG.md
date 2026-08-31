@@ -5,6 +5,66 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.54.0] — 2026-08-29 — L'ardoise : composer à plusieurs, chacun règle sa part
+
+### Le cas réel, enfin
+Un groupe arrive au stade. **Une seule personne veut installer l'app.** Elle
+compose toute la tournée, partage un lien, et chacun ouvre une page dans son
+navigateur pour prendre SES articles et les payer. Aucun autre téléchargement,
+aucun compte.
+
+La fonction précédente (« inviter un ami à commander ») supposait que tout le
+monde installe l'app — ce que personne ne fait au comptoir. Elle n'a plus de
+porte d'entrée.
+
+### Personne n'est débité avant que tout soit réglé
+C'est la garantie centrale, et elle tient en deux temps :
+
+1. quand un convive paie, sa carte est **AUTORISÉE** — la somme est bloquée,
+   rien n'est prélevé (`capture_method: manual`) ;
+2. **l'encaissement n'a lieu qu'au départ de la commande**, en une fois, pour
+   toutes les parts. `envoyer()` refuse tant qu'un seul article n'est pas réglé.
+
+Conséquence : une tournée qui capote ne laisse **aucun remboursement à faire**.
+Les autorisations non capturées se libèrent seules (7 jours pour une carte).
+Un remboursement, c'est des jours et des frais des deux côtés ; une réserve
+abandonnée, c'est rien.
+
+### Chacun paie SA nourriture
+Chaque part est une vente normale à la buvette (destination charge Connect,
+commission plateforme habituelle). Break Eat ne détient jamais l'argent d'un
+tiers — ce serait un autre métier que vendre à manger.
+
+### Les détails qui décident si ça marche
+- **Découpage à l'unité** : « 3 bières » donne trois cases. Deux convives
+  peuvent en prendre une chacun ; une ligne indivisible casserait le principe
+  dès la première tournée.
+- **Réservation conditionnelle** : si deux personnes cochent la même bière au
+  même instant, la seconde est refusée — plutôt que de payer deux fois.
+- **Réservation qui expire** (5 min) : un ami qui coche puis ferme son téléphone
+  ne bloque pas la tournée.
+- **Retrait par article** : quand quelqu'un se retire, le montant des autres ne
+  change pas. En parts égales, il aurait fallu réautoriser tout le monde.
+- **Les parts d'ardoise sont écartées des webhooks de paiement classiques** :
+  sans ce filtre, l'encaissement d'une part aurait cherché un panier inexistant
+  à chaque tournée, et un refus aurait créé une ligne de paiement orpheline qui
+  aurait fait échouer la création de la commande.
+
+### Retirable sans trace
+Module entièrement additif : le parcours de commande existant n'en traverse pas
+une ligne. `GROUP_SPLIT_ENABLED=false` sur Railway éteint le bouton sans
+déployer. La suppression définitive tient en un `git revert` et un dossier.
+
+- `+ backend/src/modules/order-splits/` (service, contrôleur, DTO, 14 tests)
+- `+ backend/prisma/migrations/20260829_order_splits`
+- `~ backend/src/modules/payments/stripe.service.ts` — page hébergée, capture, annulation
+- `~ backend/src/modules/webhooks/` — `checkout.session.completed` + filtre des parts
+- `~ backend/src/modules/orders/orders.service.ts` — `createFromSplit`
+- `+ apps/mobile/src/screens/split.screen.tsx` — un écran, deux publics
+- `~ apps/mobile/App.expo.tsx` — `split/:code` résolu aussi depuis un navigateur
+
+---
+
 ## [0.53.1] — 2026-08-28 — Suites d'un audit externe
 
 Quatre défauts réels, relevés par un audit indépendant. Le cinquième signalement

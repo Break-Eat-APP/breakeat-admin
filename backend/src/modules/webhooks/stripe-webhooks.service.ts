@@ -3,6 +3,7 @@ import { StripeAccountStatus, type Prisma } from '@prisma/client';
 import type Stripe from 'stripe';
 import { PrismaService } from '../../database/prisma.service';
 import { OrdersService } from '../orders/orders.service';
+import { OrderSplitsService } from '../order-splits/order-splits.service';
 
 /**
  * StripeWebhooksService dispatches incoming Stripe events to the right handler.
@@ -25,6 +26,7 @@ export class StripeWebhooksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orders: OrdersService,
+    private readonly splits: OrderSplitsService,
   ) {}
 
   async handleEvent(event: Stripe.Event): Promise<void> {
@@ -50,6 +52,10 @@ export class StripeWebhooksService {
       switch (event.type) {
         case 'account.updated':
           await this.onAccountUpdated(event.data.object as Stripe.Account);
+          break;
+
+        case 'checkout.session.completed':
+          await this.onCheckoutSessionCompleted(event);
           break;
 
         case 'payment_intent.succeeded':
@@ -114,8 +120,50 @@ export class StripeWebhooksService {
     );
   }
 
+  /**
+   * PHASE 25 — une part d'ardoise vient d'être AUTORISÉE (carte bloquée, rien
+   * de prélevé). On verrouille les articles sur leur payeur.
+   */
+  private async onCheckoutSessionCompleted(event: Stripe.Event): Promise<void> {
+    const session = event.data.object as Stripe.Checkout.Session;
+    if (!session.metadata?.orderSplitShareId) {
+      this.logger.log(`Checkout session sans ardoise (${session.id}) — ignorée`);
+      return;
+    }
+    const intentId =
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id;
+    if (!intentId) {
+      this.logger.warn(`Checkout session ${session.id} sans PaymentIntent`);
+      return;
+    }
+    await this.splits.marquerPartAutorisee(session.id, intentId);
+  }
+
+  /**
+   * Une part d'ardoise ne passe JAMAIS par ici.
+   *
+   * Quand on encaisse une part, Stripe émet `payment_intent.succeeded` comme
+   * pour n'importe quel paiement. Sans ce filtre, le gestionnaire chercherait
+   * un panier dans les métadonnées, n'en trouverait pas, et lèverait une erreur
+   * à chaque tournée envoyée — Stripe réessaierait en boucle. Pire pour
+   * `payment_failed` : il créerait une ligne de paiement orpheline portant
+   * l'identifiant d'intention de la part, et la création de la commande
+   * échouerait ensuite sur la contrainte d'unicité.
+   *
+   * L'ardoise pilote elle-même le cycle de vie de ses paiements.
+   */
+  private estPartDArdoise(intent: Stripe.PaymentIntent): boolean {
+    return Boolean(intent.metadata?.orderSplitShareId);
+  }
+
   private async onPaymentIntentSucceeded(event: Stripe.Event): Promise<void> {
     const intent = event.data.object as Stripe.PaymentIntent;
+    if (this.estPartDArdoise(intent)) {
+      this.logger.log(`Part d'ardoise encaissée (${intent.id}) — gérée par l'ardoise`);
+      return;
+    }
     await this.orders.createFromPaymentIntent(
       intent.id,
       {
@@ -129,6 +177,10 @@ export class StripeWebhooksService {
 
   private async onPaymentIntentFailed(event: Stripe.Event): Promise<void> {
     const intent = event.data.object as Stripe.PaymentIntent;
+    if (this.estPartDArdoise(intent)) {
+      this.logger.log(`Part d'ardoise refusée (${intent.id}) — le convive peut réessayer`);
+      return;
+    }
     const reason = intent.last_payment_error?.message ?? 'unknown';
     await this.orders.recordFailedPayment(
       intent.id,

@@ -306,6 +306,144 @@ export class OrdersService {
   }
 
   /**
+   * PHASE 25 — crée la commande d'une ARDOISE, une fois toutes les parts
+   * encaissées.
+   *
+   * Troisième point d'entrée de création de commande, après le paiement Stripe
+   * et le mode démo. Ils vivent volontairement côte à côte dans ce fichier :
+   * un rattachement câblé sur un seul des chemins est un défaut qu'on a déjà
+   * payé une fois (le groupe d'amis, absent du chemin démo).
+   *
+   * Particularité : PLUSIEURS paiements pour UNE commande. Chaque convive a son
+   * propre `PaymentIntent`, tous encaissés avant d'arriver ici. C'est ce qui
+   * permet à chacun de payer sa nourriture sans que Break Eat ne détienne
+   * l'argent de personne.
+   */
+  async createFromSplit(splitId: string) {
+    const split = await this.prisma.orderSplit.findUnique({
+      where: { id: splitId },
+      include: { units: true, shares: true },
+    });
+    if (!split) throw new NotFoundException('Ardoise introuvable');
+    if (split.orderId) {
+      // Déjà envoyée : on rend la commande existante plutôt que d'en créer une
+      // seconde. Un double appui ne doit pas produire deux tournées.
+      return this.prisma.order.findUniqueOrThrow({ where: { id: split.orderId } });
+    }
+    if (!split.pickupPointId) {
+      throw new BadRequestException('Aucun point de retrait pour cette tournée');
+    }
+
+    // Les unités redeviennent des lignes de commande : « 3 » cases d'un même
+    // produit reforment une ligne de quantité 3.
+    const parProduit = new Map<
+      string,
+      { productId: string; productNameSnapshot: string; unitPriceCentsSnapshot: number; quantity: number }
+    >();
+    for (const unite of split.units) {
+      const ligne = parProduit.get(unite.productId);
+      if (ligne) ligne.quantity += 1;
+      else
+        parProduit.set(unite.productId, {
+          productId: unite.productId,
+          productNameSnapshot: unite.productName,
+          unitPriceCentsSnapshot: unite.unitPriceCents,
+          quantity: 1,
+        });
+    }
+    const itemSnapshots = [...parProduit.values()].map((l) => ({
+      ...l,
+      lineTotalCents: l.unitPriceCentsSnapshot * l.quantity,
+    }));
+    const totalCents = itemSnapshots.reduce((sum, l) => sum + l.lineTotalCents, 0);
+
+    const encaissees = split.shares.filter(
+      (sh) => sh.status === 'CAPTURED' && sh.stripePaymentIntentId,
+    );
+    const publicOrderNumber = await this.generatePublicOrderNumber();
+    const pickupPointId = split.pickupPointId;
+
+    const order = await this.prisma.$transaction(async (tx) => {
+      const createdOrder = await tx.order.create({
+        data: {
+          publicOrderNumber,
+          userId: split.hostUserId,
+          organizationId: split.organizationId,
+          eventId: split.eventId,
+          venueId: split.venueId,
+          supplierId: split.supplierId,
+          pickupPointId,
+          status: OrderStatus.PAID,
+          paymentStatus: PaymentStatus.SUCCEEDED,
+          subtotalCents: totalCents,
+          discountCents: 0,
+          totalCents,
+          currency: 'eur',
+          items: { create: itemSnapshots },
+        },
+      });
+
+      // Un paiement par convive : la comptabilité doit pouvoir remonter à qui
+      // a payé quoi, et un remboursement se fait part par part.
+      for (const share of encaissees) {
+        await tx.payment.create({
+          data: {
+            orderId: createdOrder.id,
+            stripePaymentIntentId: share.stripePaymentIntentId as string,
+            status: PaymentStatus.SUCCEEDED,
+            amountCents: share.amountCents,
+            currency: 'eur',
+            rawStripeEvent: { orderSplitShareId: share.id, claimantName: share.claimantName },
+          },
+        });
+      }
+
+      await tx.orderAuditTrail.create({
+        data: {
+          orderId: createdOrder.id,
+          actorType: OrderActorType.SYSTEM,
+          previousState: null,
+          nextState: OrderStatus.PAID,
+          reason: `Commande créée depuis l'ardoise ${split.code} (${encaissees.length} parts)`,
+          metadata: { orderSplitId: split.id, shares: encaissees.length },
+        },
+      });
+
+      // Créneau : on ESSAIE, sans faire échouer la commande.
+      //
+      // Ailleurs, un créneau fermé annule la transaction — c'est voulu, mieux
+      // vaut refuser que promettre un retrait impossible. Ici l'argent est DÉJÀ
+      // encaissé : annuler laisserait des convives débités sans commande. On
+      // sert donc la tournée sans créneau, et l'incident est tracé.
+      if (split.selectedSlotId) {
+        try {
+          await this.slotsService.assignOrderToSlot(createdOrder.id, split.selectedSlotId, tx);
+        } catch (e: unknown) {
+          this.logger.warn(
+            `Ardoise ${split.code} : créneau ${split.selectedSlotId} non assigné (${String(e)})`,
+          );
+        }
+      }
+
+      return createdOrder;
+    });
+
+    this.logger.log(`Commande ${publicOrderNumber} créée depuis l'ardoise ${split.code}`);
+
+    this.realtimeService.emitNewOrder({
+      orderId: order.id,
+      publicOrderNumber: order.publicOrderNumber,
+      organizationId: order.organizationId,
+      venueId: order.venueId,
+      eventId: order.eventId,
+      supplierId: order.supplierId,
+      pickupPointId: order.pickupPointId,
+    });
+
+    return order;
+  }
+
+  /**
    * Records a failed payment without creating an Order.
    * Cart remains in CHECKOUT_PENDING — the customer can retry checkout.
    */

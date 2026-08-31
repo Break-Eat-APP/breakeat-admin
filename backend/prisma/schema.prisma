@@ -77,10 +77,10 @@ enum SupplierStatus {
 /// Stripe Connect onboarding state for a supplier.
 /// Drives whether the supplier can receive payments.
 enum StripeAccountStatus {
-  NOT_ONBOARDED   // No Stripe account created yet
-  PENDING         // Account created, awaiting onboarding completion or Stripe review
-  ACTIVE          // charges_enabled && payouts_enabled
-  RESTRICTED      // Account exists but charges or payouts disabled (action required)
+  NOT_ONBOARDED // No Stripe account created yet
+  PENDING // Account created, awaiting onboarding completion or Stripe review
+  ACTIVE // charges_enabled && payouts_enabled
+  RESTRICTED // Account exists but charges or payouts disabled (action required)
 
   @@map("stripe_account_status")
 }
@@ -88,11 +88,11 @@ enum StripeAccountStatus {
 /// Lifecycle of a Cart.
 /// A cart cannot accept items after CHECKOUT — items are frozen at that point.
 enum CartStatus {
-  OPEN              // Customer is editing
-  CHECKOUT_PENDING  // PaymentIntent created, awaiting payment confirmation
-  CONVERTED         // Payment succeeded, Order created
-  EXPIRED           // expiresAt passed
-  ABANDONED         // Cleared by customer or sweeper
+  OPEN // Customer is editing
+  CHECKOUT_PENDING // PaymentIntent created, awaiting payment confirmation
+  CONVERTED // Payment succeeded, Order created
+  EXPIRED // expiresAt passed
+  ABANDONED // Cleared by customer or sweeper
 
   @@map("cart_status")
 }
@@ -156,27 +156,27 @@ enum PickupPointStatus {
 /// Rattaché à une BUVETTE : deux comptoirs d’un même lieu peuvent servir à des
 /// heures différentes.
 model SlotTemplate {
-  id           String   @id @default(uuid())
-  venueId      String   @map("venue_id")
-  supplierId   String   @map("supplier_id")
+  id              String   @id @default(uuid())
+  venueId         String   @map("venue_id")
+  supplierId      String   @map("supplier_id")
   /// Rôle stable du moment de récupération (voir SlotKind).
-  kind         SlotKind @default(CUSTOM)
+  kind            SlotKind @default(CUSTOM)
   /// Ce que lit le client : « Immédiat », « À la mi-temps », « 17h45 ».
-  label        String
+  label           String
   /// Heures exprimées en MINUTES depuis minuit, dans le fuseau du lieu.
   /// Un DateTime porterait une date qui n’a aucun sens pour un motif récurrent.
-  startMinutes Int      @map("start_minutes")
-  endMinutes   Int      @map("end_minutes")
+  startMinutes    Int      @map("start_minutes")
+  endMinutes      Int      @map("end_minutes")
   /// Limite de commandes ACTIVE ou non. Faux par defaut : la plupart des clubs
   /// n'en veulent pas au depart, et une limite subie est pire qu'aucune.
-  capacityEnabled Boolean @default(false) @map("capacity_enabled")
+  capacityEnabled Boolean  @default(false) @map("capacity_enabled")
   /// Nombre de commandes quand la limite est active. Ignore sinon.
-  capacity     Int      @default(20)
+  capacity        Int      @default(20)
   /// Désactivé = ne produit plus de créneau, sans perdre l’historique.
-  isActive     Boolean  @default(true) @map("is_active")
-  sortOrder    Int      @default(0) @map("sort_order")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  isActive        Boolean  @default(true) @map("is_active")
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   venue    Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
@@ -188,18 +188,18 @@ model SlotTemplate {
 
 /// Availability status of a pickup slot.
 enum SlotStatus {
-  OPEN    // accepting orders (currentLoad < capacity)
-  FULL    // capacity reached — no new orders
-  CLOSED  // manually closed or expired
+  OPEN // accepting orders (currentLoad < capacity)
+  FULL // capacity reached — no new orders
+  CLOSED // manually closed or expired
 
   @@map("slot_status")
 }
 
 /// Who created or last modified the slot.
 enum SlotSource {
-  MANUAL   // created by an operator via API
-  DEFAULT  // generated from event default rules
-  FLAIX    // assigned or modified by the Flaix AI engine
+  MANUAL // created by an operator via API
+  DEFAULT // generated from event default rules
+  FLAIX // assigned or modified by the Flaix AI engine
 
   @@map("slot_source")
 }
@@ -297,12 +297,12 @@ model Organization {
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
-  members      OrganizationMember[]
-  venues       Venue[]
-  events       Event[]
-  suppliers    Supplier[]
-  pickupPoints PickupPoint[]
-  groups       Group[]
+  members                 OrganizationMember[]
+  venues                  Venue[]
+  events                  Event[]
+  suppliers               Supplier[]
+  pickupPoints            PickupPoint[]
+  groups                  Group[]
   /// PHASE 11 — reusable operator-dashboard screen definitions
   operatorScreenTemplates OperatorScreenTemplate[]
   scheduledPushes         ScheduledPush[]
@@ -336,45 +336,45 @@ model OrganizationMember {
 /// A physical location owned by an organisation.
 /// One venue can host many events and pickup points.
 model Venue {
-  id             String      @id @default(uuid())
-  organizationId String      @map("organization_id")
-  name           String
-  address        String
+  id                     String             @id @default(uuid())
+  organizationId         String             @map("organization_id")
+  name                   String
+  address                String
   /// PHASE 16 — coordonnées pour la découverte géolocalisée (app mobile). Nullable.
-  latitude       Float?
-  longitude      Float?
+  latitude               Float?
+  longitude              Float?
   /// PHASE 16.2 — mots-clés libres saisis par le club pour la recherche (ex.
   /// "marseille, spartiates, patinoire"). Matché en plus du nom/adresse.
-  searchTerms    String?     @map("search_terms")
+  searchTerms            String?            @map("search_terms")
   /// PHASE 16.3 — intégration Flaix (API). Quand flaixEnabled, l'app passe le relais
   /// à Flaix au lieu du parcours Break Eat natif ; flaixVenueId = identifiant du lieu
   /// côté Flaix (utilisé par les appels API Flaix, à brancher au contrat Flaix).
-  flaixEnabled   Boolean     @default(false) @map("flaix_enabled")
-  flaixVenueId   String?     @map("flaix_venue_id")
+  flaixEnabled           Boolean            @default(false) @map("flaix_enabled")
+  flaixVenueId           String?            @map("flaix_venue_id")
   /// PHASE 18 — plan des buvettes (image uploadée via Canva puis hébergée). URL
   /// affichée dans l'app (carte du lieu + confirmation de commande) pour aider le
   /// client à localiser la/les buvette(s). Nullable : tous les lieux n'en ont pas.
-  buvettePlanUrl String?     @map("buvette_plan_url")
+  buvettePlanUrl         String?            @map("buvette_plan_url")
   /// PHASE 20 — programme de fidélité, activé (ou non) par le club lui-même.
   /// Désactivé par défaut : aucun lieu existant ne se met à distribuer des points
   /// sans décision explicite.
-  loyaltyEnabled Boolean     @default(false) @map("loyalty_enabled")
+  loyaltyEnabled         Boolean            @default(false) @map("loyalty_enabled")
   /// Points gagnés par euro dépensé (entier : évite toute dérive de virgule
   /// flottante sur une contrepartie monétaire).
-  loyaltyPointsPerEuro   Int  @default(1) @map("loyalty_points_per_euro")
+  loyaltyPointsPerEuro   Int                @default(1) @map("loyalty_points_per_euro")
   /// Valeur d'UN point en centimes lors de l'utilisation (1 = 1 centime).
-  loyaltyPointValueCents Int  @default(1) @map("loyalty_point_value_cents")
+  loyaltyPointValueCents Int                @default(1) @map("loyalty_point_value_cents")
   /// PHASE 22 — rythme d'exploitation du lieu. Voir {@link VenueOperatingMode}.
-  operatingMode  VenueOperatingMode @default(EVENT_BASED) @map("operating_mode")
-  timezone       String      @default("Europe/Paris")
-  status         VenueStatus @default(ACTIVE)
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
+  operatingMode          VenueOperatingMode @default(EVENT_BASED) @map("operating_mode")
+  timezone               String             @default("Europe/Paris")
+  status                 VenueStatus        @default(ACTIVE)
+  createdAt              DateTime           @default(now()) @map("created_at")
+  updatedAt              DateTime           @updatedAt @map("updated_at")
 
-  organization Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  events       Event[]
-  pickupPoints PickupPoint[]
-  slotTemplates  SlotTemplate[]
+  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events        Event[]
+  pickupPoints  PickupPoint[]
+  slotTemplates SlotTemplate[]
 
   @@map("venues")
 }
@@ -399,38 +399,38 @@ enum VenueOperatingMode {
 /// A time-bound ordering context. Belongs to one org and one venue.
 /// An event activates suppliers, pickup points, and slots.
 model Event {
-  id                 String      @id @default(uuid())
-  organizationId     String      @map("organization_id")
-  venueId            String      @map("venue_id")
-  name               String
-  startAt            DateTime    @map("start_at")
-  endAt              DateTime    @map("end_at")
-  status             EventStatus @default(DRAFT)
+  id                   String          @id @default(uuid())
+  organizationId       String          @map("organization_id")
+  venueId              String          @map("venue_id")
+  name                 String
+  startAt              DateTime        @map("start_at")
+  endAt                DateTime        @map("end_at")
+  status               EventStatus     @default(DRAFT)
   /// PHASE 22 — vrai pour le contenant unique d'un lieu PERMANENT.
   ///
   /// Ce n'est pas un événement au sens commercial : personne ne l'a créé, ne le
   /// modifie ni ne le voit. Il existe pour porter les commandes d'un lieu ouvert
   /// en continu. Le drapeau permet de le retrouver de façon fiable et de
   /// l'écarter des listes d'événements, où il n'aurait aucun sens.
-  isPermanentContainer Boolean   @default(false) @map("is_permanent_container")
-  activeFeatureFlags Json        @default("{}") @map("active_feature_flags")
+  isPermanentContainer Boolean         @default(false) @map("is_permanent_container")
+  activeFeatureFlags   Json            @default("{}") @map("active_feature_flags")
   /// PHASE 14 — public (everyone) or private (restricted to linked groups).
-  visibility         EventVisibility @default(PUBLIC)
+  visibility           EventVisibility @default(PUBLIC)
   /// PHASE 12.8 — Branding & content shown in mobile app
-  description        String?
-  logoUrl            String?     @map("logo_url")
-  primaryColor       String?     @map("primary_color")
-  createdAt          DateTime    @default(now()) @map("created_at")
-  updatedAt          DateTime    @updatedAt @map("updated_at")
+  description          String?
+  logoUrl              String?         @map("logo_url")
+  primaryColor         String?         @map("primary_color")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
 
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  venue          Venue           @relation(fields: [venueId], references: [id])
-  eventSuppliers EventSupplier[]
-  pickupPoints   PickupPoint[]
-  carts          Cart[]
-  slots          Slot[]
-  flaixDecisions FlaixDecision[]
-  groups         EventGroup[]
+  organization    Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  venue           Venue                 @relation(fields: [venueId], references: [id])
+  eventSuppliers  EventSupplier[]
+  pickupPoints    PickupPoint[]
+  carts           Cart[]
+  slots           Slot[]
+  flaixDecisions  FlaixDecision[]
+  groups          EventGroup[]
   /// PHASE 11 — screen templates applied to this event (with per-event order/toggle)
   operatorScreens EventOperatorScreen[]
   scheduledPushes ScheduledPush[]
@@ -441,32 +441,32 @@ model Event {
 /// A food, drink or merchandise operator attached to an event.
 /// Belongs to an organisation; connected to events via EventSupplier junction.
 model Supplier {
-  id              String         @id @default(uuid())
-  organizationId  String         @map("organization_id")
-  name            String
-  status          SupplierStatus @default(CLOSED)
-  preparationZone String?        @map("preparation_zone")
+  id                   String              @id @default(uuid())
+  organizationId       String              @map("organization_id")
+  name                 String
+  status               SupplierStatus      @default(CLOSED)
+  preparationZone      String?             @map("preparation_zone")
   /// PHASE 24 — plan d'accès PROPRE à cette buvette (image hébergée).
   ///
   /// Null ⇒ on retombe sur `Venue.buvettePlanUrl`, le plan général du lieu.
   /// C'est ce qui permet à un stade à plusieurs comptoirs de guider chaque
   /// client vers LE sien, sans obliger les clubs à tout re-paramétrer.
-  planUrl         String?        @map("plan_url")
+  planUrl              String?             @map("plan_url")
   /// Exploitant externe (food-truck, traiteur tiers…) référencé via code de parrainage.
-  isExternal      Boolean        @default(false) @map("is_external")
+  isExternal           Boolean             @default(false) @map("is_external")
   /// Code de parrainage unique — partagé à l'exploitant externe pour le rattacher au club.
-  referralCode    String?        @unique @map("referral_code")
+  referralCode         String?             @unique @map("referral_code")
   /// Stripe Connect account ID — populated during Phase 5 onboarding.
-  stripeAccountId       String?              @map("stripe_account_id")
-  stripeAccountStatus   StripeAccountStatus  @default(NOT_ONBOARDED) @map("stripe_account_status")
+  stripeAccountId      String?             @map("stripe_account_id")
+  stripeAccountStatus  StripeAccountStatus @default(NOT_ONBOARDED) @map("stripe_account_status")
   /// Mirror of Stripe Account.charges_enabled — refreshed on each status check.
-  stripeChargesEnabled  Boolean              @default(false) @map("stripe_charges_enabled")
+  stripeChargesEnabled Boolean             @default(false) @map("stripe_charges_enabled")
   /// Mirror of Stripe Account.payouts_enabled — refreshed on each status check.
-  stripePayoutsEnabled  Boolean              @default(false) @map("stripe_payouts_enabled")
+  stripePayoutsEnabled Boolean             @default(false) @map("stripe_payouts_enabled")
   /// Timestamp when the account first reached ACTIVE state.
-  stripeOnboardedAt     DateTime?            @map("stripe_onboarded_at")
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt @map("updated_at")
+  stripeOnboardedAt    DateTime?           @map("stripe_onboarded_at")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
 
   organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   eventSuppliers    EventSupplier[]
@@ -478,7 +478,7 @@ model Supplier {
   slots             Slot[]
   /// PHASE 12.7 — operators assigned to this supplier
   assignedOperators OrganizationMember[] @relation("OperatorAssignments")
-  slotTemplates  SlotTemplate[]
+  slotTemplates     SlotTemplate[]
 
   @@map("suppliers")
 }
@@ -654,25 +654,25 @@ model OrderGroup {
 }
 
 model Cart {
-  id             String     @id @default(uuid())
-  userId         String     @map("user_id")
-  eventId        String     @map("event_id")
-  supplierId     String     @map("supplier_id")
-  pickupPointId  String?    @map("pickup_point_id")
+  id              String     @id @default(uuid())
+  userId          String     @map("user_id")
+  eventId         String     @map("event_id")
+  supplierId      String     @map("supplier_id")
+  pickupPointId   String?    @map("pickup_point_id")
   /// Phase 7 — customer-selected slot before checkout.
-  selectedSlotId String?    @map("selected_slot_id")
-  status         CartStatus @default(OPEN)
+  selectedSlotId  String?    @map("selected_slot_id")
+  status          CartStatus @default(OPEN)
   /// PHASE 20 — points que le client a choisi d'utiliser sur ce panier.
   /// Stocké en points (et non en centimes) : la valeur d'un point peut changer
   /// côté club, le montant de la remise est recalculé au moment du paiement.
-  redeemedPoints Int        @default(0) @map("redeemed_points")
+  redeemedPoints  Int        @default(0) @map("redeemed_points")
   /// Idempotency safeguard for /checkout — same key returns the same PaymentIntent.
-  paymentIntentId String?   @map("payment_intent_id")
+  paymentIntentId String?    @map("payment_intent_id")
   /// PHASE 24 — commande passee dans le cadre d'une invitation entre amis.
-  orderGroupId   String?    @map("order_group_id")
-  expiresAt      DateTime   @map("expires_at")
-  createdAt      DateTime   @default(now()) @map("created_at")
-  updatedAt      DateTime   @updatedAt @map("updated_at")
+  orderGroupId    String?    @map("order_group_id")
+  expiresAt       DateTime   @map("expires_at")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
 
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   event       Event        @relation(fields: [eventId], references: [id], onDelete: Cascade)
@@ -753,8 +753,8 @@ model Order {
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")
 
-  user        User             @relation(fields: [userId], references: [id])
-  slot        Slot?            @relation(fields: [slotId], references: [id], onDelete: SetNull)
+  user           User              @relation(fields: [userId], references: [id])
+  slot           Slot?             @relation(fields: [slotId], references: [id], onDelete: SetNull)
   items          OrderItem[]
   payments       Payment[]
   auditTrail     OrderAuditTrail[]
@@ -772,14 +772,14 @@ model Order {
 /// Frozen snapshot of one line at order creation.
 /// productId is kept for traceability; productNameSnapshot is the displayed name.
 model OrderItem {
-  id                    String   @id @default(uuid())
-  orderId               String   @map("order_id")
-  productId             String   @map("product_id")
-  productNameSnapshot   String   @map("product_name_snapshot")
-  unitPriceCentsSnapshot Int     @map("unit_price_cents_snapshot")
-  quantity              Int
-  lineTotalCents        Int      @map("line_total_cents")
-  createdAt             DateTime @default(now()) @map("created_at")
+  id                     String   @id @default(uuid())
+  orderId                String   @map("order_id")
+  productId              String   @map("product_id")
+  productNameSnapshot    String   @map("product_name_snapshot")
+  unitPriceCentsSnapshot Int      @map("unit_price_cents_snapshot")
+  quantity               Int
+  lineTotalCents         Int      @map("line_total_cents")
+  createdAt              DateTime @default(now()) @map("created_at")
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -831,12 +831,12 @@ model OrderAuditTrail {
 /// Stripe webhook event log — store every received event for idempotency.
 /// One row per Stripe event id. Duplicates are rejected on insert.
 model WebhookEvent {
-  id              String   @id @default(uuid())
-  stripeEventId   String   @unique @map("stripe_event_id")
-  eventType       String   @map("event_type")
-  processedAt     DateTime? @map("processed_at")
-  receivedAt      DateTime @default(now()) @map("received_at")
-  rawPayload      Json     @map("raw_payload")
+  id            String    @id @default(uuid())
+  stripeEventId String    @unique @map("stripe_event_id")
+  eventType     String    @map("event_type")
+  processedAt   DateTime? @map("processed_at")
+  receivedAt    DateTime  @default(now()) @map("received_at")
+  rawPayload    Json      @map("raw_payload")
 
   @@index([eventType, receivedAt])
   @@map("webhook_events")
@@ -888,12 +888,12 @@ model Slot {
   carts          Cart[]
   flaixDecisions FlaixDecision[]
 
-  @@index([eventId, status])
-  @@index([eventId, startAt])
   /// Un modèle ne produit qu’un seul créneau par journée. C’est cette
   /// contrainte qui autorise la génération à la volée sans verrou : deux
   /// clients qui ouvrent le lieu en même temps ne créent pas de doublon.
   @@unique([templateId, serviceDate])
+  @@index([eventId, status])
+  @@index([eventId, startAt])
   @@map("slots")
 }
 
@@ -1107,6 +1107,133 @@ enum OperatorScreenKind {
 ///                 { categoryIds?: string[], excludeCategoryIds?: string[],
 ///                   productIds?: string[], excludeProductIds?: string[],
 ///                   showRecap?: boolean }
+// ─── PHASE 25 — L'ARDOISE PARTAGÉE ────────────────────────────
+
+/// État d'une ardoise partagée.
+enum OrderSplitStatus {
+  /// En cours de règlement : les convives se servent dans la liste.
+  OPEN
+  /// Tout est réglé et la commande est partie au comptoir.
+  SENT
+  /// L'hôte a renoncé — toutes les autorisations ont été libérées.
+  CANCELLED
+
+  @@map("order_split_status")
+}
+
+/// État d'une unité réclamable.
+enum OrderSplitUnitStatus {
+  /// Personne ne l'a prise ; à défaut, elle reviendra à l'hôte.
+  FREE
+  /// Réservée le temps d'un paiement. Se libère seule si le convive abandonne.
+  RESERVED
+  /// Payée (autorisée) — verrouillée sur son payeur.
+  PAID
+
+  @@map("order_split_unit_status")
+}
+
+/// État du paiement d'une part.
+enum OrderSplitShareStatus {
+  /// Page de paiement ouverte, rien d'autorisé encore.
+  PENDING
+  /// Carte AUTORISÉE : la somme est bloquée, pas prélevée.
+  AUTHORIZED
+  /// Encaissée au départ de la commande.
+  CAPTURED
+  /// Autorisation libérée (abandon, retrait, annulation).
+  CANCELLED
+
+  @@map("order_split_share_status")
+}
+
+/// PHASE 25 — « l'ardoise » : une commande composée par un hôte, réglée à
+/// plusieurs, dont un seul a l'application.
+///
+/// Le problème résolu : un groupe arrive au stade, UNE personne veut installer
+/// l'app. Elle compose toute la tournée, partage un lien, et chacun ouvre une
+/// page web pour prendre SES articles et les payer par carte. Aucun autre
+/// téléchargement, aucun compte.
+///
+/// Chaque convive paie SA nourriture à la buvette : ce sont des ventes normales
+/// (destination charges Connect), jamais une collecte d'argent pour un tiers.
+///
+/// Les cartes sont AUTORISÉES puis encaissées au départ de la commande. Si la
+/// tournée capote, il n'y a rien à rembourser — une autorisation non capturée se
+/// libère d'elle-même.
+model OrderSplit {
+  id             String           @id @default(uuid())
+  /// Code court partagé au groupe (sans I/O/0/1).
+  code           String           @unique
+  organizationId String           @map("organization_id")
+  eventId        String           @map("event_id")
+  venueId        String           @map("venue_id")
+  supplierId     String           @map("supplier_id")
+  pickupPointId  String?          @map("pickup_point_id")
+  selectedSlotId String?          @map("selected_slot_id")
+  /// Le convive qui a composé la tournée. Seul lui peut envoyer ou annuler.
+  hostUserId     String           @map("host_user_id")
+  status         OrderSplitStatus @default(OPEN)
+  /// Commande créée au moment de l'encaissement.
+  orderId        String?          @map("order_id")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  expiresAt      DateTime         @map("expires_at")
+
+  units  OrderSplitUnit[]
+  shares OrderSplitShare[]
+
+  @@index([hostUserId, status])
+  @@map("order_splits")
+}
+
+/// Une UNITÉ réclamable : « une » bière, pas « trois bières ».
+///
+/// Le découpage à l'unité est ce qui permet à deux convives de prendre chacun
+/// une bière sur les trois commandées. Une ligne indivisible casserait le
+/// principe dès la première tournée.
+model OrderSplitUnit {
+  id             String               @id @default(uuid())
+  splitId        String               @map("split_id")
+  productId      String               @map("product_id")
+  /// Nom et prix FIGÉS à la composition : le tarif ne doit pas bouger sous le
+  /// convive entre le moment où il coche et celui où il paie.
+  productName    String               @map("product_name")
+  unitPriceCents Int                  @map("unit_price_cents")
+  status         OrderSplitUnitStatus @default(FREE)
+  shareId        String?              @map("share_id")
+  /// Fin de la réservation. Passé ce délai, l'unité redevient libre.
+  reservedUntil  DateTime?            @map("reserved_until")
+
+  split OrderSplit       @relation(fields: [splitId], references: [id], onDelete: Cascade)
+  share OrderSplitShare? @relation(fields: [shareId], references: [id], onDelete: SetNull)
+
+  @@index([splitId, status])
+  @@map("order_split_units")
+}
+
+/// Une PART : le paiement d'un convive, couvrant les unités qu'il a prises.
+model OrderSplitShare {
+  id                    String                @id @default(uuid())
+  splitId               String                @map("split_id")
+  /// Prénom facultatif, pour que l'hôte suive son ardoise. Aucun compte requis.
+  claimantName          String?               @map("claimant_name")
+  /// Vrai pour la part de l'hôte (« je paie le reste »).
+  isHost                Boolean               @default(false) @map("is_host")
+  amountCents           Int                   @map("amount_cents")
+  status                OrderSplitShareStatus @default(PENDING)
+  stripeSessionId       String?               @unique @map("stripe_session_id")
+  stripePaymentIntentId String?               @unique @map("stripe_payment_intent_id")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+
+  split OrderSplit       @relation(fields: [splitId], references: [id], onDelete: Cascade)
+  units OrderSplitUnit[]
+
+  @@index([splitId, status])
+  @@map("order_split_shares")
+}
+
 /// ⚠️ VESTIGE — plus aucun code ne lit ces deux tables.
 ///
 /// Le board opérateur est passé à trois colonnes FIXES (nouvelle → en
