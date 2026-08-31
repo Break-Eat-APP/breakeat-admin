@@ -21,15 +21,6 @@ interface CartState {
   /** Lieu de la commande — sert à interroger le programme de fidélité du club. */
   venueId: string | null;
 
-  /**
-   * Code d'invitation, quand ce panier rejoint la commande d'un ami.
-   *
-   * Porté par le panier et non par un écran : le client traverse le catalogue,
-   * le panier, le créneau et le paiement — le rattachement doit survivre à tout
-   * ce parcours, sinon sa commande arriverait détachée du groupe.
-   */
-  orderGroupCode: string | null;
-
   /** Local items (before submitting to backend) */
   items: CartItem[];
 
@@ -44,10 +35,8 @@ interface CartState {
     supplierId: string,
     buvettePlanUrl?: string | null,
     venueId?: string | null,
-    orderGroupCode?: string | null,
   ) => void;
   setBackendCartId: (id: string) => void;
-  setOrderGroupCode: (code: string | null) => void;
 
   addItem: (item: Omit<CartItem, 'quantity'>) => void;
   removeItem: (productId: string) => void;
@@ -71,7 +60,6 @@ const INITIAL_STATE = {
   supplierId: null,
   venueBuvettePlanUrl: null,
   venueId: null,
-  orderGroupCode: null,
   items: [] as CartItem[],
   selectedSlotId: null,
   selectedSlotLabel: null,
@@ -80,17 +68,15 @@ const INITIAL_STATE = {
 export const useCartStore = create<CartState>((set, get) => ({
   ...INITIAL_STATE,
 
-  initCart: (eventId, supplierId, buvettePlanUrl, venueId, orderGroupCode) =>
+  initCart: (eventId, supplierId, buvettePlanUrl, venueId) =>
     set({
       ...INITIAL_STATE,
       eventId,
       supplierId,
       venueBuvettePlanUrl: buvettePlanUrl ?? null,
       venueId: venueId ?? null,
-      orderGroupCode: orderGroupCode ?? null,
     }),
 
-  setOrderGroupCode: (code) => set({ orderGroupCode: code }),
 
   setBackendCartId: (id) => set({ backendCartId: id }),
 

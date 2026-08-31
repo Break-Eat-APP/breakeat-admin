@@ -32,7 +32,6 @@ export function CartScreen({ navigation }: Props) {
     supplierId,
     selectedSlotLabel,
     clearSlot,
-    orderGroupCode,
   } = useCartStore();
 
   const [invitationEnCours, setInvitationEnCours] = useState(false);
@@ -146,7 +145,7 @@ export function CartScreen({ navigation }: Props) {
                 ) : null}
 
                 {/* L'ardoise : un seul installe l'app, chacun regle sa part. */}
-                {ardoisePossible && !orderGroupCode ? (
+                {ardoisePossible ? (
                   <Pressable
                     style={({ pressed }) => [styles.inviteBtn, pressed && { opacity: 0.85 }]}
                     onPress={() => void handlePartagerAddition()}

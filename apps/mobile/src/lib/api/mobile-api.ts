@@ -213,10 +213,12 @@ export interface BackendCart {
   };
 }
 
-export interface DemoCheckoutResponse {
-  orderId: string;
-  publicOrderNumber: string;
-  totalCents: number;
+export interface CheckoutResponse {
+  cartId: string;
+  /** Page de paiement hebergee par Stripe — l'app l'ouvre, c'est tout. */
+  checkoutUrl: string;
+  amountCents: number;
+  currency: string;
   status: string;
 }
 
@@ -246,8 +248,6 @@ export interface Order {
   supplierName?: string | null;
   /** Plan menant à CETTE buvette (à défaut, plan général du lieu). */
   pickupPlanUrl?: string | null;
-  /** Non nul ⇒ commande passée à plusieurs (cf. invitation entre amis). */
-  orderGroupId?: string | null;
   items: Array<{
     productId: string;
     productNameSnapshot: string;
@@ -326,39 +326,8 @@ export const apiGetPublicSlots = (eventId: string, supplierId?: string | null) =
 
 // ─── Cart (authenticated) ──────────────────────────────────────
 
-export const apiCreateCart = (
-  eventId: string,
-  supplierId: string,
-  orderGroupCode?: string | null,
-) =>
-  req<BackendCart>('/carts', {
-    method: 'POST',
-    body: JSON.stringify({ eventId, supplierId, ...(orderGroupCode ? { orderGroupCode } : {}) }),
-  });
-
-// ─── Commander à plusieurs ────────────────────────────────────
-
-/** Invitation partagée à un ami : il commande à la même buvette, et paie sa part. */
-export interface OrderGroup {
-  code: string;
-  eventId: string;
-  supplierId: string;
-  supplierName: string | null;
-  /** Commandes déjà passées dans ce groupe (la sienne comprise, une fois payée). */
-  orderCount: number;
-  expiresAt: string;
-}
-
-/** Ouvre (ou retrouve) mon invitation pour cette buvette. Deux appuis, un seul code. */
-export const apiOpenOrderGroup = (eventId: string, supplierId: string) =>
-  req<OrderGroup>('/order-groups', {
-    method: 'POST',
-    body: JSON.stringify({ eventId, supplierId }),
-  });
-
-/** Où mène ce code ? Lisible sans être connecté. */
-export const apiJoinOrderGroup = (code: string) =>
-  req<OrderGroup>(`/public/order-groups/${encodeURIComponent(code)}`);
+export const apiCreateCart = (eventId: string, supplierId: string) =>
+  req<BackendCart>('/carts', { method: 'POST', body: JSON.stringify({ eventId, supplierId }) });
 
 export const apiAddCartItem = (cartId: string, productId: string, quantity: number) =>
   req<BackendCart>(`/carts/${cartId}/items`, {
@@ -369,8 +338,15 @@ export const apiAddCartItem = (cartId: string, productId: string, quantity: numb
 export const apiRemoveCartItem = (cartId: string, itemId: string) =>
   req<BackendCart>(`/carts/${cartId}/items/${itemId}`, { method: 'DELETE' });
 
-export const apiDemoCheckout = (cartId: string) =>
-  req<DemoCheckoutResponse>(`/carts/${cartId}/demo-checkout`, { method: 'POST' });
+/**
+ * Ouvre la page de paiement Stripe pour ce panier.
+ *
+ * La commande n'est PAS creee ici : elle nait du webhook Stripe, une fois le
+ * paiement encaisse. C'est la seule facon d'etre sur qu'aucune commande ne part
+ * en cuisine sans argent. Elle apparait donc dans « Mes commandes ».
+ */
+export const apiCheckout = (cartId: string) =>
+  req<CheckoutResponse>(`/carts/${cartId}/checkout`, { method: 'POST' });
 
 // ─── Fidélité (points) ─────────────────────────────────────────
 

@@ -18,7 +18,6 @@ import { AddCartItemDto } from './dto/add-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 import { RedeemPointsDto } from './dto/redeem-points.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { DemoGuard } from '../../common/guards/demo.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 
@@ -108,18 +107,5 @@ export class CartController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.cartService.setRedeemedPoints(id, user.sub, dto.points);
-  }
-
-  /**
-   * POST /api/v1/carts/:id/demo-checkout
-   *
-   * Creates a real Order with PAID status without going through Stripe.
-   * Only available when DEMO_MODE=true. Used by the mobile demo flow.
-   */
-  @Post(':id/demo-checkout')
-  @HttpCode(HttpStatus.CREATED)
-  @UseGuards(DemoGuard)
-  demoCheckout(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
-    return this.cartService.demoCheckout(id, user.sub);
   }
 }

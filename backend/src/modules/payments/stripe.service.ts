@@ -156,6 +156,11 @@ export class StripeService implements OnModuleInit {
     cancelUrl: string;
     idempotencyKey: string;
     metadata?: Record<string, string>;
+    /**
+     * `manual` pour une part d'ardoise (on encaisse au départ de la commande),
+     * `automatic` pour une commande seule (il n'y a rien à attendre).
+     */
+    captureMethod?: 'automatic' | 'manual';
   }): Promise<Stripe.Checkout.Session> {
     const applicationFeeAmount = Math.floor((params.amountCents * this.platformFeeBps) / 10_000);
 
@@ -174,7 +179,7 @@ export class StripeService implements OnModuleInit {
           },
         ],
         payment_intent_data: {
-          capture_method: 'manual',
+          capture_method: params.captureMethod ?? 'manual',
           application_fee_amount: applicationFeeAmount,
           transfer_data: { destination: params.destinationAccountId },
           metadata: params.metadata,

@@ -5,6 +5,48 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.55.0] — 2026-08-29 — Le paiement devient réel, la démo disparaît
+
+### La caisse encaisse vraiment
+Le passage en caisse appelait `demo-checkout` : une commande était créée **sans
+qu'un centime ne bouge**. Il ouvre maintenant une **page de paiement hébergée
+par Stripe** — Apple Pay compris — et la commande naît du webhook, une fois
+l'argent encaissé. C'est la seule façon d'être sûr qu'aucune commande ne parte
+en cuisine sans paiement.
+
+Page hébergée plutôt que champs de carte dans l'app : aucun numéro ne traverse
+notre code, il n'y a pas de bibliothèque native à embarquer, et la même page
+sert déjà l'ardoise.
+
+⚠️ **Conséquence sur les versions déjà installées.** L'app publiée et la build
+TestFlight actuelle ne connaissent que `demo-checkout`, qui n'existe plus. Elles
+ne pourront plus commander tant que la build 8 n'est pas livrée. C'était de
+toute façon inévitable : ces versions ne savent pas payer.
+
+### Ce qui a été supprimé
+- **`demo-checkout`** (route, service, tests) et le drapeau `DEMO_MODE` ;
+- **le simulateur** (`/internal/simulator`), qui n'existait que pour la démo ;
+- **`DemoGuard`**, sans protégé ;
+- **« Inviter un ami à commander »** (module, tables, écrans) : il supposait que
+  tous les convives installent l'app — ce que personne ne fait au comptoir.
+  L'ardoise résout le vrai cas. Les tables n'ayant jamais été déployées, elles
+  sont supprimées plutôt que laissées en vestige ;
+- **le chemin `PaymentIntent` + Stripe Elements**, jamais appelé : une seule
+  façon de payer désormais, la même pour tous.
+
+`checkout()` garde son nom et sa route ; seul son retour change (`checkoutUrl`
+au lieu d'un `clientSecret`). Un client qui revient en arrière retrouve **la
+même page** — la clé d'idempotence `cart_<id>` s'en charge côté Stripe.
+
+- `~ backend/src/modules/cart/` — page hébergée, démo retirée
+- `~ backend/src/modules/payments/stripe.service.ts` — capture automatique ou différée
+- `- backend/src/modules/simulator/`, `- backend/src/common/guards/demo.guard.ts`
+- `- backend/src/modules/order-groups/`, `+ migration 20260829b_drop_order_groups`
+- `~ apps/mobile/src/screens/checkout.screen.tsx` — ouvre la page Stripe
+- `~ apps/operator/` — plus de pastille « à remettre ensemble »
+
+---
+
 ## [0.54.0] — 2026-08-29 — L'ardoise : composer à plusieurs, chacun règle sa part
 
 ### Le cas réel, enfin

@@ -279,15 +279,6 @@ function OrderCard({
         <Text style={styles.price}>{formatPrice(order.totalCents)}</Text>
       </View>
 
-      {/* Commande passée à plusieurs : on le rappelle, parce que le retrait se
-          fait ensemble et que le client peut l'avoir oublié à la mi-temps. */}
-      {order.orderGroupId ? (
-        <View style={styles.groupRow}>
-          <Ionicons name="people" size={13} color={THEME.orange} />
-          <Text style={styles.groupText}>Commande à plusieurs</Text>
-        </View>
-      ) : null}
-
       {/* La buvette de retrait — un lieu peut en avoir plusieurs, et le client
           doit savoir DEVANT LAQUELLE se présenter. */}
       {order.supplierName ? (
@@ -424,8 +415,6 @@ const styles = StyleSheet.create({
   timeSoft: { color: THEME.inkSoft, fontSize: 12, fontFamily: HEAD.medium },
   dateLine: { color: THEME.grey, fontSize: 11.5, fontFamily: HEAD.medium },
 
-  groupRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
-  groupText: { color: THEME.orange, fontSize: 12.5, fontFamily: HEAD.semibold },
   supplierRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, marginBottom: 8 },
   supplierText: { color: THEME.inkSoft, fontSize: 13, fontFamily: HEAD.semibold },
   planBtn: {

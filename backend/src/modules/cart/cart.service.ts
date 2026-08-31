@@ -8,18 +8,15 @@ import {
 import {
   CartStatus,
   EventStatus,
-  OrderActorType,
-  OrderStatus,
-  PaymentStatus,
   ProductStatus,
   StripeAccountStatus,
 } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
 import { GroupsService } from '../groups/groups.service';
 import { LoyaltyService, MIN_PAYABLE_CENTS } from '../loyalty/loyalty.service';
 import { SlotsService } from '../slots/slots.service';
-import { OrderGroupsService } from '../order-groups/order-groups.service';
 import type { CreateCartDto } from './dto/create-cart.dto';
 import type { UpdateCartDto } from './dto/update-cart.dto';
 import type { AddCartItemDto } from './dto/add-cart-item.dto';
@@ -78,8 +75,11 @@ export interface CartWithTotals {
 /** Response payload of POST /carts/:id/checkout */
 export interface CheckoutResponse {
   cartId: string;
-  paymentIntentId: string;
-  clientSecret: string;
+  /**
+   * Page de paiement hébergée par Stripe. L'app l'ouvre, le client paie, le
+   * webhook crée la commande. Aucun numéro de carte ne passe par notre code.
+   */
+  checkoutUrl: string;
   amountCents: number;
   currency: string;
   status: CartStatus;
@@ -95,7 +95,7 @@ export class CartService {
     private readonly groups: GroupsService,
     private readonly loyaltyService: LoyaltyService,
     private readonly slotsService: SlotsService,
-    private readonly orderGroups: OrderGroupsService,
+    private readonly config: ConfigService,
   ) {}
 
   // ─── Create / Read ───────────────────────────────────────────
@@ -165,24 +165,12 @@ export class CartService {
     // repousse son échéance puisqu'il s'en sert à l'instant.
     //
     // Le point de retrait est actualisé s'il en a choisi un autre entre-temps.
-    // PHASE 24 — rattachement a une invitation entre amis, s'il y en a une.
-    const orderGroupId = dto.orderGroupCode
-      ? await this.orderGroups.resoudrePourPanier({
-          code: dto.orderGroupCode,
-          eventId: dto.eventId,
-          supplierId: dto.supplierId,
-        })
-      : null;
-
     if (existingOpen) {
       await this.prisma.cart.update({
         where: { id: existingOpen.id },
         data: {
           expiresAt: new Date(Date.now() + CART_TTL_MS),
           ...(dto.pickupPointId !== undefined && { pickupPointId: dto.pickupPointId ?? null }),
-          // On ne DETACHE jamais un panier deja rattache : revenir sur l'ecran
-          // sans le code ne doit pas sortir le client du groupe a son insu.
-          ...(orderGroupId ? { orderGroupId } : {}),
         },
       });
       this.logger.log(`Cart reused: ${existingOpen.id} user=${userId} event=${dto.eventId}`);
@@ -197,7 +185,6 @@ export class CartService {
         eventId: dto.eventId,
         supplierId: dto.supplierId,
         pickupPointId: dto.pickupPointId ?? null,
-        orderGroupId,
         expiresAt,
       },
     });
@@ -352,20 +339,11 @@ export class CartService {
     // revoked between cart creation and checkout).
     await this.assertEventStillAccessible(cart.eventId, userId);
 
-    // Allow re-entry: if cart is already CHECKOUT_PENDING and has a PaymentIntent,
-    // return it. Otherwise, only OPEN carts can checkout.
-    if (cart.status === CartStatus.CHECKOUT_PENDING && cart.paymentIntentId) {
-      const existing = await this.stripe.retrievePaymentIntent(cart.paymentIntentId);
-      return {
-        cartId: cart.id,
-        paymentIntentId: existing.id,
-        clientSecret: existing.client_secret ?? '',
-        amountCents: existing.amount,
-        currency: existing.currency,
-        status: cart.status,
-      };
-    }
-    if (cart.status !== CartStatus.OPEN) {
+    // Re-entrée : un client qui revient sur l'écran de paiement doit retrouver
+    // LA MÊME page, pas une seconde. La clé d'idempotence `cart_<id>` s'en
+    // charge côté Stripe — le même appel renvoie la même session, donc la même
+    // adresse. On laisse donc repasser un panier déjà engagé.
+    if (cart.status !== CartStatus.OPEN && cart.status !== CartStatus.CHECKOUT_PENDING) {
       throw new BadRequestException(`Cart is ${cart.status} and cannot be checked out`);
     }
 
@@ -417,10 +395,25 @@ export class CartService {
     // Performed BEFORE any DB mutation. If it throws, the cart stays OPEN
     // with live prices and no snapshot — the next /checkout recomputes the
     // total from scratch instead of reusing a stale frozen value.
-    const intent = await this.stripe.createPaymentIntent({
+    //
+    // Page HÉBERGÉE par Stripe plutôt que des champs de carte dans l'app :
+    // aucun numéro de carte ne traverse notre code, il n'y a pas de bibliothèque
+    // native à embarquer, et la même page sert l'ardoise. Apple Pay reste
+    // disponible.
+    //
+    // `metadata.cartId` est ce qui relie le paiement à la commande : le webhook
+    // `payment_intent.succeeded` le lit pour créer l'Order. Le retirer casserait
+    // la création de commande sans autre signe qu'un paiement encaissé et aucune
+    // commande en cuisine.
+    const webUrl = this.config.get<string>('app.split.webUrl') ?? '';
+    const session = await this.stripe.createHostedCheckout({
       amountCents: view.totalCents,
       currency: view.currency,
       destinationAccountId: supplier.stripeAccountId,
+      productName: `Commande ${supplier.name}`,
+      captureMethod: 'automatic',
+      successUrl: `${webUrl}/commandes?paye=1`,
+      cancelUrl: `${webUrl}/panier?annule=1`,
       idempotencyKey: `cart_${cart.id}`,
       metadata: {
         cartId: cart.id,
@@ -430,6 +423,15 @@ export class CartService {
         pickupPointId: cart.pickupPointId ?? '',
       },
     });
+    const intent = {
+      id:
+        typeof session.payment_intent === 'string'
+          ? session.payment_intent
+          : (session.payment_intent?.id ?? ''),
+      amount: view.totalCents,
+      currency: view.currency,
+      url: session.url ?? '',
+    };
 
     // ─── Freeze prices + transition, atomically ────────────────
     // Snapshot write and status flip happen in ONE transaction. After this
@@ -455,202 +457,18 @@ export class CartService {
       }),
     ]);
 
-    this.logger.log(
-      `Checkout: cart=${cart.id} → PaymentIntent ${intent.id} amount=${intent.amount}¢`,
-    );
+    this.logger.log(`Checkout: cart=${cart.id} → page Stripe, ${intent.amount}¢`);
 
     return {
       cartId: cart.id,
-      paymentIntentId: intent.id,
-      clientSecret: intent.client_secret ?? '',
+      /** Adresse de la page de paiement Stripe — l'app l'ouvre, c'est tout. */
+      checkoutUrl: intent.url,
       amountCents: intent.amount,
       currency: intent.currency,
       status: CartStatus.CHECKOUT_PENDING,
     };
   }
 
-  // ─── Demo checkout (DEMO_MODE only — bypasses Stripe) ────────
-
-  /**
-   * POST /api/v1/carts/:id/demo-checkout
-   *
-   * Creates a PAID order directly from the cart without going through Stripe.
-   * Only callable when DEMO_MODE=true (enforced by DemoGuard in the controller).
-   *
-   * Simplified vs real checkout:
-   * - No pickupPointId required (uses first pickup point of the event, or null)
-   * - No stock validation (demo products may not have stock entries)
-   * - No Stripe payment intent
-   * - Cart + items must still be valid
-   */
-  async demoCheckout(
-    cartId: string,
-    userId: string,
-  ): Promise<{ orderId: string; publicOrderNumber: string; totalCents: number; status: OrderStatus }> {
-    const cart = await this.requireOwnership(cartId, userId);
-
-    // Phase 14.4 — re-verify PRIVATE-event access before converting to an order.
-    await this.assertEventStillAccessible(cart.eventId, userId);
-
-    if (cart.status !== CartStatus.OPEN) {
-      throw new BadRequestException(`Cart is ${cart.status} — only OPEN carts can demo-checkout`);
-    }
-
-    const view = await this.computeView(cartId);
-    if (view.items.length === 0) {
-      throw new BadRequestException('Cart is empty');
-    }
-
-    // Load event to get organizationId and venueId
-    const event = await this.prisma.event.findUnique({
-      where: { id: cart.eventId },
-      select: { organizationId: true, venueId: true },
-    });
-    if (!event) throw new NotFoundException('Event not found');
-
-    // Resolve a pickup point — Order.pickupPointId is non-nullable in the schema.
-    // Use the cart's pickupPointId first, then fall back to the first pickup point of the event.
-    let pickupPointId = cart.pickupPointId;
-    if (!pickupPointId) {
-      const pp = await this.prisma.pickupPoint.findFirst({
-        where: { eventId: cart.eventId },
-        select: { id: true },
-      });
-      if (!pp) {
-        throw new NotFoundException(
-          'No pickup point found for this event. Create one in the admin panel first.',
-        );
-      }
-      pickupPointId = pp.id;
-    }
-
-    // Snapshot prices and compute total
-    const subtotalCents = view.items.reduce((sum, it) => sum + it.lineTotalCents, 0);
-    // PHASE 20 — remise fidélité, figée ici comme les prix : le montant payé et
-    // les points débités ne doivent plus bouger après la création de la commande.
-    const { pointsUsed, discountCents } = view.loyalty;
-    const totalCents = subtotalCents - discountCents;
-    const itemSnapshots = view.items.map((it) => ({
-      productId: it.productId,
-      productNameSnapshot: it.productName,
-      unitPriceCentsSnapshot: it.unitPriceCents,
-      quantity: it.quantity,
-      lineTotalCents: it.lineTotalCents,
-    }));
-
-    const publicOrderNumber = `DEMO-${Date.now().toString(36).toUpperCase()}`;
-
-    const order = await this.prisma.$transaction(async (tx) => {
-      // 1. Freeze prices on cart items
-      for (const it of view.items) {
-        await tx.cartItem.update({
-          where: { cartId_productId: { cartId, productId: it.productId } },
-          data: { priceSnapshotCents: it.unitPriceCents },
-        });
-      }
-
-      // 2. Mark cart converted
-      await tx.cart.update({
-        where: { id: cartId },
-        data: { status: CartStatus.CONVERTED },
-      });
-
-      // 3. Create Order in PAID status
-      const createdOrder = await tx.order.create({
-        data: {
-          publicOrderNumber,
-          userId: cart.userId,
-          organizationId: event.organizationId,
-          eventId: cart.eventId,
-          venueId: event.venueId,
-          supplierId: cart.supplierId,
-          pickupPointId,
-          // PHASE 24 — le rattachement au groupe d'amis, ici AUSSI.
-          //
-          // Il y a deux chemins de creation de commande : celui-ci (demo) et
-          // `createFromPaymentIntent`. L'app passe aujourd'hui par le demo :
-          // ne l'avoir cable que sur l'autre revenait a livrer une fonction
-          // « commander a plusieurs » qui ne groupait rien en TestFlight.
-          orderGroupId: cart.orderGroupId,
-          status: OrderStatus.PAID,
-          paymentStatus: PaymentStatus.SUCCEEDED,
-          subtotalCents,
-          discountCents,
-          totalCents,
-          pointsRedeemed: pointsUsed,
-          currency: 'eur',
-          items: { create: itemSnapshots },
-        },
-      });
-
-      // 3ter. PHASE 23 — rattacher la commande au CRÉNEAU choisi.
-      //
-      // Le panier portait `selectedSlotId` depuis le début, mais la commande se
-      // créait sans lui : le créneau ne se remplissait jamais, sa capacité ne
-      // servait qu'à afficher un nombre, et il ne passait jamais « complet ».
-      //
-      // `assignOrderToSlot` incrémente de façon sûre en concurrence (WHERE
-      // currentLoad < capacity) et bascule en FULL à la limite. Dans la MÊME
-      // transaction que la commande : jamais de place consommée sans commande,
-      // ni de commande sur un créneau plein.
-      //
-      // Un créneau devenu complet ou fermé entre le choix et le paiement fait
-      // échouer la transaction — c'est le comportement voulu : mieux vaut un
-      // refus clair qu'une commande que personne ne pourra servir.
-      if (cart.selectedSlotId) {
-        await this.slotsService.assignOrderToSlot(
-          createdOrder.id,
-          cart.selectedSlotId,
-          tx,
-        );
-      }
-
-      // 3bis. PHASE 20 — débit des points DANS la même transaction que la
-      // commande : jamais de points perdus sans commande, ni de remise accordée
-      // sans débit. Revérifie le solde (le panier a pu être préparé bien avant).
-      await this.loyaltyService.redeemForOrderTx(tx, {
-        userId: cart.userId,
-        organizationId: event.organizationId,
-        orderId: createdOrder.id,
-        points: pointsUsed,
-      });
-
-      // 4. Fake payment row (no Stripe, demo only)
-      await tx.payment.create({
-        data: {
-          orderId: createdOrder.id,
-          stripePaymentIntentId: `demo_${createdOrder.id}`,
-          status: PaymentStatus.SUCCEEDED,
-          amountCents: totalCents,
-          currency: 'eur',
-          rawStripeEvent: { demo: true },
-        },
-      });
-
-      // 5. Audit trail
-      await tx.orderAuditTrail.create({
-        data: {
-          orderId: createdOrder.id,
-          actorType: OrderActorType.SYSTEM,
-          previousState: null,
-          nextState: OrderStatus.PAID,
-          reason: 'Demo checkout — payment bypassed',
-          metadata: { demo: true },
-        },
-      });
-
-      return createdOrder;
-    });
-
-    this.logger.log(`Demo checkout: cart=${cartId} → order=${order.id} (${publicOrderNumber})`);
-    return {
-      orderId: order.id,
-      publicOrderNumber: order.publicOrderNumber,
-      // Montant réellement payé (remise fidélité déduite), pas le sous-total.
-      totalCents,
-      status: OrderStatus.PAID,
-    };
-  }
 
   /**
    * PHASE 20 — le client choisit combien de points utiliser sur son panier.

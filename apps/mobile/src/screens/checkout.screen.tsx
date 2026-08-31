@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { THEME } from '@lib/theme';
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,7 +15,7 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 import {
   apiCreateCart,
   apiAddCartItem,
-  apiDemoCheckout,
+  apiCheckout,
   apiGetLoyaltyStatus,
   apiSetCartPoints,
   formatPrice,
@@ -44,9 +45,7 @@ export function CheckoutScreen({ navigation }: Props) {
     supplierId,
     selectedSlotLabel,
     totalCents,
-    venueBuvettePlanUrl,
     venueId,
-    orderGroupCode,
     setBackendCartId,
     resetCart,
   } = useCartStore();
@@ -118,9 +117,7 @@ export function CheckoutScreen({ navigation }: Props) {
     try {
       // 1. Create backend cart
       setStep('Création du panier…');
-      // Le code d'invitation voyage jusqu'ici : c'est a la creation du panier
-      // que le rattachement se fait, et le panier le transmet a la commande.
-      const cart = await apiCreateCart(eventId, supplierId, orderGroupCode);
+      const cart = await apiCreateCart(eventId, supplierId);
       setBackendCartId(cart.id);
 
       // 2. Add items
@@ -136,19 +133,19 @@ export function CheckoutScreen({ navigation }: Props) {
         await apiSetCartPoints(cart.id, pointsToUse);
       }
 
-      // 3. Demo checkout (bypasses Stripe)
-      setStep('Validation de la commande…');
-      const result = await apiDemoCheckout(cart.id);
+      // 3. Paiement REEL, sur une page hebergee par Stripe.
+      setStep('Ouverture du paiement…');
+      const { checkoutUrl } = await apiCheckout(cart.id);
 
-      // 4. Reset cart + navigate to confirmation (on garde le plan avant reset)
-      const planUrl = venueBuvettePlanUrl;
+      // 4. On quitte l'app le temps du reglement.
+      //
+      // La commande n'est pas creee ici mais par le webhook Stripe, une fois
+      // l'argent encaisse : c'est la seule facon d'etre sur qu'aucune commande
+      // ne parte en cuisine sans paiement. Elle apparait donc dans « Mes
+      // commandes », qui se recharge au retour au premier plan.
       resetCart();
-      navigation.replace('OrderConfirmation', {
-        orderId: result.orderId,
-        publicOrderNumber: result.publicOrderNumber,
-        totalCents: result.totalCents,
-        buvettePlanUrl: planUrl,
-      });
+      navigation.navigate('Commandes');
+      await Linking.openURL(checkoutUrl);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erreur inconnue';
 
@@ -271,11 +268,12 @@ export function CheckoutScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {/* Demo badge */}
+        {/* Le paiement se fait sur une page Stripe : on prévient avant de
+            sortir de l'app, sinon le client croit avoir perdu sa commande. */}
         <View style={styles.demoBadge}>
-          <Text style={styles.demoIcon}>🧪</Text>
+          <Text style={styles.demoIcon}>🔒</Text>
           <Text style={styles.demoText}>
-            Mode démo — aucun paiement réel ne sera effectué
+            Paiement sécurisé par Stripe. La page s’ouvre dans ton navigateur, puis tu reviens ici.
           </Text>
         </View>
 

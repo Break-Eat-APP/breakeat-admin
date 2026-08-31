@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import {
   BadRequestException,
   ForbiddenException,
@@ -12,7 +13,6 @@ import {
 } from '@prisma/client';
 import { CartService } from './cart.service';
 import { SlotsService } from '../slots/slots.service';
-import { OrderGroupsService } from '../order-groups/order-groups.service';
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
 import { GroupsService } from '../groups/groups.service';
@@ -101,11 +101,6 @@ describe('CartService', () => {
           useValue: { assignOrderToSlot: jest.fn() },
         },
         {
-          // Phase 24 — sans code d'invitation, le service n'est pas appele.
-          provide: OrderGroupsService,
-          useValue: { resoudrePourPanier: jest.fn().mockResolvedValue(null) },
-        },
-        {
           provide: PrismaService,
           useValue: {
             event: { findUnique: jest.fn() },
@@ -133,9 +128,14 @@ describe('CartService', () => {
         {
           provide: StripeService,
           useValue: {
-            createPaymentIntent: jest.fn(),
+            createHostedCheckout: jest.fn(),
             retrievePaymentIntent: jest.fn(),
           },
+        },
+        {
+          // L'adresse de retour apres paiement — une valeur suffit ici.
+          provide: ConfigService,
+          useValue: { get: () => 'https://app.breakeat.test' },
         },
         {
           provide: GroupsService,
@@ -293,24 +293,28 @@ describe('CartService', () => {
       (prisma.stock.findFirst as jest.Mock).mockResolvedValue(mockStock(50));
     }
 
-    it('creates a PaymentIntent and transitions cart to CHECKOUT_PENDING', async () => {
+    it('ouvre une page Stripe et engage le panier', async () => {
       setupValidCheckout();
-      const stripe = (service as unknown as { stripe: { createPaymentIntent: jest.Mock } }).stripe;
-      stripe.createPaymentIntent.mockResolvedValue({
-        id: 'pi_test',
-        client_secret: 'pi_test_secret_123',
-        amount: 1600,
-        currency: 'eur',
+      const stripe = (service as unknown as { stripe: { createHostedCheckout: jest.Mock } }).stripe;
+      stripe.createHostedCheckout.mockResolvedValue({
+        id: 'cs_test',
+        url: 'https://stripe/pay/cs_test',
+        payment_intent: 'pi_test',
       });
 
       const result = await service.checkout(CART_ID, USER_ID);
 
-      expect(result.paymentIntentId).toBe('pi_test');
+      expect(result.checkoutUrl).toBe('https://stripe/pay/cs_test');
       expect(result.amountCents).toBe(1600);
-      expect(stripe.createPaymentIntent).toHaveBeenCalledWith(
+      // `cartId` dans les métadonnées est ce qui relie le paiement à la
+      // commande : le webhook le lit pour créer l'Order. Sans lui, on
+      // encaisserait sans que rien n'arrive en cuisine.
+      expect(stripe.createHostedCheckout).toHaveBeenCalledWith(
         expect.objectContaining({
           idempotencyKey: `cart_${CART_ID}`,
           destinationAccountId: 'acct_test',
+          captureMethod: 'automatic',
+          metadata: expect.objectContaining({ cartId: CART_ID }),
         }),
       );
     });
@@ -334,12 +338,11 @@ describe('CartService', () => {
 
     it('freezes prices + transitions ONLY after Stripe succeeds, in one transaction (P1 — snapshot timing)', async () => {
       setupValidCheckout();
-      const stripe = (service as unknown as { stripe: { createPaymentIntent: jest.Mock } }).stripe;
-      stripe.createPaymentIntent.mockResolvedValue({
-        id: 'pi_test',
-        client_secret: 'sec',
-        amount: 1600,
-        currency: 'eur',
+      const stripe = (service as unknown as { stripe: { createHostedCheckout: jest.Mock } }).stripe;
+      stripe.createHostedCheckout.mockResolvedValue({
+        id: 'cs_test',
+        url: 'https://stripe/pay/cs_test',
+        payment_intent: 'pi_test',
       });
       const txSpy = (prisma as unknown as { $transaction: jest.Mock }).$transaction;
       txSpy.mockResolvedValueOnce([]);
@@ -347,7 +350,7 @@ describe('CartService', () => {
       await service.checkout(CART_ID, USER_ID);
 
       // Stripe MUST be called before the freeze/transition transaction.
-      const stripeOrder = stripe.createPaymentIntent.mock.invocationCallOrder[0];
+      const stripeOrder = stripe.createHostedCheckout.mock.invocationCallOrder[0];
       const txOrder = txSpy.mock.invocationCallOrder[0];
       expect(stripeOrder).toBeLessThan(txOrder);
 
@@ -370,8 +373,8 @@ describe('CartService', () => {
 
     it('does NOT freeze prices or transition when Stripe fails — cart stays OPEN with live prices (P1 — snapshot timing)', async () => {
       setupValidCheckout();
-      const stripe = (service as unknown as { stripe: { createPaymentIntent: jest.Mock } }).stripe;
-      stripe.createPaymentIntent.mockRejectedValue(new Error('stripe unavailable'));
+      const stripe = (service as unknown as { stripe: { createHostedCheckout: jest.Mock } }).stripe;
+      stripe.createHostedCheckout.mockRejectedValue(new Error('stripe unavailable'));
       const txSpy = (prisma as unknown as { $transaction: jest.Mock }).$transaction;
 
       await expect(service.checkout(CART_ID, USER_ID)).rejects.toThrow('stripe unavailable');
@@ -392,23 +395,27 @@ describe('CartService', () => {
       await expect(service.checkout(CART_ID, USER_ID)).rejects.toThrow(ForbiddenException);
     });
 
-    it('returns existing PaymentIntent when cart is already CHECKOUT_PENDING (idempotency)', async () => {
-      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(
-        mockCart({ status: CartStatus.CHECKOUT_PENDING, paymentIntentId: 'pi_existing' }),
-      );
-      const stripe = (service as unknown as { stripe: { retrievePaymentIntent: jest.Mock; createPaymentIntent: jest.Mock } }).stripe;
-      stripe.retrievePaymentIntent.mockResolvedValue({
-        id: 'pi_existing',
-        client_secret: 'sec_existing',
-        amount: 1600,
-        currency: 'eur',
+    it('rend LA MÊME page à un client qui revient sur le paiement', async () => {
+      setupValidCheckout();
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue({
+        ...mockCart({ status: CartStatus.CHECKOUT_PENDING }),
+        items: [{ id: ITEM_ID, productId: PRODUCT_ID, quantity: 2, product: mockProduct() }],
+      });
+      const stripe = (service as unknown as { stripe: { createHostedCheckout: jest.Mock } }).stripe;
+      stripe.createHostedCheckout.mockResolvedValue({
+        id: 'cs_test',
+        url: 'https://stripe/pay/cs_test',
+        payment_intent: 'pi_test',
       });
 
       const result = await service.checkout(CART_ID, USER_ID);
 
-      expect(result.paymentIntentId).toBe('pi_existing');
-      // Must NOT create a new intent
-      expect(stripe.createPaymentIntent).not.toHaveBeenCalled();
+      // Même clé d'idempotence ⇒ Stripe renvoie la session déjà créée. Un
+      // client qui revient en arrière ne doit pas ouvrir un second paiement.
+      expect(result.checkoutUrl).toBe('https://stripe/pay/cs_test');
+      expect(stripe.createHostedCheckout).toHaveBeenCalledWith(
+        expect.objectContaining({ idempotencyKey: `cart_${CART_ID}` }),
+      );
     });
   });
 
@@ -419,79 +426,6 @@ describe('CartService', () => {
 });
 
 // --- Stock : suivi explicite, pas obligatoire ------------------
-
-describe('demoCheckout — le rattachement au groupe suit le panier', () => {
-  // Il existe DEUX chemins de creation de commande : `createFromPaymentIntent`
-  // (paiement reel) et `demoCheckout`. L'app passe aujourd'hui par le second :
-  // cabler le groupe sur le premier seulement livrait une fonction « commander
-  // a plusieurs » qui ne groupait rien la ou elle sert.
-  let service: CartService;
-  let capture: { data?: Record<string, unknown> };
-
-  async function demarrer(orderGroupId: string | null) {
-    capture = {};
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        CartService,
-        loyaltyDisabledProvider,
-        { provide: SlotsService, useValue: { assignOrderToSlot: jest.fn() } },
-        {
-          provide: OrderGroupsService,
-          useValue: { resoudrePourPanier: jest.fn().mockResolvedValue(null) },
-        },
-        { provide: StripeService, useValue: { createPaymentIntent: jest.fn() } },
-        { provide: GroupsService, useValue: { canAccessEvent: jest.fn().mockResolvedValue(true) } },
-        {
-          provide: PrismaService,
-          useValue: {
-            cart: {
-              findUnique: jest.fn().mockResolvedValue({
-                ...mockCart({ orderGroupId }),
-                items: [{ id: ITEM_ID, productId: PRODUCT_ID, quantity: 1, product: mockProduct() }],
-                event: mockEvent(),
-              }),
-            },
-            event: {
-              findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-1', venueId: VENUE_ID }),
-            },
-            pickupPoint: { findFirst: jest.fn().mockResolvedValue({ id: PICKUP_POINT_ID }) },
-            product: { findUnique: jest.fn().mockResolvedValue(mockProduct()) },
-            stock: { findFirst: jest.fn().mockResolvedValue(mockStock(50)) },
-            $transaction: jest.fn().mockImplementation(async (cb: (tx: unknown) => unknown) =>
-              cb({
-                cartItem: { update: jest.fn() },
-                cart: { update: jest.fn() },
-                order: {
-                  create: jest.fn().mockImplementation((args: { data: Record<string, unknown> }) => {
-                    capture.data = args.data;
-                    return Promise.resolve({ id: 'order-1', publicOrderNumber: 'DEMO-1', ...args.data });
-                  }),
-                },
-                payment: { create: jest.fn() },
-                orderAuditTrail: { create: jest.fn() },
-                slot: { update: jest.fn(), findUnique: jest.fn() },
-              }),
-            ),
-          },
-        },
-      ],
-    }).compile();
-
-    service = module.get(CartService);
-    await service.demoCheckout(CART_ID, USER_ID);
-  }
-
-  it('recopie le groupe sur la commande', async () => {
-    await demarrer('grp-1');
-    expect(capture.data?.orderGroupId).toBe('grp-1');
-  });
-
-  it('laisse le champ vide pour une commande passee seul', async () => {
-    await demarrer(null);
-    expect(capture.data?.orderGroupId).toBeNull();
-  });
-
-});
 
 describe('CartService — produit sans ligne de stock', () => {
   it('resolveStock renvoie null quand aucune ligne n existe', async () => {

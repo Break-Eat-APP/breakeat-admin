@@ -26,7 +26,6 @@ export default registerAs('app', () => ({
    * Demo Mode — when true, /admin/simulator and /demo endpoints are exposed.
    * Per PRODUCT_VALIDATION.md, demo mode must NEVER be enabled in production.
    */
-  demoMode: process.env.DEMO_MODE === 'true',
 
   /**
    * Staging-only operations (seeders, simulators) require this token.

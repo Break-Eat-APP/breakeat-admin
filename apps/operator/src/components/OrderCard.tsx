@@ -28,8 +28,6 @@ export interface OrderCardProps {
    * attend au point de retrait : la carte pulse et affiche depuis combien de temps.
    */
   customerArrivedAt?: string | null;
-  /** Nombre de commandes du meme groupe d'amis (1 ou absent = commande seule). */
-  groupSize?: number;
   isLoading?: boolean;
   onPrepare?: () => void;
   onReady?: () => void;
@@ -55,7 +53,6 @@ export function OrderCard({
   items,
   createdAt,
   customerArrivedAt = null,
-  groupSize = 1,
   isLoading = false,
   onPrepare,
   onReady,
@@ -88,28 +85,6 @@ export function OrderCard({
         <span style={{ fontWeight: 800, fontSize: 15 }}>#{orderNumber}</span>
         <StatusBadge status={status} size="sm" />
       </div>
-
-      {/* PHASE 24 — a remettre AVEC les autres commandes du groupe. Sans ce
-          reperage, un convive repart pendant que ses amis attendent encore. */}
-      {groupSize > 1 && (
-        <div
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 5,
-            background: BRAND.orangeTint,
-            color: BRAND.orange,
-            border: `1px solid ${BRAND.orangeSoft}`,
-            borderRadius: 999,
-            padding: '2px 9px',
-            fontSize: 11,
-            fontWeight: 700,
-            marginBottom: 8,
-          }}
-        >
-          👥 À remettre ensemble · {groupSize} commandes
-        </div>
-      )}
 
       {/* Elapsed time */}
       <div style={{ fontSize: 11, color: BRAND.grey, marginBottom: arrived ? 6 : 10 }}>

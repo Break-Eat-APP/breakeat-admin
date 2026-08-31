@@ -15,11 +15,9 @@ import { ProductsModule } from './modules/products/products.module';
 import { StockModule } from './modules/stock/stock.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { CartModule } from './modules/cart/cart.module';
-import { OrderGroupsModule } from './modules/order-groups/order-groups.module';
 import { OrderSplitsModule } from './modules/order-splits/order-splits.module';
 import { OrdersModule } from './modules/orders/orders.module';
 import { RealtimeModule } from './modules/realtime/realtime.module';
-import { SimulatorModule } from './modules/simulator/simulator.module';
 import { WebhooksModule } from './modules/webhooks/webhooks.module';
 import { SlotsModule } from './modules/slots/slots.module';
 import { FlaixModule } from './modules/flaix/flaix.module';
@@ -63,13 +61,11 @@ import appConfig from './config/app.config';
     // Phase 5
     PaymentsModule,
     CartModule,
-    OrderGroupsModule,
     OrderSplitsModule,
     OrdersModule,
     WebhooksModule,
     // Phase 6
     RealtimeModule,
-    SimulatorModule,
     // Phase 7
     SlotsModule,
     FlaixModule,
