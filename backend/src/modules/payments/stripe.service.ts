@@ -11,9 +11,17 @@ import Stripe from 'stripe';
  * - keeps webhook signature verification on a single code path.
  *
  * Critical guarantees:
- * - We use the standard Stripe marketplace pattern: destination charges
- *   (`transfer_data.destination`) + `application_fee_amount` for the platform fee.
- *   We never use direct charges or separate manual transfers in V1.
+ * - Paiements en « destination charges » (`transfer_data.destination`) : la
+ *   charge naît sur le compte Break Eat, les fonds partent vers le compte du
+ *   club. Jamais de charges directes ni de virements manuels.
+ * - AUCUNE commission n'est prélevée à la source (`STRIPE_PLATFORM_FEE_BPS = 0`) :
+ *   Break Eat facture sa part au club en fin de mois, hors Stripe.
+ *
+ *   ⚠️ Conséquence de ce montage : en destination charge, les FRAIS STRIPE sont
+ *   supportés par le compte à l'origine de la charge — donc par Break Eat, et
+ *   non par le club. Sans commission à la source, chaque transaction coûte à la
+ *   plateforme. Le passage en charges DIRECTES (les frais suivent alors le
+ *   club) est un autre montage, à décider en connaissance de cause.
  * - Connect account type = "standard" for V1 (suppliers manage their own dashboard).
  * - Webhook signature verification uses `constructEvent` — never trust raw body.
  */
@@ -32,7 +40,10 @@ export class StripeService implements OnModuleInit {
     const secretKey = this.config.get<string>('app.stripe.secretKey') ?? '';
     const apiVersion = this.config.get<string>('app.stripe.apiVersion') ?? '2024-12-18.acacia';
     this.webhookSecret = this.config.get<string>('app.stripe.webhookSecret') ?? '';
-    this.platformFeeBps = this.config.get<number>('app.stripe.platformFeeBps') ?? 500;
+    // Par defaut AUCUNE commission prelevee au paiement : Break Eat facture sa
+    // part au club en fin de mois, hors Stripe. Mettre `STRIPE_PLATFORM_FEE_BPS`
+    // a une valeur non nulle reactive le prelevement a la source.
+    this.platformFeeBps = this.config.get<number>('app.stripe.platformFeeBps') ?? 0;
     this.connectReturnUrl = this.config.get<string>('app.stripe.connect.returnUrl') ?? '';
     this.connectRefreshUrl = this.config.get<string>('app.stripe.connect.refreshUrl') ?? '';
 
@@ -100,7 +111,7 @@ export class StripeService implements OnModuleInit {
 
   /**
    * Creates a PaymentIntent with the supplier's Connect account as destination.
-   * Uses destination charges with application_fee_amount = platform commission.
+   * La commission n'est jointe que si elle est configurée (zéro par défaut).
    *
    * @param amountCents total amount in cents (already includes everything)
    * @param destinationAccountId the supplier's connected account
@@ -119,7 +130,7 @@ export class StripeService implements OnModuleInit {
       {
         amount: params.amountCents,
         currency: params.currency,
-        application_fee_amount: applicationFeeAmount,
+        ...(applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {}),
         transfer_data: { destination: params.destinationAccountId },
         metadata: params.metadata,
         automatic_payment_methods: { enabled: true },
@@ -162,7 +173,14 @@ export class StripeService implements OnModuleInit {
      */
     captureMethod?: 'automatic' | 'manual';
   }): Promise<Stripe.Checkout.Session> {
+    // Commission a la source : omise quand elle vaut zero.
+    //
+    // Stripe refuse `application_fee_amount: 0` — et surtout, envoyer le champ
+    // a zero laisserait croire, a la lecture, qu'une commission est prelevee.
+    // Sans lui, la totalite part vers le compte du club.
     const applicationFeeAmount = Math.floor((params.amountCents * this.platformFeeBps) / 10_000);
+    const commission =
+      applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {};
 
     return this.stripe.checkout.sessions.create(
       {
@@ -180,7 +198,7 @@ export class StripeService implements OnModuleInit {
         ],
         payment_intent_data: {
           capture_method: params.captureMethod ?? 'manual',
-          application_fee_amount: applicationFeeAmount,
+          ...commission,
           transfer_data: { destination: params.destinationAccountId },
           metadata: params.metadata,
         },

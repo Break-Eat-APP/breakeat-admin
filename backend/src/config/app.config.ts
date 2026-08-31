@@ -60,11 +60,13 @@ export default registerAs('app', () => ({
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
     apiVersion: process.env.STRIPE_API_VERSION ?? '2024-12-18.acacia',
     /**
-     * Platform commission in basis points.
-     * 100 bps = 1%, 500 bps = 5%, etc.
-     * Used as application_fee_amount on PaymentIntents.
+     * Commission prelevee A LA SOURCE, en points de base (500 = 5 %).
+     *
+     * ZERO par defaut : Break Eat ne prend rien au moment du paiement et
+     * facture sa part au club en fin de mois. L'integralite part donc sur le
+     * compte Stripe du club.
      */
-    platformFeeBps: parseInt(process.env.STRIPE_PLATFORM_FEE_BPS ?? '500', 10),
+    platformFeeBps: parseInt(process.env.STRIPE_PLATFORM_FEE_BPS ?? '0', 10),
     connect: {
       returnUrl:
         process.env.STRIPE_CONNECT_RETURN_URL ??
