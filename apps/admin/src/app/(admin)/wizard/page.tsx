@@ -91,7 +91,6 @@ interface StepResult {
 interface DoneResult {
   eventId: string;
   operatorUrl: string;
-  simulatorPath: string;
   qrLink: string;
 }
 
@@ -669,7 +668,6 @@ export default function WizardPage() {
       setDone({
         eventId,
         operatorUrl: operatorDashboardUrl(eventId),
-        simulatorPath: `/simulator?eventId=${eventId}`,
         qrLink: `breakeat://event/${eventId}`,
       });
     } catch (err) {
@@ -1575,9 +1573,6 @@ function Success({ done, onReset }: { done: DoneResult; onReset: () => void }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             <a href={done.operatorUrl} target="_blank" rel="noopener noreferrer" style={linkBtn(BRAND.ink)}>
               📊 Ouvrir le dashboard opérateur →
-            </a>
-            <a href={done.simulatorPath} style={linkBtn(BRAND.orange)}>
-              🚀 Ouvrir le simulateur (Rush de commandes) →
             </a>
             <a href={`/events/${done.eventId}`} style={linkBtn('#fff', true)}>
               🎪 Voir l&apos;événement dans l&apos;admin →

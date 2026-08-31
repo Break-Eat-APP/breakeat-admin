@@ -22,16 +22,6 @@ export default registerAs('app', () => ({
   port: parseInt(process.env.PORT ?? '3000', 10),
   corsOrigins: process.env.CORS_ORIGINS?.split(',') ?? ['http://localhost:3001'],
 
-  /**
-   * Demo Mode — when true, /admin/simulator and /demo endpoints are exposed.
-   * Per PRODUCT_VALIDATION.md, demo mode must NEVER be enabled in production.
-   */
-
-  /**
-   * Staging-only operations (seeders, simulators) require this token.
-   * Generated server-side, shared via secure channel to the product owner.
-   */
-  stagingToken: process.env.STAGING_ONLY_TOKEN ?? '',
 
   /**
    * Secret d'amorçage du compte principal (POST /bootstrap/super-admin).

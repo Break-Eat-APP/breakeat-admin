@@ -701,7 +701,15 @@ export class OrdersService {
     // sur « Je suis au comptoir » depuis la Live Activity, il attend une preuve
     // que le message est passé. Sans cette poussée, le bouton resterait affiché
     // comme si rien ne s'était produit. Fire-and-forget, comme les transitions.
-    void this.liveActivityService.pushOrderUpdate(updated.id);
+    // `.catch` OBLIGATOIRE sur un appel non attendu : depuis Node 15, une
+    // promesse rejetee sans gestionnaire ARRETE le processus. Une panne APNs
+    // — reseau, cle expiree — suffirait donc a faire tomber l'API entiere au
+    // moment ou un client appuie sur « Je suis arrive », c'est-a-dire en plein
+    // service. Les autres appels de ce fichier attrapent en interne ; celui-ci
+    // ne le faisait pas.
+    void this.liveActivityService.pushOrderUpdate(updated.id).catch((e: unknown) => {
+      this.logger.warn(`Live Activity non mise a jour apres l'arrivee client: ${String(e)}`);
+    });
 
     this.logger.log(`Client présent pour la commande ${updated.publicOrderNumber}`);
     return updated;
@@ -726,15 +734,20 @@ export class OrdersService {
    *   where each order = Order & { slotKind, items: (OrderItem & { categoryId })[] }
    */
   async findDashboardByEvent(eventId: string, supplierId?: string) {
-    // Phase 11.4: PICKED_UP is included so the configurable "récupérées" screen
-    // (default statuses = [PICKED_UP, RECOVERED]) can display collected orders.
-    // COMPLETED + CANCELLED stay excluded — they are terminal and off-board.
+    // Statuts CHARGES — exactement ceux que le board affiche, et rien de plus.
+    //
+    // `PICKED_UP` en faisait partie pour un ecran « recuperees » qui n'existe
+    // plus. Une commande remise y restait donc pour toujours : sur une soiree a
+    // 5 000 commandes, le board finissait par transporter les 5 000, avec leurs
+    // lignes, a chaque rafraichissement et pour chaque poste. Le service ralentit
+    // au fil de la soiree — au pire moment, celui du coup de feu.
+    //
+    // La regle : on ne charge que ce qui reste a FAIRE.
     const DASHBOARD_STATUSES = [
       OrderStatus.PAID,
       OrderStatus.ACCEPTED,
       OrderStatus.PREPARING,
       OrderStatus.READY,
-      OrderStatus.PICKED_UP,
       OrderStatus.RECOVERED,
     ] as const;
 

@@ -1,6 +1,6 @@
 import './instrument'; // Sentry must be imported first
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, type LoggerService } from '@nestjs/common';
 import { json, raw } from 'express';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
@@ -69,6 +69,8 @@ async function bootstrap(): Promise<void> {
   // /webhooks/stripe must stay stable for Stripe; /health for Docker/monitoring.
   app.setGlobalPrefix('api/v1', { exclude: ['health', 'webhooks/(.*)'] });
 
+  verifierConfigurationProduction(logger);
+
   const port = process.env.PORT ?? 3000;
   await app.listen(port);
   logger.log(`BREAK EAT backend running on port ${port}`);
@@ -77,5 +79,80 @@ async function bootstrap(): Promise<void> {
   logger.log(`Stripe hook:  POST http://localhost:${port}/webhooks/stripe`);
   logger.log(`API base:     http://localhost:${port}/api/v1`);
 }
+
+/**
+ * Rapport de configuration au démarrage.
+ *
+ * Chaque variable manquante ici retombe sur une valeur de DÉVELOPPEMENT, et
+ * chacune de ces valeurs échoue en silence une fois en ligne :
+ *
+ *   • `CORS_ORIGINS` absent ⇒ seuls les localhost sont autorisés, et TOUS les
+ *     dashboards affichent « identifiants incorrects » — c'est arrivé deux fois
+ *     sur ce projet, et on a cherché du côté des mots de passe ;
+ *   • `PUBLIC_WEB_URL` absent ⇒ après avoir payé, le client est renvoyé vers
+ *     `localhost` : il voit une page morte alors que son argent est parti ;
+ *   • `STRIPE_*` absent ⇒ plus aucun encaissement, donc plus aucune commande.
+ *
+ * Aucune de ces pannes ne se signale d'elle-même. Ce rapport les rend visibles
+ * dans les journaux, au démarrage, avant que quiconque ne commande.
+ *
+ * On n'interrompt PAS le démarrage : une API debout mais mal configurée sert
+ * encore l'app mobile ; une API refusant de démarrer ne sert plus personne.
+ */
+function verifierConfigurationProduction(logger: LoggerService): void {
+  const enProduction = process.env.NODE_ENV === 'production';
+
+  const requises: Array<[string, string | undefined]> = [
+    ['DATABASE_URL', process.env.DATABASE_URL],
+    ['JWT_SECRET', process.env.JWT_SECRET],
+    ['CORS_ORIGINS', process.env.CORS_ORIGINS],
+    ['PUBLIC_WEB_URL', process.env.PUBLIC_WEB_URL],
+    ['STRIPE_SECRET_KEY', process.env.STRIPE_SECRET_KEY],
+    ['STRIPE_WEBHOOK_SECRET', process.env.STRIPE_WEBHOOK_SECRET],
+    ['STRIPE_CONNECT_RETURN_URL', process.env.STRIPE_CONNECT_RETURN_URL],
+    ['STRIPE_CONNECT_REFRESH_URL', process.env.STRIPE_CONNECT_REFRESH_URL],
+  ];
+
+  const absentes = requises.filter(([, valeur]) => !valeur).map(([nom]) => nom);
+  const enLocal = requises
+    .filter(([, valeur]) => valeur?.includes('localhost') || valeur?.includes('127.0.0.1'))
+    .map(([nom]) => nom);
+
+  if (absentes.length > 0) {
+    const message = `Variables absentes (repli de développement actif) : ${absentes.join(', ')}`;
+    if (enProduction) logger.error(message);
+    else logger.warn(message);
+  }
+  if (enLocal.length > 0) {
+    logger.error(`Variables pointant sur la machine locale : ${enLocal.join(', ')}`);
+  }
+  if (absentes.length === 0 && enLocal.length === 0) {
+    logger.log('Configuration : toutes les variables de production sont renseignées.');
+  }
+
+  // Le mode Stripe se lit sur la clé, et lui seul décide si l'argent est réel.
+  const cleStripe = process.env.STRIPE_SECRET_KEY ?? '';
+  if (cleStripe.startsWith('sk_test')) {
+    logger.warn('Stripe en mode TEST — aucun paiement réel ne sera encaissé.');
+  } else if (cleStripe.startsWith('sk_live')) {
+    logger.log('Stripe en mode RÉEL — les paiements sont encaissés.');
+  }
+}
+
+/**
+ * Filet de dernier recours.
+ *
+ * Depuis Node 15, une promesse rejetée sans gestionnaire ARRÊTE le processus.
+ * Un oubli de `.catch` sur un appel accessoire — une notification, une trace —
+ * suffirait donc à couper l'API en plein service, alors que la commande, elle,
+ * s'était parfaitement déroulée.
+ *
+ * On journalise et on reste debout. Ce filet ne dispense pas d'attraper à la
+ * source : il évite qu'un oubli ne coûte une soirée.
+ */
+process.on('unhandledRejection', (raison) => {
+  // eslint-disable-next-line no-console
+  console.error('[Break Eat] Promesse rejetée sans gestionnaire :', raison);
+});
 
 void bootstrap();

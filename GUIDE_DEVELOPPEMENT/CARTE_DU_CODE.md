@@ -19,20 +19,31 @@ Modules et à quoi ils servent :
 | `venues` | **Lieux** (géoloc, recherche, Flaix, plan buvettes). `public-venues.controller.ts` = endpoint app |
 | `events`, `slots` | Événements + créneaux de retrait. `public-events.controller.ts` = endpoint app |
 | `suppliers`, `products`, `categories`, `stock` | Points de retrait (« buvettes »), catalogue, stock. Une **catégorie appartient à une buvette**, pas à l'organisation |
-| `cart`, `orders`, `payments`, `webhooks` | Panier → commande → paiement (Stripe) |
+| `cart`, `orders`, `payments`, `webhooks` | Panier → commande → paiement (Stripe). **Le paiement passe par une page HÉBERGÉE Stripe** (`createHostedCheckout`) : aucun numéro de carte dans notre code, aucune bibliothèque native. La commande naît du webhook `payment_intent.succeeded`, jamais de l'app |
+| `order-splits` | **L'ardoise** : une tournée composée par un hôte, réglée par plusieurs convives depuis un simple navigateur. Cartes AUTORISÉES puis encaissées d'un coup au départ de la commande |
 | `pickup-points` | Comptoirs de retrait (1–4 par buvette) |
 | `loyalty` | Fidélité : solde par organisation, registre immuable |
 | `live-activity` | Live Activity iOS : client APNs + webhook Flaix signé |
 | `bootstrap` | Reprise de l'accès principal (route inerte sans secret) |
 | `realtime` | Temps réel (Socket.IO) vers l'écran opérateur |
 | `notifications` | Push Expo : par statut de commande + programmées |
-| `operator-screens` | Écrans configurables du board opérateur |
 | `stats`, `backoffice` | Analytics club + KPIs super-admin |
 | `feature-flags`, `app-settings` | Config sans redéploiement (CMS clé/valeur) |
 | `flaix` | Intégration Flaix (API tierce — voir `brain/FLAIX_CONTRACT.md`) |
-| `simulator` | Génération de données de démo/charge |
 
-**Endpoints que l'app mobile consomme** (pas d'auth requise) : `GET /public/venues`, `GET /public/events/:id`, `GET /public/events/:id/suppliers/:sid/products`, `GET /public/events/:id/slots`. Puis авec auth : `/carts`, `/orders`.
+**Endpoints que l'app mobile consomme** (pas d'auth requise) : `GET /public/venues`, `GET /public/events/:id`, `GET /public/events/:id/suppliers/:sid/products`, `GET /public/events/:id/slots`, `GET /public/order-splits/:code` (+ `/claim`, pour un convive **sans compte**). Puis avec auth : `/carts`, `/orders`, `/order-splits`.
+
+**Ce qui a disparu, et pourquoi** (ne pas le réintroduire sans lire le manuel) :
+`simulator` et tout le mode démo (`demo-checkout`, `DEMO_MODE`, `DemoGuard`) —
+ils créaient de vraies commandes sans qu'un centime ne bouge ;
+`operator-screens` côté serveur — le board est passé à trois colonnes fixes
+(ses tables subsistent, annotées dans le schéma) ; `order-groups` — il supposait
+que tous les convives installent l'app.
+
+**Garde-fou de démarrage** : `verifierConfigurationProduction()` dans `main.ts`
+énumère au démarrage les variables absentes ou pointant encore sur `localhost`.
+Chacune de ces absences échoue en SILENCE une fois en ligne — dashboards
+bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
 
 ## App mobile (`apps/mobile/`) — React Native / Expo
 
@@ -56,6 +67,7 @@ Modules et à quoi ils servent :
 | `flaix-order.screen.tsx`, `supplier-catalog.screen.tsx`, `cart.screen.tsx`, `slot-selector.screen.tsx`, `checkout.screen.tsx`, `order-confirmation.screen.tsx` | Parcours de commande | ✅ |
 | `event-home.screen.tsx`, `order-tracking.screen.tsx` | Écran d'un lieu (catalogue, retrait) et suivi de commande | ✅ branchés dans `App.expo.tsx` |
 | `qr-scanner.screen.tsx` | Scan QR | ⚠️ **stubbé** dans `App.expo.tsx` — la caméra n'existe pas sur le web |
+| `split.screen.tsx` | **L'ardoise** — un écran, deux publics : l'hôte y suit sa tournée et l'envoie, le convive y coche ses articles et paie. Atteint aussi depuis un NAVIGATEUR, sans compte ni installation, via `/split/<code>` | ✅ |
 | `partners.screen.tsx`, `placeholder.screen.tsx` | Secondaires | ✅ |
 
 **`src/`** — le reste :
@@ -65,6 +77,10 @@ Modules et à quoi ils servent :
 - `lib/theme.ts` — couleurs + polices (`HEAD` = Raleway, `BLOC` = Oswald).
 - `lib/alert.ts` — alertes multiplateformes (⚠️ à utiliser à la place de `Alert.alert`).
 - `lib/hooks/use-user-location.ts` — géolocalisation.
+- `lib/hooks/use-deep-links.ts` — liens `breakeat://order/<id>` et `.../arrived`
+  (la Live Activity parle à l'app). Le lien `split/<code>`, lui, passe par la
+  configuration `linking` de `App.expo.tsx` : il doit résoudre depuis une
+  **adresse web**, ce que le schéma `breakeat://` ne sait pas faire.
 - `lib/config/env.ts` — variables d'environnement (dont `API_URL`).
 
 ## Apps web (Next.js)

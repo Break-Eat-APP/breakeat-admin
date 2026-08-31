@@ -4,6 +4,47 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-08-29] Paiement réel, l'ardoise partagée, et le grand ménage
+
+> Détail dans `CHANGELOG.md` [0.51.0] → [0.55.0] ; analyse dans
+> `ENGINEERING_MANUAL.md` [2026-08-29] « Phases 24-25 ».
+
+### Livré
+- **Live Activity** : bouton « Je suis arrivé » sur l'écran verrouillé, refonte
+  visuelle, et fermeture automatique côté app quand le serveur n'a pas pu la
+  clore. Cause racine des étapes figées : `APNS_ENV` en `sandbox` face à une
+  build signée production.
+- **Un plan d'accès par buvette** (`suppliers.plan_url`), avec repli sur le plan
+  du lieu. « Y aller — voir le plan » dans « Mes commandes ».
+- **Board opérateur à trois colonnes fixes** (nouvelle → en préparation → prête
+  à remettre), configurateur d'écrans supprimé. Épinglage à la buvette désormais
+  appliqué EN ÉCRITURE, pas seulement en lecture.
+- **« L'ardoise »** : une tournée composée par un hôte, réglée par des convives
+  qui n'installent rien — page web, carte autorisée puis encaissée d'un coup au
+  départ de la commande.
+- **Le paiement réel** par page hébergée Stripe, pour la commande seule comme
+  pour les parts. **Mode démo supprimé**.
+- **Bouton « Se connecter à Stripe »** sur la fiche buvette : les routes Connect
+  existaient depuis la phase 5 sans qu'aucune interface ne les appelle.
+- **Garde-fou de démarrage** : les variables absentes ou restées sur `localhost`
+  sont énumérées dans les journaux.
+
+### Ce qu'on en retient
+- Une fonctionnalité livrée **sans son bouton** n'est pas livrée.
+- Une donnée qui doit suivre une commande se pose sur **tous** les points de
+  création, ou il n'y en a qu'un.
+- Une règle appliquée en lecture et pas en écriture **ne protège rien**.
+- Un `void` sans `.catch` peut **arrêter le serveur** (Node ≥ 15).
+- Ne charger que ce qui reste **à faire** : `PICKED_UP` sur le board faisait
+  grossir la charge toute la soirée.
+
+### Reste à faire
+Build 8 (obligatoire : les versions installées ne savent plus commander),
+limitation de débit sur les routes publiques, adaptateur Redis avant toute
+seconde instance serveur.
+
+---
+
 ## [2026-08-25] Le repli silencieux — accès opérateur, remise à zéro, doublons
 
 > Détail dans `CHANGELOG.md` [0.49.0] ; analyse dans `ENGINEERING_MANUAL.md`

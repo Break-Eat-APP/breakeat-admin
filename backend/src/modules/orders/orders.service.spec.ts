@@ -647,7 +647,7 @@ describe('OrdersService', () => {
       expect(result.orders.PAID).toEqual([]);
     });
 
-    it('queries the active dashboard statuses incl. PICKED_UP (excludes COMPLETED + CANCELLED)', async () => {
+    it('ne charge QUE ce qui reste à faire — pas les commandes déjà remises', async () => {
       (prisma.order.findMany as jest.Mock).mockResolvedValue([]);
 
       await service.findDashboardByEvent(EVENT_ID);
@@ -655,8 +655,12 @@ describe('OrdersService', () => {
       const callArg = (prisma.order.findMany as jest.Mock).mock.calls[0][0];
       const queriedStatuses: string[] = callArg.where.status.in;
       expect(queriedStatuses).toContain(OrderStatus.PAID);
-      expect(queriedStatuses).toContain(OrderStatus.PICKED_UP);
       expect(queriedStatuses).toContain(OrderStatus.RECOVERED);
+      // Une commande REMISE ne revient jamais sur le board. L'y laisser la
+      // faisait transporter jusqu'a la fin du service : sur une soiree a 5 000
+      // commandes, le board finissait par les charger toutes, a chaque
+      // rafraichissement et pour chaque poste.
+      expect(queriedStatuses).not.toContain(OrderStatus.PICKED_UP);
       expect(queriedStatuses).not.toContain(OrderStatus.COMPLETED);
       expect(queriedStatuses).not.toContain(OrderStatus.CANCELLED);
     });

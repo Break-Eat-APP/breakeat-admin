@@ -1209,27 +1209,6 @@ export default function EventDetailPage() {
         </a>
       </Card>
 
-      {/* Simulator shortcut */}
-      <Card title="🚀 Simulateur">
-        <p style={{ color: BRAND.grey, fontSize: 14, margin: '0 0 12px' }}>
-          Accédez au simulateur pour tester cet événement avec des données de démonstration.
-        </p>
-        <a
-          href={`/simulator?eventId=${event.id}`}
-          style={{
-            display: 'inline-block',
-            background: BRAND.ink,
-            color: '#fff',
-            borderRadius: 8,
-            padding: '10px 20px',
-            fontWeight: 600,
-            fontSize: 14,
-            textDecoration: 'none',
-          }}
-        >
-          Ouvrir le simulateur →
-        </a>
-      </Card>
     </div>
   );
 }

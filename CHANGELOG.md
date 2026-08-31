@@ -5,6 +5,52 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.56.0] — 2026-08-29 — Audit de mise en production
+
+Passe complète avant bascule en réel : traces de développement, tenue à
+5 000 commandes par soirée, documentation.
+
+### Ce qui aurait cédé un soir de match
+**Le board opérateur chargeait les commandes déjà remises.** `PICKED_UP` y
+figurait pour un écran « récupérées » supprimé depuis. Une commande remise y
+restait donc pour toujours : sur une soirée à 5 000 commandes, le board finissait
+par transporter les 5 000 — avec leurs lignes — à chaque rafraîchissement et pour
+chaque poste. Le service ralentissait au fil de la soirée, pour devenir le plus
+lourd au moment du coup de feu. Le board ne charge plus que ce qui reste à faire.
+
+**Un `void` sans `.catch` pouvait arrêter le serveur.** Depuis Node 15, une
+promesse rejetée sans gestionnaire coupe le processus : un incident APNs au
+moment où un client appuie sur « Je suis arrivé » aurait suffi à faire tomber
+l'API en plein service. L'appel est protégé, et un filet global journalise
+désormais toute promesse orpheline au lieu de laisser le processus mourir.
+
+### Ce qui échouait en silence
+`verifierConfigurationProduction()` énumère au démarrage les variables absentes
+ou pointant encore sur `localhost`, et annonce si Stripe tourne en test ou en
+réel. Chacune de ces absences se manifestait jusqu'ici par un symptôme trompeur :
+dashboards en « identifiants incorrects » (CORS retombé sur localhost), ou client
+renvoyé vers `localhost` après avoir payé.
+
+### Restes de démonstration
+Supprimés : la carte « Simulateur » de la fiche événement et le lien du wizard,
+qui menaient à une page inexistante depuis le retrait du module ; le commentaire
+orphelin de `DEMO_MODE` ; `STAGING_ONLY_TOKEN`, qu'aucun code ne lisait.
+
+### Documentation
+`ENGINEERING_MANUAL.md` reçoit l'entrée « Phases 24-25 » : ce qui a été
+construit, **pourquoi ces choix-là**, les pièges rencontrés, ce qui a été
+supprimé et ce qui reste à surveiller. `CARTE_DU_CODE.md`, `REPRISE.md` et
+`TASK_SUMMARY.md` sont alignés. Un développeur qui reprend le dossier trouve
+l'état réel en tête de `REPRISE.md`.
+
+### Connu, non traité
+- Aucune **limitation de débit** sur les routes publiques, ouvertes sans auth.
+- **Socket.IO en mémoire** : une seule instance serveur tant qu'aucun adaptateur
+  Redis n'est branché.
+- **Pool Prisma** non réglé (`connection_limit` dans l'URL de base).
+
+---
+
 ## [0.55.0] — 2026-08-29 — Le paiement devient réel, la démo disparaît
 
 ### La caisse encaisse vraiment

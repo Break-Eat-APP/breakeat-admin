@@ -15,7 +15,25 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-08-29_
+_Dernière mise à jour : 2026-08-29 (audit production)_
+
+## 🔴 ÉTAT AU 29/08/2026 — LIRE D'ABORD
+
+**Le mode démo n'existe plus.** Toute commande passe par un vrai paiement Stripe
+(page hébergée). Conséquence directe : **l'app publiée sur le store et la build
+TestFlight actuelle ne peuvent plus commander** — elles n'appellent que
+`demo-checkout`, supprimé. Il faut livrer la build 8.
+
+**Stripe est en mode TEST** (`sk_test_…`). Aucun paiement réel n'est encaissé.
+Le serveur l'annonce au démarrage : `Stripe en mode TEST — aucun paiement réel`.
+
+**Une buvette ne peut encaisser que si son compte Stripe Connect est actif.**
+Le bouton « Se connecter à Stripe » vit sur sa fiche dans le backoffice manager.
+Sans compte actif, la page de paiement refuse de s'ouvrir.
+
+**Non traité, et assumé** (voir `brain/ENGINEERING_MANUAL.md`, phases 24-25) :
+aucune limitation de débit sur les routes publiques ; Socket.IO sans adaptateur
+Redis, donc **une seule instance serveur** ; pool Prisma non réglé.
 
 ## ⏭️ REPRISE IMMÉDIATE
 

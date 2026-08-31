@@ -4260,3 +4260,131 @@ suivent le même modèle, à conserver pour toute opération sans retour :
 - **Conserver ce qui permet de revenir.** Le lieu (GPS, mots-clés) et les accès
   survivent à la remise à zéro : sans eux, plus personne ne pourrait se
   reconnecter pour reconfigurer.
+
+---
+
+## [2026-08-29] Phases 24-25 — Le plan de la bonne buvette, l'ardoise partagée, et le passage au paiement réel
+
+### Ce qui a été construit
+
+**Un plan d'accès par buvette** (`suppliers.plan_url`). Le plan était rangé sur
+le LIEU : un stade à quatre comptoirs affichait la même image à tous les
+clients. `withPickupGuidance()` (OrdersService) attache désormais à chaque
+commande le nom de sa buvette et le plan à montrer — celui de la buvette, à
+défaut celui du lieu. Deux lectures groupées, quelle que soit la longueur de la
+liste ; `Order` ne porte que des identifiants bruts, sans relation Prisma.
+
+**« L'ardoise »** (`modules/order-splits/`). Un groupe arrive au stade et **une
+seule personne installe l'app**. Elle compose la tournée, partage un lien, et
+chaque convive ouvre une PAGE WEB pour cocher SES articles et les payer par
+carte. C'est le seul montage qui corresponde à la réalité du comptoir.
+
+**Le paiement réel**, par page hébergée Stripe (`createHostedCheckout`), pour la
+commande seule comme pour les parts d'ardoise. Le mode démo a été supprimé.
+
+### Pourquoi ces choix-là
+
+**Pourquoi une page hébergée par Stripe et non des champs de carte dans l'app.**
+Aucun numéro ne traverse notre code, il n'y a pas de bibliothèque native à
+embarquer — donc pas de build de plus, pas de dépendance de plus dans un
+monorepo qui a déjà payé cher ses doublons — et la même page sert les convives
+qui n'ont rien installé. Apple Pay reste disponible : c'est une carte.
+
+**Pourquoi l'autorisation puis la capture, et non un paiement immédiat.** Une
+part d'ardoise BLOQUE la carte sans la débiter (`capture_method: 'manual'`).
+L'encaissement n'a lieu qu'au départ de la commande, en une fois, pour toutes
+les parts — `envoyer()` refuse tant qu'un seul article n'est pas réglé.
+
+La conséquence est le cœur du dispositif : **une tournée qui capote ne laisse
+aucun remboursement à faire.** Les autorisations non capturées se libèrent
+seules (7 jours pour une carte en ligne). Un remboursement, ce sont des jours et
+des frais des deux côtés ; une réserve abandonnée, ce n'est rien.
+
+**Pourquoi le découpage à l'unité.** « 3 bières » donne trois cases à cocher.
+Une ligne indivisible empêcherait deux convives d'en prendre une chacun — le
+principe casserait dès la première tournée.
+
+**Pourquoi la division par article et non en parts égales.** Quand quelqu'un se
+retire, le montant des autres ne change pas : leurs autorisations restent
+valables telles quelles. En parts égales, il aurait fallu annuler et redemander
+l'autorisation de TOUT LE MONDE, donc renvoyer chacun sur une nouvelle page de
+paiement, au stade, pendant le match.
+
+**Pourquoi le board opérateur est passé à trois colonnes fixes.** « Acceptée »
+n'était pas un geste réel : accepter une commande et s'y mettre sont le même
+mouvement au comptoir, et la colonne imposait deux clics pour un seul. Deux
+transitions ont rejoint la machine à états (`PAID → PREPARING`,
+`ACCEPTED → READY`) : ce sont les transitions NORMALES de ce board, pas des
+exceptions. Chaque colonne regroupe plusieurs statuts, à dessein — **un statut
+sans colonne est une commande invisible**.
+
+### Les pièges rencontrés, et ce qu'ils enseignent
+
+**Deux chemins de création de commande, un seul câblé.** Le rattachement au
+groupe avait été posé sur `createFromPaymentIntent` mais pas sur `demoCheckout`
+— or l'app empruntait le second. La fonction n'aurait rien groupé là où elle
+servait. Relevé par un audit externe, pas par les tests.
+
+> Quand une donnée doit suivre une commande, la poser sur **tous** les points
+> d'entrée de création, ou n'en avoir qu'un. Ils vivent désormais côte à côte
+> dans `OrdersService` pour qu'on les voie ensemble.
+
+**Une règle appliquée en lecture et pas en écriture ne protège rien.** Le board
+appliquait l'épinglage à la buvette depuis la phase 12.9 ; les transitions, non.
+N'importe quel membre pouvait faire avancer, par appel direct, la commande d'un
+autre comptoir.
+
+**L'encaissement d'une part réveille les webhooks de paiement classiques.**
+Capturer une part émet `payment_intent.succeeded` comme n'importe quel paiement.
+Sans filtre, le gestionnaire cherchait un panier inexistant à chaque tournée ;
+et sur un refus, il aurait créé une ligne de paiement orpheline qui aurait fait
+échouer la création de la commande sur la contrainte d'unicité. Les parts
+d'ardoise sont donc écartées explicitement (`metadata.orderSplitShareId`).
+
+**Une API sans porte d'entrée n'existe pas.** Les routes d'inscription Stripe
+Connect dormaient depuis la phase 5 sans qu'aucune interface ne les appelle :
+aucune buvette ne pouvait donc encaisser. Le mode démo masquait ce blocage
+total.
+
+> Une fonctionnalité livrée sans son bouton n'est pas livrée. Chercher les
+> routes que personne n'appelle.
+
+**Un repli de développement échoue en silence en production.** `CORS_ORIGINS`
+absent ⇒ seuls les localhost sont autorisés et tous les dashboards affichent
+« identifiants incorrects ». `PUBLIC_WEB_URL` absent ⇒ le client paie et est
+renvoyé vers `localhost`. `verifierConfigurationProduction()` (main.ts) énumère
+désormais ces variables au démarrage.
+
+**Un `void` sans `.catch` peut arrêter le serveur.** Depuis Node 15, une
+promesse rejetée sans gestionnaire coupe le processus. Un incident APNs au
+moment d'un « Je suis arrivé » aurait suffi à faire tomber l'API en plein
+service.
+
+### Ce qui a été supprimé, et pourquoi
+
+- **Le mode démo** (`demo-checkout`, `DEMO_MODE`, `DemoGuard`, le simulateur) :
+  il créait de vraies commandes sans qu'un centime ne bouge.
+- **Le configurateur d'écrans opérateur** : le board est fixe, il n'avait plus
+  d'objet. Les tables restent, annotées dans le schéma — les supprimer
+  effacerait les écrans enregistrés par les clubs.
+- **« Inviter un ami à commander »** : il supposait que TOUS les convives
+  installent l'app. Personne ne fait ça au comptoir. Ses tables n'ayant jamais
+  été déployées, elles ont été supprimées plutôt que laissées en vestige.
+- **Le chemin PaymentIntent + Stripe Elements** : jamais appelé.
+
+### Ce qui tient la charge, et ce qui reste à surveiller
+
+Le board opérateur ne charge plus que ce qui reste **à faire**. `PICKED_UP` en
+faisait partie pour un écran disparu : une commande remise y restait pour
+toujours, et sur une soirée à 5 000 commandes le board finissait par les
+transporter toutes, à chaque rafraîchissement et pour chaque poste.
+
+Restent connus et **non traités** :
+
+- **Aucune limitation de débit** sur les routes publiques (`/public/**`), qui
+  sont ouvertes sans authentification.
+- **Socket.io en mémoire, sans adaptateur Redis** : ne pas passer le serveur à
+  plusieurs instances sans en ajouter un, sinon un poste ne recevra que les
+  événements de l'instance qui le sert.
+- **Taille du pool Prisma** non réglée : à ajuster via `connection_limit` dans
+  l'URL de base si le coup de feu sature les connexions.
