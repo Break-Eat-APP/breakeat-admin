@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  setSessionTokens,
   apiLogin,
   apiMeWithMemberships,
   getToken,
@@ -37,8 +38,10 @@ export default function LoginPage() {
     setError('');
     try {
       // 1 — Authenticate
-      const { user, accessToken } = await apiLogin(email.trim(), password);
-      localStorage.setItem('admin_token', accessToken);
+      const { user, accessToken, refreshToken } = await apiLogin(email.trim(), password);
+      // Le jeton de renouvellement est conserve : sans lui, la session meurt au
+      // bout de 15 minutes et le dashboard « saute » au clic suivant.
+      setSessionTokens(accessToken, refreshToken);
       localStorage.setItem('admin_user', JSON.stringify(user));
 
       // 2 — Load memberships to determine which org to work with

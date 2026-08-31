@@ -62,14 +62,51 @@ export function getStoredUser(): AdminUser | null {
   }
 }
 
+/** Jeton de renouvellement (7 jours) — sert a prolonger la session sans ressaisie. */
+export function getRefreshToken(): string {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem('admin_refresh') ?? '';
+}
+
+export function setSessionTokens(accessToken: string, refreshToken?: string): void {
+  localStorage.setItem('admin_token', accessToken);
+  if (refreshToken) localStorage.setItem('admin_refresh', refreshToken);
+}
+
 export function clearSession(): void {
   localStorage.removeItem('admin_token');
+  localStorage.removeItem('admin_refresh');
   localStorage.removeItem('admin_user');
   localStorage.removeItem('admin_org_id');
   localStorage.removeItem('admin_org_name');
 }
 
 // ─── Base fetch ────────────────────────────────────────────────────────────────
+
+/**
+ * Échange le jeton de renouvellement contre un nouveau jeton d'accès.
+ *
+ * Renvoie faux si le renouvellement est impossible (pas de jeton, ou expiré) :
+ * l'appelant déconnecte alors pour de bon.
+ */
+async function renouvelerSession(): Promise<boolean> {
+  const refresh = getRefreshToken();
+  if (!refresh) return false;
+  try {
+    const res = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: refresh }),
+    });
+    if (!res.ok) return false;
+    const data = (await res.json()) as { accessToken?: string; refreshToken?: string };
+    if (!data.accessToken) return false;
+    setSessionTokens(data.accessToken, data.refreshToken);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function req<T>(
   method: string,
@@ -88,6 +125,21 @@ async function req<T>(
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+
+  // 401 : on RENOUVELLE avant de déconnecter.
+  //
+  // Le jeton d'accès ne vit que 15 minutes ; le jeton de renouvellement, 7
+  // jours. Sans cette reprise, un manager qui passe un quart d'heure sur une
+  // page — le temps d'aller chercher une information ailleurs, par exemple sur
+  // Stripe — était éjecté au clic suivant, sans comprendre pourquoi. Le geste
+  // avait l'air de « faire sauter le dashboard ».
+  //
+  // Une seule tentative, et jamais sur la route de renouvellement elle-même :
+  // un jeton mort relancerait sinon la reprise à l'infini.
+  if (res.status === 401 && !noAuth && !path.startsWith('/auth/refresh')) {
+    const renouvele = await renouvelerSession();
+    if (renouvele) return req<T>(method, path, body, noAuth);
+  }
 
   if (res.status === 401) {
     clearSession();

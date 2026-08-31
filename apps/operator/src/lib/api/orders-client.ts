@@ -35,6 +35,31 @@ if (
  */
 export const SESSION_EXPIREE = 'breakeat:session-expiree';
 
+/**
+ * Echange le jeton de renouvellement (7 jours) contre un nouveau jeton d'acces.
+ * Renvoie le nouveau jeton, ou null si le renouvellement est impossible.
+ */
+async function renouvelerSession(): Promise<string | null> {
+  if (typeof window === 'undefined') return null;
+  const refresh = localStorage.getItem('operator_refresh');
+  if (!refresh) return null;
+  try {
+    const res = await fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: refresh }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { accessToken?: string; refreshToken?: string };
+    if (!data.accessToken) return null;
+    localStorage.setItem('operator_token', data.accessToken);
+    if (data.refreshToken) localStorage.setItem('operator_refresh', data.refreshToken);
+    return data.accessToken;
+  } catch {
+    return null;
+  }
+}
+
 async function apiFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
@@ -57,9 +82,20 @@ async function apiFetch<T>(path: string, token: string, init?: RequestInit): Pro
   //
   // On signale par un événement : la page décide, une seule fois, de revenir au
   // formulaire de connexion.
-  if (res.status === 401) {
+  // On RENOUVELLE avant de renvoyer au formulaire.
+  //
+  // Le jeton d'acces ne vit que 15 minutes ; un service dure des heures. Sans
+  // cette reprise, l'operatrice etait ejectee en plein coup de feu, toutes les
+  // quinze minutes, sans autre explication qu'un ecran de connexion.
+  //
+  // Une seule tentative, jamais sur la route de renouvellement : un jeton mort
+  // relancerait sinon la reprise a l'infini.
+  if (res.status === 401 && !path.startsWith('/auth/refresh')) {
+    const nouveau = await renouvelerSession();
+    if (nouveau) return apiFetch<T>(path, nouveau, init);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('operator_token');
+      localStorage.removeItem('operator_refresh');
       window.dispatchEvent(new Event(SESSION_EXPIREE));
     }
     throw new Error('Session expirée — reconnectez-vous.');

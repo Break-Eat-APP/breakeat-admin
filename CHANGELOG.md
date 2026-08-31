@@ -5,6 +5,38 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.56.1] — 2026-08-31 — La session ne saute plus au bout d'un quart d'heure
+
+### Le symptôme
+« Je clique sur *Se connecter à Stripe* et ça déconnecte le dashboard. »
+
+### La cause
+Le jeton d'accès vit **15 minutes**. Le jeton de renouvellement, lui, vit 7
+jours — mais **aucun dashboard ne le conservait**, ni ne s'en servait. Passé le
+quart d'heure, le premier appel repartait en 401, et le client d'API faisait ce
+qu'on lui avait dit : vider la session et renvoyer au formulaire.
+
+Le geste n'y était pour rien. N'importe quel clic après quinze minutes
+produisait le même effet — et il suffisait d'aller consulter Stripe dans un
+autre onglet pour les dépasser.
+
+Le cas grave n'était pas celui du manager : **une opératrice était éjectée toutes
+les quinze minutes en plein service**, sans autre explication qu'un écran de
+connexion.
+
+### Le correctif
+Sur 401, les deux dashboards **renouvellent** avant de déconnecter : échange du
+jeton de renouvellement, puis **reprise de la requête d'origine** — l'utilisateur
+ne voit rien. La déconnexion n'arrive que si le renouvellement échoue aussi.
+
+Une seule tentative, et jamais sur la route de renouvellement elle-même : un
+jeton mort relancerait sinon la reprise à l'infini.
+
+- `~ apps/admin/src/lib/api/admin-client.ts` + `app/login/page.tsx`
+- `~ apps/operator/src/lib/api/orders-client.ts` + `components/LoginForm.tsx`
+
+---
+
 ## [0.56.0] — 2026-08-29 — Audit de mise en production
 
 Passe complète avant bascule en réel : traces de développement, tenue à

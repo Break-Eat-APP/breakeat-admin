@@ -23,8 +23,11 @@ export function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
     setLoading(true);
     setError('');
     try {
-      const { accessToken } = await login(email, password);
+      const { accessToken, refreshToken } = await login(email, password);
       localStorage.setItem('operator_token', accessToken);
+      // Sans le jeton de renouvellement, la session meurt au bout de 15 minutes
+      // et l'operatrice se retrouve devant ce formulaire en plein service.
+      if (refreshToken) localStorage.setItem('operator_refresh', refreshToken);
       onLogin(accessToken);
     } catch (err) {
       // Afficher le message RÉEL. Un `catch` qui réécrit tout en « identifiants
