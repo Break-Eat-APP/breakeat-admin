@@ -31,6 +31,18 @@ Le serveur l'annonce au démarrage : `Stripe en mode TEST — aucun paiement ré
 Le bouton « Se connecter à Stripe » vit sur sa fiche dans le backoffice manager.
 Sans compte actif, la page de paiement refuse de s'ouvrir.
 
+**Dette technique datée — Stripe « Accounts v1 ».** Notre code crée les comptes
+des buvettes avec `stripe.accounts.create()`, que Stripe ne recommande plus pour
+une nouvelle intégration : il faut avoir activé
+[Accounts v1 support](https://dashboard.stripe.com/settings/features/feat_accounts_v1_support)
+dans le tableau de bord, sinon la création est refusée.
+
+Migrer vers `POST /v2/core/accounts` changerait la forme des appels ET le
+parcours d'inscription (les liens d'inscription actuels ne s'y appliquent pas),
+et demanderait de monter la bibliothèque Stripe (17 → 19+) avec la version d'API
+épinglée. À traiter comme un chantier à part entière, **jamais au milieu d'autre
+chose** : c'est le chemin du paiement.
+
 **Non traité, et assumé** (voir `brain/ENGINEERING_MANUAL.md`, phases 24-25) :
 aucune limitation de débit sur les routes publiques ; Socket.IO sans adaptateur
 Redis, donc **une seule instance serveur** ; pool Prisma non réglé.

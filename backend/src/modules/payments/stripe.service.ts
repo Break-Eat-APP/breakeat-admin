@@ -132,6 +132,15 @@ export class StripeService implements OnModuleInit {
     businessName?: string;
     metadata?: Record<string, string>;
   }): Promise<Stripe.Account> {
+    // ⚠️ « Accounts v1 ». Stripe ne recommande plus cette API pour une nouvelle
+    // integration et REFUSE la creation tant que « Accounts v1 support » n'est
+    // pas active dans le tableau de bord du compte plateforme :
+    // https://dashboard.stripe.com/settings/features/feat_accounts_v1_support
+    //
+    // Migrer vers `POST /v2/core/accounts` changerait aussi le parcours
+    // d'inscription (les `accountLinks` ci-dessous n'y correspondent pas) et
+    // demanderait de monter la bibliotheque. Chantier a part entiere : c'est le
+    // chemin du paiement.
     return this.appeler('creation du compte connecte', () =>
       this.stripe.accounts.create({
         type: 'standard',
