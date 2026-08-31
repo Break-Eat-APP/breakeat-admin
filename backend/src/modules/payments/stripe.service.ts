@@ -51,6 +51,15 @@ export class StripeService implements OnModuleInit {
       this.logger.warn('STRIPE_SECRET_KEY is empty — Stripe calls will fail at runtime');
     }
 
+    // Adresses de retour de l'inscription Connect. Non renseignees, elles
+    // pointent sur localhost : la buvette finit son inscription chez Stripe et
+    // atterrit dans le vide, sans que rien n'ait l'air d'avoir echoue.
+    if (this.connectReturnUrl.includes('localhost')) {
+      this.logger.warn(
+        'STRIPE_CONNECT_RETURN_URL pointe sur localhost — la buvette reviendra dans le vide apres son inscription Stripe.',
+      );
+    }
+
     this.stripe = new Stripe(secretKey, {
       apiVersion: apiVersion as Stripe.LatestApiVersion,
       typescript: true,

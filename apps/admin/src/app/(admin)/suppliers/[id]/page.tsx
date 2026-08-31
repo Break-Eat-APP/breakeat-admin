@@ -6,6 +6,8 @@ import {
   apiGetSuppliers,
   apiUpdateSupplier,
   apiUpdateSupplierStatus,
+  apiStripeOnboardingLink,
+  apiStripeStatus,
   apiRegenerateReferral,
   apiGetCategories,
   apiGetVenues,
@@ -90,6 +92,8 @@ export default function SupplierDetailPage() {
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [settingsName, setSettingsName] = useState('');
   const [settingsPlan, setSettingsPlan] = useState('');
+  const [stripeBusy, setStripeBusy] = useState(false);
+  const [stripeMsg, setStripeMsg] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState('');
   const [statusSaving, setStatusSaving] = useState(false);
@@ -182,6 +186,49 @@ export default function SupplierDetailPage() {
     }
   }
 
+  // ─── Encaissement (Stripe Connect) ─────────────────────────
+
+  /**
+   * Ouvre l'inscription Stripe de la buvette.
+   *
+   * Le lien est à USAGE UNIQUE et expire vite : on en redemande un à chaque
+   * clic plutôt que de le garder. Le premier appel crée aussi le compte.
+   *
+   * `window.location.assign` plutôt qu'un nouvel onglet : Stripe renvoie vers
+   * le dashboard à la fin, et un onglet surgissant se fait bloquer une fois sur
+   * deux — l'utilisateur croirait alors que le bouton ne marche pas.
+   */
+  async function handleStripeOnboarding() {
+    setStripeBusy(true);
+    setStripeMsg('');
+    try {
+      const { url } = await apiStripeOnboardingLink(orgId, supplierId);
+      window.location.assign(url);
+    } catch (err) {
+      setStripeMsg(err instanceof Error ? err.message : 'Erreur');
+      setStripeBusy(false);
+    }
+  }
+
+  /** Relit l'état chez Stripe : c'est lui qui fait foi, pas notre copie. */
+  async function handleStripeRefresh() {
+    setStripeBusy(true);
+    setStripeMsg('');
+    try {
+      const maj = await apiStripeStatus(orgId, supplierId);
+      setStripeMsg(
+        maj.stripeChargesEnabled
+          ? '✓ Cette buvette peut encaisser.'
+          : 'Inscription incomplète — Stripe attend encore des informations.',
+      );
+      await load();
+    } catch (err) {
+      setStripeMsg(err instanceof Error ? err.message : 'Erreur');
+    } finally {
+      setStripeBusy(false);
+    }
+  }
+
   async function handleSaveSettings(e: React.FormEvent) {
     e.preventDefault();
     if (!settingsName.trim()) {
@@ -252,9 +299,21 @@ export default function SupplierDetailPage() {
   }
 
   if (!orgId) return <div style={{ padding: 32, color: '#dc2626', fontSize: 14, fontFamily: BRAND.font }}>Aucune organisation.</div>;
+  const STRIPE_LIBELLES: Record<string, { label: string; bg: string; color: string }> = {
+    NOT_ONBOARDED: { label: 'Pas encore inscrite', bg: BRAND.bgSubtle, color: BRAND.inkSoft },
+    PENDING: { label: 'Inscription en cours', bg: '#fef3c7', color: '#92400e' },
+    ACTIVE: { label: '✓ Peut encaisser', bg: '#d1fae5', color: '#065f46' },
+    RESTRICTED: { label: 'Restreinte par Stripe', bg: '#fee2e2', color: '#991b1b' },
+    REJECTED: { label: 'Refusée par Stripe', bg: '#fee2e2', color: '#991b1b' },
+  };
+
   if (loading) return <div style={{ padding: 32, color: BRAND.grey, fontSize: 14, fontFamily: BRAND.font }}>Chargement…</div>;
   if (error) return <div style={{ padding: 32, color: '#dc2626', fontSize: 14, background: '#fee2e2', borderRadius: 8, margin: 32, fontFamily: BRAND.font }}>{error}</div>;
   if (!supplier) return <div style={{ padding: 32, color: '#dc2626', fontSize: 14, fontFamily: BRAND.font }}>Fournisseur introuvable.</div>;
+
+  const stripeStyle =
+    STRIPE_LIBELLES[supplier.stripeAccountStatus ?? 'NOT_ONBOARDED'] ??
+    STRIPE_LIBELLES.NOT_ONBOARDED;
 
   const catById = Object.fromEntries(categories.map((c) => [c.id, c.name]));
   const productsByCat = categories.map((cat) => ({
@@ -354,6 +413,91 @@ export default function SupplierDetailPage() {
             {savingSettings ? 'Enregistrement…' : 'Enregistrer'}
           </button>
         </form>
+      </Card>
+
+      {/* Encaissement — sans ça, la buvette ne peut RIEN vendre.
+          L'argent des clients arrive directement sur son compte Stripe ; tant
+          qu'il n'existe pas, la page de paiement refuse de s'ouvrir. */}
+      <Card title="Encaissement (Stripe)">
+        <p style={{ color: BRAND.grey, fontSize: 13, margin: '0 0 14px', lineHeight: 1.5 }}>
+          L&apos;argent des commandes arrive <strong>directement sur le compte Stripe de cette
+          buvette</strong>. Tant qu&apos;il n&apos;est pas actif, les clients ne peuvent pas payer.
+        </p>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+          <span
+            style={{
+              background: stripeStyle.bg,
+              color: stripeStyle.color,
+              borderRadius: 999,
+              padding: '4px 14px',
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            {stripeStyle.label}
+          </span>
+          {supplier.stripeAccountId && (
+            <span style={{ color: BRAND.grey, fontSize: 12, fontFamily: 'monospace' }}>
+              {supplier.stripeAccountId}
+            </span>
+          )}
+        </div>
+
+        {stripeMsg && (
+          <div style={{ color: stripeMsg.startsWith('✓') ? '#065f46' : '#dc2626', fontSize: 13, marginBottom: 12 }}>
+            {stripeMsg}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => void handleStripeOnboarding()}
+            disabled={stripeBusy}
+            style={{
+              background: stripeBusy ? BRAND.grey : BRAND.orange,
+              color: '#fff',
+              border: 'none',
+              borderRadius: 8,
+              padding: '10px 18px',
+              fontWeight: 600,
+              fontSize: 14,
+              cursor: stripeBusy ? 'not-allowed' : 'pointer',
+              fontFamily: 'inherit',
+            }}
+          >
+            {supplier.stripeAccountId
+              ? 'Reprendre l’inscription Stripe'
+              : 'Se connecter à Stripe'}
+          </button>
+
+          {supplier.stripeAccountId && (
+            <button
+              type="button"
+              onClick={() => void handleStripeRefresh()}
+              disabled={stripeBusy}
+              style={{
+                background: BRAND.surface,
+                color: BRAND.ink,
+                border: `1px solid ${BRAND.border}`,
+                borderRadius: 8,
+                padding: '10px 18px',
+                fontWeight: 600,
+                fontSize: 14,
+                cursor: stripeBusy ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              Vérifier l’état
+            </button>
+          )}
+        </div>
+
+        <p style={{ color: BRAND.grey, fontSize: 12, margin: '12px 0 0', lineHeight: 1.5 }}>
+          L&apos;inscription s&apos;ouvre sur le site de Stripe. Le lien est à usage unique : s&apos;il
+          expire, réappuyez sur le bouton. Au retour, cliquez sur « Vérifier l&apos;état ».
+        </p>
       </Card>
 
       {/* Créneaux de récupération — leur place est ICI.

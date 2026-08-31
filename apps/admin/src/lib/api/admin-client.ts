@@ -210,6 +210,11 @@ export interface Supplier {
   preparationZone?: string | null;
   /** Plan d'accès propre à cette buvette (null ⇒ plan général du lieu). */
   planUrl?: string | null;
+  /** Compte Stripe Connect de la buvette — c'est là que l'argent arrive. */
+  stripeAccountId?: string | null;
+  stripeAccountStatus?: 'NOT_ONBOARDED' | 'PENDING' | 'ACTIVE' | 'RESTRICTED' | 'REJECTED';
+  stripeChargesEnabled?: boolean;
+  stripePayoutsEnabled?: boolean;
   isExternal?: boolean;
   referralCode?: string | null;
   organizationId: string;
@@ -470,6 +475,25 @@ export async function apiUpdateSupplier(
   data: { name?: string; preparationZone?: string; planUrl?: string | null },
 ): Promise<Supplier> {
   return req<Supplier>('PATCH', `/organizations/${orgId}/suppliers/${supplierId}`, data);
+}
+
+/**
+ * Ouvre (ou reprend) l'inscription Stripe d'une buvette.
+ *
+ * Le compte Connect est créé au premier appel, puis l'adresse renvoyée mène au
+ * formulaire de Stripe. Cette adresse est à USAGE UNIQUE et expire vite : on la
+ * redemande à chaque clic plutôt que de la conserver.
+ */
+export async function apiStripeOnboardingLink(
+  orgId: string,
+  supplierId: string,
+): Promise<{ accountId: string; url: string; expiresAt: number }> {
+  return req('POST', `/organizations/${orgId}/suppliers/${supplierId}/stripe/onboarding-link`, {});
+}
+
+/** Relit l'état du compte chez Stripe et le recopie sur la buvette. */
+export async function apiStripeStatus(orgId: string, supplierId: string): Promise<Supplier> {
+  return req('GET', `/organizations/${orgId}/suppliers/${supplierId}/stripe/status`);
 }
 
 export async function apiUpdateSupplierStatus(
