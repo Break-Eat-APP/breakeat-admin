@@ -203,9 +203,24 @@ export default function SupplierDetailPage() {
     setStripeMsg('');
     try {
       const { url } = await apiStripeOnboardingLink(orgId, supplierId);
+      // Le bouton est REARME avant de partir. Sans ca, si la redirection
+      // n'aboutit pas — adresse vide, navigation bloquee — il restait grise
+      // pour toujours, avec un curseur « interdit » et aucune explication.
+      setStripeBusy(false);
+      if (!url) {
+        setStripeMsg('Stripe n’a pas renvoyé d’adresse d’inscription. Réessayez.');
+        return;
+      }
       window.location.assign(url);
     } catch (err) {
-      setStripeMsg(err instanceof Error ? err.message : 'Erreur');
+      // La session expirée est un cas A PART : le client d'API renvoie au
+      // formulaire de connexion, et le message se perdrait. On le dit ici.
+      const message = err instanceof Error ? err.message : 'Erreur inconnue';
+      setStripeMsg(
+        message.includes('Session expirée')
+          ? 'Session expirée — reconnectez-vous, puis réessayez.'
+          : message,
+      );
       setStripeBusy(false);
     }
   }
