@@ -1,4 +1,10 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BadGatewayException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 
@@ -74,6 +80,46 @@ export class StripeService implements OnModuleInit {
     return this.stripe;
   }
 
+  /**
+   * Enveloppe TOUT appel à Stripe.
+   *
+   * Raison d'être : Stripe répond `401` quand NOTRE clé est invalide. Relayé
+   * tel quel, ce 401 arrive au navigateur, qui le lit comme « la session de
+   * l'utilisateur a expiré » — il vide la session et renvoie au formulaire de
+   * connexion. Une clé mal recopiée déconnectait donc le manager à chaque clic,
+   * sans que rien ne mentionne jamais Stripe.
+   *
+   * Deux erreurs de sens opposé partageaient le même nombre. On les sépare :
+   * un problème de clé devient un 503 qui NOMME la cause, une panne Stripe un
+   * 502. Le 401 reste réservé à l'authentification de l'utilisateur.
+   */
+  private async appeler<T>(operation: string, fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (e: unknown) {
+      const erreur = e as { type?: string; statusCode?: number; message?: string };
+      const authentification =
+        erreur?.type === 'StripeAuthenticationError' || erreur?.statusCode === 401;
+
+      if (authentification) {
+        this.logger.error(
+          `Stripe refuse notre cle (${operation}) — verifier STRIPE_SECRET_KEY : ${erreur.message ?? ''}`,
+        );
+        throw new ServiceUnavailableException(
+          'La clé Stripe du serveur est invalide ou incomplète. ' +
+            'Vérifiez STRIPE_SECRET_KEY (elle doit être recopiée en entier, sans espace).',
+        );
+      }
+
+      // Une erreur metier de Stripe (compte inexistant, Connect non active…)
+      // porte un message utile : on le transmet plutot que de l'ecraser.
+      if (erreur?.statusCode && erreur.statusCode < 500) {
+        throw new BadGatewayException(erreur.message ?? `Stripe a refusé : ${operation}`);
+      }
+      throw e;
+    }
+  }
+
   // ─── Connect ─────────────────────────────────────────────────
 
   /**
@@ -86,13 +132,15 @@ export class StripeService implements OnModuleInit {
     businessName?: string;
     metadata?: Record<string, string>;
   }): Promise<Stripe.Account> {
-    return this.stripe.accounts.create({
-      type: 'standard',
-      country: params.country ?? 'FR',
-      email: params.email,
-      business_profile: params.businessName ? { name: params.businessName } : undefined,
-      metadata: params.metadata,
-    });
+    return this.appeler('creation du compte connecte', () =>
+      this.stripe.accounts.create({
+        type: 'standard',
+        country: params.country ?? 'FR',
+        email: params.email,
+        business_profile: params.businessName ? { name: params.businessName } : undefined,
+        metadata: params.metadata,
+      }),
+    );
   }
 
   /**
@@ -100,12 +148,14 @@ export class StripeService implements OnModuleInit {
    * Account links expire — generate a fresh one each call.
    */
   async createOnboardingLink(accountId: string): Promise<Stripe.AccountLink> {
-    return this.stripe.accountLinks.create({
-      account: accountId,
-      refresh_url: this.connectRefreshUrl,
-      return_url: this.connectReturnUrl,
-      type: 'account_onboarding',
-    });
+    return this.appeler('lien d inscription', () =>
+      this.stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: this.connectRefreshUrl,
+        return_url: this.connectReturnUrl,
+        type: 'account_onboarding',
+      }),
+    );
   }
 
   /**
@@ -113,7 +163,7 @@ export class StripeService implements OnModuleInit {
    * Use to refresh Supplier.stripeAccountStatus.
    */
   async retrieveAccount(accountId: string): Promise<Stripe.Account> {
-    return this.stripe.accounts.retrieve(accountId);
+    return this.appeler('lecture du compte', () => this.stripe.accounts.retrieve(accountId));
   }
 
   // ─── PaymentIntents ──────────────────────────────────────────
@@ -135,16 +185,18 @@ export class StripeService implements OnModuleInit {
   }): Promise<Stripe.PaymentIntent> {
     const applicationFeeAmount = Math.floor((params.amountCents * this.platformFeeBps) / 10_000);
 
-    return this.stripe.paymentIntents.create(
-      {
-        amount: params.amountCents,
-        currency: params.currency,
-        ...(applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {}),
-        transfer_data: { destination: params.destinationAccountId },
-        metadata: params.metadata,
-        automatic_payment_methods: { enabled: true },
-      },
-      { idempotencyKey: params.idempotencyKey },
+    return this.appeler('creation du paiement', () =>
+      this.stripe.paymentIntents.create(
+        {
+          amount: params.amountCents,
+          currency: params.currency,
+          ...(applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {}),
+          transfer_data: { destination: params.destinationAccountId },
+          metadata: params.metadata,
+          automatic_payment_methods: { enabled: true },
+        },
+        { idempotencyKey: params.idempotencyKey },
+      ),
     );
   }
 
@@ -191,31 +243,33 @@ export class StripeService implements OnModuleInit {
     const commission =
       applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {};
 
-    return this.stripe.checkout.sessions.create(
-      {
-        mode: 'payment',
-        payment_method_types: ['card'],
-        line_items: [
-          {
-            quantity: 1,
-            price_data: {
-              currency: params.currency,
-              unit_amount: params.amountCents,
-              product_data: { name: params.productName },
+    return this.appeler('ouverture de la page de paiement', () =>
+      this.stripe.checkout.sessions.create(
+        {
+          mode: 'payment',
+          payment_method_types: ['card'],
+          line_items: [
+            {
+              quantity: 1,
+              price_data: {
+                currency: params.currency,
+                unit_amount: params.amountCents,
+                product_data: { name: params.productName },
+              },
             },
+          ],
+          payment_intent_data: {
+            capture_method: params.captureMethod ?? 'manual',
+            ...commission,
+            transfer_data: { destination: params.destinationAccountId },
+            metadata: params.metadata,
           },
-        ],
-        payment_intent_data: {
-          capture_method: params.captureMethod ?? 'manual',
-          ...commission,
-          transfer_data: { destination: params.destinationAccountId },
           metadata: params.metadata,
+          success_url: params.successUrl,
+          cancel_url: params.cancelUrl,
         },
-        metadata: params.metadata,
-        success_url: params.successUrl,
-        cancel_url: params.cancelUrl,
-      },
-      { idempotencyKey: params.idempotencyKey },
+        { idempotencyKey: params.idempotencyKey },
+      ),
     );
   }
 
@@ -225,7 +279,7 @@ export class StripeService implements OnModuleInit {
    * n'aura pas lieu.
    */
   async capturePaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
-    return this.stripe.paymentIntents.capture(paymentIntentId);
+    return this.appeler('encaissement', () => this.stripe.paymentIntents.capture(paymentIntentId));
   }
 
   /**
@@ -233,14 +287,18 @@ export class StripeService implements OnModuleInit {
    * annule). Rien n'a été prélevé : ce n'est pas un remboursement.
    */
   async cancelPaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
-    return this.stripe.paymentIntents.cancel(paymentIntentId);
+    return this.appeler('liberation de l autorisation', () =>
+      this.stripe.paymentIntents.cancel(paymentIntentId),
+    );
   }
 
   /**
    * Retrieves a PaymentIntent. Used by webhook handlers and reconciliation jobs.
    */
   async retrievePaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
-    return this.stripe.paymentIntents.retrieve(paymentIntentId);
+    return this.appeler('lecture du paiement', () =>
+      this.stripe.paymentIntents.retrieve(paymentIntentId),
+    );
   }
 
   // ─── Webhooks ────────────────────────────────────────────────

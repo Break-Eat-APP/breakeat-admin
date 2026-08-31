@@ -60,7 +60,13 @@ async function renouvelerSession(): Promise<string | null> {
   }
 }
 
-async function apiFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
+async function apiFetch<T>(
+  path: string,
+  token: string,
+  init?: RequestInit,
+  /** Vrai quand la session a deja ete renouvelee : on ne reprend qu'UNE fois. */
+  dejaRenouvele = false,
+): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
@@ -90,9 +96,9 @@ async function apiFetch<T>(path: string, token: string, init?: RequestInit): Pro
   //
   // Une seule tentative, jamais sur la route de renouvellement : un jeton mort
   // relancerait sinon la reprise a l'infini.
-  if (res.status === 401 && !path.startsWith('/auth/refresh')) {
+  if (res.status === 401 && !dejaRenouvele && !path.startsWith('/auth/refresh')) {
     const nouveau = await renouvelerSession();
-    if (nouveau) return apiFetch<T>(path, nouveau, init);
+    if (nouveau) return apiFetch<T>(path, nouveau, init, true);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('operator_token');
       localStorage.removeItem('operator_refresh');

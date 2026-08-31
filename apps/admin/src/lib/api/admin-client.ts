@@ -113,6 +113,14 @@ async function req<T>(
   path: string,
   body?: unknown,
   noAuth = false,
+  /**
+   * Vrai quand la session a DEJA ete renouvelee pour cette requete.
+   *
+   * Sans ce drapeau, un 401 qui persiste apres renouvellement relançait la
+   * reprise indefiniment : chaque tentative reussissait a renouveler, echouait
+   * de nouveau, et repartait. L'API recevait des dizaines d'appels par clic.
+   */
+  dejaRenouvele = false,
 ): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (!noAuth) {
@@ -136,9 +144,18 @@ async function req<T>(
   //
   // Une seule tentative, et jamais sur la route de renouvellement elle-même :
   // un jeton mort relancerait sinon la reprise à l'infini.
-  if (res.status === 401 && !noAuth && !path.startsWith('/auth/refresh')) {
+  if (res.status === 401 && !noAuth && !dejaRenouvele && !path.startsWith('/auth/refresh')) {
     const renouvele = await renouvelerSession();
-    if (renouvele) return req<T>(method, path, body, noAuth);
+    if (renouvele) return req<T>(method, path, body, noAuth, true);
+  }
+
+  // 401 APRES un renouvellement reussi : le jeton est bon, c'est l'ACTION qui
+  // est refusee. Deconnecter serait trompeur — on le dit tel quel.
+  if (res.status === 401 && dejaRenouvele) {
+    throw new Error(
+      "Ton compte n'a pas le droit d'effectuer cette action. " +
+        'Vérifie ton rôle dans l’organisation.',
+    );
   }
 
   if (res.status === 401) {

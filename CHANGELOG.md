@@ -5,6 +5,45 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.56.2] — 2026-08-31 — Un 401 de Stripe n'est pas une session expirée
+
+### Une heure de diagnostic pour une clé mal recopiée
+Symptôme : « je clique sur *Se connecter à Stripe* et ça déconnecte le
+dashboard ». La console a fini par livrer la vraie phrase :
+
+> `"statusCode": 401, "message": "Invalid API Key provided: sk_test_…kleu"`
+
+**Stripe répond 401 quand NOTRE clé est invalide.** Ce 401 remontait tel quel
+jusqu'au navigateur, où le client d'API le lit comme « la session de
+l'utilisateur a expiré » : il vidait la session et renvoyait au formulaire. Deux
+erreurs de sens opposé partageaient le même nombre, et rien ne mentionnait
+jamais Stripe.
+
+Tout appel à Stripe passe désormais par une enveloppe qui sépare les deux : une
+clé invalide devient un **503 qui nomme la cause** (« vérifiez
+`STRIPE_SECRET_KEY`, elle doit être recopiée en entier »), une erreur métier un
+**502 qui transmet le message de Stripe**. Le 401 redevient ce qu'il n'aurait
+jamais dû cesser d'être : l'authentification de l'utilisateur.
+
+### La reprise de session tournait en boucle
+Le correctif de session posé plus tôt se rappelait lui-même sans garde : quand
+le 401 persistait après renouvellement — ce qui était le cas ici, puisqu'il
+venait de Stripe — chaque tentative renouvelait, échouait, repartait. **L'API
+recevait des dizaines d'appels par clic.**
+
+Une seule reprise désormais. Et un 401 qui survit à un renouvellement réussi ne
+déconnecte plus : il dit que l'action est refusée, pas la session.
+
+### Le bouton restait grisé
+Il n'était réarmé que dans le `catch` : une redirection qui n'aboutit pas le
+laissait inactif pour toujours, curseur « interdit », sans un mot.
+
+- `~ backend/src/modules/payments/stripe.service.ts` — enveloppe `appeler()`
+- `~ apps/admin/src/lib/api/admin-client.ts`, `apps/operator/.../orders-client.ts`
+- `~ apps/admin/src/app/(admin)/suppliers/[id]/page.tsx`
+
+---
+
 ## [0.56.1] — 2026-08-31 — La session ne saute plus au bout d'un quart d'heure
 
 ### Le symptôme
