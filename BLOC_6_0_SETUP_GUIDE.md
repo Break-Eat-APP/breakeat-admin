@@ -75,7 +75,10 @@ Tu dois avoir 2 URLs Vercel actives. Si oui : **étape 1 terminée ✅**
 2. **Deploy from GitHub repo** → sélectionne `Break-Eat-APP`
 3. Quand la pop-up s'ouvre :
    - **Add Service → GitHub Repo** ✓
-   - **Root Directory :** `backend`
+   - **Root Directory :** *(laisser VIDE — la racine du dépôt)*
+     Le `railway.json` de la racine porte la commande de démarrage
+     (`cd backend && pnpm db:migrate:prod && node dist/main`) et l'installation
+     passe par le workspace pnpm. Pointer sur `backend` masquerait les deux.
    - **Branch :** `main` (ou ta branche de staging si tu en as une)
 4. Le déploiement va échouer la 1ère fois (pas de DB). C'est normal.
 

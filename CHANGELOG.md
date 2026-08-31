@@ -5,6 +5,43 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.53.1] — 2026-08-28 — Suites d'un audit externe
+
+Quatre défauts réels, relevés par un audit indépendant. Le cinquième signalement
+(« changements non commités ») portait sur un instantané pris avant le commit.
+
+### Le groupe ne se formait pas là où l'app passe
+`demoCheckout` créait la commande sans recopier `cart.orderGroupId`. Il existe
+DEUX chemins de création — celui-ci et `createFromPaymentIntent` — et l'app
+emprunte le premier : « commander à plusieurs » n'aurait rien groupé en
+TestFlight, alors que le panier portait bien le code. Câblé, et **deux tests**
+tiennent désormais ce chemin.
+
+### Une règle appliquée en lecture, pas en écriture
+Le board applique l'épinglage à la buvette depuis la phase 12.9 : une opératrice
+rattachée à un comptoir ne voit que lui, même en changeant le paramètre d'URL.
+Mais les transitions ne vérifiaient que l'appartenance à l'organisation :
+n'importe quel membre pouvait, par appel direct, faire avancer la commande d'un
+AUTRE comptoir. Une règle appliquée d'un seul côté ne protège rien.
+
+Trois conditions désormais, **huit tests** : membre de l'organisation, rôle qui
+tient un comptoir (MARKETING exclu), et si le membre est épinglé, que ce soit la
+buvette de la commande. SUPER_ADMIN passe outre, rôle relu en base.
+
+### Le reste
+- `pnpm lint` échouait sur deux imports morts (`ConflictException`) — retirés.
+- L'API `operator-screens` du serveur n'avait plus aucun appelant depuis le
+  passage au board fixe : module supprimé. Les TABLES restent, avec un
+  avertissement dans le schéma — les supprimer effacerait les écrans déjà
+  enregistrés par les clubs, ce qui se décide (noté dans `REPRISE.md`).
+- Docs : `REPRISE.md` annonçait encore le blocage CORS de l'opérateur, levé
+  depuis ; `BLOC_6_0_SETUP_GUIDE.md` donnait `backend` comme Root Directory
+  Railway alors que `railway.json` vit à la racine ; trois entrées de journal du
+  manuel décrivaient les écrans configurables au présent — annotées « caduc »
+  plutôt que réécrites.
+
+---
+
 ## [0.53.0] — 2026-08-28 — Le bon plan, et commander à plusieurs
 
 ### Un plan par buvette

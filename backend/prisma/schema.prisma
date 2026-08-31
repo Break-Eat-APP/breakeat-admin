@@ -1107,6 +1107,15 @@ enum OperatorScreenKind {
 ///                 { categoryIds?: string[], excludeCategoryIds?: string[],
 ///                   productIds?: string[], excludeProductIds?: string[],
 ///                   showRecap?: boolean }
+/// ⚠️ VESTIGE — plus aucun code ne lit ces deux tables.
+///
+/// Le board opérateur est passé à trois colonnes FIXES (nouvelle → en
+/// préparation → prête à remettre) : configurer des écrans n'avait plus
+/// d'objet, et l'interface comme l'API ont été retirées.
+///
+/// Les TABLES sont conservées : les supprimer effacerait les écrans déjà
+/// enregistrés par les clubs, ce qui ne se décide pas en passant. La
+/// suppression est notée dans REPRISE.md, à valider explicitement.
 model OperatorScreenTemplate {
   id             String             @id @default(uuid())
   organizationId String             @map("organization_id")

@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -42,7 +41,14 @@ function mockPickup(supplierId: string | null = null) {
     supplierId,
   };
 }
-function mockCart(overrides: Partial<{ status: CartStatus; pickupPointId: string | null; paymentIntentId: string | null }> = {}) {
+function mockCart(
+  overrides: Partial<{
+    status: CartStatus;
+    pickupPointId: string | null;
+    paymentIntentId: string | null;
+    orderGroupId: string | null;
+  }> = {},
+) {
   return {
     id: CART_ID,
     userId: USER_ID,
@@ -51,6 +57,7 @@ function mockCart(overrides: Partial<{ status: CartStatus; pickupPointId: string
     pickupPointId: PICKUP_POINT_ID,
     status: CartStatus.OPEN,
     paymentIntentId: null as string | null,
+    orderGroupId: null as string | null,
     expiresAt: new Date(Date.now() + 60_000),
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -412,6 +419,79 @@ describe('CartService', () => {
 });
 
 // --- Stock : suivi explicite, pas obligatoire ------------------
+
+describe('demoCheckout — le rattachement au groupe suit le panier', () => {
+  // Il existe DEUX chemins de creation de commande : `createFromPaymentIntent`
+  // (paiement reel) et `demoCheckout`. L'app passe aujourd'hui par le second :
+  // cabler le groupe sur le premier seulement livrait une fonction « commander
+  // a plusieurs » qui ne groupait rien la ou elle sert.
+  let service: CartService;
+  let capture: { data?: Record<string, unknown> };
+
+  async function demarrer(orderGroupId: string | null) {
+    capture = {};
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CartService,
+        loyaltyDisabledProvider,
+        { provide: SlotsService, useValue: { assignOrderToSlot: jest.fn() } },
+        {
+          provide: OrderGroupsService,
+          useValue: { resoudrePourPanier: jest.fn().mockResolvedValue(null) },
+        },
+        { provide: StripeService, useValue: { createPaymentIntent: jest.fn() } },
+        { provide: GroupsService, useValue: { canAccessEvent: jest.fn().mockResolvedValue(true) } },
+        {
+          provide: PrismaService,
+          useValue: {
+            cart: {
+              findUnique: jest.fn().mockResolvedValue({
+                ...mockCart({ orderGroupId }),
+                items: [{ id: ITEM_ID, productId: PRODUCT_ID, quantity: 1, product: mockProduct() }],
+                event: mockEvent(),
+              }),
+            },
+            event: {
+              findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-1', venueId: VENUE_ID }),
+            },
+            pickupPoint: { findFirst: jest.fn().mockResolvedValue({ id: PICKUP_POINT_ID }) },
+            product: { findUnique: jest.fn().mockResolvedValue(mockProduct()) },
+            stock: { findFirst: jest.fn().mockResolvedValue(mockStock(50)) },
+            $transaction: jest.fn().mockImplementation(async (cb: (tx: unknown) => unknown) =>
+              cb({
+                cartItem: { update: jest.fn() },
+                cart: { update: jest.fn() },
+                order: {
+                  create: jest.fn().mockImplementation((args: { data: Record<string, unknown> }) => {
+                    capture.data = args.data;
+                    return Promise.resolve({ id: 'order-1', publicOrderNumber: 'DEMO-1', ...args.data });
+                  }),
+                },
+                payment: { create: jest.fn() },
+                orderAuditTrail: { create: jest.fn() },
+                slot: { update: jest.fn(), findUnique: jest.fn() },
+              }),
+            ),
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get(CartService);
+    await service.demoCheckout(CART_ID, USER_ID);
+  }
+
+  it('recopie le groupe sur la commande', async () => {
+    await demarrer('grp-1');
+    expect(capture.data?.orderGroupId).toBe('grp-1');
+  });
+
+  it('laisse le champ vide pour une commande passee seul', async () => {
+    await demarrer(null);
+    expect(capture.data?.orderGroupId).toBeNull();
+  });
+
+});
 
 describe('CartService — produit sans ligne de stock', () => {
   it('resolveStock renvoie null quand aucune ligne n existe', async () => {

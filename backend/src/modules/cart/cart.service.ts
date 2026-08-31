@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -566,6 +565,13 @@ export class CartService {
           venueId: event.venueId,
           supplierId: cart.supplierId,
           pickupPointId,
+          // PHASE 24 — le rattachement au groupe d'amis, ici AUSSI.
+          //
+          // Il y a deux chemins de creation de commande : celui-ci (demo) et
+          // `createFromPaymentIntent`. L'app passe aujourd'hui par le demo :
+          // ne l'avoir cable que sur l'autre revenait a livrer une fonction
+          // « commander a plusieurs » qui ne groupait rien en TestFlight.
+          orderGroupId: cart.orderGroupId,
           status: OrderStatus.PAID,
           paymentStatus: PaymentStatus.SUCCEEDED,
           subtotalCents,

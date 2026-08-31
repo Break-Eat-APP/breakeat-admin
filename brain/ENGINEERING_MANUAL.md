@@ -3138,6 +3138,13 @@ Finition de la refonte white-label sur la surface OPÉRATEUR (`apps/operator`), 
 
 ## [2026-06-07] Phase 11 — Écrans opérateur configurables (fondation backend : schéma + module)
 
+> ⛔ **CADUC depuis le 28/08/2026.** Le board opérateur est repassé à trois
+> colonnes FIXES : l'API `operator-screens` du serveur, l'UI de configuration et
+> la consommation côté opérateur ont été retirées. Les tables restent en base,
+> sans lecteur. Entrée conservée telle quelle — on annote le journal, on ne le
+> réécrit pas.
+
+
 ### What Was Built
 
 Fondation backend du board opérateur **paramétrable**. Deux blocs :
@@ -3215,6 +3222,13 @@ Périmètre : **backend seul**. L'UI admin (11.3), le rendu opérateur depuis `/
 
 ## [2026-06-07] Phase 11.3 — UI admin : écrans opérateur configurables (templates + application par événement)
 
+> ⛔ **CADUC depuis le 28/08/2026.** Le board opérateur est repassé à trois
+> colonnes FIXES : l'API `operator-screens` du serveur, l'UI de configuration et
+> la consommation côté opérateur ont été retirées. Les tables restent en base,
+> sans lecteur. Entrée conservée telle quelle — on annote le journal, on ne le
+> réécrit pas.
+
+
 ### What Was Built
 
 L'**interface admin** (Next.js 15, app `@break-eat/admin`) pilotant les deux surfaces backend de la Phase 11 : (1) CRUD des **modèles d'écran réutilisables** au niveau organisation, (2) **application/réordonnancement/activation par événement**. Trois fichiers créés (un builder partagé + deux pages de route) et trois modifiés (client API, nav, page détail événement).
@@ -3276,6 +3290,15 @@ Le board opérateur doit être **paramétrable sans toucher au code** : un manag
 ---
 
 ## [2026-06-07] Phase 11.4 — Board opérateur : rendu des écrans configurables (onglets + filtrage + Récap produits)
+
+> ⛔ **CADUC depuis le 28/08/2026 — voir « Phase 24 » plus bas.** Le board est
+> repassé à trois colonnes FIXES (nouvelle → en préparation → prête à remettre) ;
+> les onglets d'écrans, `lib/screens/filter.ts`, l'UI de configuration et l'API
+> `operator-screens` ont été retirés. Le Récap produits, lui, a survécu — et
+> s'affiche désormais toujours, alors qu'il dépendait d'un écran configuré.
+>
+> Cette entrée reste telle quelle : elle décrit ce qui a été construit ce jour-là.
+> On ne réécrit pas le journal, on l'annote.
 
 ### What Was Built
 

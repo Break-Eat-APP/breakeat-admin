@@ -15,35 +15,26 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-08-27_
+_Dernière mise à jour : 2026-08-28_
 
 ## ⏭️ REPRISE IMMÉDIATE
 
-1. **`CORS_ORIGINS` — ajouter `https://breakeat-operator.vercel.app`** sur Railway.
-   Vérifié le 25/08 par requête preflight : cette adresse est la SEULE des
-   quatre à ne pas être autorisée. Le navigateur bloque donc tout, et l'app
-   opérateur affichait « Identifiants incorrects » — le mot de passe n'était
-   jamais en cause.
-
-   **La boucle est fermée** : le bouton « Ouvrir le poste opérateur » du
-   dashboard manager pointe précisément vers cette adresse
-   (`OPERATOR_URL`, `apps/admin/src/lib/api/admin-client.ts`). L'opérateur
-   atterrit donc toujours sur le seul front bloqué.
-
-   ⚠️ L'URL longue `breakeat-operator-git-main-…` n'est PAS un contournement :
-   elle est protégée par le SSO Vercel, donc inaccessible à un opérateur qui
-   n'a pas de compte sur l'organisation Vercel. **Seul l'ajout à
-   `CORS_ORIGINS` débloque la situation.**
-2. **`APNS_BUNDLE_ID = com.shapper.breakeat`** sur Railway. La build TestFlight porte l'identifiant réel ; avec une autre valeur, le topic APNs ne correspond pas et **aucune Live Activity ne démarrera**.
-3. **`APNS_ENV = production`** sur Railway. Sans cette valeur, le serveur pousse
+1. **`APNS_BUNDLE_ID = com.shapper.breakeat`** sur Railway. La build TestFlight porte l'identifiant réel ; avec une autre valeur, le topic APNs ne correspond pas et **aucune Live Activity ne démarrera**.
+2. **`APNS_ENV = production`** sur Railway. Sans cette valeur, le serveur pousse
    vers l'hôte *sandbox* alors que la build TestFlight porte un jeton de
    production : Apple rejette chaque mise à jour (`BadDeviceToken`). La Live
    Activity s'affiche quand même — iOS la crée localement — mais reste **figée
    sur son premier état**, et rien ne la termine. C'est la cause des trois
    symptômes observés le 27/08. Le serveur trace maintenant l'hôte visé au
    démarrage : la ligne `APNs — hôte …` dit lequel est utilisé.
-4. **TestFlight** — App Store Connect → onglet TestFlight → remplir les *informations de test* (obligatoire), puis s'ajouter en testeur interne.
-5. **Renseigner les coordonnées GPS des lieux** — sans elles, un lieu n'apparaît jamais par proximité. Il reste trouvable par la recherche.
+3. **TestFlight** — App Store Connect → onglet TestFlight → remplir les *informations de test* (obligatoire), puis s'ajouter en testeur interne.
+4. **Renseigner les coordonnées GPS des lieux** — sans elles, un lieu n'apparaît jamais par proximité. Il reste trouvable par la recherche.
+5. **Décider du sort des tables `operator_screen_templates` et
+   `event_operator_screens`.** Le board opérateur est passé à trois colonnes
+   fixes : l'interface et l'API de configuration ont été retirées, mais les
+   TABLES restent. Les supprimer effacerait les écrans déjà enregistrés par les
+   clubs — ça se décide, ça ne se fait pas en passant. Tant qu'elles existent,
+   elles ne coûtent rien.
 6. **Nettoyer les données de test** du wizard et de « Démo Spartiates » : événements d'abord, puis points de retrait, puis comptes.
 
 ## 🧱 Montée Expo SDK 53 → 57 (25/08)
@@ -139,7 +130,7 @@ hoisted` n'y a rien changé. **Cause non expliquée** — 7 échecs Android cont
 
 `DEMO_MODE=true` en production : les commandes se créent **sans paiement**. À retirer avant tout encaissement réel.
 
-⚠️ **`https://breakeat-operator.vercel.app` est ABSENTE de `CORS_ORIGINS`** (vérifié le 25/08). Seule l'URL longue `breakeat-operator-git-main-…` est autorisée. Résultat : sur l'adresse courte, le navigateur bloque tout et l'app affichait « Identifiants incorrects » — le mot de passe n'était pas en cause. **À ajouter sur Railway.**
+✅ **`https://breakeat-operator.vercel.app` est autorisée** (re-vérifié le 28/08, requête preflight). Le blocage du 25/08 est levé : c'était bien un rejet CORS, jamais un mot de passe. `https://breakeat-admin-admin.vercel.app` répond également.
 
 **Toute nouvelle adresse doit rejoindre `CORS_ORIGINS`** (Railway → Variables), séparée par des virgules, **sans slash final**. Une entrée malformée bloque silencieusement toute l'app — c'est arrivé le 24/08.
 

@@ -12,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { OrderActorType, OrderStatus } from '@prisma/client';
+import { GlobalRole, OrgRole } from '../../common/enums/role.enum';
 import { PrismaService } from '../../database/prisma.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -46,6 +47,15 @@ import { AssignSlotDto } from './dto/assign-slot.dto';
 const CUSTOMER_SLOT_SELECT = {
   select: { id: true, startAt: true, endAt: true, label: true, status: true },
 } as const;
+
+/**
+ * Rôles qui tiennent un comptoir, et peuvent donc faire avancer une commande.
+ *
+ * MARKETING en est exclu : ce rôle sert aux campagnes, il n'a rien à remettre
+ * au client. Une commande avancée par erreur depuis ce poste enverrait au
+ * client « votre commande est prête » sans que personne ne l'ait préparée.
+ */
+const COMPTOIR_ROLES: OrgRole[] = [OrgRole.ORG_ADMIN, OrgRole.MANAGER, OrgRole.OPERATOR];
 
 @UseGuards(JwtAuthGuard)
 @Controller('orders')
@@ -274,15 +284,51 @@ export class OrdersController {
   }
 
   /**
-   * Verifies the caller is a member of the organization that owns the order.
+   * Autorise une TRANSITION sur une commande.
+   *
+   * La lecture du board applique déjà l'épinglage depuis la phase 12.9 : une
+   * opératrice rattachée à une buvette ne voit qu'elle, même en changeant le
+   * paramètre d'URL. L'écriture, elle, se contentait de vérifier l'appartenance
+   * à l'organisation — n'importe quel membre pouvait donc faire avancer, par
+   * appel direct, la commande d'un AUTRE comptoir. Une règle appliquée en
+   * lecture et pas en écriture ne protège rien.
+   *
+   * Trois conditions, toutes nécessaires :
+   *   1. être membre de l'organisation propriétaire de la commande ;
+   *   2. porter un rôle qui tient un comptoir (MARKETING n'en tient pas) ;
+   *   3. si le membre est épinglé à une buvette, que ce soit CELLE de la commande.
+   *
+   * SUPER_ADMIN passe outre : il intervient sans appartenir à l'organisation
+   * (support, incident). Son rôle est relu en base, jamais pris dans le jeton,
+   * pour qu'un retrait de droits s'applique immédiatement.
    */
   private async assertOperatorAccessByOrder(orderId: string, userId: string): Promise<void> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      select: { organizationId: true },
+      select: { organizationId: true, supplierId: true },
     });
     if (!order) throw new NotFoundException('Order not found');
-    await this.assertOrgMember(order.organizationId, userId);
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { globalRole: true },
+    });
+    if (user?.globalRole === GlobalRole.SUPER_ADMIN) return;
+
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: {
+        userId_organizationId: { userId, organizationId: order.organizationId },
+      },
+    });
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this organization');
+    }
+    if (!COMPTOIR_ROLES.includes(membership.orgRole as OrgRole)) {
+      throw new ForbiddenException('Your role does not allow operating orders');
+    }
+    if (membership.supplierId && membership.supplierId !== order.supplierId) {
+      throw new ForbiddenException('This order belongs to another supplier');
+    }
   }
 
   private async assertOrgMember(organizationId: string, userId: string): Promise<void> {

@@ -26,7 +26,6 @@ import { FeatureFlagsModule } from './modules/feature-flags/feature-flags.module
 import { AppSettingsModule } from './modules/app-settings/app-settings.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { BackofficeModule } from './modules/backoffice/backoffice.module';
-import { OperatorScreensModule } from './modules/operator-screens/operator-screens.module';
 import { StatsModule } from './modules/stats/stats.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
@@ -79,7 +78,6 @@ import appConfig from './config/app.config';
     GroupsModule,
     BackofficeModule,
     // Phase 11 — Operator dashboard (configurable screens)
-    OperatorScreensModule,
     // Phase 15 — Manager dashboard (org/event analytics)
     StatsModule,
     // Phase 18 — Notifications push (fondation Expo : C1/C2/C3)
