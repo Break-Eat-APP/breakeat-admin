@@ -84,15 +84,6 @@ export default registerAs('app', () => ({
     webUrl: (process.env.PUBLIC_WEB_URL ?? 'http://localhost:8081').replace(/\/+$/, ''),
   },
 
-  /**
-   * Back-office reporting parameters.
-   * vatRate: the VAT rate used to derive CA HT from the TTC totals stored on
-   * orders (Order.totalCents is tax-inclusive — there is no tax field in the
-   * schema). Default 0.10 = 10% (resto sur place). HT = TTC / (1 + vatRate).
-   */
-  reporting: {
-    vatRate: parseFloat(process.env.REPORTING_VAT_RATE ?? '0.10'),
-  },
 
   sentry: {
     dsn: process.env.SENTRY_DSN_BACKEND ?? '',

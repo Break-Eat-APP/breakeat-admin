@@ -2348,3 +2348,36 @@ Risks:
 Next steps:
 - 
 ```
+
+---
+
+## Session 2026-09-01 (suite) — TVA par produit
+
+**Demande.** « dans comptabilité tu as développé le taux de % à payer mais sur
+10 % ; en restauration il y a 3 types de TVA, 5,5, 10 et 20, faudrait les
+rajouter. »
+
+**Constat.** Le taux n'était pas « un réglage à enrichir » : il était unique et
+global (`REPORTING_VAT_RATE`, défaut 0.10), appliqué à tout le chiffre
+d'affaires. Or en restauration le taux est une propriété du **produit**. Pour
+une buvette qui vend de la bière, l'ancien calcul surévaluait le CA HT et
+sous-évaluait la TVA collectée.
+
+**Livré.**
+- `Product.vatRateBps` (550 / 1000 / 2000), figé sur `OrderItem` et
+  `OrderSplitUnit` au moment de la commande. Migration à `DEFAULT 1000` : aucun
+  chiffre passé ne change.
+- `common/helpers/tva.ts` (10 tests) — taux, libellés, dérivation HT,
+  ventilation avec remise au prorata et somme exacte garantie.
+- `common/helpers/ventilation-commandes.ts` — la lecture partagée par
+  `stats` et `backoffice`, pour que les deux écrans coïncident.
+- Comptabilité : bloc **« TVA par taux »** (part du CA, TTC, HT, TVA collectée).
+- Saisie du taux dans le wizard (colonne) et sur la fiche buvette (pastille
+  cliquable, pour corriger une carte existante sans la recréer).
+- `REPORTING_VAT_RATE` supprimé.
+
+**Reste à faire côté utilisateur.** Passer sur les produits déjà en ligne et
+régler leur taux — ils sont tous à 10 % par héritage. Voir `REPRISE.md`, point 8.
+
+**Vérifié.** 484 tests, `tsc` sur les quatre paquets, `lint` sans erreur,
+`next build` vert sur admin et back-office.

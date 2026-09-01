@@ -92,6 +92,19 @@ function KpiCard({
 
 // ─── Page ───────────────────────────────────────────────────────────────────────
 
+/**
+ * Le sous-titre de la vignette CA HT.
+ *
+ * Un seul taux : on l'annonce. Plusieurs : on les liste sans montants — trois
+ * chiffres ne tiennent pas dans une vignette, et une moyenne (« TVA 13 % »)
+ * ferait croire à un taux qui n'existe pas. Le détail est en Comptabilité.
+ */
+function sousTitreTva(revenue: { vatBreakdown: { label: string }[]; caTtcCents: number }): string {
+  const taux = revenue.vatBreakdown.map((t) => t.label);
+  if (taux.length === 0) return `TTC ${euros(revenue.caTtcCents)}`;
+  return `TVA ${taux.join(' · ')} · TTC ${euros(revenue.caTtcCents)}`;
+}
+
 export default function DashboardPage() {
   const [userName, setUserName] = useState('');
   const [orgId, setOrgId] = useState('');
@@ -244,7 +257,7 @@ export default function DashboardPage() {
             <KpiCard
               label="Chiffre d'affaires HT"
               value={euros(stats.revenue.caHtCents)}
-              sub={`TVA ${Math.round(stats.revenue.vatRate * 100)}% · TTC ${euros(stats.revenue.caTtcCents)}`}
+              sub={sousTitreTva(stats.revenue)}
               accent
             />
             <KpiCard label="CA TTC" value={euros(stats.revenue.caTtcCents)} sub="Encaissé (paiements réussis)" />

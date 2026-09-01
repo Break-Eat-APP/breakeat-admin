@@ -67,6 +67,19 @@ function Card({ title, children, action }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+/**
+ * Le sous-titre de la vignette CA HT.
+ *
+ * Un seul taux : on l'annonce. Plusieurs : on les liste sans montants — trois
+ * chiffres ne tiennent pas dans une vignette, et une moyenne (« TVA 13 % »)
+ * ferait croire à un taux qui n'existe pas. Le détail est en Comptabilité.
+ */
+function sousTitreTva(revenue: { vatBreakdown: { label: string }[]; caTtcCents: number }): string {
+  const taux = revenue.vatBreakdown.map((t) => t.label);
+  if (taux.length === 0) return `TTC ${euros(revenue.caTtcCents)}`;
+  return `TVA ${taux.join(' · ')} · TTC ${euros(revenue.caTtcCents)}`;
+}
+
 export default function EventDetailPage() {
   const params = useParams();
   const eventId = params.id as string;
@@ -442,7 +455,7 @@ export default function EventDetailPage() {
               <StatTile
                 label="CA HT"
                 value={euros(stats.revenue.caHtCents)}
-                sub={`TVA ${Math.round(stats.revenue.vatRate * 100)}% · TTC ${euros(stats.revenue.caTtcCents)}`}
+                sub={sousTitreTva(stats.revenue)}
                 accent
               />
               <StatTile label="CA TTC" value={euros(stats.revenue.caTtcCents)} sub="Encaissé" />

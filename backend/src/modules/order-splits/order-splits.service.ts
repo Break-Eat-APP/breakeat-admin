@@ -123,7 +123,7 @@ export class OrderSplitsService {
     const cart = await this.prisma.cart.findUnique({
       where: { id: cartId },
       include: {
-        items: { include: { product: { select: { id: true, name: true, price: true } } } },
+        items: { include: { product: { select: { id: true, name: true, price: true, vatRateBps: true } } } },
         event: { select: { organizationId: true, venueId: true } },
       },
     });
@@ -147,6 +147,7 @@ export class OrderSplitsService {
         productId: item.productId,
         productName: item.product.name,
         unitPriceCents: item.priceSnapshotCents ?? item.product.price,
+        vatRateBps: item.product.vatRateBps,
       })),
     );
 

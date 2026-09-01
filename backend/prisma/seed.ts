@@ -171,12 +171,22 @@ async function main(): Promise<void> {
   });
 
   // Products (price in cents) + global stock
-  const productData: { name: string; price: number; categoryId: string; description?: string }[] = [
-    { name: 'Coca-Cola 33cl', price: 250, categoryId: boissons.id, description: 'Boisson gazeuse classique' },
-    { name: 'Bière Kronenbourg 33cl', price: 400, categoryId: boissons.id, description: 'Bière blonde' },
-    { name: 'Eau minérale 50cl', price: 200, categoryId: boissons.id },
-    { name: 'Hot-Dog', price: 500, categoryId: snacks.id, description: 'Pain brioché + saucisse grillée' },
-    { name: 'Nachos + Sauce', price: 450, categoryId: snacks.id },
+  // `vatRateBps` illustre les trois taux de la restauration : la bière à 20 %,
+  // l'eau capsulée vendue à emporter à 5,5 %, le reste — servi au gobelet ou
+  // chaud — à 10 %. Un jeu d'essai tout à 10 % ne montrerait jamais la
+  // ventilation de la page Comptabilité.
+  const productData: {
+    name: string;
+    price: number;
+    categoryId: string;
+    description?: string;
+    vatRateBps: number;
+  }[] = [
+    { name: 'Coca-Cola 33cl', price: 250, categoryId: boissons.id, description: 'Boisson gazeuse classique', vatRateBps: 1000 },
+    { name: 'Bière Kronenbourg 33cl', price: 400, categoryId: boissons.id, description: 'Bière blonde', vatRateBps: 2000 },
+    { name: 'Eau minérale 50cl', price: 200, categoryId: boissons.id, vatRateBps: 550 },
+    { name: 'Hot-Dog', price: 500, categoryId: snacks.id, description: 'Pain brioché + saucisse grillée', vatRateBps: 1000 },
+    { name: 'Nachos + Sauce', price: 450, categoryId: snacks.id, vatRateBps: 1000 },
   ];
   const products: { id: string; name: string; price: number }[] = [];
   for (const p of productData) {
@@ -186,6 +196,7 @@ async function main(): Promise<void> {
         categoryId: p.categoryId,
         name: p.name,
         price: p.price,
+        vatRateBps: p.vatRateBps,
         description: p.description,
         status: ProductStatus.ACTIVE,
       },

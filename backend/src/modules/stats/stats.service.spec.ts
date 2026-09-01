@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { OrderStatus, PaymentStatus } from '@prisma/client';
 import { GlobalRole, OrgRole } from '../../common/enums/role.enum';
@@ -25,7 +24,18 @@ describe('StatsService', () => {
     order: { aggregate: jest.Mock; groupBy: jest.Mock; findMany: jest.Mock };
     orderItem: { groupBy: jest.Mock };
     event: { findMany: jest.Mock; findUnique: jest.Mock };
+    $queryRaw: jest.Mock;
   };
+
+  /** Ce que renvoie le groupBy « par taux ». Reecrit par les tests concernes. */
+  let ventilationMock: Array<{ vatRateBps: number; _sum: { lineTotalCents: number } }> = [];
+  /** Ce que renvoie le groupBy « meilleures ventes ». */
+  let topProduitsMock: unknown[] = [];
+
+  beforeEach(() => {
+    ventilationMock = [];
+    topProduitsMock = [];
+  });
 
   const ORG_ID = '11111111-1111-1111-1111-111111111111';
   const EVENT_ID = '22222222-2222-2222-2222-222222222222';
@@ -44,13 +54,21 @@ describe('StatsService', () => {
       order: { aggregate: jest.fn(), groupBy: jest.fn(), findMany: jest.fn() },
       orderItem: { groupBy: jest.fn() },
       event: { findMany: jest.fn(), findUnique: jest.fn() },
+      $queryRaw: jest.fn().mockResolvedValue([]),
     };
+
+    // `orderItem.groupBy` sert deux lectures aux formes differentes : les
+    // meilleures ventes (par produit) et la ventilation TVA (par taux). Un mock
+    // unique renverrait la forme de l'une a l'autre et produirait des NaN
+    // silencieux -- exactement le genre de faux vert qu'on ne veut pas.
+    prisma.orderItem.groupBy.mockImplementation((args: { by: string[] }) =>
+      Promise.resolve(args.by.includes('vatRateBps') ? ventilationMock : topProduitsMock),
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         StatsService,
         { provide: PrismaService, useValue: prisma },
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(0.1) } },
       ],
     }).compile();
 
@@ -103,6 +121,9 @@ describe('StatsService', () => {
       expect(result.revenue.caTtcCents).toBe(11_000);
       expect(result.revenue.caHtCents).toBe(10_000); // 11000 / 1.10
       expect(result.revenue.vatRate).toBe(0.1);
+      expect(result.revenue.vatBreakdown).toEqual([
+        { vatRateBps: 1000, label: '10 %', ttcCents: 11_000, htCents: 10_000, tvaCents: 1_000 },
+      ]);
       expect(result.ordersCount).toBe(4);
       expect(result.averageBasket.ttcCents).toBe(2_750);
       expect(result.averageBasket.htCents).toBe(2_500);
@@ -126,6 +147,7 @@ describe('StatsService', () => {
 
       expect(result.revenue.caTtcCents).toBe(0);
       expect(result.revenue.caHtCents).toBe(0);
+      expect(result.revenue.vatBreakdown).toEqual([]);
       expect(result.ordersCount).toBe(0);
       expect(result.averageBasket.ttcCents).toBe(0);
       expect(result.averageBasket.htCents).toBe(0);
@@ -163,10 +185,15 @@ describe('StatsService', () => {
         { status: OrderStatus.READY, _count: { _all: 1 } },
         { status: OrderStatus.COMPLETED, _count: { _all: 1 } },
       ]);
-      prisma.orderItem.groupBy.mockResolvedValue([
+      topProduitsMock = [
         { productId: 'p1', productNameSnapshot: 'Bière', _sum: { quantity: 10, lineTotalCents: 4_000 } },
         { productId: 'p2', productNameSnapshot: 'Frites', _sum: { quantity: 5, lineTotalCents: 1_000 } },
-      ]);
+      ];
+      // 40 € de bière à 20 %, 10 € de frites à 10 % : deux taux, un seul soir.
+      ventilationMock = [
+        { vatRateBps: 1000, _sum: { lineTotalCents: 1_000 } },
+        { vatRateBps: 2000, _sum: { lineTotalCents: 4_000 } },
+      ];
 
       const result = await service.getEventStats(EVENT_ID, USER_ID);
 
@@ -179,7 +206,14 @@ describe('StatsService', () => {
 
       expect(result.event.id).toBe(EVENT_ID);
       expect(result.revenue.caTtcCents).toBe(5_000);
-      expect(result.revenue.caHtCents).toBe(4_545); // round(5000 / 1.10)
+      // Le HT ne se déduit PAS d'un taux unique : 1000/1,10 + 4000/1,20.
+      // Un calcul à 10 % pour tout aurait annoncé 4 545 € et sous-déclaré la
+      // TVA sur la bière de près de 130 €.
+      expect(result.revenue.caHtCents).toBe(909 + 3_333);
+      expect(result.revenue.vatBreakdown).toEqual([
+        { vatRateBps: 1000, label: '10 %', ttcCents: 1_000, htCents: 909, tvaCents: 91 },
+        { vatRateBps: 2000, label: '20 %', ttcCents: 4_000, htCents: 3_333, tvaCents: 667 },
+      ]);
       expect(result.ordersCount).toBe(2);
       expect(result.averageBasket.ttcCents).toBe(2_500);
 

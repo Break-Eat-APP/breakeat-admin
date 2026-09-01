@@ -5,12 +5,13 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PaymentStatus, OrgStatus, GlobalRole } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { ExpoPushService } from '../notifications/expo-push.service';
 import { PushTokensService } from '../notifications/push-tokens.service';
 import { ScheduledPushService } from '../notifications/scheduled-push.service';
+import { tauxMoyenBps, type TrancheTva } from '../../common/helpers/tva';
+import { ventilationCommandes } from '../../common/helpers/ventilation-commandes';
 import type { CreateBackofficeOrgDto } from './dto/create-backoffice-org.dto';
 import type { UpdateBackofficeOrgDto } from './dto/update-backoffice-org.dto';
 import type { SendNotificationDto } from './dto/send-notification.dto';
@@ -18,15 +19,19 @@ import type { ScheduleNotificationDto } from './dto/schedule-notification.dto';
 
 /**
  * Cross-tenant KPI snapshot for the back-office overview.
- * All monetary values are integer cents. caHt is derived from caTtc using the
- * configured reporting VAT rate (orders store TTC totals only).
+ * All monetary values are integer cents. Le HT se deduit du taux de TVA fige
+ * sur chaque ligne de commande -- 5,5 / 10 / 20 % selon le produit -- et non
+ * d'un taux unique. Meme calcul que StatsService : les deux ecrans doivent
+ * tomber sur le meme chiffre pour le meme perimetre.
  */
 export interface GlobalKpis {
   revenue: {
     caTtcCents: number;
     caHtCents: number;
-    /** VAT rate used to derive HT from TTC (e.g. 0.1 for 10%). */
+    /** Taux MOYEN collecte (0.13 = 13 %), pour affichage. Voir vatBreakdown. */
     vatRate: number;
+    /** Le detail par taux, du plus bas au plus eleve. */
+    vatBreakdown: TrancheTva[];
   };
   ordersCount: number;
   averageBasket: {
@@ -47,27 +52,19 @@ export interface GlobalKpis {
  * already authorised and does not re-check membership.
  *
  * Revenue rule: an order counts toward CA only when paymentStatus = SUCCEEDED.
- * Order.totalCents is tax-inclusive (TTC); CA HT = round(TTC / (1 + vatRate)).
+ * Order.totalCents is tax-inclusive (TTC); le HT se deduit du taux fige sur
+ * chaque ligne -- voir `common/helpers/tva.ts`.
  */
 @Injectable()
 export class BackofficeService {
   private readonly logger = new Logger(BackofficeService.name);
-  private readonly vatRate: number;
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
     private readonly expoPush: ExpoPushService,
     private readonly pushTokens: PushTokensService,
     private readonly scheduledPush: ScheduledPushService,
-  ) {
-    const configured = this.config.get<number>('app.reporting.vatRate');
-    // Guard against a missing / NaN env override; fall back to 10%.
-    this.vatRate =
-      typeof configured === 'number' && Number.isFinite(configured) && configured >= 0
-        ? configured
-        : 0.1;
-  }
+  ) {}
 
   // ─── KPIs ─────────────────────────────────────────────────────
 
@@ -88,13 +85,23 @@ export class BackofficeService {
 
     const caTtcCents = agg._sum.totalCents ?? 0;
     const ordersCount = agg._count._all;
-    const caHtCents = this.toHtCents(caTtcCents);
+    const ventilation = await ventilationCommandes(
+      this.prisma,
+      { paymentStatus: PaymentStatus.SUCCEEDED },
+      caTtcCents,
+    );
+    const caHtCents = ventilation.htCents;
 
     const avgBasketTtcCents = ordersCount > 0 ? Math.round(caTtcCents / ordersCount) : 0;
     const avgBasketHtCents = ordersCount > 0 ? Math.round(caHtCents / ordersCount) : 0;
 
     return {
-      revenue: { caTtcCents, caHtCents, vatRate: this.vatRate },
+      revenue: {
+        caTtcCents,
+        caHtCents,
+        vatRate: tauxMoyenBps(ventilation) / 10_000,
+        vatBreakdown: ventilation.tranches,
+      },
       ordersCount,
       averageBasket: { htCents: avgBasketHtCents, ttcCents: avgBasketTtcCents },
       accountsCount,
@@ -567,8 +574,4 @@ export class BackofficeService {
     return { organization: org.name, supprime };
   }
 
-  /** TTC cents → HT cents using the configured reporting VAT rate. */
-  private toHtCents(ttcCents: number): number {
-    return Math.round(ttcCents / (1 + this.vatRate));
-  }
 }

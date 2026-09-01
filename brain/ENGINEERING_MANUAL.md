@@ -4422,3 +4422,73 @@ Restent connus et **non traités** :
   événements de l'instance qui le sert.
 - **Taille du pool Prisma** non réglée : à ajuster via `connection_limit` dans
   l'URL de base si le coup de feu sature les connexions.
+
+
+## Phase 26 — La TVA par produit (2026-09-01)
+
+**Le problème.** `StatsService` et `BackofficeService` dérivaient tous deux le CA
+HT d'un taux unique figé au démarrage depuis `app.reporting.vatRate` (défaut
+0.10). C'est juste tant qu'une buvette ne vend que des sandwichs. Dès qu'elle
+sert une bière — c'est-à-dire toujours — le chiffre est faux, et une déclaration
+de TVA ne se remplit de toute façon pas avec une moyenne : elle se remplit
+**ligne par taux**.
+
+**Le choix : points de base entiers, pas de décimaux.** `vatRateBps` vaut 550,
+1000 ou 2000. Additionner des `0.055` sur cinq mille commandes par soir fait
+dériver le total de quelques centimes ; une comptabilité qui ne tombe pas juste
+n'a aucune valeur. Tout le calcul reste en entiers jusqu'à l'affichage.
+
+**Le choix : le taux est figé sur la ligne de commande.** `OrderItem.vatRateBps`
+duplique `Product.vatRateBps` au moment de la commande, exactement comme
+`unitPriceCentsSnapshot` duplique le prix. Sans cette copie, corriger le taux
+d'une bière en octobre réécrirait la TVA déclarée en septembre — et une
+déclaration déjà déposée deviendrait introuvable dans l'application.
+
+**Le choix : `DEFAULT 1000` dans la migration.** Toutes les lignes existantes
+reprennent le taux qui servait effectivement à les déclarer. La migration ne
+change donc AUCUN chiffre affiché : elle rend seulement les suivants justes.
+Une migration comptable qui réécrit le passé est une migration qu'on ne peut pas
+déployer.
+
+**Le choix : la remise au prorata.** `ventilerTva(lignes, remise)` répartit la
+remise fidélité proportionnellement au poids de chaque taux. C'est la règle
+d'une remise commerciale non affectée. L'imputer entièrement sur le taux le plus
+élevé arrangerait le club et minorerait la TVA due — donc non. Le reste
+d'arrondi va à la tranche la plus lourde : **la somme des tranches redonne
+toujours le total exact**, invariant vérifié par un test qui balaie plusieurs
+remises.
+
+**Le choix : `ventilerSurTotal(lignes, ttcRéel)`.** Le montant encaissé
+(`Order.totalCents`, agrégé) fait foi ; les lignes ne servent qu'à le
+*répartir*. On passe donc l'écart (`somme des lignes − encaissé`) comme remise.
+Cela absorbe la remise fidélité **et** toute dérive éventuelle, et garantit que
+le pied du tableau égale le total encaissé. Si les lignes sont introuvables
+alors que de l'argent est entré (commande ancienne, produit supprimé), tout est
+porté au taux par défaut plutôt que disparaître : **un CA sous-déclaré est pire
+qu'un CA mal ventilé.**
+
+**Le choix : du SQL direct pour la ventilation par événement.** Prisma ne sait
+pas grouper sur un champ de la relation parente (`order.eventId`), et
+`StatsService.lignesParEvenement()` a besoin de (événement × taux) en une passe.
+L'alternative — une requête `groupBy` par événement — multiplierait les
+allers-retours par le nombre de matchs de la saison. `SUM(...)::bigint` puis
+`Number()` : la somme d'une saison dépasse un entier 32 bits bien avant
+d'approcher la limite d'un nombre JavaScript.
+
+**La limite assumée.** Les colonnes « CA HT » des tableaux *par journée* et *par
+tranche* sont réparties au prorata du taux moyen de la période, pas ventilées
+exactement. Descendre la ventilation jusqu'à chaque journée demanderait de
+ramener les lignes de trente jours de service — des centaines de milliers de
+rangs — pour une colonne indicative. Le détail exact vit dans
+`revenue.vatBreakdown`, et l'interface dit lequel des deux sert à déclarer.
+
+**Réglage supprimé.** `REPORTING_VAT_RATE` / `app.reporting.vatRate` n'existe
+plus. Un taux global n'a plus de sens et l'oublier en production redonnerait un
+faux chiffre silencieux. Rien à retirer côté Railway : la variable n'y était pas
+définie.
+
+**Où se trouve la vérité.** `backend/src/common/helpers/tva.ts` côté serveur,
+`apps/admin/src/lib/tva.ts` côté interface. Les deux listes de taux doivent
+rester synchronisées ; toute modification de l'une se reporte à l'autre.
+
+---

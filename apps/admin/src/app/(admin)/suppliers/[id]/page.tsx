@@ -14,6 +14,7 @@ import {
   apiCreateCategory,
   apiGetProducts,
   apiCreateProduct,
+  apiUpdateProduct,
   apiDeleteProduct,
   apiGetEvents,
   apiAttachSupplier,
@@ -25,6 +26,8 @@ import {
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 import { SlotTemplatesPanel } from '@/components/slot-templates-panel';
+import { TAUX_TVA, TAUX_TVA_DEFAUT } from '@/lib/tva';
+import { PastilleTva } from '@/components/pastille-tva';
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
   OPEN: { bg: '#d1fae5', color: '#065f46', label: 'Ouverte' },
@@ -84,7 +87,10 @@ export default function SupplierDetailPage() {
   const [showProductForm, setShowProductForm] = useState(false);
   const [productForm, setProductForm] = useState({
     name: '', price: '', categoryId: '', description: '', imageUrl: '',
+    vatRateBps: TAUX_TVA_DEFAUT,
   });
+  /** Produit dont le taux est en cours d'enregistrement (pastille grisée). */
+  const [tvaEnCours, setTvaEnCours] = useState<string | null>(null);
   const [creatingProduct, setCreatingProduct] = useState(false);
   const [productError, setProductError] = useState('');
 
@@ -152,6 +158,26 @@ export default function SupplierDetailPage() {
     }
   }
 
+  /**
+   * Corrige le taux d'un produit déjà en ligne.
+   *
+   * Indispensable : une carte saisie avant cette fonctionnalité est
+   * entièrement à 10 %, bières comprises. Sans correction possible, il
+   * faudrait supprimer et recréer chaque produit — en perdant son historique.
+   */
+  async function changerTva(productId: string, vatRateBps: number) {
+    setTvaEnCours(productId);
+    setProductError('');
+    try {
+      await apiUpdateProduct(orgId, supplierId, productId, { vatRateBps });
+      await load();
+    } catch (err) {
+      setProductError(err instanceof Error ? err.message : 'Erreur');
+    } finally {
+      setTvaEnCours(null);
+    }
+  }
+
   async function handleCreateProduct(e: React.FormEvent) {
     e.preventDefault();
     setCreatingProduct(true);
@@ -165,9 +191,17 @@ export default function SupplierDetailPage() {
         categoryId: productForm.categoryId,
         description: productForm.description.trim() || undefined,
         imageUrl: productForm.imageUrl.trim() || undefined,
+        vatRateBps: productForm.vatRateBps,
       });
       setShowProductForm(false);
-      setProductForm({ name: '', price: '', categoryId: '', description: '', imageUrl: '' });
+      setProductForm({
+        name: '', price: '', categoryId: '', description: '', imageUrl: '',
+        // Le taux choisi RESTE pour le produit suivant : on saisit une carte
+        // par familles (toutes les bières, puis tous les sandwichs), et
+        // remettre 10 % à chaque ligne ferait ressaisir vingt fois la même
+        // chose — donc oublier une fois.
+        vatRateBps: productForm.vatRateBps,
+      });
       await load();
     } catch (err) {
       setProductError(err instanceof Error ? err.message : 'Erreur');
@@ -675,6 +709,22 @@ export default function SupplierDetailPage() {
                 />
               </div>
               <div>
+                <label style={lbl}>TVA *</label>
+                <select
+                  value={productForm.vatRateBps}
+                  onChange={(e) =>
+                    setProductForm((f) => ({ ...f, vatRateBps: Number(e.target.value) }))
+                  }
+                  style={{ ...inp, background: BRAND.bg }}
+                >
+                  {TAUX_TVA.map((t) => (
+                    <option key={t.bps} value={t.bps}>
+                      {t.label} — {t.usage}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label style={lbl}>Catégorie *</label>
                 <select
                   value={productForm.categoryId}
@@ -752,6 +802,11 @@ export default function SupplierDetailPage() {
                       {p.description && <div style={{ fontSize: 12, color: BRAND.grey }}>{p.description}</div>}
                     </div>
                     <div style={{ fontWeight: 700, fontSize: 15, color: '#059669' }}>{formatPrice(p.price)}</div>
+                    <PastilleTva
+                      produit={p}
+                      occupe={tvaEnCours === p.id}
+                      onChange={(bps) => void changerTva(p.id, bps)}
+                    />
                     <button
                       onClick={() => void handleDeleteProduct(p.id)}
                       style={{ background: 'none', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}
@@ -775,6 +830,11 @@ export default function SupplierDetailPage() {
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
                   </div>
                   <div style={{ fontWeight: 700, fontSize: 15, color: '#059669' }}>{formatPrice(p.price)}</div>
+                  <PastilleTva
+                    produit={p}
+                    occupe={tvaEnCours === p.id}
+                    onChange={(bps) => void changerTva(p.id, bps)}
+                  />
                   <button onClick={() => void handleDeleteProduct(p.id)} style={{ background: 'none', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Suppr.</button>
                 </div>
               ))}

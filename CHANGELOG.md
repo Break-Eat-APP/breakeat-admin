@@ -5,6 +5,88 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.58.0] — 2026-09-01 — La TVA suit le produit, pas le commerçant
+
+La comptabilité dérivait le CA HT d'un taux unique, 10 %, lu dans une variable
+d'environnement (`REPORTING_VAT_RATE`). En restauration, ce chiffre n'existe
+pas : il y a **trois** taux, et c'est le PRODUIT qui décide lequel s'applique.
+
+| Taux | Ce qui relève de ce taux |
+|---|---|
+| **5,5 %** | Vente à emporter destinée à une consommation différée — produit conditionné, emballé, vendu fermé (bouteille capsulée, sandwich sous film) |
+| **10 %** | Consommation immédiate — le régime ordinaire d'une buvette : sandwich chaud, frites, boisson au gobelet, café |
+| **20 %** | Alcools, en toutes circonstances. Et tout ce qui n'est pas alimentaire |
+
+Pour une buvette qui vend de la bière, l'ancien calcul était faux dans les deux
+sens : **HT surévalué, TVA collectée sous-évaluée**. Sur 10 000 € encaissés dont
+3 000 € de bière, l'écart de base imposable dépasse 100 €. Et une déclaration se
+remplit **taux par taux** — jamais en moyenne.
+
+### Le taux vit sur le produit, et se fige à la commande
+`Product.vatRateBps` (points de base entiers : 550 / 1000 / 2000 — 5,5 % n'a pas
+d'écriture exacte en virgule flottante, et une TVA arrondie de travers ne passe
+pas devant un comptable). `OrderItem.vatRateBps` et `OrderSplitUnit.vatRateBps`
+en gardent une **copie figée**, comme le prix : corriger le taux d'un produit
+demain ne doit pas réécrire la comptabilité d'hier.
+
+`DEFAULT 1000` sur les trois colonnes : les lignes déjà en base reprennent
+exactement le taux qui servait à les déclarer. **Les chiffres d'hier restent les
+chiffres d'hier.**
+
+### Un seul endroit qui sait compter
+`common/helpers/tva.ts` — les trois taux, leurs libellés, la dérivation HT, et
+`ventilerTva()` / `ventilerSurTotal()`. La remise fidélité est répartie **au
+prorata** de chaque taux (une remise commerciale qui ne vise aucun produit
+réduit proportionnellement chaque base imposable ; l'imputer sur le seul taux à
+20 % minorerait la TVA due). Le reste d'arrondi va à la tranche la plus lourde,
+si bien que **la somme des tranches redonne toujours le total exact** — un
+tableau dont les lignes ne totalisent pas le pied est un tableau qu'on ne peut
+pas déposer. 10 tests, dont un balayage d'arrondis.
+
+`common/helpers/ventilation-commandes.ts` fait la lecture en base, partagée par
+`StatsService` (tableau de bord club) et `BackofficeService` (plateforme) : les
+deux écrans doivent tomber sur le même chiffre pour le même périmètre.
+
+### Comptabilité — le tableau qui sert à déclarer
+Nouveau bloc **« TVA par taux »** : part du CA, CA TTC, CA HT (base imposable) et
+TVA collectée, une ligne par taux. Il suit la vue affichée — « par période » lit
+la fenêtre choisie, « par événement » lit tout l'historique.
+
+La vignette « TVA collectée » ne dit plus « ≈ 10 % » mais liste les taux
+présents. Les colonnes CA HT des tableaux par période / par événement restent
+indicatives, et le disent.
+
+### Saisir le taux là où on saisit le produit
+- **Assistant de configuration** : une colonne TVA dans le tableau des produits.
+  Les cartes pré-remplies sont corrigées — la bière, l'IPA et le cidre partent à
+  20 %, l'eau minérale à 5,5 %.
+- **Fiche buvette** : le taux est une **pastille colorée cliquable** sur chaque
+  produit, modifiable sans rouvrir de formulaire. Indispensable : une carte
+  saisie avant aujourd'hui est entièrement à 10 %, bières comprises. Le violet du
+  20 % se repère d'un coup d'œil dans une liste de trente lignes.
+- Le taux choisi **reste** d'un produit au suivant : on saisit une carte par
+  familles, et le remettre à chaque ligne ferait ressaisir vingt fois la même
+  chose — donc oublier une fois.
+
+### Fichiers
+- `+ backend/src/common/helpers/tva.ts`, `+ tva.spec.ts` (10 tests)
+- `+ backend/src/common/helpers/ventilation-commandes.ts`
+- `+ backend/prisma/migrations/20260901b_tva_par_produit/migration.sql`
+- `+ apps/admin/src/lib/tva.ts`, `+ apps/admin/src/components/pastille-tva.tsx`
+- `~ backend/prisma/schema.prisma` — `vatRateBps` sur `Product`, `OrderItem`, `OrderSplitUnit`
+- `~ backend/src/modules/products/` (DTO create/update + service), `orders.service.ts`, `order-splits.service.ts`
+- `~ backend/src/modules/stats/stats.service.ts` — ventilation par événement en une requête SQL (Prisma ne groupe pas sur un champ de la relation parente)
+- `~ backend/src/modules/backoffice/backoffice.service.ts`
+- `~ backend/prisma/seed.ts` — les trois taux représentés
+- `~ apps/admin` : `accounting/`, `wizard/`, `suppliers/[id]/`, `dashboard/`, `events/[id]/`, `admin-client.ts`
+- `~ apps/backoffice` : `overview/`, `backoffice-client.ts`
+- `- REPORTING_VAT_RATE` — le réglage global n'a plus de sens et a été retiré (config + `.env.example`)
+
+484 tests au vert. `tsc` propre sur les quatre paquets, `lint` sans erreur,
+`next build` vert sur admin et back-office.
+
+---
+
 ## [0.57.1] — 2026-09-01 — Audit du trajet d'une commande, du panier au comptoir
 
 Question posée : « avec plusieurs buvettes, chaque commande arrive-t-elle bien

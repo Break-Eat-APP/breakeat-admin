@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, TrendingUp, ShoppingBag, Receipt, BarChart2 } from 'lucide-react';
+import { RefreshCw, TrendingUp, ShoppingBag, Receipt, BarChart2, Percent } from 'lucide-react';
 import {
   apiGetOrgStats,
   apiGetPeriodStats,
@@ -11,6 +11,7 @@ import {
   type OrgStatsOverview,
   type PeriodGranularity,
   type PeriodStats,
+  type TrancheTva,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 
@@ -89,6 +90,83 @@ function KpiCard({ icon: Icon, label, value, sub, accent }: {
   );
 }
 
+// ─── Ventilation TVA ──────────────────────────────────────────────────────────
+
+const COULEUR_TAUX: Record<number, string> = {
+  550: '#059669',
+  1000: '#0284c7',
+  2000: '#7c3aed',
+};
+
+/**
+ * Le chiffre d'affaires taux par taux.
+ *
+ * C'est la seule lecture qui permette de remplir une déclaration : la CA3 se
+ * remplit par taux, pas en moyenne. Un total global à « 10 % » suffisait tant
+ * que la buvette ne vendait que des sandwichs ; dès qu'elle sert une bière
+ * (20 %) ou vend une bouteille capsulée à emporter (5,5 %), ce chiffre unique
+ * est simplement faux — HT surévalué, TVA collectée sous-évaluée.
+ */
+function VentilationTva({ tranches }: { tranches: TrancheTva[] }) {
+  const totalTtc = tranches.reduce((n, t) => n + t.ttcCents, 0);
+  const totalHt = tranches.reduce((n, t) => n + t.htCents, 0);
+  const totalTva = tranches.reduce((n, t) => n + t.tvaCents, 0);
+
+  return (
+    <div style={{ background: BRAND.surface, borderRadius: BRAND.radius.card, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}`, overflow: 'hidden', marginBottom: 24 }}>
+      <div style={{ padding: '16px 22px', borderBottom: `1px solid ${BRAND.border}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Percent size={16} strokeWidth={2.2} color={BRAND.orange} />
+        <h2 style={{ ...BRAND.sectionTitle, margin: 0 }}>TVA par taux</h2>
+        <span style={{ color: BRAND.grey, fontSize: 12.5 }}>
+          Le taux suit le produit : 5,5 % à emporter emballé, 10 % consommation immédiate, 20 % alcools.
+        </span>
+      </div>
+
+      {tranches.length === 0 ? (
+        <div style={{ padding: 28, textAlign: 'center', color: BRAND.grey, fontSize: 14 }}>
+          Aucune vente sur la période.
+        </div>
+      ) : (
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+          <thead>
+            <tr style={{ background: BRAND.bgSubtle }}>
+              {['Taux', 'Part du CA', 'CA TTC', 'CA HT (base imposable)', 'TVA collectée'].map((h) => (
+                <th key={h} style={{ padding: '10px 16px', textAlign: h === 'Taux' ? 'left' : 'right', fontWeight: 700, color: BRAND.inkSoft, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4, borderBottom: `1px solid ${BRAND.border}` }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tranches.map((t, i) => {
+              const couleur = COULEUR_TAUX[t.vatRateBps] ?? BRAND.inkSoft;
+              return (
+                <tr key={t.vatRateBps} style={{ borderBottom: i < tranches.length - 1 ? `1px solid ${BRAND.border}` : 'none', background: i % 2 === 1 ? BRAND.bg : BRAND.surface }}>
+                  <td style={{ padding: '12px 16px' }}>
+                    <span style={{ background: `${couleur}18`, color: couleur, borderRadius: 999, padding: '3px 12px', fontSize: 13, fontWeight: 800 }}>
+                      {t.label}
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', color: BRAND.inkSoft }}>{pct(t.ttcCents, totalTtc)}</td>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: BRAND.ink }}>{euros(t.ttcCents)}</td>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: '#059669' }}>{euros(t.htCents)}</td>
+                  <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: couleur }}>{euros(t.tvaCents)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ background: BRAND.bgSubtle, borderTop: `2px solid ${BRAND.border}` }}>
+              <td colSpan={2} style={{ padding: '12px 16px', fontWeight: 800, color: BRAND.ink, fontSize: 13 }}>TOTAL</td>
+              <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: BRAND.ink }}>{euros(totalTtc)}</td>
+              <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: '#059669' }}>{euros(totalHt)}</td>
+              <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: BRAND.ink }}>{euros(totalTva)}</td>
+            </tr>
+          </tfoot>
+        </table>
+      )}
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AccountingPage() {
@@ -149,11 +227,26 @@ export default function AccountingPage() {
     return <div style={{ padding: 32, color: '#dc2626', fontSize: 14, fontFamily: BRAND.font }}>Aucune organisation sélectionnée.</div>;
   }
 
-  const totalTtc = data?.revenue?.caTtcCents ?? 0;
-  const totalHt  = data?.revenue?.caHtCents ?? 0;
+  // La ventilation suit la vue : « par période » lit la fenêtre choisie,
+  // « par événement » lit tout l'historique. Afficher le total de toujours
+  // sous un tableau des trente derniers jours ferait dire au gérant que ses
+  // chiffres ne tombent pas juste.
+  const source = view === 'periods' && periods ? periods : data;
+  const totalTtc = source?.revenue?.caTtcCents ?? 0;
+  const totalHt  = source?.revenue?.caHtCents ?? 0;
   const tva = totalTtc - totalHt;
-  const avgBasket = data?.averageBasket?.ttcCents ?? 0;
-  const nbOrders = data?.ordersCount ?? 0;
+  const tranches = source?.revenue?.vatBreakdown ?? [];
+  const sousTitreTva =
+    tranches.length > 1
+      ? `${tranches.map((t) => t.label).join(' · ')} — détail ci-dessous`
+      : `≈ ${pct(tva, totalTtc)} du CA TTC`;
+  const avgBasket = source?.averageBasket?.ttcCents ?? 0;
+  const nbOrders = source?.ordersCount ?? 0;
+  // Le pied du tableau « par événement » totalise TOUS les événements, quelle
+  // que soit la fenêtre choisie plus haut : c'est sa propre somme.
+  const totalTtcEvenements = data?.revenue?.caTtcCents ?? 0;
+  const totalHtEvenements = data?.revenue?.caHtCents ?? 0;
+  const nbOrdersEvenements = data?.ordersCount ?? 0;
 
   return (
     <div style={{ padding: 32, fontFamily: BRAND.font }}>
@@ -163,7 +256,7 @@ export default function AccountingPage() {
           <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0, letterSpacing: -0.3 }}>Comptabilité</h1>
           <p style={{ color: BRAND.inkSoft, fontSize: 13.5, margin: '6px 0 0', lineHeight: 1.55 }}>
             Chiffre d&apos;affaires, TVA et commandes — consolidés sur l&apos;ensemble des événements de <strong>{orgName ?? 'l\'organisation'}</strong>.
-            TVA à 10 % (restauration). CA HT = CA TTC ÷ 1,10.
+            La TVA est calculée <strong>produit par produit</strong> : 5,5 %, 10 % ou 20 % selon ce qui est vendu.
           </p>
         </div>
         <button
@@ -187,10 +280,13 @@ export default function AccountingPage() {
           {/* KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginTop: 20, marginBottom: 28 }}>
             <KpiCard icon={TrendingUp} label="CA TTC total" value={euros(totalTtc)} sub="TVA incluse" />
-            <KpiCard icon={Receipt} label="CA HT total" value={euros(totalHt)} sub="TVA 10 % exclue" accent="#059669" />
-            <KpiCard icon={BarChart2} label="TVA collectée" value={euros(tva)} sub={`≈ ${pct(tva, totalTtc)} du CA TTC`} accent="#7c3aed" />
+            <KpiCard icon={Receipt} label="CA HT total" value={euros(totalHt)} sub="Base imposable, TVA exclue" accent="#059669" />
+            <KpiCard icon={BarChart2} label="TVA collectée" value={euros(tva)} sub={sousTitreTva} accent="#7c3aed" />
             <KpiCard icon={ShoppingBag} label="Commandes" value={INT.format(nbOrders)} sub={avgBasket ? `Panier moyen ${euros(avgBasket)}` : undefined} accent="#0284c7" />
           </div>
+
+          {/* La ventilation par taux — la lecture qui sert à déclarer. */}
+          <VentilationTva tranches={tranches} />
 
           {/* Détail — par période ou par événement */}
           <div style={{ background: BRAND.surface, borderRadius: BRAND.radius.card, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}`, overflow: 'hidden' }}>
@@ -300,10 +396,10 @@ export default function AccountingPage() {
                 <tfoot>
                   <tr style={{ background: BRAND.bgSubtle, borderTop: `2px solid ${BRAND.border}` }}>
                     <td colSpan={3} style={{ padding: '12px 16px', fontWeight: 800, color: BRAND.ink, fontSize: 13 }}>TOTAL</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: BRAND.ink }}>{INT.format(nbOrders)}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: BRAND.ink }}>{euros(totalTtc)}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: '#059669' }}>{euros(totalHt)}</td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: BRAND.inkSoft }}>{euros(tva)}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: BRAND.ink }}>{INT.format(nbOrdersEvenements)}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: BRAND.ink }}>{euros(totalTtcEvenements)}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 800, color: '#059669' }}>{euros(totalHtEvenements)}</td>
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700, color: BRAND.inkSoft }}>{euros(totalTtcEvenements - totalHtEvenements)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -312,7 +408,10 @@ export default function AccountingPage() {
 
           <p style={{ fontSize: 11.5, color: BRAND.grey, marginTop: 12, lineHeight: 1.5 }}>
             * Seules les commandes avec paiement confirmé (PAID, ACCEPTED, PREPARING, READY, PICKED_UP, COMPLETED) entrent dans le calcul du CA.
-            Les commandes annulées ou remboursées sont exclues.
+            Les commandes annulées ou remboursées sont exclues. Le taux de TVA appliqué est celui figé sur chaque
+            ligne au moment du paiement : changer le taux d&apos;un produit aujourd&apos;hui ne modifie pas les
+            commandes déjà passées. Les colonnes CA HT des tableaux ci-dessous sont indicatives — c&apos;est la
+            ventilation par taux qui sert à déclarer.
           </p>
         </>
       )}

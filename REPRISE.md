@@ -15,7 +15,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-08-29 (audit production)_
+_Dernière mise à jour : 2026-09-01 (TVA par produit, sélecteur de buvette, créneaux au fuseau du lieu)_
 
 ## 🔴 ÉTAT AU 29/08/2026 — LIRE D'ABORD
 
@@ -78,6 +78,15 @@ Redis, donc **une seule instance serveur** ; pool Prisma non réglé.
    clubs — ça se décide, ça ne se fait pas en passant. Tant qu'elles existent,
    elles ne coûtent rien.
 7. **Nettoyer les données de test** du wizard et de « Démo Spartiates » : événements d'abord, puis points de retrait, puis comptes.
+8. **Régler la TVA des produits déjà en ligne.** Toute carte saisie avant le
+   01/09/2026 est à **10 %**, bières comprises : c'était le seul taux que
+   l'application connaissait. Les taux de la restauration sont trois — 5,5 %
+   (à emporter, produit emballé), 10 % (consommation immédiate), 20 % (alcools
+   et non-alimentaire). Dashboard → **Buvettes** → une buvette : chaque produit
+   porte une **pastille de taux cliquable**. Tant qu'une bière reste à 10 %, la
+   page Comptabilité surévalue le CA HT et sous-évalue la TVA collectée. Les
+   commandes DÉJÀ passées gardent leur taux d'origine — c'est voulu : on ne
+   réécrit pas une déclaration déposée.
 
 ## 🧱 Montée Expo SDK 53 → 57 (25/08)
 

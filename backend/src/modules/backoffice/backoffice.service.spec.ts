@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { PaymentStatus, OrgStatus, GlobalRole } from '@prisma/client';
 import { BackofficeService } from './backoffice.service';
@@ -21,6 +20,7 @@ describe('BackofficeService', () => {
   let service: BackofficeService;
   let prisma: {
     order: { aggregate: jest.Mock; count: jest.Mock };
+    orderItem: { groupBy: jest.Mock };
     user: { count: jest.Mock; findUnique: jest.Mock; update: jest.Mock; delete: jest.Mock };
     organization: {
       count: jest.Mock;
@@ -36,6 +36,13 @@ describe('BackofficeService', () => {
   beforeEach(async () => {
     prisma = {
       order: { aggregate: jest.fn(), count: jest.fn() },
+      // La ventilation TVA lit les lignes de commande groupees par taux.
+      // Par defaut : tout a 10 %, le regime historique de la plateforme.
+      orderItem: {
+        groupBy: jest.fn().mockResolvedValue([
+          { vatRateBps: 1000, _sum: { lineTotalCents: 11_000 } },
+        ]),
+      },
       user: { count: jest.fn(), findUnique: jest.fn(), update: jest.fn(), delete: jest.fn() },
       organization: {
         count: jest.fn(),
@@ -53,7 +60,6 @@ describe('BackofficeService', () => {
         BackofficeService,
         { provide: PrismaService, useValue: prisma },
         // Configured reporting VAT rate = 10% (resto sur place).
-        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue(0.1) } },
         // Notifications push : injectées par le service mais non sollicitées par
         // les cas testés ici (KPIs + CRUD org) → mocks vides suffisants pour la DI.
         { provide: ExpoPushService, useValue: { send: jest.fn() } },
@@ -92,6 +98,9 @@ describe('BackofficeService', () => {
       // 11000 / 1.10 = 10000 exactly.
       expect(kpis.revenue.caHtCents).toBe(10_000);
       expect(kpis.revenue.vatRate).toBe(0.1);
+      expect(kpis.revenue.vatBreakdown).toEqual([
+        { vatRateBps: 1000, label: '10 %', ttcCents: 11_000, htCents: 10_000, tvaCents: 1_000 },
+      ]);
 
       expect(kpis.ordersCount).toBe(4);
       // 11000 / 4 = 2750 TTC ; 10000 / 4 = 2500 HT.
@@ -108,6 +117,9 @@ describe('BackofficeService', () => {
         _sum: { totalCents: 999 },
         _count: { _all: 1 },
       });
+      prisma.orderItem.groupBy.mockResolvedValue([
+        { vatRateBps: 1000, _sum: { lineTotalCents: 999 } },
+      ]);
       prisma.user.count.mockResolvedValue(1);
       prisma.organization.count.mockResolvedValue(1);
 
@@ -117,11 +129,38 @@ describe('BackofficeService', () => {
       expect(kpis.averageBasket.htCents).toBe(908);
     });
 
+    it('sépare les trois taux de la restauration', async () => {
+      // Une soirée ordinaire : des frites (10 %), de la bière (20 %) et des
+      // bouteilles d'eau capsulées vendues à emporter (5,5 %).
+      prisma.order.aggregate.mockResolvedValue({
+        _sum: { totalCents: 10_000 },
+        _count: { _all: 20 },
+      });
+      prisma.orderItem.groupBy.mockResolvedValue([
+        { vatRateBps: 550, _sum: { lineTotalCents: 2_000 } },
+        { vatRateBps: 1000, _sum: { lineTotalCents: 5_000 } },
+        { vatRateBps: 2000, _sum: { lineTotalCents: 3_000 } },
+      ]);
+      prisma.user.count.mockResolvedValue(1);
+      prisma.organization.count.mockResolvedValue(1);
+
+      const kpis = await service.getGlobalKpis();
+
+      expect(kpis.revenue.vatBreakdown.map((t) => t.label)).toEqual(['5,5 %', '10 %', '20 %']);
+      // Un taux unique à 10 % aurait annoncé 9 091 € de HT ; le vrai chiffre
+      // est plus bas, parce que la bière porte deux fois plus de TVA.
+      expect(kpis.revenue.caHtCents).toBe(1_896 + 4_545 + 2_500);
+      expect(kpis.revenue.caHtCents).toBeLessThan(9_091);
+      // Le pied de tableau tombe toujours juste.
+      expect(kpis.revenue.vatBreakdown.reduce((n, t) => n + t.ttcCents, 0)).toBe(10_000);
+    });
+
     it('returns zeroes and avoids divide-by-zero when there are no paid orders', async () => {
       prisma.order.aggregate.mockResolvedValue({
         _sum: { totalCents: null },
         _count: { _all: 0 },
       });
+      prisma.orderItem.groupBy.mockResolvedValue([]);
       prisma.user.count.mockResolvedValue(0);
       prisma.organization.count.mockResolvedValue(0);
 

@@ -285,11 +285,11 @@ model PushToken {
 /// A company, venue operator or event owner.
 /// One organisation can own many venues, events and suppliers.
 model Organization {
-  id           String    @id @default(uuid())
-  name         String
-  slug         String    @unique
-  status       OrgStatus @default(ACTIVE)
-  settings     Json      @default("{}")
+  id                   String              @id @default(uuid())
+  name                 String
+  slug                 String              @unique
+  status               OrgStatus           @default(ACTIVE)
+  settings             Json                @default("{}")
   /// PHASE 26 — compte Stripe DU CLUB.
   ///
   /// C'est ici que l'argent des commandes arrive, pour TOUTES ses buvettes. Le
@@ -302,11 +302,11 @@ model Organization {
   stripeChargesEnabled Boolean             @default(false) @map("stripe_charges_enabled")
   stripeOnboardedAt    DateTime?           @map("stripe_onboarded_at")
   /// PHASE 12.8 — Branding fields (URL-based, no file upload in V1)
-  logoUrl      String?   @map("logo_url")
-  primaryColor String?   @map("primary_color")
-  description  String?
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  logoUrl              String?             @map("logo_url")
+  primaryColor         String?             @map("primary_color")
+  description          String?
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
 
   members                 OrganizationMember[]
   venues                  Venue[]
@@ -588,6 +588,15 @@ model Product {
   description    String?
   /// Price in cents. 250 = €2.50. Must be >= 0.
   price          Int
+  /// Taux de TVA en points de base : 550 = 5,5 %, 1000 = 10 %, 2000 = 20 %.
+  /// En restauration le taux dépend du PRODUIT, pas du commerçant : une bière
+  /// est à 20 %, un sandwich consommé sur place à 10 %, le même sandwich vendu
+  /// à emporter sous emballage à 5,5 %. Un taux unique pour toute la carte
+  /// fausserait la déclaration.
+  /// Entier en points de base et non décimal : 5,5 n'a pas de représentation
+  /// exacte en virgule flottante, et une TVA arrondie de travers ne passe pas
+  /// devant un comptable.
+  vatRateBps     Int           @default(1000) @map("vat_rate_bps")
   imageUrl       String?       @map("image_url")
   status         ProductStatus @default(ACTIVE)
   availableFrom  DateTime?     @map("available_from")
@@ -752,6 +761,10 @@ model OrderItem {
   productId              String   @map("product_id")
   productNameSnapshot    String   @map("product_name_snapshot")
   unitPriceCentsSnapshot Int      @map("unit_price_cents_snapshot")
+  /// Taux de TVA figé à la commande, comme le prix. Corriger le taux d'un
+  /// produit demain ne doit pas réécrire la comptabilité d'hier : une
+  /// déclaration déjà déposée resterait alors introuvable dans l'application.
+  vatRateBps             Int      @default(1000) @map("vat_rate_bps")
   quantity               Int
   lineTotalCents         Int      @map("line_total_cents")
   createdAt              DateTime @default(now()) @map("created_at")
@@ -1175,6 +1188,8 @@ model OrderSplitUnit {
   /// convive entre le moment où il coche et celui où il paie.
   productName    String               @map("product_name")
   unitPriceCents Int                  @map("unit_price_cents")
+  /// Figé au même instant que le prix (voir Product.vatRateBps).
+  vatRateBps     Int                  @default(1000) @map("vat_rate_bps")
   status         OrderSplitUnitStatus @default(FREE)
   shareId        String?              @map("share_id")
   /// Fin de la réservation. Passé ce délai, l'unité redevient libre.

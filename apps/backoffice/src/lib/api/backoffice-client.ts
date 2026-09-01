@@ -104,6 +104,17 @@ async function req<T>(
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
+/** Une tranche de TVA : le chiffre d'affaires d'un taux donné. */
+export interface TrancheTva {
+  /** Taux en points de base : 550, 1000 ou 2000. */
+  vatRateBps: number;
+  /** « 5,5 % », « 10 % », « 20 % » — prêt à afficher. */
+  label: string;
+  ttcCents: number;
+  htCents: number;
+  tvaCents: number;
+}
+
 export interface BackofficeUser {
   id: string;
   email: string;
@@ -125,7 +136,10 @@ export interface GlobalKpis {
   revenue: {
     caTtcCents: number;
     caHtCents: number;
+    /** Taux MOYEN collecté (0.13 = 13 %). Le détail fait foi : vatBreakdown. */
     vatRate: number;
+    /** Le chiffre d'affaires par taux — 5,5 / 10 / 20 % en restauration. */
+    vatBreakdown: TrancheTva[];
   };
   ordersCount: number;
   averageBasket: {

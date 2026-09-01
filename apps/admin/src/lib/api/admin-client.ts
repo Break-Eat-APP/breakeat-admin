@@ -1044,6 +1044,13 @@ export interface Product {
   name: string;
   description?: string | null;
   price: number; // cents
+  /**
+   * Taux de TVA en points de base : 550 (5,5 %), 1000 (10 %), 2000 (20 %).
+   * En restauration le taux suit le PRODUIT : une bière est à 20 %, un
+   * sandwich servi sur place à 10 %, le même sandwich emballé à emporter
+   * à 5,5 %. C'est ce taux qui alimente la ventilation en comptabilité.
+   */
+  vatRateBps: number;
   imageUrl?: string | null;
   status: string;
   categoryId: string;
@@ -1059,9 +1066,30 @@ export async function apiGetProducts(orgId: string, supplierId: string): Promise
 export async function apiCreateProduct(
   orgId: string,
   supplierId: string,
-  data: { name: string; price: number; categoryId: string; description?: string; imageUrl?: string },
+  data: {
+    name: string;
+    price: number;
+    categoryId: string;
+    description?: string;
+    imageUrl?: string;
+    vatRateBps?: number;
+  },
 ): Promise<Product> {
   return req<Product>('POST', `/organizations/${orgId}/suppliers/${supplierId}/products`, data);
+}
+
+/** Modifie un produit — sert aujourd'hui à corriger son taux de TVA. */
+export async function apiUpdateProduct(
+  orgId: string,
+  supplierId: string,
+  productId: string,
+  data: Partial<{ name: string; price: number; description: string; vatRateBps: number }>,
+): Promise<Product> {
+  return req<Product>(
+    'PATCH',
+    `/organizations/${orgId}/suppliers/${supplierId}/products/${productId}`,
+    data,
+  );
 }
 
 export async function apiDeleteProduct(
@@ -1184,14 +1212,33 @@ export async function apiSimulatorStats(eventId: string): Promise<SimulatorStats
 // ─── Stats (Phase 15 — Manager dashboard) ───────────────────────────────────────
 // Read-only analytics, gated server-side to MANAGE_ROLES (ORG_ADMIN, MANAGER);
 // SUPER_ADMIN bypasses. All money is integer cents; TTC is tax-inclusive and
-// caHtCents = round(caTtcCents / (1 + vatRate)) — reconciles with the back office.
+// le HT se déduit du taux de TVA figé sur CHAQUE LIGNE de commande (5,5 / 10 /
+// 20 % selon le produit), pas d'un taux unique — mêmes chiffres qu'au back-office.
+
+
+/** Une tranche de TVA : le chiffre d'affaires d'un taux donné. */
+export interface TrancheTva {
+  /** Taux en points de base : 550, 1000 ou 2000. */
+  vatRateBps: number;
+  /** « 5,5 % », « 10 % », « 20 % » — prêt à afficher. */
+  label: string;
+  ttcCents: number;
+  htCents: number;
+  tvaCents: number;
+}
 
 /** Revenue rollup for a scope (org or event). */
 export interface RevenueBlock {
   caTtcCents: number;
   caHtCents: number;
-  /** VAT rate used to derive HT from TTC (e.g. 0.1 for 10%). */
+  /**
+   * Taux MOYEN collecté (0.13 = 13 %), pour une étiquette quand la place
+   * manque. Ce n'est PAS une base de déclaration : c'est `vatBreakdown` qui
+   * fait foi, taux par taux.
+   */
   vatRate: number;
+  /** Le détail par taux, du plus bas au plus élevé. Vide si aucune vente. */
+  vatBreakdown: TrancheTva[];
 }
 
 export interface BasketBlock {

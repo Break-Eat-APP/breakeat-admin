@@ -22,6 +22,7 @@ import {
   type VenueOperatingMode,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
+import { TAUX_TVA, TAUX_TVA_DEFAUT } from '@/lib/tva';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ interface ProductDraft {
   name: string;
   priceEuros: string;
   category: string;
+  /** Taux de TVA en points de base : 550, 1000 ou 2000. Voir `@/lib/tva`. */
+  vatRateBps: number;
 }
 
 interface Buvette {
@@ -147,11 +150,11 @@ const TEMPLATES: TemplatePreset[] = [
           pickupPoint: 'Comptoir Nord',
           categories: ['Boissons', 'Snacks'],
           products: [
-            { id: uid(), name: 'Coca-Cola 33cl', priceEuros: '2.50', category: 'Boissons' },
-            { id: uid(), name: 'Bière 33cl', priceEuros: '4.00', category: 'Boissons' },
-            { id: uid(), name: 'Eau minérale 50cl', priceEuros: '2.00', category: 'Boissons' },
-            { id: uid(), name: 'Hot-Dog', priceEuros: '5.00', category: 'Snacks' },
-            { id: uid(), name: 'Nachos + Sauce', priceEuros: '4.50', category: 'Snacks' },
+            { id: uid(), name: 'Coca-Cola 33cl', priceEuros: '2.50', category: 'Boissons', vatRateBps: 1000 },
+            { id: uid(), name: 'Bière 33cl', priceEuros: '4.00', category: 'Boissons', vatRateBps: 2000 },
+            { id: uid(), name: 'Eau minérale 50cl', priceEuros: '2.00', category: 'Boissons', vatRateBps: 550 },
+            { id: uid(), name: 'Hot-Dog', priceEuros: '5.00', category: 'Snacks', vatRateBps: 1000 },
+            { id: uid(), name: 'Nachos + Sauce', priceEuros: '4.50', category: 'Snacks', vatRateBps: 1000 },
           ],
         },
         {
@@ -161,9 +164,9 @@ const TEMPLATES: TemplatePreset[] = [
           pickupPoint: 'Comptoir Sud',
           categories: ['Boissons'],
           products: [
-            { id: uid(), name: 'Bière 50cl', priceEuros: '5.50', category: 'Boissons' },
-            { id: uid(), name: 'Soft 33cl', priceEuros: '3.00', category: 'Boissons' },
-            { id: uid(), name: 'Eau minérale 50cl', priceEuros: '2.00', category: 'Boissons' },
+            { id: uid(), name: 'Bière 50cl', priceEuros: '5.50', category: 'Boissons', vatRateBps: 2000 },
+            { id: uid(), name: 'Soft 33cl', priceEuros: '3.00', category: 'Boissons', vatRateBps: 1000 },
+            { id: uid(), name: 'Eau minérale 50cl', priceEuros: '2.00', category: 'Boissons', vatRateBps: 550 },
           ],
         },
       ],
@@ -193,10 +196,10 @@ const TEMPLATES: TemplatePreset[] = [
           pickupPoint: 'Stand Scène',
           categories: ['Boissons', 'Plats'],
           products: [
-            { id: uid(), name: 'Soft 33cl', priceEuros: '3.00', category: 'Boissons' },
-            { id: uid(), name: 'Burger', priceEuros: '8.00', category: 'Plats' },
-            { id: uid(), name: 'Frites', priceEuros: '4.00', category: 'Plats' },
-            { id: uid(), name: 'Crêpe sucrée', priceEuros: '4.50', category: 'Plats' },
+            { id: uid(), name: 'Soft 33cl', priceEuros: '3.00', category: 'Boissons', vatRateBps: 1000 },
+            { id: uid(), name: 'Burger', priceEuros: '8.00', category: 'Plats', vatRateBps: 1000 },
+            { id: uid(), name: 'Frites', priceEuros: '4.00', category: 'Plats', vatRateBps: 1000 },
+            { id: uid(), name: 'Crêpe sucrée', priceEuros: '4.50', category: 'Plats', vatRateBps: 1000 },
           ],
         },
         {
@@ -206,9 +209,9 @@ const TEMPLATES: TemplatePreset[] = [
           pickupPoint: 'Stand Entrée',
           categories: ['Boissons'],
           products: [
-            { id: uid(), name: 'Bière pression 50cl', priceEuros: '5.00', category: 'Boissons' },
-            { id: uid(), name: 'IPA artisanale 33cl', priceEuros: '6.00', category: 'Boissons' },
-            { id: uid(), name: 'Cidre 33cl', priceEuros: '4.50', category: 'Boissons' },
+            { id: uid(), name: 'Bière pression 50cl', priceEuros: '5.00', category: 'Boissons', vatRateBps: 2000 },
+            { id: uid(), name: 'IPA artisanale 33cl', priceEuros: '6.00', category: 'Boissons', vatRateBps: 2000 },
+            { id: uid(), name: 'Cidre 33cl', priceEuros: '4.50', category: 'Boissons', vatRateBps: 2000 },
           ],
         },
       ],
@@ -238,11 +241,11 @@ const TEMPLATES: TemplatePreset[] = [
           pickupPoint: 'Comptoir Cafétéria',
           categories: ['Boissons', 'Plats'],
           products: [
-            { id: uid(), name: 'Café', priceEuros: '1.50', category: 'Boissons' },
-            { id: uid(), name: 'Jus de fruits', priceEuros: '2.50', category: 'Boissons' },
-            { id: uid(), name: 'Sandwich', priceEuros: '5.50', category: 'Plats' },
-            { id: uid(), name: 'Salade', priceEuros: '7.00', category: 'Plats' },
-            { id: uid(), name: 'Plat chaud', priceEuros: '9.00', category: 'Plats' },
+            { id: uid(), name: 'Café', priceEuros: '1.50', category: 'Boissons', vatRateBps: 1000 },
+            { id: uid(), name: 'Jus de fruits', priceEuros: '2.50', category: 'Boissons', vatRateBps: 1000 },
+            { id: uid(), name: 'Sandwich', priceEuros: '5.50', category: 'Plats', vatRateBps: 1000 },
+            { id: uid(), name: 'Salade', priceEuros: '7.00', category: 'Plats', vatRateBps: 1000 },
+            { id: uid(), name: 'Plat chaud', priceEuros: '9.00', category: 'Plats', vatRateBps: 1000 },
           ],
         },
       ],
@@ -575,6 +578,7 @@ export default function WizardPage() {
                 name: p.name.trim(),
                 price: toCents(p.priceEuros),
                 categoryId: catMap[p.category],
+                vatRateBps: p.vatRateBps,
               }),
             ),
           );
@@ -1119,7 +1123,13 @@ function BuvetteCard({
     onChange({
       products: [
         ...buvette.products,
-        { id: uid(), name: '', priceEuros: '', category: buvette.categories[0] ?? '' },
+        {
+          id: uid(),
+          name: '',
+          priceEuros: '',
+          category: buvette.categories[0] ?? '',
+          vatRateBps: TAUX_TVA_DEFAUT,
+        },
       ],
     });
   }
@@ -1242,9 +1252,16 @@ function BuvetteCard({
 
       {/* Products table */}
       <label style={sLabel}>Produits</label>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 92px 150px 36px', gap: 8, fontSize: 11, fontWeight: 700, color: BRAND.grey, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
+        <span>Nom</span>
+        <span>Prix TTC</span>
+        <span title="5,5 % à emporter emballé · 10 % consommation immédiate · 20 % alcools">TVA</span>
+        <span>Catégorie</span>
+        <span />
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {buvette.products.map((p) => (
-          <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 150px 36px', gap: 8, alignItems: 'center' }}>
+          <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 92px 150px 36px', gap: 8, alignItems: 'center' }}>
             <input
               value={p.name}
               onChange={(e) => updateProduct(p.id, { name: e.target.value })}
@@ -1261,6 +1278,19 @@ function BuvetteCard({
               />
               <span style={{ position: 'absolute', right: 10, top: 10, color: BRAND.grey, fontSize: 13 }}>€</span>
             </div>
+            {/* La TVA se choisit ICI, à la saisie de la carte. La régler
+                plus tard supposerait de repasser sur chaque produit — et
+                personne ne repasse sur une carte qui « marche ». */}
+            <select
+              value={p.vatRateBps}
+              onChange={(e) => updateProduct(p.id, { vatRateBps: Number(e.target.value) })}
+              title="Taux de TVA"
+              style={{ ...sInput, cursor: 'pointer', padding: '9px 6px' }}
+            >
+              {TAUX_TVA.map((t) => (
+                <option key={t.bps} value={t.bps}>{t.label}</option>
+              ))}
+            </select>
             <select
               value={p.category}
               onChange={(e) => updateProduct(p.id, { category: e.target.value })}

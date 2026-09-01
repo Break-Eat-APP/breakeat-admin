@@ -1,23 +1,37 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { OrderStatus, PaymentStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import {
   requireOrgAccess,
   MANAGE_ROLES,
 } from '../../common/helpers/require-org-access';
+import {
+  tauxMoyenBps,
+  ventilerSurTotal,
+  type LigneTva,
+  type TrancheTva,
+  type VentilationTva,
+} from '../../common/helpers/tva';
+import { ventilationCommandes } from '../../common/helpers/ventilation-commandes';
 
 /**
- * Revenue figures for a scope (org or event). All monetary values are integer
- * cents. `Order.totalCents` is tax-inclusive (TTC); HT is derived from TTC using
- * the configured reporting VAT rate, identically to BackofficeService so the
- * manager numbers reconcile with the SUPER_ADMIN back office.
+ * Le chiffre d'affaires d'un périmètre (organisation ou événement), en centimes
+ * entiers. `Order.totalCents` est TTC ; le HT se déduit du TAUX DE CHAQUE
+ * LIGNE, pas d'un taux unique : une buvette qui vend une bière (20 %) et un
+ * sandwich (10 %) n'a pas un taux, elle en a deux, et sa déclaration se remplit
+ * taux par taux. Voir `common/helpers/tva.ts`.
  */
 export interface RevenueBlock {
   caTtcCents: number;
   caHtCents: number;
-  /** VAT rate used to derive HT from TTC (e.g. 0.1 for 10%). */
+  /**
+   * Taux MOYEN effectivement collecté (0.13 = 13 %), pour une étiquette de
+   * vignette quand la place manque. Jamais une base de déclaration : c'est
+   * `vatBreakdown` qui fait foi.
+   */
   vatRate: number;
+  /** Le détail par taux, du plus bas au plus élevé. Vide si aucune vente. */
+  vatBreakdown: TrancheTva[];
 }
 
 export interface BasketBlock {
@@ -108,27 +122,14 @@ export interface EventStats {
  *
  * Revenue rule (mirrors BackofficeService): an order counts toward CA only when
  * paymentStatus = SUCCEEDED ET status ≠ CANCELLED (commandes annulées exclues,
- * cohérent avec le libellé de l'UI compta). CA HT = round(CA TTC / (1 + vatRate)).
+ * cohérent avec le libellé de l'UI compta). Le CA HT se déduit du taux de TVA
+ * figé sur chaque ligne de commande — voir `common/helpers/tva.ts`.
  *
  * Read-only: no schema, no writes — pure aggregation over existing tables.
  */
 @Injectable()
 export class StatsService {
-  private readonly vatRate: number;
-
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly config: ConfigService,
-  ) {
-    const configured = this.config.get<number>('app.reporting.vatRate');
-    // Guard against a missing / NaN env override; fall back to 10%.
-    this.vatRate =
-      typeof configured === 'number' &&
-      Number.isFinite(configured) &&
-      configured >= 0
-        ? configured
-        : 0.1;
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   // ─── Org overview ─────────────────────────────────────────────
 
@@ -170,9 +171,23 @@ export class StatsService {
       });
     }
 
+    const caTtcCents = agg._sum.totalCents ?? 0;
+    const ordersCount = agg._count._all;
+
+    // Les lignes de commande, groupees par evenement ET par taux, en une seule
+    // requete : le HT de chaque evenement depend de ce qu'il a vendu. Un match
+    // ou la biere domine n'a pas le meme HT qu'un match sans buvette alcool, et
+    // une moyenne appliquee a tous effacerait justement cet ecart.
+    const lignesParEvenement = await this.lignesParEvenement(orgId);
+    const ventilationOrg = ventilerSurTotal(
+      [...lignesParEvenement.values()].flat(),
+      caTtcCents,
+    );
+
     const now = new Date();
     const eventStats: OrgEventStat[] = events.map((e) => {
       const r = revByEvent.get(e.id) ?? { ttc: 0, count: 0 };
+      const v = ventilerSurTotal(lignesParEvenement.get(e.id) ?? [], r.ttc);
       return {
         id: e.id,
         name: e.name,
@@ -180,23 +195,20 @@ export class StatsService {
         startAt: e.startAt.toISOString(),
         endAt: e.endAt.toISOString(),
         caTtcCents: r.ttc,
-        caHtCents: this.toHtCents(r.ttc),
+        caHtCents: v.htCents,
         ordersCount: r.count,
       };
     });
 
-    const caTtcCents = agg._sum.totalCents ?? 0;
-    const ordersCount = agg._count._all;
-    const caHtCents = this.toHtCents(caTtcCents);
     const activeEventsCount = events.filter(
       (e) => e.startAt <= now && e.endAt >= now,
     ).length;
 
     return {
       organizationId: orgId,
-      revenue: { caTtcCents, caHtCents, vatRate: this.vatRate },
+      revenue: StatsService.bloc(ventilationOrg),
       ordersCount,
-      averageBasket: this.averageBasket(caTtcCents, caHtCents, ordersCount),
+      averageBasket: this.averageBasket(caTtcCents, ventilationOrg.htCents, ordersCount),
       eventsCount: events.length,
       activeEventsCount,
       events: eventStats,
@@ -266,20 +278,27 @@ export class StatsService {
 
     const caTtcCents = orders.reduce((sum, o) => sum + o.totalCents, 0);
     const ordersCount = orders.length;
-    const caHtCents = this.toHtCents(caTtcCents);
+    const ventilation = await ventilationCommandes(this.prisma, revenueWhere, caTtcCents);
+
+    // Le HT d'une TRANCHE est reparti au prorata du taux moyen de la periode.
+    // Le detail exact par taux vit dans `revenue.vatBreakdown` : c'est lui qui
+    // sert a declarer. Descendre la ventilation jusqu'a chaque journee
+    // demanderait de ramener toutes les lignes de trente jours de service --
+    // des centaines de milliers, pour une colonne indicative.
+    const partHt = caTtcCents === 0 ? 0 : ventilation.htCents / caTtcCents;
 
     return {
       organizationId: orgId,
       granularity,
       from: from.toISOString(),
       to: to.toISOString(),
-      revenue: { caTtcCents, caHtCents, vatRate: this.vatRate },
+      revenue: StatsService.bloc(ventilation),
       ordersCount,
-      averageBasket: this.averageBasket(caTtcCents, caHtCents, ordersCount),
+      averageBasket: this.averageBasket(caTtcCents, ventilation.htCents, ordersCount),
       buckets: [...buckets.entries()].map(([startAt, b]) => ({
         startAt,
         caTtcCents: b.ttc,
-        caHtCents: this.toHtCents(b.ttc),
+        caHtCents: Math.round(b.ttc * partHt),
         ordersCount: b.count,
       })),
       topProducts: topItems.map((row) => ({
@@ -406,7 +425,11 @@ export class StatsService {
 
     const caTtcCents = agg._sum.totalCents ?? 0;
     const ordersCount = agg._count._all;
-    const caHtCents = this.toHtCents(caTtcCents);
+    const ventilation = await ventilationCommandes(
+      this.prisma,
+      { eventId, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } },
+      caTtcCents,
+    );
 
     const topProducts: TopProduct[] = topItems.map((row) => ({
       productId: row.productId,
@@ -424,9 +447,9 @@ export class StatsService {
         endAt: event.endAt.toISOString(),
         organizationId: event.organizationId,
       },
-      revenue: { caTtcCents, caHtCents, vatRate: this.vatRate },
+      revenue: StatsService.bloc(ventilation),
       ordersCount,
-      averageBasket: this.averageBasket(caTtcCents, caHtCents, ordersCount),
+      averageBasket: this.averageBasket(caTtcCents, ventilation.htCents, ordersCount),
       ordersByStatus,
       topProducts,
     };
@@ -434,9 +457,50 @@ export class StatsService {
 
   // ─── Private helpers ──────────────────────────────────────────
 
-  /** TTC cents → HT cents using the configured reporting VAT rate. */
-  private toHtCents(ttcCents: number): number {
-    return Math.round(ttcCents / (1 + this.vatRate));
+  /**
+   * Les lignes de commande d'une organisation, groupees par evenement et par
+   * taux de TVA, en une requete.
+   *
+   * Prisma ne sait pas grouper sur un champ de la relation parente
+   * (`order.eventId`) : d'ou le SQL direct. L'alternative -- une requete par
+   * evenement -- multiplierait les allers-retours par le nombre de matchs de la
+   * saison, sur une page que le gerant ouvre en debut de mois.
+   *
+   * `::bigint` puis `Number()` : la somme d'une saison depasse la capacite d'un
+   * entier 32 bits bien avant d'approcher la limite d'un nombre JavaScript.
+   */
+  private async lignesParEvenement(orgId: string): Promise<Map<string, LigneTva[]>> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{ eventId: string; vatRateBps: number; ttc: bigint | number }>
+    >`
+      SELECT o.event_id AS "eventId",
+             oi.vat_rate_bps AS "vatRateBps",
+             SUM(oi.line_total_cents)::bigint AS "ttc"
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+       WHERE o.organization_id = ${orgId}
+         AND o.payment_status::text = 'SUCCEEDED'
+         AND o.status::text <> 'CANCELLED'
+       GROUP BY 1, 2
+    `;
+
+    const parEvenement = new Map<string, LigneTva[]>();
+    for (const row of rows) {
+      const lignes = parEvenement.get(row.eventId) ?? [];
+      lignes.push({ vatRateBps: Number(row.vatRateBps), ttcCents: Number(row.ttc) });
+      parEvenement.set(row.eventId, lignes);
+    }
+    return parEvenement;
+  }
+
+  /** Le bloc revenu, ventilé par taux, prêt à renvoyer. */
+  private static bloc(v: VentilationTva): RevenueBlock {
+    return {
+      caTtcCents: v.ttcCents,
+      caHtCents: v.htCents,
+      vatRate: tauxMoyenBps(v) / 10_000,
+      vatBreakdown: v.tranches,
+    };
   }
 
   /** Average basket; guards against division by zero on empty scopes. */

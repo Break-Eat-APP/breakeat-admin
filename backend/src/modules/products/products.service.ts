@@ -13,6 +13,7 @@ import {
 import type { CreateProductDto } from './dto/create-product.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
 import type { Product } from '@prisma/client';
+import { TAUX_TVA_DEFAUT } from '../../common/helpers/tva';
 
 /**
  * ProductsService owns product catalog persistence logic.
@@ -52,6 +53,7 @@ export class ProductsService {
         name: dto.name,
         description: dto.description ?? null,
         price: dto.price,
+        vatRateBps: dto.vatRateBps ?? TAUX_TVA_DEFAUT,
         imageUrl: dto.imageUrl ?? null,
         status: dto.status,
         availableFrom: dto.availableFrom ? new Date(dto.availableFrom) : null,
@@ -126,6 +128,7 @@ export class ProductsService {
         ...(dto.name !== undefined && { name: dto.name }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.price !== undefined && { price: dto.price }),
+        ...(dto.vatRateBps !== undefined && { vatRateBps: dto.vatRateBps }),
         ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl }),
         ...(dto.status !== undefined && { status: dto.status }),
         ...(dto.availableFrom !== undefined && { availableFrom: new Date(dto.availableFrom) }),

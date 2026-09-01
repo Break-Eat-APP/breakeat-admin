@@ -10,7 +10,10 @@ export default function OverviewPage() {
     queryFn: apiGetKpis,
   });
 
-  const vatPct = data ? Math.round(data.revenue.vatRate * 100) : 10;
+  // Les taux réellement collectés, nommés plutôt que moyennés : la
+  // restauration en a trois (5,5 / 10 / 20 %) et une moyenne pondérée
+  // n'existe sur aucune déclaration.
+  const tauxCollectes = data?.revenue.vatBreakdown?.map((t) => t.label) ?? [];
 
   return (
     <div style={{ padding: '32px 40px', maxWidth: 1100 }}>
@@ -43,7 +46,11 @@ export default function OverviewPage() {
             <KpiCard
               label="CA total HT"
               value={formatEuros(data.revenue.caHtCents)}
-              hint={`TVA ${vatPct}% (resto sur place)`}
+              hint={
+                tauxCollectes.length > 0
+                  ? `TVA ${tauxCollectes.join(' · ')}`
+                  : 'TVA par taux de produit'
+              }
             />
             <KpiCard label="Nombre de commandes" value={data.ordersCount.toLocaleString('fr-FR')} />
           </Grid>

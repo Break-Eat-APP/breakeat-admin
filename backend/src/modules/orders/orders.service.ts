@@ -129,6 +129,8 @@ export class OrdersService {
         productId: it.productId,
         productNameSnapshot: it.product.name,
         unitPriceCentsSnapshot: unitPrice,
+        // Le taux est figé au même titre que le prix : voir OrderItem.vatRateBps.
+        vatRateBps: it.product.vatRateBps,
         quantity: it.quantity,
         lineTotalCents: lineTotal,
       };
@@ -335,7 +337,13 @@ export class OrdersService {
     // produit reforment une ligne de quantité 3.
     const parProduit = new Map<
       string,
-      { productId: string; productNameSnapshot: string; unitPriceCentsSnapshot: number; quantity: number }
+      {
+        productId: string;
+        productNameSnapshot: string;
+        unitPriceCentsSnapshot: number;
+        vatRateBps: number;
+        quantity: number;
+      }
     >();
     for (const unite of split.units) {
       const ligne = parProduit.get(unite.productId);
@@ -345,6 +353,7 @@ export class OrdersService {
           productId: unite.productId,
           productNameSnapshot: unite.productName,
           unitPriceCentsSnapshot: unite.unitPriceCents,
+          vatRateBps: unite.vatRateBps,
           quantity: 1,
         });
     }
