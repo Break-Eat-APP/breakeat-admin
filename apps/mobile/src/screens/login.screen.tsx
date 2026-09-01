@@ -79,7 +79,7 @@ export function LoginScreen({ navigation, route }: Props) {
         mode === 'login'
           ? await apiLogin(email.trim(), password)
           : await apiRegister(email.trim(), password, displayName.trim());
-      await setAuth(res.accessToken, res.user);
+      await setAuth(res.accessToken, res.user, res.refreshToken);
       if (mode === 'register') {
         // Confort, pas prérequis : localisation et notifications sont demandées
         // APRÈS que le compte existe. Isolées dans leur propre try, car un

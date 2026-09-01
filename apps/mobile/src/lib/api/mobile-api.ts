@@ -20,7 +20,39 @@ export class ApiError extends Error {
   }
 }
 
-async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
+/**
+ * Echange le jeton de renouvellement contre un nouveau jeton d'acces.
+ *
+ * Le jeton d'acces ne vit que 15 minutes. Payer prend plus longtemps que ca :
+ * le client quitte l'app pour la page Stripe, saisit sa carte, revient — et
+ * l'app le deconnectait, en effacant au passage le panier qu'il venait de
+ * regler. Le renouvellement rend ce trajet invisible.
+ */
+async function renouvelerSession(): Promise<string | null> {
+  const refresh = useAuthStore.getState().refreshToken;
+  if (!refresh) return null;
+  try {
+    const res = await fetch(`${BASE}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: refresh }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { accessToken?: string; refreshToken?: string };
+    if (!data.accessToken) return null;
+    await useAuthStore.getState().setToken(data.accessToken, data.refreshToken);
+    return data.accessToken;
+  } catch {
+    return null;
+  }
+}
+
+async function req<T>(
+  path: string,
+  options: RequestInit = {},
+  /** Vrai quand la session a deja ete renouvelee : on ne reprend qu'UNE fois. */
+  dejaRenouvele = false,
+): Promise<T> {
   const token = useAuthStore.getState().token;
 
   const res = await fetch(`${BASE}${path}`, {
@@ -45,6 +77,14 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   //
   // On ne nettoie QUE si un jeton était présent : un 401 sur une route publique
   // ne concerne pas la session.
+  // On RENOUVELLE avant de jeter la session — une seule fois, et jamais sur la
+  // route de renouvellement elle-meme (un jeton mort relancerait la reprise
+  // indefiniment).
+  if (res.status === 401 && token && !dejaRenouvele && !path.startsWith('/auth/refresh')) {
+    const nouveau = await renouvelerSession();
+    if (nouveau) return req<T>(path, options, true);
+  }
+
   if (res.status === 401 && token) {
     await useAuthStore.getState().clearAuth();
     throw new ApiError(401, 'Session expirée. Reconnectez-vous pour continuer.');
