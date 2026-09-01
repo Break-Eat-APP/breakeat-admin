@@ -20,6 +20,7 @@ describe('OrderSplitsService — l’ardoise', () => {
     orderSplitUnit: { updateMany: jest.Mock; findMany: jest.Mock };
     orderSplitShare: { create: jest.Mock; update: jest.Mock; findUnique: jest.Mock };
     supplier: { findUnique: jest.Mock };
+    organization: { findUnique: jest.Mock };
     $transaction: jest.Mock;
   };
   let stripe: {
@@ -78,7 +79,20 @@ describe('OrderSplitsService — l’ardoise', () => {
         findUnique: jest.fn(),
       },
       supplier: {
-        findUnique: jest.fn().mockResolvedValue({ name: 'Buvette Nord', stripeAccountId: 'acct_1' }),
+        // Buvette SANS compte propre : elle encaisse sur celui du club.
+        findUnique: jest.fn().mockResolvedValue({
+          name: 'Buvette Nord',
+          organizationId: 'org-1',
+          stripeAccountId: null,
+          stripeAccountStatus: 'NOT_ONBOARDED',
+        }),
+      },
+      organization: {
+        findUnique: jest.fn().mockResolvedValue({
+          name: 'Club test',
+          stripeAccountId: 'acct_club',
+          stripeAccountStatus: 'ACTIVE',
+        }),
       },
       $transaction: jest.fn().mockResolvedValue([]),
     };
@@ -177,7 +191,8 @@ describe('OrderSplitsService — l’ardoise', () => {
       // La capture différée est le cœur du dispositif : sans elle, une tournée
       // abandonnée laisserait des remboursements à faire.
       const args = stripe.createHostedCheckout.mock.calls[0][0];
-      expect(args.destinationAccountId).toBe('acct_1');
+      // L'argent va au compte du CLUB : la buvette n'a pas le sien.
+      expect(args.destinationAccountId).toBe('acct_club');
       expect(args.metadata.orderSplitShareId).toBe('share-1');
     });
 
@@ -210,8 +225,12 @@ describe('OrderSplitsService — l’ardoise', () => {
       );
     });
 
-    it('refuse une buvette sans compte Stripe plutôt que d’encaisser dans le vide', async () => {
-      prisma.supplier.findUnique.mockResolvedValue({ name: 'Buvette', stripeAccountId: null });
+    it('refuse quand NI la buvette NI le club ne peuvent encaisser', async () => {
+      prisma.organization.findUnique.mockResolvedValue({
+        name: 'Club test',
+        stripeAccountId: null,
+        stripeAccountStatus: 'NOT_ONBOARDED',
+      });
       await expect(
         service.prendreSaPart({ code: CODE, unitIds: ['u-1'] }),
       ).rejects.toBeInstanceOf(BadRequestException);

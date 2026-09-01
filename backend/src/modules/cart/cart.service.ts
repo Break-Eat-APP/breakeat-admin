@@ -5,13 +5,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { CartStatus, EventStatus, PickupPointStatus, ProductStatus } from '@prisma/client';
 import {
-  CartStatus,
-  EventStatus,
-  PickupPointStatus,
-  ProductStatus,
-  StripeAccountStatus,
-} from '@prisma/client';
+  CompteStripeIndisponible,
+  resoudreCompteEncaisseur,
+} from '../../common/helpers/compte-stripe';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
@@ -359,32 +357,21 @@ export class CartService {
       );
     }
 
-    // Supplier must be Stripe-ready
+    // À qui va l'argent : le compte du CLUB, sauf exploitant tiers.
+    // Une seule fonction en décide, partagée avec l'ardoise — sinon les deux
+    // chemins pourraient verser la recette d'une même buvette à deux endroits.
     const supplier = await this.prisma.supplier.findUnique({
       where: { id: cart.supplierId },
+      select: { name: true },
     });
     if (!supplier) throw new NotFoundException('Cart supplier no longer exists');
-    if (!supplier.stripeAccountId) {
-      throw new BadRequestException(
-        'Cette buvette n’est pas encore reliée à Stripe : elle ne peut pas encaisser. ' +
-          'À faire depuis sa fiche dans le back-office, bouton « Se connecter à Stripe ».',
-      );
-    }
-    if (supplier.stripeAccountStatus !== StripeAccountStatus.ACTIVE) {
-      // Le statut brut ne dit rien a un utilisateur : on traduit ce qu'il
-      // implique, et surtout ce qu'il reste a faire.
-      const explication: Record<string, string> = {
-        PENDING:
-          'son inscription Stripe n’est pas terminée — Stripe attend encore des informations',
-        RESTRICTED: 'Stripe a restreint ce compte',
-        REJECTED: 'Stripe a refusé ce compte',
-        NOT_ONBOARDED: 'elle n’a pas commencé son inscription Stripe',
-      };
-      throw new BadRequestException(
-        `Cette buvette ne peut pas encaisser : ${
-          explication[supplier.stripeAccountStatus] ?? supplier.stripeAccountStatus
-        }. Ouvre sa fiche dans le back-office et appuie sur « Vérifier l’état ».`,
-      );
+
+    let encaisseur;
+    try {
+      encaisseur = await resoudreCompteEncaisseur(this.prisma, cart.supplierId);
+    } catch (e: unknown) {
+      if (e instanceof CompteStripeIndisponible) throw new BadRequestException(e.message);
+      throw e;
     }
 
     // Re-verify every item (in case stock changed since add)
@@ -431,7 +418,7 @@ export class CartService {
     const session = await this.stripe.createHostedCheckout({
       amountCents: view.totalCents,
       currency: view.currency,
-      destinationAccountId: supplier.stripeAccountId,
+      destinationAccountId: encaisseur.accountId,
       productName: `Commande ${supplier.name}`,
       captureMethod: 'automatic',
       successUrl: `${webUrl}/commandes?paye=1`,

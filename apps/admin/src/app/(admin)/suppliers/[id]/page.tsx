@@ -433,10 +433,12 @@ export default function SupplierDetailPage() {
       {/* Encaissement — sans ça, la buvette ne peut RIEN vendre.
           L'argent des clients arrive directement sur son compte Stripe ; tant
           qu'il n'existe pas, la page de paiement refuse de s'ouvrir. */}
-      <Card title="Encaissement (Stripe)">
+      <Card title="Encaissement — exploitant extérieur">
         <p style={{ color: BRAND.grey, fontSize: 13, margin: '0 0 14px', lineHeight: 1.5 }}>
-          L&apos;argent des commandes arrive <strong>directement sur le compte Stripe de cette
-          buvette</strong>. Tant qu&apos;il n&apos;est pas actif, les clients ne peuvent pas payer.
+          Par défaut, cette buvette encaisse sur le <strong>compte Stripe du club</strong> —
+          rien à faire ici. Ne reliez un compte à cette buvette que si elle est tenue par un
+          <strong> exploitant extérieur</strong> (food-truck, traiteur) qui doit recevoir sa
+          recette lui-même : son compte prendra alors le pas sur celui du club.
         </p>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>

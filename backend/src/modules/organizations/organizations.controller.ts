@@ -6,6 +6,7 @@ import {
   Delete,
   Body,
   Param,
+  ParseUUIDPipe,
   UseGuards,
   HttpCode,
   HttpStatus,
@@ -60,6 +61,28 @@ export class OrganizationsController {
    * Returns all members with user info (email, displayName) and assigned supplier.
    * Any member can view; SUPER_ADMIN bypasses membership check.
    */
+  /**
+   * POST /api/v1/organizations/:id/stripe/onboarding-link
+   * Ouvre l'inscription Stripe DU CLUB — une seule pour toutes ses buvettes.
+   */
+  @Post(':id/stripe/onboarding-link')
+  @HttpCode(HttpStatus.CREATED)
+  createStripeOnboardingLink(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.organizationsService.createOnboardingLink(id, user.sub);
+  }
+
+  /** GET /api/v1/organizations/:id/stripe/status — relit l'état chez Stripe. */
+  @Get(':id/stripe/status')
+  refreshStripeStatus(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.organizationsService.refreshStripeStatus(id, user.sub);
+  }
+
   @Get(':id/members')
   listMembers(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.organizationsService.getMembers(id, user.sub, user.globalRole);

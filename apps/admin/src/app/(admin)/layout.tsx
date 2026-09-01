@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
+  CreditCard,
   LayoutDashboard,
   Receipt,
   Wand2,
@@ -68,6 +69,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Points de retrait',
     items: [
       { href: '/suppliers', icon: Store, label: 'Points de retrait' },
+      { href: '/encaissement', icon: CreditCard, label: 'Encaissement' },
     ],
   },
   {

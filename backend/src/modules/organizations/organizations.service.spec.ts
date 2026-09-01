@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
 import { PrismaService } from '../../database/prisma.service';
+import { StripeService } from '../payments/stripe.service';
 import { OrgRole } from '../../common/enums/role.enum';
 
 // ─── Helpers ─────────────────────────────────────────────────
@@ -46,6 +47,16 @@ describe('OrganizationsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrganizationsService,
+        {
+          // Phase 26 — le club porte son compte Stripe. Aucun test de ce fichier
+          // n'appelle Stripe : un mock vide suffit a l'injection.
+          provide: StripeService,
+          useValue: {
+            createConnectAccount: jest.fn(),
+            createOnboardingLink: jest.fn(),
+            retrieveAccount: jest.fn(),
+          },
+        },
         {
           provide: PrismaService,
           useValue: {

@@ -208,6 +208,10 @@ export interface Organization {
   name: string;
   slug: string;
   status: string;
+  /** Compte Stripe DU CLUB : toutes ses buvettes encaissent dessus. */
+  stripeAccountId?: string | null;
+  stripeAccountStatus?: 'NOT_ONBOARDED' | 'PENDING' | 'ACTIVE' | 'RESTRICTED' | 'REJECTED';
+  stripeChargesEnabled?: boolean;
   logoUrl?: string | null;
   primaryColor?: string | null;
   description?: string | null;
@@ -553,6 +557,21 @@ export async function apiUpdateSupplier(
  * formulaire de Stripe. Cette adresse est à USAGE UNIQUE et expire vite : on la
  * redemande à chaque clic plutôt que de la conserver.
  */
+/**
+ * Ouvre l'inscription Stripe DU CLUB — une seule pour toutes ses buvettes.
+ * L'adresse renvoyée est à usage unique : on en redemande une à chaque clic.
+ */
+export async function apiOrgStripeOnboardingLink(
+  orgId: string,
+): Promise<{ accountId: string; url: string; expiresAt: number }> {
+  return req('POST', `/organizations/${orgId}/stripe/onboarding-link`, {});
+}
+
+/** Relit l'état du compte du club chez Stripe. */
+export async function apiOrgStripeStatus(orgId: string): Promise<Organization> {
+  return req('GET', `/organizations/${orgId}/stripe/status`);
+}
+
 export async function apiStripeOnboardingLink(
   orgId: string,
   supplierId: string,

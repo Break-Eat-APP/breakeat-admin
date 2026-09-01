@@ -5,6 +5,50 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.57.0] — 2026-09-01 — Le compte Stripe appartient au club, pas à la buvette
+
+### Le problème, tel que le client l'a vu
+Trois comptes Stripe pour une seule organisation — « break eat test »,
+« Buvette Nord », « Nouvelle entreprise » — et la recette éparpillée. La
+plateforme demandait une inscription **par buvette** : quatre comptoirs, quatre
+formulaires, quatre fois les mêmes coordonnées bancaires, quatre tableaux de
+bord.
+
+Ce n'était pas une erreur d'usage : la plateforme est bâtie comme ça depuis la
+phase 5. La question avait été posée, puis reportée. Elle revient au pire moment,
+celui des premiers essais de paiement.
+
+### Ce qui change
+**Le compte Stripe est porté par l'ORGANISATION.** Le club s'inscrit une fois,
+toutes ses buvettes encaissent dessus.
+
+Une buvette ne garde son propre compte que si elle est tenue par un **exploitant
+extérieur** — food-truck, traiteur — qui doit recevoir sa recette lui-même. Son
+compte prime alors, pour elle seule. Le modèle prévoyait déjà ce cas avec le
+drapeau « exploitant externe » ; il trouve enfin son sens.
+
+Une **seule** fonction décide de cette priorité (`resoudreCompteEncaisseur`),
+partagée par le paiement seul et l'ardoise. Deux lectures séparées auraient pu
+verser la recette d'une même buvette à deux endroits différents.
+
+### L'écran
+« Encaissement » a sa propre entrée de menu, et non une carte au fond des
+réglages : tant qu'il n'est pas vert, **aucun client ne peut payer, nulle part**.
+Le ranger dans la configuration technique reviendrait à cacher le seul écran qui
+explique pourquoi rien ne rentre.
+
+La fiche buvette garde son bouton, mais dit maintenant ce qu'il fait vraiment :
+« par défaut, cette buvette encaisse sur le compte du club — ne reliez un compte
+ici que pour un exploitant extérieur ».
+
+- `+ backend/src/common/helpers/compte-stripe.ts` — la règle, en un seul endroit
+- `+ backend/prisma/migrations/20260901_org_stripe_account`
+- `~ backend/src/modules/organizations/` — inscription et relecture d'état
+- `~ backend/src/modules/{cart,order-splits}` — les deux paiements résolvent pareil
+- `+ apps/admin/src/app/(admin)/encaissement/`
+
+---
+
 ## [0.56.3] — 2026-09-01 — Un client Prisma périmé, et le silence qui l'entourait
 
 ### Le symptôme

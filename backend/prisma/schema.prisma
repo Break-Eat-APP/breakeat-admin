@@ -290,6 +290,17 @@ model Organization {
   slug         String    @unique
   status       OrgStatus @default(ACTIVE)
   settings     Json      @default("{}")
+  /// PHASE 26 — compte Stripe DU CLUB.
+  ///
+  /// C'est ici que l'argent des commandes arrive, pour TOUTES ses buvettes. Le
+  /// club s'inscrit une fois ; ses comptoirs n'ont rien à faire.
+  ///
+  /// Une buvette ne porte son propre compte que si elle est exploitée par un
+  /// tiers (food-truck, traiteur) : le sien prime alors sur celui du club.
+  stripeAccountId      String?             @map("stripe_account_id")
+  stripeAccountStatus  StripeAccountStatus @default(NOT_ONBOARDED) @map("stripe_account_status")
+  stripeChargesEnabled Boolean             @default(false) @map("stripe_charges_enabled")
+  stripeOnboardedAt    DateTime?           @map("stripe_onboarded_at")
   /// PHASE 12.8 — Branding fields (URL-based, no file upload in V1)
   logoUrl      String?   @map("logo_url")
   primaryColor String?   @map("primary_color")

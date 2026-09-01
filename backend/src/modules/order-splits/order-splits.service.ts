@@ -16,6 +16,10 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
+import {
+  CompteStripeIndisponible,
+  resoudreCompteEncaisseur,
+} from '../../common/helpers/compte-stripe';
 import { OrdersService } from '../orders/orders.service';
 
 /**
@@ -278,10 +282,16 @@ export class OrderSplitsService {
 
     const buvette = await this.prisma.supplier.findUnique({
       where: { id: split.supplierId },
-      select: { name: true, stripeAccountId: true },
+      select: { name: true },
     });
-    if (!buvette?.stripeAccountId) {
-      throw new BadRequestException('Cette buvette n’accepte pas encore les paiements en ligne');
+
+    // Même règle que le paiement seul : le compte du club, sauf exploitant tiers.
+    let encaisseur;
+    try {
+      encaisseur = await resoudreCompteEncaisseur(this.prisma, split.supplierId);
+    } catch (e: unknown) {
+      if (e instanceof CompteStripeIndisponible) throw new BadRequestException(e.message);
+      throw e;
     }
 
     const share = await this.prisma.orderSplitShare.create({
@@ -321,8 +331,8 @@ export class OrderSplitsService {
       const session = await this.stripe.createHostedCheckout({
         amountCents,
         currency: 'eur',
-        destinationAccountId: buvette.stripeAccountId,
-        productName: `Ma part — ${buvette.name ?? 'commande Break Eat'}`,
+        destinationAccountId: encaisseur.accountId,
+        productName: `Ma part — ${buvette?.name ?? 'commande Break Eat'}`,
         successUrl: `${retour}?paye=1`,
         cancelUrl: `${retour}?annule=1`,
         idempotencyKey: `split-share-${share.id}`,

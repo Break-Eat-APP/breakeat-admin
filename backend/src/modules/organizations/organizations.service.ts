@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   ConflictException,
   NotFoundException,
@@ -11,6 +12,13 @@ import { GlobalRole, OrgRole } from '../../common/enums/role.enum';
 import type { CreateOrganizationDto } from './dto/create-organization.dto';
 import type { UpdateOrgBrandingDto } from './dto/update-org-branding.dto';
 import type { Organization, OrganizationMember } from '@prisma/client';
+import { StripeAccountStatus } from '@prisma/client';
+import { StripeService } from '../payments/stripe.service';
+import {
+  ALL_ORG_ROLES,
+  MANAGE_ROLES,
+  requireOrgAccess,
+} from '../../common/helpers/require-org-access';
 
 export type OrganizationWithMembers = Organization & {
   members: OrganizationMember[];
@@ -52,7 +60,99 @@ const ROLES_DELEGABLES_PAR_ORG_ADMIN: readonly OrgRole[] = [OrgRole.OPERATOR];
 export class OrganizationsService {
   private readonly logger = new Logger(OrganizationsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly stripe: StripeService,
+  ) {}
+
+  // ─── Encaissement (Stripe Connect, au niveau du CLUB) ────────
+
+  /**
+   * Ouvre (ou reprend) l'inscription Stripe DU CLUB.
+   *
+   * Une seule inscription pour toutes ses buvettes : lui en demander une par
+   * comptoir reviendrait à lui faire saisir quatre fois les mêmes coordonnées
+   * bancaires, pour une recette éparpillée sur quatre tableaux de bord.
+   *
+   * Le lien est à usage unique et de courte durée : on en redemande un à chaque
+   * appel plutôt que de le conserver.
+   */
+  async createOnboardingLink(organizationId: string, userId: string) {
+    await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true, stripeAccountId: true },
+    });
+    if (!org) throw new NotFoundException('Organisation introuvable');
+
+    let accountId = org.stripeAccountId;
+    if (!accountId) {
+      const email = await this.emailAppelant(userId);
+      const account = await this.stripe.createConnectAccount({
+        email,
+        country: 'FR',
+        businessName: org.name,
+        metadata: { organizationId },
+      });
+      accountId = account.id;
+      await this.prisma.organization.update({
+        where: { id: organizationId },
+        data: { stripeAccountId: accountId, stripeAccountStatus: StripeAccountStatus.PENDING },
+      });
+      this.logger.log(`Compte Stripe cree pour le club ${organizationId} : ${accountId}`);
+    }
+
+    const link = await this.stripe.createOnboardingLink(accountId);
+    return { accountId, url: link.url, expiresAt: link.expires_at };
+  }
+
+  /** Relit l'etat chez Stripe et le recopie : c'est lui qui fait foi. */
+  async refreshStripeStatus(organizationId: string, userId: string) {
+    await requireOrgAccess(this.prisma, userId, organizationId, ALL_ORG_ROLES);
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { stripeAccountId: true },
+    });
+    if (!org?.stripeAccountId) {
+      throw new BadRequestException(
+        'Ce club n’a pas encore de compte Stripe — commencez par « Se connecter à Stripe ».',
+      );
+    }
+
+    const account = await this.stripe.retrieveAccount(org.stripeAccountId);
+    const actif = account.charges_enabled === true;
+    const statut = actif
+      ? StripeAccountStatus.ACTIVE
+      : account.details_submitted
+        ? StripeAccountStatus.RESTRICTED
+        : StripeAccountStatus.PENDING;
+
+    return this.prisma.organization.update({
+      where: { id: organizationId },
+      data: {
+        stripeAccountStatus: statut,
+        stripeChargesEnabled: actif,
+        ...(actif ? { stripeOnboardedAt: new Date() } : {}),
+      },
+      select: {
+        id: true,
+        stripeAccountId: true,
+        stripeAccountStatus: true,
+        stripeChargesEnabled: true,
+      },
+    });
+  }
+
+  private async emailAppelant(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true },
+    });
+    if (!user) throw new NotFoundException('Utilisateur introuvable');
+    return user.email;
+  }
 
   /**
    * Creates a new organisation and adds the creator as ORG_ADMIN.
