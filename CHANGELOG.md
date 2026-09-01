@@ -5,6 +5,44 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.56.3] — 2026-09-01 — Un client Prisma périmé, et le silence qui l'entourait
+
+### Le symptôme
+Commander : `{"statusCode":500,"message":"Internal server error"}`.
+Partager l'addition : le même. Deux écrans, aucune piste.
+
+### La cause
+```
+code: 'P2022', meta: { modelName: 'Cart', column: 'carts.order_group_id' }
+```
+
+Le **client Prisma généré** connaissait encore `carts.order_group_id`, colonne
+supprimée par la migration du même commit. Le code compilé était pourtant à
+jour — vérifié en interrogeant une route retirée le même jour, qui répondait
+bien 404. Seul le client était resté en arrière, à cause du cache de
+construction : toute lecture de panier émettait alors une requête portant une
+colonne absente.
+
+`prisma generate` est désormais exécuté **au démarrage**, pas seulement à la
+construction de l'image. Le client ne peut plus diverger du schéma déployé.
+
+### Le silence, qui a coûté plus cher que le défaut
+« Internal server error » est ce que NestJS renvoie à toute exception imprévue.
+C'est le bon réflexe face au public — un message brut révèle la structure de la
+base. Mais ici, personne ne pouvait avancer : ni l'utilisateur, ni moi.
+
+Un filtre d'exceptions global :
+- **journalise** l'erreur complète avec sa pile et la route ;
+- attribue une **référence courte**, renvoyée au client, qui retrouve la ligne
+  exacte dans les journaux ;
+- hors production, renvoie **aussi le message réel** — sur un environnement
+  d'essai, cacher la cause à celui qui teste n'allonge que la boucle.
+
+- `+ backend/src/common/filters/all-exceptions.filter.ts`
+- `~ railway.json` — `pnpm db:generate` au démarrage
+
+---
+
 ## [0.56.2] — 2026-08-31 — Un 401 de Stripe n'est pas une session expirée
 
 ### Une heure de diagnostic pour une clé mal recopiée

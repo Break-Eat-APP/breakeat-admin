@@ -31,6 +31,13 @@ Le serveur l'annonce au démarrage : `Stripe en mode TEST — aucun paiement ré
 Le bouton « Se connecter à Stripe » vit sur sa fiche dans le backoffice manager.
 Sans compte actif, la page de paiement refuse de s'ouvrir.
 
+**Le client Prisma est REGENERE au démarrage** (`railway.json`), pas seulement
+à la construction de l'image. Sans cela, un cache de build peut laisser un
+client généré sur un ANCIEN schéma face à une base déjà migrée : chaque requête
+échoue alors en `P2022 — la colonne n'existe pas`, le serveur répond « Internal
+server error », et rien ne dit que le coupable est le client. C'est arrivé le
+01/09 : commander et partager l'addition échouaient toutes deux, sans indice.
+
 **Dette technique datée — Stripe « Accounts v1 ».** Notre code crée les comptes
 des buvettes avec `stripe.accounts.create()`, que Stripe ne recommande plus pour
 une nouvelle intégration : il faut avoir activé

@@ -4,6 +4,7 @@ import { ValidationPipe, type LoggerService } from '@nestjs/common';
 import { json, raw } from 'express';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JsonLogger } from './logger/json-logger';
 
 async function bootstrap(): Promise<void> {
@@ -28,6 +29,12 @@ async function bootstrap(): Promise<void> {
   // octets bruts, un JSON re-sérialisé ne correspondrait plus.
   app.use('/webhooks/flaix', raw({ type: 'application/json' }));
   app.use(json({ limit: '1mb' }));
+
+  // Toute exception imprevue est journalisee avec sa pile et une reference
+  // courte, renvoyee au client. Hors production, le message reel accompagne la
+  // reference : sur un environnement d'essai, cacher la cause a celui qui teste
+  // n'allonge que la boucle.
+  app.useGlobalFilters(new AllExceptionsFilter());
 
   // Global validation pipe — active for all routes
   app.useGlobalPipes(
