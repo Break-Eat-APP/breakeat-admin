@@ -5,12 +5,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  CartStatus,
-  EventStatus,
-  ProductStatus,
-  StripeAccountStatus,
-} from '@prisma/client';
+import { CartStatus, EventStatus, ProductStatus, StripeAccountStatus } from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
@@ -189,7 +184,9 @@ export class CartService {
       },
     });
 
-    this.logger.log(`Cart created: ${cart.id} user=${userId} event=${dto.eventId} supplier=${dto.supplierId}`);
+    this.logger.log(
+      `Cart created: ${cart.id} user=${userId} event=${dto.eventId} supplier=${dto.supplierId}`,
+    );
     return this.computeView(cart.id);
   }
 
@@ -201,11 +198,7 @@ export class CartService {
 
   // ─── Cart metadata (pickup point) ────────────────────────────
 
-  async update(
-    cartId: string,
-    userId: string,
-    dto: UpdateCartDto,
-  ): Promise<CartWithTotals> {
+  async update(cartId: string, userId: string, dto: UpdateCartDto): Promise<CartWithTotals> {
     const cart = await this.requireOwnership(cartId, userId);
     this.requireEditable(cart.status);
 
@@ -240,11 +233,7 @@ export class CartService {
    * Adds (or merges) an item. If the product already exists in the cart,
    * the quantity is incremented.
    */
-  async addItem(
-    cartId: string,
-    userId: string,
-    dto: AddCartItemDto,
-  ): Promise<CartWithTotals> {
+  async addItem(cartId: string, userId: string, dto: AddCartItemDto): Promise<CartWithTotals> {
     const cart = await this.requireOwnership(cartId, userId);
     this.requireEditable(cart.status);
 
@@ -298,11 +287,7 @@ export class CartService {
     return this.computeView(cartId);
   }
 
-  async removeItem(
-    cartId: string,
-    itemId: string,
-    userId: string,
-  ): Promise<CartWithTotals> {
+  async removeItem(cartId: string, itemId: string, userId: string): Promise<CartWithTotals> {
     const cart = await this.requireOwnership(cartId, userId);
     this.requireEditable(cart.status);
 
@@ -348,7 +333,10 @@ export class CartService {
     }
 
     if (!cart.pickupPointId) {
-      throw new BadRequestException('Cart has no pickup point — set one before checkout');
+      throw new BadRequestException(
+        'Aucun point de retrait n’est associé à cette commande. ' +
+          'Le club doit en créer un pour cette buvette dans son back-office.',
+      );
     }
 
     // Supplier must be Stripe-ready
@@ -357,18 +345,32 @@ export class CartService {
     });
     if (!supplier) throw new NotFoundException('Cart supplier no longer exists');
     if (!supplier.stripeAccountId) {
-      throw new BadRequestException('Supplier has not completed Stripe onboarding');
+      throw new BadRequestException(
+        'Cette buvette n’est pas encore reliée à Stripe : elle ne peut pas encaisser. ' +
+          'À faire depuis sa fiche dans le back-office, bouton « Se connecter à Stripe ».',
+      );
     }
     if (supplier.stripeAccountStatus !== StripeAccountStatus.ACTIVE) {
+      // Le statut brut ne dit rien a un utilisateur : on traduit ce qu'il
+      // implique, et surtout ce qu'il reste a faire.
+      const explication: Record<string, string> = {
+        PENDING:
+          'son inscription Stripe n’est pas terminée — Stripe attend encore des informations',
+        RESTRICTED: 'Stripe a restreint ce compte',
+        REJECTED: 'Stripe a refusé ce compte',
+        NOT_ONBOARDED: 'elle n’a pas commencé son inscription Stripe',
+      };
       throw new BadRequestException(
-        `Supplier Stripe account is ${supplier.stripeAccountStatus} — cannot receive payments`,
+        `Cette buvette ne peut pas encaisser : ${
+          explication[supplier.stripeAccountStatus] ?? supplier.stripeAccountStatus
+        }. Ouvre sa fiche dans le back-office et appuie sur « Vérifier l’état ».`,
       );
     }
 
     // Re-verify every item (in case stock changed since add)
     const view = await this.computeView(cartId);
     if (view.items.length === 0) {
-      throw new BadRequestException('Cart is empty');
+      throw new BadRequestException('Ton panier est vide.');
     }
     for (const item of view.items) {
       await this.assertProductOrderable(item.productId, cart.supplierId, cart.pickupPointId);
@@ -469,7 +471,6 @@ export class CartService {
     };
   }
 
-
   /**
    * PHASE 20 — le client choisit combien de points utiliser sur son panier.
    *
@@ -499,9 +500,7 @@ export class CartService {
     if (points > 0) {
       const balance = await this.loyaltyService.getBalance(userId, event.organizationId);
       if (points > balance) {
-        throw new BadRequestException(
-          `Solde insuffisant : ${balance} point(s) disponible(s)`,
-        );
+        throw new BadRequestException(`Solde insuffisant : ${balance} point(s) disponible(s)`);
       }
     }
 
@@ -540,7 +539,7 @@ export class CartService {
       const unitPrice =
         cart.status === CartStatus.OPEN
           ? it.product.price
-          : it.priceSnapshotCents ?? it.product.price;
+          : (it.priceSnapshotCents ?? it.product.price);
       const lineTotal = unitPrice * it.quantity;
       subtotal += lineTotal;
       return {

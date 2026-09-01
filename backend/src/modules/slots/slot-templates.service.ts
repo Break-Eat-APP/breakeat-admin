@@ -190,7 +190,22 @@ export class SlotTemplatesService {
 
     const journee = jourSeul(quand);
 
+    // Ne tenter QUE les créneaux manquants.
+    //
+    // La contrainte d'unicité reste le vrai garde-fou en concurrence (deux
+    // clients simultanés), mais s'y heurter volontairement à chaque lecture
+    // faisait écrire à PostgreSQL une ERREUR par créneau et par consultation.
+    // Sur une soirée à 5 000 commandes et quatre créneaux, ce sont des dizaines
+    // de milliers de lignes d'erreur qui n'en sont pas — et le vrai incident
+    // devient introuvable au milieu.
+    const dejaLa = await this.prisma.slot.findMany({
+      where: { templateId: { in: templates.map((t) => t.id) }, serviceDate: journee },
+      select: { templateId: true },
+    });
+    const connus = new Set(dejaLa.map((s) => s.templateId));
+
     for (const t of templates) {
+      if (connus.has(t.id)) continue;
       const startAt = new Date(journee);
       startAt.setUTCMinutes(t.startMinutes);
       const endAt = new Date(journee);
