@@ -638,8 +638,6 @@ model Cart {
   redeemedPoints  Int        @default(0) @map("redeemed_points")
   /// Idempotency safeguard for /checkout — same key returns the same PaymentIntent.
   paymentIntentId String?    @map("payment_intent_id")
-  /// PHASE 24 — commande passee dans le cadre d'une invitation entre amis.
-  orderGroupId    String?    @map("order_group_id")
   expiresAt       DateTime   @map("expires_at")
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")

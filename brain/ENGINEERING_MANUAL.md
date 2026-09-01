@@ -4360,6 +4360,40 @@ promesse rejetée sans gestionnaire coupe le processus. Un incident APNs au
 moment d'un « Je suis arrivé » aurait suffi à faire tomber l'API en plein
 service.
 
+### Le schéma et les migrations doivent être VÉRIFIÉS l'un contre l'autre
+
+Le 01/09, commander et partager l'addition échouaient toutes deux en
+« Internal server error ». Cause :
+
+```
+P2022 — meta: { modelName: 'Cart', column: 'carts.order_group_id' }
+```
+
+Le champ `orderGroupId` était **resté dans `schema.prisma`** alors que la
+migration du même commit avait supprimé la colonne. Toute lecture de panier
+émettait donc une requête réclamant une colonne absente.
+
+Rien ne l'avait signalé, et c'est ce qui rend le cas instructif :
+
+- `prisma validate` **passe** — un champ orphelin est un schéma valide ;
+- `prisma generate` **passe** — il génère ce qu'on lui donne ;
+- `tsc` **passe** — plus aucun code ne lisait ce champ ;
+- les **471 tests passent** — ils travaillent sur des mocks, jamais sur la base.
+
+Aucun garde-fou de la chaîne ne compare le schéma aux migrations. La
+vérification tient pourtant en une ligne, et vaut d'être refaite après toute
+suppression de colonne :
+
+```bash
+# Toute colonne ajoutée/supprimée par une migration, confrontée au schéma
+grep -oE '(ADD|DROP) COLUMN IF (NOT )?EXISTS "[a-z_]+"' prisma/migrations/*/migration.sql
+```
+
+> Une suppression par remplacement de texte qui ne trouve pas son motif ne
+> supprime rien, et ne le dit pas. C'est ce qui s'est produit : `prisma format`
+> avait réaligné les colonnes entre-temps. **Toute édition automatisée doit
+> échouer bruyamment quand son motif est introuvable.**
+
 ### Ce qui a été supprimé, et pourquoi
 
 - **Le mode démo** (`demo-checkout`, `DEMO_MODE`, `DemoGuard`, le simulateur) :
