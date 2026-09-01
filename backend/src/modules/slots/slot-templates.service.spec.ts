@@ -140,8 +140,13 @@ describe('SlotTemplatesService', () => {
       const premier = prisma.slot.create.mock.calls[0][0].data;
       expect(premier.templateId).toBe('tpl-1');
       expect(premier.label).toBe('17h45');
-      // 1065 minutes = 17h45 UTC le jour demandé.
-      expect((premier.startAt as Date).toISOString()).toBe('2026-08-26T17:45:00.000Z');
+      // 1065 minutes = 17h45 DANS LE FUSEAU DU LIEU, pas en UTC.
+      //
+      // Le 26 août, Paris est à UTC+2 : 17h45 local vaut donc 15h45 UTC. Le
+      // code posait ces minutes en UTC — le créneau naissait à 19h45 heure de
+      // Paris, le libellé disait 17h45, et le client arrivait deux heures trop
+      // tard sans que rien ne signale l'écart.
+      expect((premier.startAt as Date).toISOString()).toBe('2026-08-26T15:45:00.000Z');
     });
 
     it('ignore les modeles desactives', async () => {

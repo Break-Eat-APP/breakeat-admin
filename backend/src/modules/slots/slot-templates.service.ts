@@ -188,7 +188,14 @@ export class SlotTemplatesService {
     });
     if (templates.length === 0) return [];
 
-    const journee = jourSeul(quand);
+    // Le fuseau DU LIEU : les heures saisies par le club sont les siennes.
+    const lieu = await this.prisma.venue.findUnique({
+      where: { id: venueId },
+      select: { timezone: true },
+    });
+    const fuseau = lieu?.timezone || 'Europe/Paris';
+
+    const journee = jourLocal(quand, fuseau);
 
     // Ne tenter QUE les créneaux manquants.
     //
@@ -206,10 +213,8 @@ export class SlotTemplatesService {
 
     for (const t of templates) {
       if (connus.has(t.id)) continue;
-      const startAt = new Date(journee);
-      startAt.setUTCMinutes(t.startMinutes);
-      const endAt = new Date(journee);
-      endAt.setUTCMinutes(t.endMinutes);
+      const startAt = instantLocal(journee, t.startMinutes, fuseau);
+      const endAt = instantLocal(journee, t.endMinutes, fuseau);
 
       try {
         await this.prisma.slot.create({
@@ -262,6 +267,60 @@ export class SlotTemplatesService {
 }
 
 /** Minuit UTC de la journée considérée — la clé d'idempotence. */
-function jourSeul(d: Date): Date {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+/**
+ * Décalage d'un fuseau, en minutes, à un instant donné.
+ *
+ * Calculé par `Intl` plutôt que codé en dur : l'écart de Paris vaut +60 en
+ * hiver et +120 en été, et un créneau matérialisé avec la mauvaise valeur
+ * décale toute une soirée de service.
+ */
+function decalageFuseau(instant: Date, fuseau: string): number {
+  const parties = new Intl.DateTimeFormat('en-US', {
+    timeZone: fuseau,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(instant);
+  const p = Object.fromEntries(parties.map((x) => [x.type, x.value])) as Record<string, string>;
+  const local = Date.UTC(
+    Number(p.year),
+    Number(p.month) - 1,
+    Number(p.day),
+    Number(p.hour),
+    Number(p.minute),
+    Number(p.second),
+  );
+  return (local - instant.getTime()) / 60000;
+}
+
+/**
+ * Instant réel correspondant à `minutes` après minuit LOCAL, le jour donné.
+ *
+ * Le club saisit « 17:45 » en pensant à l'heure de son stade. Le code posait
+ * cette valeur en UTC : le créneau naissait donc à 19:45 heure de Paris. Le
+ * libellé disait 17:45, l'horaire affiché 19:45, et personne ne comprenait
+ * lequel des deux croire — le client arrivait deux heures trop tard.
+ */
+function instantLocal(jourUtc: Date, minutes: number, fuseau: string): Date {
+  const naif = new Date(jourUtc.getTime() + minutes * 60_000);
+  return new Date(naif.getTime() - decalageFuseau(naif, fuseau) * 60_000);
+}
+
+/** Jour CALENDAIRE local — à 00h30 à Paris, on est déjà demain, pas encore en UTC. */
+function jourLocal(instant: Date, fuseau: string): Date {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: fuseau,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(instant)
+      .map((x) => [x.type, x.value]),
+  ) as Record<string, string>;
+  return new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day)));
 }

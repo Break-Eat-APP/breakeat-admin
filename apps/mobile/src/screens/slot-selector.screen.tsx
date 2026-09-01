@@ -17,24 +17,19 @@ import { PageHeader } from '@components/page-header';
 type Props = NativeStackScreenProps<RootStackParamList, 'SlotSelector'>;
 
 /**
- * Un créneau « moment » (mi-temps, entracte) court sur toute la journée : il n'a
- * pas d'heure. Afficher ses bornes donnait « 02:00 – 02:00 », qui n'apprenait
- * rien et faisait douter de tout l'écran.
+ * UNE heure, pas trois.
  *
- * On le reconnaît à sa durée : 24 h pile ne décrit pas un retrait.
+ * Le créneau affichait « 19:45 – 20:00 — 17:45 » : la plage, puis le libellé
+ * du club, qui disait une heure différente à cause d'un décalage de fuseau.
+ * Trois nombres pour un seul rendez-vous, dont deux se contredisaient.
+ *
+ * Le client n'a besoin que de l'heure à laquelle il vient. Le libellé du club
+ * fait foi quand il existe — c'est lui qui a été écrit pour être lu (« Immédiat »,
+ * « Mi-temps », « 17h45 ») ; sinon, l'heure de début.
  */
-function estUnMoment(slot: PublicSlot): boolean {
-  const duree = new Date(slot.endAt).getTime() - new Date(slot.startAt).getTime();
-  return duree >= 23 * 3600 * 1000;
-}
-
 function slotLabel(slot: PublicSlot): string {
-  if (estUnMoment(slot)) return slot.label ?? 'Moment';
-  const plage = `${formatTime(slot.startAt)} – ${formatTime(slot.endAt)}`;
-  // Le libellé ne se répète pas quand il redit l'heure.
-  return slot.label && slot.label !== formatTime(slot.startAt)
-    ? `${plage} — ${slot.label}`
-    : plage;
+  if (slot.label?.trim()) return slot.label.trim();
+  return formatTime(slot.startAt);
 }
 
 export function SlotSelectorScreen({ route, navigation }: Props) {
@@ -124,22 +119,7 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
                 onPress={() => handleSelect(item)}
               >
                 <View style={styles.slotLeft}>
-                  {estUnMoment(item) ? (
-                    /* Pas d'heure : le nom du moment EST l'information. */
-                    <Text style={[styles.slotTime]}>
-                      {item.label ?? 'Moment'}
-                    </Text>
-                  ) : (
-                    <>
-                      <Text style={[styles.slotTime]}>
-                        {formatTime(item.startAt)}
-                      </Text>
-                      <Text style={styles.slotEnd}>– {formatTime(item.endAt)}</Text>
-                      {item.label && item.label !== formatTime(item.startAt) && (
-                        <Text style={styles.slotSubLabel}>{item.label}</Text>
-                      )}
-                    </>
-                  )}
+                  <Text style={styles.slotTime}>{slotLabel(item)}</Text>
                 </View>
 
                 {/* Plus de compteur de places : le club n'en gere pas, et
@@ -221,8 +201,6 @@ const styles = StyleSheet.create({
   slotLeft: { flex: 1 },
   slotTime: { color: THEME.ink, fontSize: 22, fontWeight: '800' },
   slotTimeFull: { color: THEME.grey },
-  slotEnd: { color: THEME.inkSoft, fontSize: 14 },
-  slotSubLabel: { color: THEME.inkSoft, fontSize: 12, marginTop: 2 },
 
   slotRight: { alignItems: 'flex-end', gap: 8 },
   availBadge: {

@@ -18,6 +18,8 @@ import {
   startPreparingOrder,
   type Order,
   fetchSupplier,
+  fetchEventSuppliers,
+  fetchMeWithMemberships,
   SESSION_EXPIREE,
   setSupplierStatus as apiSetSupplierStatus,
   type SupplierStatus,
@@ -135,6 +137,9 @@ export default function DashboardPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Phase 12.9 — supplier filter
   const [supplierId, setSupplierId] = useState<string | null>(null);
+  /** Buvettes du lieu, pour le choix quand le poste n'en connait aucune. */
+  const [buvettes, setBuvettes] = useState<Array<{ id: string; name: string }>>([]);
+  const [choixOuvert, setChoixOuvert] = useState(false);
   const [supplierName, setSupplierName] = useState<string | null>(null);
   const { playNewOrder, playOrderReady } = useSound();
   const prevNotification = useRef<string | null>(null);
@@ -161,6 +166,63 @@ export default function DashboardPage() {
     if (sid) { setSupplierId(sid); setSupplierName(sname); }
     setOrgId(localStorage.getItem('operator_org_id'));
   }, []);
+
+  /**
+   * Quelle buvette ce poste tient-il ?
+   *
+   * Sans reponse, le tableau affichait TOUTES les commandes du lieu melangees :
+   * le serveur ne filtre que si le membre est epingle a un comptoir, et le lien
+   * « Ouvrir le poste » du back-office ne transmet pas la buvette. Une commande
+   * du Sud apparaissait donc au Nord.
+   *
+   * On cherche donc, dans l'ordre : l'adresse, la memoire du navigateur,
+   * l'epinglage du compte. A defaut, on DEMANDE — plutot que de tout montrer.
+   */
+  useEffect(() => {
+    if (!token || supplierId) return;
+    let annule = false;
+    void (async () => {
+      try {
+        const moi = await fetchMeWithMemberships(token);
+        const epingle = moi.memberships.find((m) => m.supplierId);
+        if (!annule && epingle?.supplierId) {
+          setSupplierId(epingle.supplierId);
+          setSupplierName(epingle.supplier?.name ?? null);
+          localStorage.setItem('operator_supplier_id', epingle.supplierId);
+          return;
+        }
+      } catch {
+        // Sans reponse, on tombe sur le choix manuel — jamais sur « tout ».
+      }
+      const liste = await fetchEventSuppliers(eventId);
+      if (annule) return;
+      setBuvettes(liste);
+      // Une seule buvette : la choisir soi-meme serait une question inutile.
+      if (liste.length === 1) {
+        setSupplierId(liste[0].id);
+        setSupplierName(liste[0].name);
+        localStorage.setItem('operator_supplier_id', liste[0].id);
+      } else if (liste.length > 1) {
+        setChoixOuvert(true);
+      }
+    })();
+    return () => {
+      annule = true;
+    };
+  }, [token, supplierId, eventId]);
+
+  const choisirBuvette = (id: string, nom: string) => {
+    setSupplierId(id);
+    setSupplierName(nom);
+    localStorage.setItem('operator_supplier_id', id);
+    localStorage.setItem('operator_supplier_name', nom);
+    setChoixOuvert(false);
+  };
+
+  const ouvrirChoix = async () => {
+    if (buvettes.length === 0) setBuvettes(await fetchEventSuppliers(eventId));
+    setChoixOuvert(true);
+  };
 
   // Le serveur a refusé le jeton : on revient au formulaire, UNE fois.
   //
@@ -343,25 +405,31 @@ export default function DashboardPage() {
           </span>
         </div>
         <span style={{ color: BRAND.grey, fontSize: 13 }}>Dashboard opérateur</span>
-        {supplierName ? (
-          <span style={{
+        {/* La buvette tenue par ce poste — cliquable pour en changer.
+            Le nom n'est pas decoratif : c'est lui qui dit quelles commandes
+            s'affichent. Il doit donc etre visible ET modifiable. */}
+        <button
+          type="button"
+          onClick={() => void ouvrirChoix()}
+          title="Changer de buvette"
+          style={{
             display: 'inline-flex',
             alignItems: 'center',
             gap: 5,
-            background: BRAND.orangeTint,
-            border: `1px solid ${BRAND.orangeSoft}`,
+            background: supplierName ? BRAND.orangeTint : BRAND.surface,
+            border: `1px solid ${supplierName ? BRAND.orangeSoft : BRAND.border}`,
             borderRadius: 8,
-            padding: '3px 11px',
+            padding: '4px 11px',
             fontSize: 13,
             fontWeight: 700,
-            color: BRAND.orangeDark,
-          }}>
-            <Store size={14} strokeWidth={2} style={{ flexShrink: 0 }} /> {supplierName}
-          </span>
-        ) : (
-
-          <span style={{ color: BRAND.grey, fontSize: 12, fontFamily: 'monospace' }}>{eventId}</span>
-        )}
+            color: supplierName ? BRAND.orangeDark : BRAND.grey,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          <Store size={14} strokeWidth={2} style={{ flexShrink: 0 }} />{' '}
+          {supplierName ?? 'Choisir une buvette'}
+        </button>
 
         {/* Ouverture de la buvette — décidée par l'équipier, à son poste.
             Lui seul sait s'il a du monde, du stock et de quoi servir : ce
@@ -487,8 +555,89 @@ export default function DashboardPage() {
       )}
 
       {/* Screen tabs (Phase 11.4) — only when screens are configured */}
+      {/* Choix de la buvette — tant qu'on ne l'a pas, on n'affiche RIEN.
+          Montrer les commandes de tout le lieu « en attendant » serait pire
+          que ne rien montrer : l'opératrice croirait que ce sont les siennes. */}
+      {choixOuvert && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(45,41,38,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 50,
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              borderRadius: 16,
+              padding: 26,
+              width: 420,
+              maxWidth: '100%',
+              border: `2px solid ${BRAND.orange}`,
+            }}
+          >
+            <h2 style={{ margin: '0 0 6px', fontSize: 19, fontWeight: 800, color: BRAND.ink }}>
+              Quelle buvette tenez-vous ?
+            </h2>
+            <p style={{ margin: '0 0 18px', fontSize: 13.5, color: BRAND.grey, lineHeight: 1.5 }}>
+              Vous ne verrez que les commandes de ce comptoir.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {buvettes.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => choisirBuvette(b.id, b.name)}
+                  style={{
+                    textAlign: 'left',
+                    padding: '13px 16px',
+                    borderRadius: 10,
+                    border: `1.5px solid ${b.id === supplierId ? BRAND.orange : BRAND.border}`,
+                    background: b.id === supplierId ? BRAND.orangeTint : '#fff',
+                    fontSize: 15,
+                    fontWeight: 700,
+                    color: BRAND.ink,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {b.name}
+                </button>
+              ))}
+              {buvettes.length === 0 && (
+                <span style={{ color: BRAND.grey, fontSize: 13.5 }}>
+                  Aucune buvette rattachée à cet événement.
+                </span>
+              )}
+            </div>
+            {supplierId && (
+              <button
+                type="button"
+                onClick={() => setChoixOuvert(false)}
+                style={{
+                  marginTop: 16,
+                  background: 'none',
+                  border: 'none',
+                  color: BRAND.grey,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Annuler
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Kanban board (active screen, or legacy fallback) + Récap panel */}
-      {data && (
+      {data && supplierId && (
         <div
           style={{
             display: 'flex',

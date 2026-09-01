@@ -180,6 +180,24 @@ export interface MeWithMemberships {
   memberships: OperatorMembership[];
 }
 
+/**
+ * Buvettes d'un evenement, via la route PUBLIQUE.
+ *
+ * Le poste a besoin de savoir laquelle il tient. La liste ne contient rien de
+ * sensible — des noms de comptoirs — et cette route existe deja pour l'app
+ * cliente : inutile d'en ouvrir une seconde, authentifiee, pour la meme chose.
+ */
+export async function fetchEventSuppliers(
+  eventId: string,
+): Promise<Array<{ id: string; name: string; status: string }>> {
+  const res = await fetch(`${BASE}/public/events/${eventId}`);
+  if (!res.ok) return [];
+  const data = (await res.json()) as {
+    suppliers?: Array<{ id: string; name: string; status: string }>;
+  };
+  return data.suppliers ?? [];
+}
+
 export async function fetchMeWithMemberships(token: string): Promise<MeWithMemberships> {
   return apiFetch<MeWithMemberships>('/auth/me/memberships', token);
 }
