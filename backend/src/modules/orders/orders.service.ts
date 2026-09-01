@@ -520,6 +520,7 @@ export class OrdersService {
       orderId: updated.id,
       organizationId: updated.organizationId,
       eventId: updated.eventId,
+      supplierId: updated.supplierId,
       previousStatus: order.status,
       nextStatus: to,
       actorType,
@@ -532,6 +533,7 @@ export class OrdersService {
         publicOrderNumber: updated.publicOrderNumber,
         organizationId: updated.organizationId,
         eventId: updated.eventId,
+        supplierId: updated.supplierId,
         pickupPointId: updated.pickupPointId,
       });
     }

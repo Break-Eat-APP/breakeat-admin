@@ -120,7 +120,11 @@ describe('CartService', () => {
             },
             product: { findUnique: jest.fn() },
             stock: { findFirst: jest.fn() },
-            supplier: { findUnique: jest.fn() },
+            // Buvette OUVERTE par defaut : une buvette fermee ne prend plus de
+            // commande, et chaque test de creation partirait sinon en erreur.
+            supplier: {
+              findUnique: jest.fn().mockResolvedValue({ name: 'Buvette Nord', status: 'OPEN' }),
+            },
             // checkout freezes prices via $transaction([update, update, …])
             $transaction: jest.fn().mockResolvedValue([]),
           },
@@ -236,6 +240,19 @@ describe('CartService', () => {
   });
 
   // ─── addItem ─────────────────────────────────────────────────
+
+    it('refuse une buvette FERMÉE — le bouton de l’opératrice doit avoir un effet', async () => {
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
+      (prisma.eventSupplier.findFirst as jest.Mock).mockResolvedValue(mockEventSupplier());
+      (prisma.supplier.findUnique as jest.Mock).mockResolvedValue({
+        name: 'Buvette Sud',
+        status: 'CLOSED',
+      });
+
+      await expect(
+        service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID }),
+      ).rejects.toThrow(/fermée/);
+    });
 
     it('choisit le comptoir de la buvette quand le client n’en désigne aucun', async () => {
       // L'app ne demande jamais de comptoir : le client a deja choisi sa buvette.

@@ -261,7 +261,14 @@ export function useDashboard({
     const client = new SocketClient({
       url: apiUrl.replace('/api/v1', ''),
       token,
-      room: `event:${eventId}`,
+      // Salon de la BUVETTE quand on en connait une.
+      //
+      // Sur `event:` un poste recevait les evenements de TOUTES les buvettes du
+      // lieu : une commande au comptoir Sud declenchait, sur l'ecran du Nord,
+      // une alerte « nouvelle commande » avec un numero qui n'etait pas le sien,
+      // et un rechargement complet du tableau. Un soir a 5 000 commandes, c'est
+      // un poste qui sonne en continu pour des commandes qu'il ne verra jamais.
+      room: supplierId ? `supplier:${supplierId}` : `event:${eventId}`,
       onEvent: handleRealtimeEvent,
       onStatusChange: (status) => {
         dispatch({ type: 'SOCKET_STATUS', status });
@@ -282,7 +289,7 @@ export function useDashboard({
       socketRef.current = null;
       stopPolling();
     };
-  }, [eventId, token, apiUrl]);
+  }, [eventId, token, apiUrl, supplierId]);
 
   // ─── Dismiss notification ─────────────────────────────────────
 

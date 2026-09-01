@@ -5,6 +5,48 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.57.1] — 2026-09-01 — Audit du trajet d'une commande, du panier au comptoir
+
+Question posée : « avec plusieurs buvettes, chaque commande arrive-t-elle bien
+sur le poste de LA bonne buvette ? » Trajet suivi de bout en bout. Trois défauts.
+
+### 1. Le temps réel ne connaissait pas les buvettes
+Chaque poste s'abonnait au salon de l'ÉVÉNEMENT. Une commande au comptoir Sud
+déclenchait donc, sur l'écran du Nord, une alerte « nouvelle commande » avec un
+numéro qui n'était pas le sien, et un rechargement complet du tableau. La liste
+affichée restait juste — elle est filtrée côté serveur — mais le poste sonnait
+pour des commandes qu'il ne verrait jamais. Un soir à 5 000 commandes, c'est une
+alerte toutes les quelques secondes.
+
+Un poste écoute désormais le salon de SA buvette. Les événements d'avancement et
+de mise à disposition y sont maintenant diffusés aussi — sans quoi un comptoir
+abonné à lui seul aurait cessé de voir avancer ses propres commandes.
+
+### 2. Fermer une buvette n'avait aucun effet
+Le bouton « fermer la buvette » du poste changeait le statut, et rien d'autre :
+le serveur acceptait toujours les commandes, et l'app affichait la buvette comme
+ouverte. L'opératrice fermait, les commandes continuaient d'arriver.
+
+Le serveur refuse maintenant, et l'app grise la buvette avec « Fermée pour le
+moment » — au moment du choix, pas au moment de payer.
+
+### 3. Le poste ouvert depuis le back-office ne savait pas quelle buvette
+« Ouvrir le poste opérateur » n'emporte pas la buvette dans son adresse. Un
+membre non épinglé à un comptoir voit donc TOUTES les commandes du lieu,
+mélangées. L'épinglage, lui, fonctionne : une opératrice rattachée à un comptoir
+ne voit que le sien, en lecture comme en écriture.
+
+**Non corrigé à ce stade** — cela demande un sélecteur de buvette sur le poste
+et un lien enrichi côté back-office. Documenté ici pour ne pas être découvert un
+soir de match.
+
+- `~ backend/src/modules/realtime/realtime.service.ts` — salon buvette partout
+- `~ backend/src/modules/cart/cart.service.ts` — refus d'une buvette fermée
+- `~ apps/operator/src/hooks/useDashboard.ts` — abonnement par buvette
+- `~ apps/mobile/src/screens/event-home.screen.tsx` — buvette fermée visible
+
+---
+
 ## [0.57.0] — 2026-09-01 — Le compte Stripe appartient au club, pas à la buvette
 
 ### Le problème, tel que le client l'a vu

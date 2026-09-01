@@ -5,7 +5,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { CartStatus, EventStatus, PickupPointStatus, ProductStatus } from '@prisma/client';
+import {
+  CartStatus,
+  EventStatus,
+  PickupPointStatus,
+  ProductStatus,
+  SupplierStatus,
+} from '@prisma/client';
 import {
   CompteStripeIndisponible,
   resoudreCompteEncaisseur,
@@ -131,6 +137,22 @@ export class CartService {
     });
     if (!eventSupplier) {
       throw new BadRequestException('Supplier is not attached to this event');
+    }
+
+    // Une buvette FERMÉE ne prend plus de commande.
+    //
+    // Le bouton « fermer la buvette » du poste opérateur n'avait aucun effet
+    // ici : le serveur acceptait toujours, et l'app affichait la buvette comme
+    // ouverte. L'opératrice fermait, et les commandes continuaient d'arriver.
+    const buvette = await this.prisma.supplier.findUnique({
+      where: { id: dto.supplierId },
+      select: { name: true, status: true },
+    });
+    if (!buvette) throw new NotFoundException('Supplier not found');
+    if (buvette.status !== SupplierStatus.OPEN) {
+      throw new BadRequestException(
+        `« ${buvette.name} » est fermée pour le moment. Choisis une autre buvette.`,
+      );
     }
 
     if (dto.pickupPointId) {

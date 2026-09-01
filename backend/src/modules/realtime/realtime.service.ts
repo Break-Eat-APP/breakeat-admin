@@ -18,6 +18,8 @@ export interface OrderUpdatedPayload {
   orderId: string;
   organizationId: string;
   eventId: string;
+  /** Buvette concernee : c'est le salon qu'ecoute un poste operateur. */
+  supplierId: string;
   previousStatus: string;
   nextStatus: string;
   actorType: string;
@@ -29,6 +31,7 @@ export interface OrderReadyPayload {
   publicOrderNumber: string;
   organizationId: string;
   eventId: string;
+  supplierId: string;
   pickupPointId: string;
 }
 
@@ -100,6 +103,10 @@ export class RealtimeService {
     server.to(`order:${payload.orderId}`).emit('order_updated', envelope);
     server.to(`organization:${payload.organizationId}`).emit('order_updated', envelope);
     server.to(`event:${payload.eventId}`).emit('order_updated', envelope);
+    // Salon de la BUVETTE : c'est celui qu'un poste ecoute. Sans lui, un
+    // comptoir abonne a sa seule buvette ne verrait jamais avancer ses propres
+    // commandes — il resterait fige jusqu'au prochain rafraichissement complet.
+    server.to(`supplier:${payload.supplierId}`).emit('order_updated', envelope);
 
     this.logger.debug(
       `Emitted order_updated [${payload.orderId}] ${payload.previousStatus} → ${payload.nextStatus}`,
@@ -152,6 +159,7 @@ export class RealtimeService {
     server.to(`pickup-point:${payload.pickupPointId}`).emit('order_ready', envelope);
     server.to(`organization:${payload.organizationId}`).emit('order_ready', envelope);
     server.to(`event:${payload.eventId}`).emit('order_ready', envelope);
+    server.to(`supplier:${payload.supplierId}`).emit('order_ready', envelope);
 
     this.logger.debug(`Emitted order_ready [${payload.orderId}] → pickup-point ${payload.pickupPointId}`);
   }

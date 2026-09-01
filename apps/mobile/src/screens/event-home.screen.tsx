@@ -196,27 +196,44 @@ export function EventHomeScreen({ route, navigation }: Props) {
               tintColor={THEME.orange}
             />
           }
-          renderItem={({ item }) => (
-            <Pressable
-              style={({ pressed }) => [styles.supplierCard, pressed && styles.pressed]}
-              onPress={() => handleSelectSupplier(item.id)}
-            >
-              <View style={styles.supplierAvatar}>
-                <Text style={styles.supplierInitial}>
-                  {item.name.charAt(0).toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.supplierInfo}>
-                <Text style={styles.supplierName}>{item.name}</Text>
-                {item.description && (
-                  <Text style={styles.supplierDesc} numberOfLines={2}>
-                    {item.description}
+          renderItem={({ item }) => {
+            // Une buvette fermée se voit AVANT d'être touchée.
+            //
+            // Le statut était ignoré : une buvette fermée par l'opératrice
+            // s'affichait comme les autres, et le client n'apprenait son refus
+            // qu'au moment de payer. On le dit ici, où il choisit.
+            const ouverte = item.status === 'OPEN';
+            return (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.supplierCard,
+                  !ouverte && styles.supplierFermee,
+                  pressed && ouverte && styles.pressed,
+                ]}
+                onPress={() => handleSelectSupplier(item.id)}
+                disabled={!ouverte}
+              >
+                <View style={styles.supplierAvatar}>
+                  <Text style={styles.supplierInitial}>
+                    {item.name.charAt(0).toUpperCase()}
                   </Text>
-                )}
-              </View>
-              <Text style={styles.arrow}>→</Text>
-            </Pressable>
-          )}
+                </View>
+                <View style={styles.supplierInfo}>
+                  <Text style={styles.supplierName}>{item.name}</Text>
+                  {ouverte ? (
+                    item.description ? (
+                      <Text style={styles.supplierDesc} numberOfLines={2}>
+                        {item.description}
+                      </Text>
+                    ) : null
+                  ) : (
+                    <Text style={styles.supplierFermeeTexte}>Fermée pour le moment</Text>
+                  )}
+                </View>
+                {ouverte ? <Text style={styles.arrow}>→</Text> : null}
+              </Pressable>
+            );
+          }}
         />
       )}
 
@@ -449,6 +466,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: { color: THEME.grey, fontSize: 14, textAlign: 'center' },
+  supplierFermee: { opacity: 0.5 },
+  supplierFermeeTexte: { color: THEME.grey, fontSize: 13, marginTop: 2 },
 
   loginHint: {
     // `bottom` est fourni a l'usage (cf. useFloatingBarBottom).

@@ -40,6 +40,7 @@ function makeOrderUpdatedPayload(): OrderUpdatedPayload {
     orderId: ORDER_ID,
     organizationId: ORG_ID,
     eventId: EVENT_ID,
+    supplierId: SUPPLIER_ID,
     previousStatus: 'PAID',
     nextStatus: 'ACCEPTED',
     actorType: 'OPERATOR',
@@ -53,6 +54,7 @@ function makeOrderReadyPayload(): OrderReadyPayload {
     publicOrderNumber: 'BE-00000001',
     organizationId: ORG_ID,
     eventId: EVENT_ID,
+    supplierId: SUPPLIER_ID,
     pickupPointId: PICKUP_ID,
   };
 }
