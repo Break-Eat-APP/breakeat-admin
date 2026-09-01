@@ -5,7 +5,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { CartStatus, EventStatus, ProductStatus, StripeAccountStatus } from '@prisma/client';
+import {
+  CartStatus,
+  EventStatus,
+  PickupPointStatus,
+  ProductStatus,
+  StripeAccountStatus,
+} from '@prisma/client';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
@@ -138,6 +144,18 @@ export class CartService {
       );
     }
 
+    // Point de retrait : choisi POUR le client quand il n'a rien choisi.
+    //
+    // L'app ne demande jamais de comptoir : le client a déjà désigné sa buvette,
+    // et lui faire choisir « Comptoir Nord » quand il n'y en a qu'un serait une
+    // question sans intérêt, posée au moment le plus pressé.
+    //
+    // Le mode démo faisait ce repli en silence ; le vrai paiement, lui, EXIGE un
+    // point de retrait. En retirant la démo, le parcours s'est donc cassé pour
+    // tout le monde. On résout ici, une fois, et tout l'aval en hérite —
+    // paiement seul comme ardoise partagée.
+    const pickupPointId = dto.pickupPointId ?? (await this.premierPointDeRetrait(dto));
+
     // Reuse an existing OPEN cart if any
     const existingOpen = await this.prisma.cart.findFirst({
       where: {
@@ -165,7 +183,9 @@ export class CartService {
         where: { id: existingOpen.id },
         data: {
           expiresAt: new Date(Date.now() + CART_TTL_MS),
-          ...(dto.pickupPointId !== undefined && { pickupPointId: dto.pickupPointId ?? null }),
+          // Un panier repris sans comptoir en reçoit un : sinon il resterait
+          // impossible à payer jusqu'à son expiration.
+          ...(pickupPointId ? { pickupPointId } : {}),
         },
       });
       this.logger.log(`Cart reused: ${existingOpen.id} user=${userId} event=${dto.eventId}`);
@@ -179,7 +199,7 @@ export class CartService {
         userId,
         eventId: dto.eventId,
         supplierId: dto.supplierId,
-        pickupPointId: dto.pickupPointId ?? null,
+        pickupPointId,
         expiresAt,
       },
     });
@@ -514,6 +534,40 @@ export class CartService {
    * Computes the read-model view: cart + items + totals.
    * Prices are read live from Product — never trusted from the cart row.
    */
+  /**
+   * Comptoir à utiliser quand le client n'en a pas désigné.
+   *
+   * Priorité à celui de SA buvette : un lieu peut en avoir plusieurs, et
+   * envoyer la commande au mauvais comptoir vaut à peine mieux que de la
+   * refuser. À défaut, un comptoir de l'événement — cas d'un lieu qui n'en
+   * déclare qu'un pour tout le monde.
+   *
+   * Renvoie null quand le club n'en a créé aucun : le paiement refusera alors
+   * avec un message qui dit quoi faire, plutôt que de deviner.
+   */
+  private async premierPointDeRetrait(dto: {
+    eventId: string;
+    supplierId: string;
+  }): Promise<string | null> {
+    const deLaBuvette = await this.prisma.pickupPoint.findFirst({
+      where: {
+        eventId: dto.eventId,
+        supplierId: dto.supplierId,
+        status: PickupPointStatus.ACTIVE,
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (deLaBuvette) return deLaBuvette.id;
+
+    const duLieu = await this.prisma.pickupPoint.findFirst({
+      where: { eventId: dto.eventId, status: PickupPointStatus.ACTIVE },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    return duLieu?.id ?? null;
+  }
+
   async computeView(cartId: string): Promise<CartWithTotals> {
     const cart = await this.prisma.cart.findUnique({
       where: { id: cartId },

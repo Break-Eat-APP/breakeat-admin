@@ -105,7 +105,7 @@ describe('CartService', () => {
           useValue: {
             event: { findUnique: jest.fn() },
             eventSupplier: { findFirst: jest.fn() },
-            pickupPoint: { findUnique: jest.fn() },
+            pickupPoint: { findUnique: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
             cart: {
               findFirst: jest.fn(),
               findUnique: jest.fn(),
@@ -236,6 +236,24 @@ describe('CartService', () => {
   });
 
   // ─── addItem ─────────────────────────────────────────────────
+
+    it('choisit le comptoir de la buvette quand le client n’en désigne aucun', async () => {
+      // L'app ne demande jamais de comptoir : le client a deja choisi sa buvette.
+      // Sans ce repli, chaque commande echouait au paiement — « aucun point de
+      // retrait » — alors que le club en avait bien cree un.
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
+      (prisma.eventSupplier.findFirst as jest.Mock).mockResolvedValue(mockEventSupplier());
+      (prisma.pickupPoint.findFirst as jest.Mock).mockResolvedValue({ id: PICKUP_POINT_ID });
+      (prisma.cart.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.cart.create as jest.Mock).mockResolvedValue(mockCart());
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue({ ...mockCart(), items: [] });
+
+      await service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID });
+
+      expect((prisma.cart.create as jest.Mock).mock.calls[0][0].data.pickupPointId).toBe(
+        PICKUP_POINT_ID,
+      );
+    });
 
   describe('addItem', () => {
     it('rejects when caller does not own the cart', async () => {
