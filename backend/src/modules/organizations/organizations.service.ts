@@ -108,6 +108,59 @@ export class OrganizationsService {
   }
 
   /**
+   * Les deux comptes en presence, cote a cote.
+   *
+   * Un paiement Connect met en jeu DEUX comptes : celui qui appelle Stripe
+   * (notre cle) et celui qui recoit (le club). Ils doivent etre DIFFERENTS --
+   * Stripe refuse un virement d'un compte vers lui-meme, avec un message qui
+   * ne dit pas lequel des deux est mal renseigne.
+   *
+   * Sans cet ecran, la reponse vivait dans les journaux du serveur et dans le
+   * tableau de bord Stripe, et il fallait comparer a la main deux chaines de
+   * vingt caracteres qui se ressemblent. Une soiree y est passee.
+   *
+   * Rien de secret ici : un identifiant `acct_` s'affiche partout chez Stripe.
+   */
+  async diagnosticStripe(organizationId: string, userId: string) {
+    await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
+
+    const [org, plateforme] = await Promise.all([
+      this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { name: true, stripeAccountId: true, stripeAccountStatus: true },
+      }),
+      this.stripe.compteDeLaPlateforme(),
+    ]);
+    if (!org) throw new NotFoundException('Organisation introuvable');
+
+    const memeCompte =
+      !!plateforme.accountId &&
+      !!org.stripeAccountId &&
+      plateforme.accountId === org.stripeAccountId;
+
+    return {
+      plateforme: {
+        accountId: plateforme.accountId,
+        nom: plateforme.nom,
+        mode: this.stripe.modeCle,
+      },
+      club: {
+        nom: org.name,
+        accountId: org.stripeAccountId,
+        etat: org.stripeAccountStatus,
+      },
+      memeCompte,
+      verdict: !plateforme.accountId
+        ? 'CLE_INVALIDE'
+        : !org.stripeAccountId
+          ? 'CLUB_NON_RELIE'
+          : memeCompte
+            ? 'MEME_COMPTE'
+            : 'OK',
+    };
+  }
+
+  /**
    * Oublie le compte Stripe du club, pour repartir de zero.
    *
    * Ne touche a RIEN chez Stripe : le compte connecte continue d'exister, avec

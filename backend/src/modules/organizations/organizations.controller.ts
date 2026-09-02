@@ -84,6 +84,17 @@ export class OrganizationsController {
   }
 
   /**
+   * GET /api/v1/organizations/:id/stripe/diagnostic
+   *
+   * Le compte qui APPELLE Stripe et le compte qui ENCAISSE, cote a cote. Ils
+   * doivent differer : Stripe refuse un virement d'un compte vers lui-meme.
+   */
+  @Get(':id/stripe/diagnostic')
+  diagnosticStripe(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.organizationsService.diagnosticStripe(id, user.sub);
+  }
+
+  /**
    * DELETE /api/v1/organizations/:id/stripe
    *
    * Oublie le compte Stripe du club. Ne supprime rien chez Stripe : le compte

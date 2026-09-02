@@ -105,6 +105,36 @@ export class StripeService implements OnModuleInit {
   }
 
   /**
+   * Le compte auquel appartient NOTRE clé, et le mode dans lequel elle opère.
+   *
+   * Ni l'un ni l'autre n'est un secret : l'identifiant `acct_` est affiché
+   * partout dans le tableau de bord Stripe, et le mode se lit sur le préfixe de
+   * la clé. Les exposer permet de comparer, depuis l'application, le compte qui
+   * ENCAISSE et le compte qui APPELLE — la seule chose qui distingue une
+   * configuration correcte d'un virement d'un compte vers lui-même.
+   */
+  async compteDeLaPlateforme(): Promise<{ accountId: string | null; nom: string | null }> {
+    try {
+      const compte = await this.stripe.accounts.retrieve();
+      return {
+        accountId: compte.id,
+        nom: compte.business_profile?.name ?? compte.email ?? null,
+      };
+    } catch (e: unknown) {
+      this.logger.warn(`Lecture du compte plateforme impossible : ${(e as Error).message}`);
+      return { accountId: null, nom: null };
+    }
+  }
+
+  /** `test` ou `reel`, deduit du prefixe de la cle. */
+  get modeCle(): 'test' | 'reel' | 'inconnu' {
+    const cle = this.config.get<string>('app.stripe.secretKey') ?? '';
+    if (cle.startsWith('sk_test')) return 'test';
+    if (cle.startsWith('sk_live')) return 'reel';
+    return 'inconnu';
+  }
+
+  /**
    * Direct SDK access for advanced cases. Prefer the typed helpers below.
    */
   get sdk(): Stripe {

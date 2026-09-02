@@ -572,6 +572,18 @@ export async function apiOrgStripeStatus(orgId: string): Promise<Organization> {
   return req('GET', `/organizations/${orgId}/stripe/status`);
 }
 
+/** Les deux comptes en présence : celui qui appelle Stripe, celui qui encaisse. */
+export interface DiagnosticStripe {
+  plateforme: { accountId: string | null; nom: string | null; mode: 'test' | 'reel' | 'inconnu' };
+  club: { nom: string; accountId: string | null; etat: string };
+  memeCompte: boolean;
+  verdict: 'OK' | 'MEME_COMPTE' | 'CLUB_NON_RELIE' | 'CLE_INVALIDE';
+}
+
+export async function apiOrgStripeDiagnostic(orgId: string): Promise<DiagnosticStripe> {
+  return req('GET', `/organizations/${orgId}/stripe/diagnostic`);
+}
+
 /**
  * Oublie le compte Stripe du club — de NOTRE côté seulement.
  *

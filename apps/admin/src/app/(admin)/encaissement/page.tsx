@@ -5,8 +5,10 @@ import {
   apiGetOrganization,
   apiOrgStripeOnboardingLink,
   apiOrgStripeDelier,
+  apiOrgStripeDiagnostic,
   apiOrgStripeStatus,
   getOrgId,
+  type DiagnosticStripe,
   type Organization,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
@@ -61,16 +63,103 @@ const ETATS: Record<string, { label: string; bg: string; color: string; suite: s
   },
 };
 
+/**
+ * Les DEUX comptes d'un paiement Connect, cote a cote.
+ *
+ * Un paiement met en jeu le compte qui APPELLE Stripe (notre cle serveur) et
+ * celui qui ENCAISSE (le club). Ils doivent differer : Stripe refuse un
+ * virement d'un compte vers lui-meme, et son message ne dit pas lequel des deux
+ * est mal renseigne.
+ *
+ * Jusqu'ici la reponse vivait dans les journaux du serveur et dans le tableau
+ * de bord Stripe, et il fallait comparer a la main deux chaines de vingt
+ * caracteres qui se ressemblent. Une soiree entiere y est passee. Ce bloc rend
+ * la comparaison immediate.
+ */
+function BlocDiagnostic({ diag }: { diag: DiagnosticStripe }) {
+  const PROBLEMES: Record<string, { titre: string; quoiFaire: string }> = {
+    MEME_COMPTE: {
+      titre: 'Le même compte des deux côtés',
+      quoiFaire:
+        'La clé du serveur (STRIPE_SECRET_KEY) appartient au compte qui doit encaisser. ' +
+        'Soit la clé a été prise dans le tableau de bord du compte connecté au lieu de celui ' +
+        'de la plateforme, soit c’est le compte de la plateforme qui a été relié ici par erreur ' +
+        '— dans ce cas, « Relier un autre compte » puis refaites l’inscription.',
+    },
+    CLE_INVALIDE: {
+      titre: 'Stripe ne reconnaît pas la clé du serveur',
+      quoiFaire: 'Vérifiez STRIPE_SECRET_KEY : recopiée en entier, sans espace, et en mode test.',
+    },
+    CLUB_NON_RELIE: {
+      titre: 'Aucun compte relié',
+      quoiFaire: 'Appuyez sur « Se connecter à Stripe » ci-dessus.',
+    },
+  };
+  const probleme = PROBLEMES[diag.verdict];
+  const ok = diag.verdict === 'OK';
+
+  const ligne = (label: string, valeur: string | null, sousTitre?: string) => (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: BRAND.grey, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 13, fontFamily: 'monospace', color: valeur ? BRAND.ink : '#dc2626' }}>
+        {valeur ?? '— introuvable —'}
+      </div>
+      {sousTitre && <div style={{ fontSize: 12, color: BRAND.grey }}>{sousTitre}</div>}
+    </div>
+  );
+
+  return (
+    <div
+      style={{
+        marginTop: 18,
+        padding: '14px 16px',
+        borderRadius: 10,
+        background: ok ? BRAND.bgSubtle : '#fef2f2',
+        border: `1px solid ${ok ? BRAND.border : '#fecaca'}`,
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 700, color: ok ? BRAND.ink : '#991b1b', marginBottom: 10 }}>
+        {ok ? '✓ Les deux comptes sont bien distincts' : probleme?.titre}
+      </div>
+
+      {ligne(
+        'Compte qui encaisse — votre club',
+        diag.club.accountId,
+        diag.club.nom,
+      )}
+      {ligne(
+        'Compte qui appelle Stripe — la plateforme',
+        diag.plateforme.accountId,
+        [diag.plateforme.nom, diag.plateforme.mode === 'reel' ? 'clé RÉELLE' : 'clé de test']
+          .filter(Boolean)
+          .join(' · '),
+      )}
+
+      {probleme && (
+        <div style={{ fontSize: 12.5, color: '#991b1b', lineHeight: 1.6, marginTop: 4 }}>
+          {probleme.quoiFaire}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function EncaissementPage() {
   const orgId = getOrgId();
   const [org, setOrg] = useState<Organization | null>(null);
   const [chargement, setChargement] = useState(true);
   const [occupe, setOccupe] = useState(false);
   const [message, setMessage] = useState('');
+  const [diag, setDiag] = useState<DiagnosticStripe | null>(null);
 
   const charger = useCallback(async () => {
     try {
       setOrg(await apiGetOrganization(orgId));
+      // Le diagnostic ne doit JAMAIS empêcher la page de s'afficher : c'est un
+      // outil de dépannage, pas une dépendance.
+      setDiag(await apiOrgStripeDiagnostic(orgId).catch(() => null));
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Erreur');
     } finally {
@@ -295,6 +384,8 @@ export default function EncaissementPage() {
             </button>
           )}
         </div>
+
+        {diag && <BlocDiagnostic diag={diag} />}
 
         <p style={{ color: BRAND.grey, fontSize: 12.5, margin: '16px 0 0', lineHeight: 1.6 }}>
           L’inscription s’ouvre sur le site de Stripe : vous pouvez vous y connecter avec un compte
