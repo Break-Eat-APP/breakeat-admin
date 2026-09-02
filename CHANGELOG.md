@@ -5,6 +5,54 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.60.0] — 2026-09-02 — Un stade, un compte Stripe
+
+Le back-office proposait DEUX inscriptions Stripe : une par buvette
+(« exploitant extérieur ») et une pour le club. Les deux affichaient « compte
+relié » avec un identifiant, et **rien ne disait laquelle recevait l'argent**.
+Dans les faits le compte de la buvette primait — donc l'écran « Encaissement »
+du club, coché en vert, ne servait à rien pour ce comptoir.
+
+Le compte par buvette existait pour un cas réel mais absent : un food-truck ou
+un traiteur tenant un stand et encaissant lui-même. Personne ne l'utilisait. Il
+est retiré.
+
+**Désormais : un compte par CLUB, créé dans « Encaissement », et c'est tout.**
+`resoudreCompteEncaisseur()` n'a plus de branche — il lit l'organisation, point.
+
+### Ce qui disparaît
+- Le panneau « Encaissement — exploitant extérieur » de la fiche buvette
+- Les routes `POST /suppliers/:id/stripe/onboarding-link` et
+  `GET /suppliers/:id/stripe/status`, leurs méthodes de service, leur DTO
+- Les appels client correspondants — les garder aurait laissé croire à une
+  fonctionnalité disponible dont le premier clic renvoie un 404
+- Le renvoi « Une buvette tenue par un exploitant extérieur ? » au bas de la
+  page Encaissement
+
+### Ce qui reste, et pourquoi
+Les colonnes `Supplier.stripe*` restent en base, **annotées INERTES dans le
+schéma**. Les supprimer effacerait l'historique des clubs déjà inscrits ainsi ;
+les relire ferait diverger la recette d'une buvette vers un compte que plus
+aucun écran n'affiche. Même traitement que les tables du board opérateur : une
+suppression de données se décide, elle ne se fait pas en passant.
+
+### Une lacune corrigée au passage
+Le webhook `account.updated` ne mettait à jour que les **buvettes**. L'état du
+compte du club n'était donc rafraîchi que si quelqu'un pensait à cliquer
+« Vérifier l'état » — un club dont Stripe restreint le compte l'aurait appris
+en découvrant que plus personne ne peut payer. Il vise maintenant
+l'organisation.
+
+### Côté Stripe, pour le club
+Le compte qui encaisse tout est désormais celui affiché dans « Encaissement ».
+Les comptes connectés créés par l'ancien parcours par buvette existent toujours
+chez Stripe et ne recevront plus rien : à renommer ou à faire rejeter, sous
+peine de chercher des paiements dans le mauvais tableau de bord.
+
+488 tests au vert, `tsc` propre, `lint` sans erreur, `next build` vert.
+
+---
+
 ## [0.59.1] — 2026-09-02 — Le bouton sous la barre, et les emojis dehors
 
 **« Confirmer la commande » passait derrière la barre d'onglets.** L'écran

@@ -467,15 +467,24 @@ model Supplier {
   isExternal           Boolean             @default(false) @map("is_external")
   /// Code de parrainage unique — partagé à l'exploitant externe pour le rattacher au club.
   referralCode         String?             @unique @map("referral_code")
-  /// Stripe Connect account ID — populated during Phase 5 onboarding.
+  /// ─── INERTES depuis le 02/09/2026 — NE PLUS LIRE ───────────────────────
+  /// Une buvette n'a plus de compte Stripe propre : l'argent va au compte du
+  /// CLUB (`Organization.stripeAccountId`), decide par
+  /// `common/helpers/compte-stripe.ts` et lui seul.
+  ///
+  /// Le compte par comptoir servait au cas d'un exploitant tiers encaissant
+  /// lui-meme. Personne ne l'utilisait, et il ouvrait une SECONDE source de
+  /// verite : deux ecrans annoncaient « compte relie » sans que rien ne dise
+  /// lequel recevait l'argent. Les colonnes restent pour ne pas effacer
+  /// l'historique des clubs qui s'etaient inscrits ainsi ; les relire ferait
+  /// diverger la recette d'une buvette vers un compte que plus aucun ecran
+  /// n'affiche.
   stripeAccountId      String?             @map("stripe_account_id")
   stripeAccountStatus  StripeAccountStatus @default(NOT_ONBOARDED) @map("stripe_account_status")
-  /// Mirror of Stripe Account.charges_enabled — refreshed on each status check.
   stripeChargesEnabled Boolean             @default(false) @map("stripe_charges_enabled")
-  /// Mirror of Stripe Account.payouts_enabled — refreshed on each status check.
   stripePayoutsEnabled Boolean             @default(false) @map("stripe_payouts_enabled")
-  /// Timestamp when the account first reached ACTIVE state.
   stripeOnboardedAt    DateTime?           @map("stripe_onboarded_at")
+  /// ────────────────────────────────────────────────────────────────────────
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
 

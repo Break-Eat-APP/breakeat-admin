@@ -34,7 +34,9 @@ describe('StripeWebhooksService', () => {
               create: jest.fn(),
               update: jest.fn(),
             },
-            supplier: {
+            // `account.updated` suit desormais le compte du CLUB : c'est le
+            // seul qui encaisse.
+            organization: {
               findFirst: jest.fn(),
               update: jest.fn(),
             },
@@ -122,10 +124,12 @@ describe('StripeWebhooksService', () => {
     );
   });
 
-  it('updates supplier mirrors on account.updated', async () => {
+  it('met a jour l’etat Stripe DU CLUB sur account.updated', async () => {
+    // Sans ce suivi, un club dont Stripe restreint le compte l'apprendrait en
+    // decouvrant que plus personne ne peut payer.
     (prisma.webhookEvent.findUnique as jest.Mock).mockResolvedValue(null);
-    (prisma.supplier.findFirst as jest.Mock).mockResolvedValue({
-      id: 'supplier-1',
+    (prisma.organization.findFirst as jest.Mock).mockResolvedValue({
+      id: 'club-1',
       stripeAccountId: 'acct_test',
       stripeOnboardedAt: null,
     });
@@ -139,9 +143,9 @@ describe('StripeWebhooksService', () => {
 
     await service.handleEvent(event);
 
-    const updateCall = (prisma.supplier.update as jest.Mock).mock.calls[0][0];
+    const updateCall = (prisma.organization.update as jest.Mock).mock.calls[0][0];
+    expect(updateCall.where.id).toBe('club-1');
     expect(updateCall.data.stripeChargesEnabled).toBe(true);
-    expect(updateCall.data.stripePayoutsEnabled).toBe(true);
     expect(updateCall.data.stripeAccountStatus).toBe('ACTIVE');
     // First-time onboarded timestamp must be set
     expect(updateCall.data.stripeOnboardedAt).toBeInstanceOf(Date);

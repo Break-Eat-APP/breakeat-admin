@@ -2,25 +2,24 @@ import { StripeAccountStatus } from '@prisma/client';
 import type { PrismaService } from '../../database/prisma.service';
 
 /**
- * À QUI va l'argent d'une commande.
+ * À QUI va l'argent d'une commande : au compte Stripe DU CLUB.
  *
- * Le compte Stripe appartient au CLUB : il s'inscrit une fois, et toutes ses
- * buvettes encaissent dessus. Demander quatre inscriptions à un club qui a
- * quatre comptoirs n'aurait aucun sens — quatre fois les mêmes coordonnées
- * bancaires, quatre tableaux de bord, une recette éparpillée.
+ * Un stade, un compte. Le club s'inscrit une fois dans « Encaissement », et
+ * toutes ses buvettes encaissent dessus. Demander une inscription par comptoir
+ * n'aurait aucun sens — quatre fois les mêmes coordonnées bancaires, quatre
+ * tableaux de bord, une recette éparpillée.
  *
- * Une buvette ne porte son propre compte que lorsqu'elle est exploitée par un
- * TIERS — food-truck, traiteur. Le sien prime alors : sa recette ne doit pas
- * atterrir chez le club.
- *
- * C'est la seule fonction qui décide de cette priorité. Toute autre lecture
- * directe de `supplier.stripeAccountId` ferait diverger le paiement seul de
- * l'ardoise partagée, et l'argent d'une buvette de deux endroits différents.
+ * Un compte PAR BUVETTE a existé, pour le cas d'un exploitant extérieur
+ * (food-truck, traiteur) encaissant lui-même. Il a été retiré : personne ne
+ * l'utilisait, et il introduisait une seconde source de vérité — deux écrans
+ * annonçaient un compte relié, sans que rien ne dise lequel recevait l'argent.
+ * Les colonnes `Supplier.stripe*` restent en base, inertes, et le schéma le dit.
+ * Le jour où un exploitant tiers se présentera, c'est ici que la règle revivra,
+ * et nulle part ailleurs : toute autre lecture ferait diverger le paiement seul
+ * de l'ardoise partagée.
  */
 export interface CompteEncaisseur {
   accountId: string;
-  /** Vrai quand c'est le compte propre de la buvette (exploitant tiers). */
-  propreALaBuvette: boolean;
 }
 
 /** Ce qui manque pour encaisser, dit en français, prêt à afficher. */
@@ -44,47 +43,30 @@ export async function resoudreCompteEncaisseur(
 ): Promise<CompteEncaisseur> {
   const supplier = await prisma.supplier.findUnique({
     where: { id: supplierId },
-    select: {
-      name: true,
-      organizationId: true,
-      stripeAccountId: true,
-      stripeAccountStatus: true,
-    },
+    select: { organizationId: true },
   });
   if (!supplier) {
     throw new CompteStripeIndisponible('Cette buvette n’existe plus.');
   }
 
-  // Exploitant tiers : son compte prime.
-  if (supplier.stripeAccountId) {
-    if (supplier.stripeAccountStatus !== StripeAccountStatus.ACTIVE) {
-      throw new CompteStripeIndisponible(
-        `« ${supplier.name} » ne peut pas encaisser : ${
-          EXPLICATIONS[supplier.stripeAccountStatus] ?? supplier.stripeAccountStatus
-        }. Ouvre sa fiche et appuie sur « Vérifier l’état ».`,
-      );
-    }
-    return { accountId: supplier.stripeAccountId, propreALaBuvette: true };
-  }
-
   const club = await prisma.organization.findUnique({
     where: { id: supplier.organizationId },
-    select: { name: true, stripeAccountId: true, stripeAccountStatus: true },
+    select: { stripeAccountId: true, stripeAccountStatus: true },
   });
 
   if (!club?.stripeAccountId) {
     throw new CompteStripeIndisponible(
       'Le club n’est pas encore relié à Stripe : aucune de ses buvettes ne peut ' +
-        'encaisser. À faire une seule fois, dans le back-office → Réglages.',
+        'encaisser. À faire une seule fois, dans le back-office → Encaissement.',
     );
   }
   if (club.stripeAccountStatus !== StripeAccountStatus.ACTIVE) {
     throw new CompteStripeIndisponible(
       `Le club ne peut pas encore encaisser : ${
         EXPLICATIONS[club.stripeAccountStatus] ?? club.stripeAccountStatus
-      }. Va dans le back-office → Réglages et appuie sur « Vérifier l’état ».`,
+      }. Va dans le back-office → Encaissement et appuie sur « Vérifier l’état ».`,
     );
   }
 
-  return { accountId: club.stripeAccountId, propreALaBuvette: false };
+  return { accountId: club.stripeAccountId };
 }

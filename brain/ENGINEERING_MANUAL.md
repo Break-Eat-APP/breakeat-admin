@@ -4550,3 +4550,41 @@ verrait qu'après un vrai paiement. Mieux vaut une variable manquante, signalée
 au démarrage, qu'un repli plausible et faux.
 
 ---
+
+
+## Phase 28 — Un seul compte Stripe, celui du club (2026-09-02)
+
+**Le defaut n'etait pas technique, il etait de lisibilite.** Deux ecrans
+proposaient de relier un compte Stripe — la fiche buvette et la page
+Encaissement — et tous deux affichaient ensuite « compte relie » avec un
+identifiant. Aucun ne disait lequel encaissait. La regle vivait dans
+`resoudreCompteEncaisseur()` : la buvette prime, sinon le club. Correcte, mais
+invisible depuis l'interface.
+
+Une interface qui presente deux reglages sans dire lequel gagne finit toujours
+par etre mal reglee. Ici la sanction etait silencieuse : un club cochait
+« Encaissement » en vert et croyait tout couvert, alors que ses comptoirs
+versaient ailleurs.
+
+**Le choix : supprimer la branche, pas la documenter.** Le compte par buvette
+servait un cas absent (exploitant tiers encaissant lui-meme). Le maintenir
+« au cas ou » aurait garde deux sources de verite pour zero usage. Il reviendra
+si un food-truck se presente, et il reviendra AU MEME ENDROIT — le helper est
+la seule fonction autorisee a decider a qui va l'argent.
+
+**Le choix : garder les colonnes, annotees.** Precedent applique : les tables
+`operator_screen_templates` ont ete conservees pour la meme raison. Supprimer
+des donnees efface l'historique de clubs qui s'etaient reellement inscrits ;
+c'est une decision a prendre en connaissance de cause, pas un effet de bord
+d'un nettoyage d'interface. Le schema porte un bandeau `INERTES — NE PLUS LIRE`
+avec le pourquoi : sans lui, un futur developpeur retablirait la branche en
+croyant reparer un oubli.
+
+**La lacune revelee par le nettoyage.** En deplacant `account.updated` du
+fournisseur vers l'organisation, on a decouvert que l'etat Stripe du CLUB
+n'avait jamais ete suivi par webhook — seul celui des buvettes l'etait. Tant que
+le compte du club n'encaissait rien, cela ne se voyait pas. Il devient le seul
+compte : sans ce suivi, une restriction Stripe se serait manifestee par des
+paiements refuses, sans explication nulle part.
+
+---

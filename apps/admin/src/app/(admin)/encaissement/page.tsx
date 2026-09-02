@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import {
   apiGetOrganization,
   apiOrgStripeOnboardingLink,
@@ -14,9 +13,11 @@ import { BRAND } from '@/lib/brand';
 /**
  * Encaissement — le compte Stripe DU CLUB.
  *
- * Une seule inscription pour toutes ses buvettes. Le contraire — un compte par
- * comptoir — obligerait à saisir quatre fois les mêmes coordonnées bancaires,
- * pour une recette éparpillée sur quatre tableaux de bord.
+ * Une seule inscription pour toutes ses buvettes, et c'est le SEUL endroit où
+ * elle se fait. Un compte par comptoir a existé : il obligeait à saisir quatre
+ * fois les mêmes coordonnées bancaires, éparpillait la recette sur quatre
+ * tableaux de bord, et surtout créait deux écrans annonçant chacun « compte
+ * relié » sans que rien ne dise lequel recevait l'argent.
  *
  * Cette page a sa propre entrée de menu parce qu'elle conditionne TOUTE la
  * recette : tant qu'elle n'est pas verte, aucun client ne peut payer, nulle
@@ -246,25 +247,6 @@ export default function EncaissementPage() {
         </p>
       </div>
 
-      <div
-        style={{
-          marginTop: 20,
-          padding: '16px 20px',
-          background: BRAND.bgSubtle,
-          borderRadius: 10,
-          color: BRAND.inkSoft,
-          fontSize: 13.5,
-          lineHeight: 1.6,
-        }}
-      >
-        <strong style={{ color: BRAND.ink }}>Une buvette tenue par un exploitant extérieur ?</strong>{' '}
-        Un food-truck ou un traiteur peut recevoir sa recette sur son propre compte : ouvrez sa
-        fiche dans{' '}
-        <Link href="/suppliers" style={{ color: BRAND.orange }}>
-          Buvettes
-        </Link>{' '}
-        et reliez-la séparément. Son compte prendra alors le pas sur celui du club, pour elle seule.
-      </div>
     </div>
   );
 }

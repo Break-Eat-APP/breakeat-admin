@@ -572,18 +572,6 @@ export async function apiOrgStripeStatus(orgId: string): Promise<Organization> {
   return req('GET', `/organizations/${orgId}/stripe/status`);
 }
 
-export async function apiStripeOnboardingLink(
-  orgId: string,
-  supplierId: string,
-): Promise<{ accountId: string; url: string; expiresAt: number }> {
-  return req('POST', `/organizations/${orgId}/suppliers/${supplierId}/stripe/onboarding-link`, {});
-}
-
-/** Relit l'état du compte chez Stripe et le recopie sur la buvette. */
-export async function apiStripeStatus(orgId: string, supplierId: string): Promise<Supplier> {
-  return req('GET', `/organizations/${orgId}/suppliers/${supplierId}/stripe/status`);
-}
-
 export async function apiUpdateSupplierStatus(
   orgId: string,
   supplierId: string,

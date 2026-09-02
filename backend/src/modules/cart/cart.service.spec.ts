@@ -22,6 +22,7 @@ const USER_ID = 'user-1';
 const EVENT_ID = 'event-1';
 const VENUE_ID = 'venue-1';
 const SUPPLIER_ID = 'supplier-1';
+const ORG_ID = 'org-1';
 const PICKUP_POINT_ID = 'pp-1';
 const PRODUCT_ID = 'product-1';
 const CART_ID = 'cart-1';
@@ -64,7 +65,7 @@ function mockCart(
     // Phase 20 — computeView lit le lieu (config fidélité) et l'org (solde)
     // via la relation `event`, obligatoire côté Prisma.
     redeemedPoints: 0,
-    event: { venueId: VENUE_ID, organizationId: 'org-1' },
+    event: { venueId: VENUE_ID, organizationId: ORG_ID },
     ...overrides,
   };
 }
@@ -122,8 +123,20 @@ describe('CartService', () => {
             stock: { findFirst: jest.fn() },
             // Buvette OUVERTE par defaut : une buvette fermee ne prend plus de
             // commande, et chaque test de creation partirait sinon en erreur.
+            // Le compte encaisseur est celui du CLUB : la buvette ne fournit
+            // plus que son nom, son etat et l'organisation dont elle depend.
+            organization: {
+              findUnique: jest.fn().mockResolvedValue({
+                stripeAccountId: 'acct_club',
+                stripeAccountStatus: StripeAccountStatus.ACTIVE,
+              }),
+            },
             supplier: {
-              findUnique: jest.fn().mockResolvedValue({ name: 'Buvette Nord', status: 'OPEN' }),
+              findUnique: jest.fn().mockResolvedValue({
+                name: 'Buvette Nord',
+                status: 'OPEN',
+                organizationId: ORG_ID,
+              }),
             },
             // checkout freezes prices via $transaction([update, update, …])
             $transaction: jest.fn().mockResolvedValue([]),
@@ -347,22 +360,60 @@ describe('CartService', () => {
       expect(stripe.createHostedCheckout).toHaveBeenCalledWith(
         expect.objectContaining({
           idempotencyKey: `cart_${CART_ID}`,
-          destinationAccountId: 'acct_test',
+          destinationAccountId: 'acct_club',
           captureMethod: 'automatic',
           metadata: expect.objectContaining({ cartId: CART_ID }),
         }),
       );
     });
 
-    it('rejects checkout if supplier is not Stripe-ACTIVE', async () => {
+    it('refuse le paiement tant que le CLUB ne peut pas encaisser', async () => {
+      // L'argent va au compte du club, jamais a celui d'une buvette : c'est
+      // donc son etat a lui qui autorise ou non le paiement.
       setupValidCheckout();
-      (prisma.supplier.findUnique as jest.Mock).mockResolvedValue({
-        id: SUPPLIER_ID,
-        stripeAccountId: 'acct_test',
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue({
+        stripeAccountId: 'acct_club',
         stripeAccountStatus: StripeAccountStatus.PENDING,
       });
 
       await expect(service.checkout(CART_ID, USER_ID)).rejects.toThrow(BadRequestException);
+    });
+
+    it('refuse le paiement si le club n’est pas relié du tout', async () => {
+      setupValidCheckout();
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue({
+        stripeAccountId: null,
+        stripeAccountStatus: StripeAccountStatus.NOT_ONBOARDED,
+      });
+
+      await expect(service.checkout(CART_ID, USER_ID)).rejects.toThrow(BadRequestException);
+    });
+
+    it('encaisse sur le compte du CLUB, même si la buvette en porte un ancien', async () => {
+      // Les colonnes `stripe*` de Supplier subsistent en base pour l'historique.
+      // Les lire de nouveau ferait diverger la recette d'une buvette vers un
+      // compte que plus aucun écran n'affiche.
+      setupValidCheckout();
+      (prisma.supplier.findUnique as jest.Mock).mockResolvedValue({
+        name: 'Buvette Nord',
+        status: 'OPEN',
+        organizationId: ORG_ID,
+        stripeAccountId: 'acct_ANCIEN_DE_LA_BUVETTE',
+        stripeAccountStatus: StripeAccountStatus.ACTIVE,
+      });
+
+      const stripe = (service as unknown as { stripe: { createHostedCheckout: jest.Mock } }).stripe;
+      stripe.createHostedCheckout.mockResolvedValue({
+        id: 'cs_test',
+        url: 'https://stripe/pay/cs_test',
+        payment_intent: 'pi_test',
+      });
+
+      await service.checkout(CART_ID, USER_ID);
+
+      expect(stripe.createHostedCheckout).toHaveBeenCalledWith(
+        expect.objectContaining({ destinationAccountId: 'acct_club' }),
+      );
     });
 
     it('rejects checkout if cart has no pickup point', async () => {

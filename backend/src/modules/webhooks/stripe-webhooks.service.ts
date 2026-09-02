@@ -85,12 +85,19 @@ export class StripeWebhooksService {
 
   // ─── Handlers ────────────────────────────────────────────────
 
+  /**
+   * Stripe a modifié un compte connecté — c'est celui d'un CLUB.
+   *
+   * Sans ce suivi, l'état affiché ne changerait que si quelqu'un pensait à
+   * appuyer sur « Vérifier l'état ». Un club dont Stripe restreint le compte
+   * apprendrait la nouvelle en découvrant que plus personne ne peut payer.
+   */
   private async onAccountUpdated(account: Stripe.Account): Promise<void> {
-    const supplier = await this.prisma.supplier.findFirst({
+    const club = await this.prisma.organization.findFirst({
       where: { stripeAccountId: account.id },
     });
-    if (!supplier) {
-      this.logger.warn(`account.updated for unknown stripeAccountId ${account.id}`);
+    if (!club) {
+      this.logger.warn(`account.updated pour un compte inconnu : ${account.id}`);
       return;
     }
 
@@ -103,20 +110,20 @@ export class StripeWebhooksService {
           ? StripeAccountStatus.RESTRICTED
           : StripeAccountStatus.PENDING;
 
-    await this.prisma.supplier.update({
-      where: { id: supplier.id },
+    await this.prisma.organization.update({
+      where: { id: club.id },
       data: {
         stripeAccountStatus: newStatus,
         stripeChargesEnabled: chargesOk,
-        stripePayoutsEnabled: payoutsOk,
-        ...(newStatus === StripeAccountStatus.ACTIVE && !supplier.stripeOnboardedAt && {
+        ...(newStatus === StripeAccountStatus.ACTIVE && !club.stripeOnboardedAt && {
           stripeOnboardedAt: new Date(),
         }),
       },
     });
 
     this.logger.log(
-      `Supplier ${supplier.id} Stripe status updated via webhook: ${newStatus} (charges=${chargesOk}, payouts=${payoutsOk})`,
+      `Club ${club.id} — état Stripe mis à jour par webhook : ${newStatus} ` +
+        `(encaissements=${chargesOk}, virements=${payoutsOk})`,
     );
   }
 
