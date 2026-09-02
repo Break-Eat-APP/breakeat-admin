@@ -1,5 +1,6 @@
 import {
   BadGatewayException,
+  BadRequestException,
   Injectable,
   Logger,
   OnModuleInit,
@@ -71,6 +72,36 @@ export class StripeService implements OnModuleInit {
       typescript: true,
       appInfo: { name: 'break-eat-backend', version: '0.1.0' },
     });
+
+    if (secretKey) void this.annoncerCompte();
+  }
+
+  /**
+   * Dit dans les journaux À QUEL COMPTE appartient notre clé.
+   *
+   * Une clé `sk_test_…` ne se distingue pas d'une autre à l'œil, et chaque
+   * compte CONNECTÉ possède, en test, son propre tableau de bord et ses propres
+   * clés. Prendre celle du club au lieu de celle de la plateforme donne un
+   * serveur qui démarre normalement, encaisse normalement — jusqu'au premier
+   * paiement, où Stripe refuse un virement d'un compte vers lui-même.
+   *
+   * Cette ligne rend la confusion visible au démarrage plutôt qu'après une
+   * commande perdue. Elle n'interrompt rien : une API qui refuse de démarrer
+   * parce qu'elle n'a pas pu joindre Stripe ne sert plus personne.
+   */
+  private async annoncerCompte(): Promise<void> {
+    try {
+      const compte = await this.stripe.accounts.retrieve();
+      this.logger.log(
+        `Stripe — compte PLATEFORME : ${compte.id}` +
+          `${compte.business_profile?.name ? ` (${compte.business_profile.name})` : ''}. ` +
+          'Les comptes des clubs doivent tous être DIFFÉRENTS de celui-ci.',
+      );
+    } catch (e: unknown) {
+      this.logger.warn(
+        `Impossible de lire le compte Stripe de la plateforme : ${(e as Error).message}`,
+      );
+    }
   }
 
   /**
@@ -108,6 +139,28 @@ export class StripeService implements OnModuleInit {
         throw new ServiceUnavailableException(
           'La clé Stripe du serveur est invalide ou incomplète. ' +
             'Vérifiez STRIPE_SECRET_KEY (elle doit être recopiée en entier, sans espace).',
+        );
+      }
+
+      // Le compte qui encaisse est le compte qui APPELLE : Stripe refuse de
+      // virer de l'argent d'un compte vers lui-même.
+      //
+      // Cela n'arrive jamais par accident de code : c'est toujours que
+      // `STRIPE_SECRET_KEY` a été prise dans le tableau de bord d'un compte
+      // CONNECTÉ au lieu de celui de la plateforme. En test, chaque compte
+      // connecté a son propre tableau de bord et ses propres clés `sk_test_`,
+      // qui se ressemblent toutes — la confusion est facile, et le message brut
+      // de Stripe (« cannot be set to your own account ») ne dit pas quoi faire.
+      if (erreur?.message?.includes('cannot be set to your own account')) {
+        this.logger.error(
+          `Stripe : destination = compte appelant (${operation}). ` +
+            'STRIPE_SECRET_KEY appartient au même compte que le compte encaisseur.',
+        );
+        throw new BadRequestException(
+          'La clé Stripe du serveur appartient au même compte que celui qui doit ' +
+            'encaisser : Stripe refuse un virement d’un compte vers lui-même. ' +
+            'STRIPE_SECRET_KEY doit être la clé de la PLATEFORME (Break Eat), pas ' +
+            'celle du compte connecté du club.',
         );
       }
 
