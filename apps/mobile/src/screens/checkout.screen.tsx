@@ -25,7 +25,9 @@ import {
 } from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
 import { useAuthStore } from '@store/auth.store';
+import { Ionicons } from '@expo/vector-icons';
 import { PageHeader } from '@components/page-header';
+import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { showAlert } from '@lib/alert';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Checkout'>;
@@ -85,6 +87,9 @@ async function attendreLaCommande(cartId: string) {
 }
 
 export function CheckoutScreen({ navigation }: Props) {
+  // La barre du bas flotte au-dessus des ecrans : tout element pose en bas doit
+  // lui laisser la place, encoche de l'appareil comprise.
+  const espaceBas = useBottomBarSpace();
   const { user, token } = useAuthStore();
   const {
     items,
@@ -258,7 +263,7 @@ export function CheckoutScreen({ navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Customer info */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>👤 Commande pour</Text>
+          <Text style={styles.cardTitle}>Commande pour</Text>
           <Text style={styles.cardValue}>{user.displayName}</Text>
           <Text style={styles.cardSub}>{user.email}</Text>
         </View>
@@ -266,14 +271,14 @@ export function CheckoutScreen({ navigation }: Props) {
         {/* Slot */}
         {selectedSlotLabel && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>⏰ Créneau de retrait</Text>
+            <Text style={styles.cardTitle}>Créneau de retrait</Text>
             <Text style={styles.cardValue}>{selectedSlotLabel}</Text>
           </View>
         )}
 
         {/* Items */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>🛒 Articles ({items.length})</Text>
+          <Text style={styles.cardTitle}>Articles ({items.length})</Text>
           {items.map((item) => (
             <View key={item.productId} style={styles.itemRow}>
               <Text style={styles.itemQty}>{item.quantity}×</Text>
@@ -290,7 +295,7 @@ export function CheckoutScreen({ navigation }: Props) {
         {/* Fidélité — visible seulement si le club a activé le programme */}
         {loyalty?.enabled && (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>⭐ Mes points</Text>
+            <Text style={styles.cardTitle}>Mes points</Text>
             <Text style={styles.cardValue}>
               {loyalty.balance} point{loyalty.balance > 1 ? 's' : ''} disponible
               {loyalty.balance > 1 ? 's' : ''}
@@ -349,25 +354,30 @@ export function CheckoutScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {/* Le paiement se fait sur une page Stripe : on prévient avant de
-            sortir de l'app, sinon le client croit avoir perdu sa commande. */}
-        <View style={styles.demoBadge}>
-          <Text style={styles.demoIcon}>🔒</Text>
-          <Text style={styles.demoText}>
-            Paiement sécurisé par Stripe. La page s’ouvre dans ton navigateur, puis tu reviens ici.
+        {/* Ce que le client doit savoir avant d'appuyer : qui encaisse, et
+            qu'il ne quitte pas l'application. Le texte disait « la page s'ouvre
+            dans ton navigateur » — ce n'est plus vrai depuis que le paiement
+            s'affiche dans l'app, et une consigne fausse inquiète plus qu'elle
+            ne rassure. */}
+        <View style={styles.mentionPaiement}>
+          <Ionicons
+            name="lock-closed"
+            size={15}
+            color={THEME.inkSoft}
+            style={{ marginTop: 1 }}
+          />
+          <Text style={styles.mentionTexte}>
+            Paiement sécurisé par Stripe, sans quitter l’application.
           </Text>
-        </View>
-
-        {/* Payment visual (fake card) */}
-        <View style={styles.fakeCard}>
-          <View style={styles.fakeCardChip} />
-          <Text style={styles.fakeCardNum}>•••• •••• •••• 4242</Text>
-          <Text style={styles.fakeCardLabel}>Visa Demo</Text>
         </View>
       </ScrollView>
 
-      {/* CTA */}
-      <View style={styles.cta}>
+      {/* Le bouton, au-dessus de la barre d'onglets.
+          Sans cette marge il finissait DERRIERE la pastille centrale : le
+          client voyait « Confirmer la commande » coupe en deux, et l'appui
+          tombait sur l'onglet. La valeur vient de la geometrie reelle de la
+          barre — voir `useBottomBarSpace`. */}
+      <View style={[styles.cta, { paddingBottom: espaceBas }]}>
         {loading ? (
           <View style={styles.ctaLoading}>
             <ActivityIndicator color="#fff" />
@@ -449,38 +459,20 @@ const styles = StyleSheet.create({
   totalLabel: { color: THEME.ink, fontSize: 16, fontWeight: '700' },
   totalValue: { color: THEME.orange, fontSize: 22, fontWeight: '800' },
 
-  demoBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: THEME.bg,
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: THEME.grey,
-  },
-  demoIcon: { fontSize: 18 },
-  demoText: { color: THEME.grey, fontSize: 12, flex: 1, lineHeight: 16 },
 
-  fakeCard: {
-    backgroundColor: THEME.orangeTint,
-    borderRadius: 16,
-    padding: 20,
+
+  mentionPaiement: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 8,
-    borderWidth: 1,
-    borderColor: THEME.orangeSoft,
+    paddingHorizontal: 4,
+    paddingTop: 4,
   },
-  fakeCardChip: {
-    width: 36,
-    height: 28,
-    backgroundColor: '#d97706',
-    borderRadius: 6,
-  },
-  fakeCardNum: { color: THEME.orangeSoft, fontSize: 16, letterSpacing: 2, fontWeight: '600' },
-  fakeCardLabel: { color: THEME.orangeSoft, fontSize: 12 },
+  mentionTexte: { color: THEME.inkSoft, fontSize: 12.5, flex: 1, lineHeight: 18 },
 
   cta: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
     backgroundColor: THEME.bg,
     borderTopWidth: 1,
     borderTopColor: THEME.surface,

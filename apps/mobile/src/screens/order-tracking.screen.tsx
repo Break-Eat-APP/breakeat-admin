@@ -14,6 +14,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiGetOrder, formatPrice, type Order } from '@lib/api/mobile-api';
 import { PageHeader } from '@components/page-header';
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderTracking'>;
 
@@ -21,7 +22,8 @@ const POLL_INTERVAL_MS = 5000;
 
 interface StatusConfig {
   label: string;
-  icon: string;
+  /** Nom d'icone Ionicons — dessinee, donc a notre couleur et a notre taille. */
+  icon: keyof typeof Ionicons.glyphMap;
   color: string;
   bg: string;
   description: string;
@@ -31,7 +33,7 @@ interface StatusConfig {
 const STATUS_MAP: Record<string, StatusConfig> = {
   PAID: {
     label: 'Payé',
-    icon: '💳',
+    icon: 'card-outline',
     color: THEME.orange,
     bg: THEME.orangeTint,
     description: 'Votre commande a été reçue. En attente de confirmation du stand.',
@@ -39,7 +41,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   },
   ACCEPTED: {
     label: 'Acceptée',
-    icon: '✅',
+    icon: 'checkmark-circle-outline',
     color: '#16a34a',
     bg: '#ecfdf5',
     description: 'Le stand a accepté votre commande. Préparation en cours.',
@@ -47,7 +49,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   },
   PREPARING: {
     label: 'En préparation',
-    icon: '🍳',
+    icon: 'flame-outline',
     color: '#d97706',
     bg: '#fffbeb',
     description: 'Votre commande est en cours de préparation.',
@@ -55,7 +57,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   },
   READY: {
     label: 'Prête à retirer !',
-    icon: '🎉',
+    icon: 'bag-check-outline',
     color: '#16a34a',
     bg: '#ecfdf5',
     description: 'Votre commande est prête ! Rendez-vous au point de retrait.',
@@ -63,7 +65,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   },
   PICKED_UP: {
     label: 'Récupérée',
-    icon: '🏁',
+    icon: 'checkmark-done-outline',
     color: THEME.grey,
     bg: THEME.surface,
     description: 'Commande récupérée. Bon appétit !',
@@ -71,7 +73,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   },
   CANCELLED: {
     label: 'Annulée',
-    icon: '✕',
+    icon: 'close-circle-outline',
     color: '#dc2626',
     bg: '#fef2f2',
     description: 'Votre commande a été annulée. Contactez un opérateur.',
@@ -79,7 +81,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   },
   RECOVERED: {
     label: 'Récupérée (issue)',
-    icon: '🔄',
+    icon: 'refresh-outline',
     color: THEME.grey,
     bg: THEME.surface,
     description: 'Commande clôturée après incident.',
@@ -204,7 +206,7 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Status hero */}
         <View style={[styles.statusHero, { backgroundColor: statusCfg.bg }]}>
-          <Text style={styles.statusIcon}>{statusCfg.icon}</Text>
+          <Ionicons name={statusCfg.icon} size={44} color={statusCfg.color} />
           <Text style={[styles.statusLabel, { color: statusCfg.color }]}>
             {statusCfg.label}
           </Text>
@@ -225,7 +227,7 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
                     isDone && styles.stepDotDone,
                     isActive && styles.stepDotActive,
                   ]}>
-                    {isDone && <Text style={styles.stepCheck}>✓</Text>}
+                    {isDone && <Ionicons name="checkmark" size={13} color="#fff" />}
                     {isActive && <Animated.View style={[styles.stepPulse, { transform: [{ scale: pulseAnim }] }]} />}
                   </View>
                   <Text style={[
@@ -246,7 +248,7 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
 
         {/* Order items */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>🛒 Votre commande</Text>
+          <Text style={styles.cardTitle}>Votre commande</Text>
           {order.items.map((item, i) => (
             <View key={i} style={styles.itemRow}>
               <Text style={styles.itemQty}>{item.quantity}×</Text>
@@ -338,7 +340,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: THEME.bgSubtle,
   },
-  statusIcon: { fontSize: 48 },
   statusLabel: { fontSize: 22, fontWeight: '800' },
   statusDesc: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center', lineHeight: 20 },
 
@@ -360,7 +361,6 @@ const styles = StyleSheet.create({
   },
   stepDotDone: { backgroundColor: '#16a34a' },
   stepDotActive: { backgroundColor: THEME.orange },
-  stepCheck: { color: '#fff', fontSize: 12, fontWeight: '800' },
   stepPulse: {
     width: 12,
     height: 12,

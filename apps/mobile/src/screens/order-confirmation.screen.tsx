@@ -54,7 +54,7 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
     <View style={styles.root}>
       {/* Success icon */}
       <Animated.View style={[styles.iconWrap, { transform: [{ scale: scaleAnim }] }]}>
-        <Text style={styles.icon}>✓</Text>
+        <Ionicons name="checkmark" size={44} color="#fff" />
       </Animated.View>
 
       {/* Texts */}
@@ -82,7 +82,7 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
         </View>
 
         <View style={styles.infoBox}>
-          <Text style={styles.infoIcon}>ℹ️</Text>
+          <Ionicons name="information-circle-outline" size={16} color={THEME.inkSoft} />
           <Text style={styles.infoText}>
             Rendez-vous au stand à l'heure de votre créneau. Votre commande sera préparée !
           </Text>
@@ -145,7 +145,6 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 10,
   },
-  icon: { color: '#fff', fontSize: 48, fontWeight: '900', lineHeight: 54 },
 
   textBlock: { width: '100%', alignItems: 'center', gap: 12 },
   title: { color: THEME.ink, fontSize: 26, fontWeight: '800', textAlign: 'center' },
@@ -184,7 +183,6 @@ const styles = StyleSheet.create({
     borderColor: THEME.bgSubtle,
     width: '100%',
   },
-  infoIcon: { fontSize: 16 },
   infoText: { color: THEME.inkSoft, fontSize: 13, flex: 1, lineHeight: 18 },
 
   actions: { width: '100%', gap: 12 },

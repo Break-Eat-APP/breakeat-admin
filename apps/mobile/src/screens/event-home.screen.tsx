@@ -25,6 +25,7 @@ import { useCartStore } from '@store/cart.store';
 import { useAuthStore } from '@store/auth.store';
 import { PageHeader } from '@components/page-header';
 import { useFloatingBarBottom } from '@components/app-bottom-bar';
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EventHome'>;
 
@@ -120,7 +121,12 @@ export function EventHomeScreen({ route, navigation }: Props) {
       <View style={styles.root}>
         <PageHeader />
         <View style={styles.centered}>
-          <Text style={{ fontSize: 48, marginBottom: 16 }}>🏟️</Text>
+          <Ionicons
+            name="storefront-outline"
+            size={44}
+            color={THEME.grey}
+            style={{ marginBottom: 16 }}
+          />
           <Text style={{ fontSize: 20, fontWeight: '700', color: THEME.ink, textAlign: 'center', marginBottom: 8 }}>
             Plan du lieu
           </Text>
@@ -160,7 +166,7 @@ export function EventHomeScreen({ route, navigation }: Props) {
       {/* Ou l'on se trouve */}
       {event.venue && (
         <View style={styles.venueBar}>
-          <Text style={styles.venueIcon}>📍</Text>
+          <Ionicons name="location-outline" size={15} color={THEME.grey} />
           <Text style={styles.venueName}>
             {event.venue.name}
             {!event.isPermanentContainer ? ` · ${event.name}` : ''}
@@ -424,7 +430,6 @@ const styles = StyleSheet.create({
     borderTopColor: THEME.bgSubtle,
     gap: 8,
   },
-  venueIcon: { fontSize: 14 },
   venueName: { color: THEME.inkSoft, fontSize: 13, flex: 1 },
   venueTime: { color: THEME.inkSoft, fontSize: 12 },
 

@@ -89,7 +89,7 @@ export function CartScreen({ navigation }: Props) {
 
       {items.length === 0 ? (
         <View style={styles.centered}>
-          <Text style={styles.emptyIcon}>🛒</Text>
+          <Ionicons name="cart-outline" size={44} color={THEME.grey} />
           <Text style={styles.emptyTitle}>Votre panier est vide</Text>
           <Text style={styles.emptyText}>Ajoutez des articles depuis le catalogue.</Text>
         </View>
@@ -199,7 +199,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
 
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, gap: 10 },
-  emptyIcon: { fontSize: 48 },
   emptyTitle: { color: THEME.ink, fontSize: 19, fontFamily: FONT.bold },
   emptyText: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center', fontFamily: FONT.regular },
 

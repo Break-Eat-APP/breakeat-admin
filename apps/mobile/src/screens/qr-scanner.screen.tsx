@@ -194,7 +194,7 @@ export function QRScannerScreen({ navigation }: Props) {
 
         {scanned && (
           <View style={styles.scannedBadge}>
-            <Text style={styles.scannedText}>✓ QR détecté !</Text>
+            <Text style={styles.scannedText}>QR détecté</Text>
           </View>
         )}
 

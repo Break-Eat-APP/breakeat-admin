@@ -10,7 +10,7 @@
  *
  * À importer AU PLUS TÔT dans l'entrée de l'app, avant tout écran.
  *
- * ⚠️ Le pont ne suffit pas seul : il faut aussi la justification iOS
+ * Le pont ne suffit pas seul : il faut aussi la justification iOS
  * (`NSLocationWhenInUseUsageDescription`) et les permissions Android
  * (`ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION`), toutes deux posées dans
  * `app.config.js`. Sans elles, le système ne présente jamais la demande

@@ -5,6 +5,42 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.59.1] — 2026-09-02 — Le bouton sous la barre, et les emojis dehors
+
+**« Confirmer la commande » passait derrière la barre d'onglets.** L'écran
+Récapitulatif posait son bouton en bas sans réserver la hauteur de la barre
+flottante — pastille centrale comprise, qui déborde de 37 px vers le haut. Le
+bouton était coupé en deux, et l'appui tombait sur l'onglet. `useBottomBarSpace()`
+existait déjà (le panier s'en sert) : l'écran ne l'appelait pas.
+
+**Vingt-six pictogrammes retirés de l'application.** Un emoji est rendu par la
+police du système : sa forme, sa couleur et sa taille nous échappent, il change
+d'aspect à chaque version d'iOS, et il donne à l'interface l'air d'un brouillon.
+Chacun est devenu soit rien, soit une icône vectorielle Ionicons — qui prend la
+couleur du thème et la taille qu'on lui donne.
+
+Ce qui disparaît : les décorations de titres (`Commande pour`, `Créneau de
+retrait`, `Articles`, `Mes points`, `Votre commande`), le singe qui se cachait
+les yeux sur le champ mot de passe, le stade, l'épingle, le panier vide, les
+sept états de suivi de commande et les coches.
+
+Deux pièges rencontrés au passage, notés parce qu'ils se reproduiront :
+
+- un style ne portant qu'un `fontSize` appliqué à une `<Ionicons>` **écrase** sa
+  prop `size` — l'icône sortait à 48 px quoi qu'on demande. La taille se règle
+  sur la prop, pas dans la feuille de style ;
+- `styles.icon` reconnaît `styles.iconWrap` si on cherche sans limite de mot :
+  un style encore utilisé passerait pour mort, et l'élément perdrait sa mise en
+  forme sans que rien n'échoue.
+
+**Un texte redevenu vrai.** La mention sous le total disait « la page s'ouvre
+dans ton navigateur, puis tu reviens ici ». Depuis que le paiement s'affiche
+dans l'application, c'était faux — et une consigne fausse inquiète plus qu'elle
+ne rassure. La fausse carte bancaire « Visa Demo » décorative part avec, reste
+d'un mode démo qui n'existe plus.
+
+---
+
 ## [0.59.0] — 2026-09-02 — Le paiement revient dans l'application
 
 Quatre symptômes signalés, une seule séance de test : « ça sort de l'app pour

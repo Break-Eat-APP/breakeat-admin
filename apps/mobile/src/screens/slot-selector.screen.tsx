@@ -13,6 +13,7 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiGetPublicSlots, formatTime, type PublicSlot } from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
 import { PageHeader } from '@components/page-header';
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SlotSelector'>;
 
@@ -126,7 +127,9 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
                     « 1000000 places » ne voulait rien dire. Reste ce qui
                     compte — le creneau choisi. */}
                 <View style={styles.slotRight}>
-                  {isSelected && <Text style={styles.selectedCheck}>✓</Text>}
+                  {isSelected && (
+                    <Ionicons name="checkmark-circle" size={22} color={THEME.orange} />
+                  )}
                 </View>
               </Pressable>
             );
@@ -220,7 +223,6 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 2,
   },
-  selectedCheck: { color: THEME.orange, fontSize: 18, fontWeight: '800' },
 
   emptyBox: {
     margin: 20,

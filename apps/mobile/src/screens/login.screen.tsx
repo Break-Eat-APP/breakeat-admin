@@ -226,7 +226,13 @@ export function LoginScreen({ navigation, route }: Props) {
             secureTextEntry={!showPassword}
           />
           <Pressable onPress={() => setShowPassword((s) => !s)} hitSlop={8}>
-            <Text style={styles.eye}>{showPassword ? '🙈' : '👁'}</Text>
+            {/* Un singe qui se cache les yeux pour masquer un mot de passe :
+                l'icone standard dit la meme chose sans faire farce. */}
+            <Ionicons
+              name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+              size={20}
+              color={THEME.grey}
+            />
           </Pressable>
         </View>
 
@@ -359,7 +365,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   passwordInput: { flex: 1, paddingVertical: 15, fontSize: 15, color: THEME.ink, fontFamily: HEAD.medium },
-  eye: { fontSize: 18, paddingLeft: 8 },
 
   forgot: { alignSelf: 'flex-end', paddingVertical: 8 },
   forgotText: { color: THEME.orange, fontSize: 13, fontFamily: HEAD.semibold },
