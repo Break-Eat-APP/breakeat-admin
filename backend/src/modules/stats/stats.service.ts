@@ -468,6 +468,12 @@ export class StatsService {
    *
    * `::bigint` puis `Number()` : la somme d'une saison depasse la capacite d'un
    * entier 32 bits bien avant d'approcher la limite d'un nombre JavaScript.
+   *
+   * `${orgId}::uuid` n'est PAS decoratif. Les identifiants sont des colonnes
+   * `UUID` en base, alors qu'un parametre de requete arrive en `text` :
+   * PostgreSQL refuse la comparaison (`operator does not exist: uuid = text`)
+   * et la page Comptabilite tombe en erreur. Le cast porte sur le PARAMETRE et
+   * non sur la colonne, pour que l'index reste utilisable.
    */
   private async lignesParEvenement(orgId: string): Promise<Map<string, LigneTva[]>> {
     const rows = await this.prisma.$queryRaw<
@@ -478,7 +484,7 @@ export class StatsService {
              SUM(oi.line_total_cents)::bigint AS "ttc"
         FROM order_items oi
         JOIN orders o ON o.id = oi.order_id
-       WHERE o.organization_id = ${orgId}
+       WHERE o.organization_id = ${orgId}::uuid
          AND o.payment_status::text = 'SUCCEEDED'
          AND o.status::text <> 'CANCELLED'
        GROUP BY 1, 2
