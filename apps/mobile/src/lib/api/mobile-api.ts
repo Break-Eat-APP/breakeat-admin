@@ -7,6 +7,7 @@
 
 import { ENV } from '@lib/config/env';
 import { useAuthStore } from '@store/auth.store';
+import { Platform } from 'react-native';
 
 const BASE = ENV.API_URL;
 
@@ -385,8 +386,36 @@ export const apiRemoveCartItem = (cartId: string, itemId: string) =>
  * paiement encaisse. C'est la seule facon d'etre sur qu'aucune commande ne part
  * en cuisine sans argent. Elle apparait donc dans « Mes commandes ».
  */
+/**
+ * Ouvre le paiement et rend l'adresse de la page Stripe.
+ *
+ * `plateforme` ne change QUE le retour : en natif, Stripe rappelle un pont qui
+ * rebondit vers `breakeat://` et ramene le client dans l'app ; sur le web, il
+ * renvoie sur le site. Sans cette distinction, un client sur iPhone finissait
+ * son paiement dans une page web et devait revenir a la main.
+ */
 export const apiCheckout = (cartId: string) =>
-  req<CheckoutResponse>(`/carts/${cartId}/checkout`, { method: 'POST' });
+  req<CheckoutResponse>(
+    `/carts/${cartId}/checkout?plateforme=${Platform.OS === 'web' ? 'web' : 'native'}`,
+    { method: 'POST' },
+  );
+
+/** La commande nee d'un panier, ou `pret: false` tant que Stripe n'a pas repondu. */
+export interface CommandeDuPanier {
+  pret: boolean;
+  order: {
+    id: string;
+    publicOrderNumber: string;
+    totalCents: number;
+    status: string;
+    supplierName: string | null;
+    pickupPlanUrl: string | null;
+    slotStartAt: string | null;
+  } | null;
+}
+
+export const apiCommandeDuPanier = (cartId: string) =>
+  req<CommandeDuPanier>(`/carts/${cartId}/commande`);
 
 // ─── Fidélité (points) ─────────────────────────────────────────
 

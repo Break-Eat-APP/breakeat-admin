@@ -357,7 +357,11 @@ export class CartService {
    * - If a paymentIntentId is already stored on the cart, we return its current
    *   state instead of creating a new one.
    */
-  async checkout(cartId: string, userId: string): Promise<CheckoutResponse> {
+  async checkout(
+    cartId: string,
+    userId: string,
+    plateforme: 'native' | 'web' = 'web',
+  ): Promise<CheckoutResponse> {
     const cart = await this.requireOwnership(cartId, userId);
 
     // Phase 14.4 — re-verify PRIVATE-event access (membership may have been
@@ -436,15 +440,20 @@ export class CartService {
     // `payment_intent.succeeded` le lit pour créer l'Order. Le retirer casserait
     // la création de commande sans autre signe qu'un paiement encaissé et aucune
     // commande en cuisine.
-    const webUrl = this.config.get<string>('app.split.webUrl') ?? '';
+    // Le retour se fait par le pont `/paiement/retour`, jamais directement.
+    // Stripe n'accepte que du http(s) : `breakeat://` y serait refuse. Le pont
+    // rebondit vers l'app quand elle est native, vers le site quand elle tourne
+    // dans un navigateur.
+    const pont = `${this.apiUrl()}/paiement/retour?panier=${cart.id}` +
+      `&cible=${plateforme === 'native' ? 'app' : 'web'}`;
     const session = await this.stripe.createHostedCheckout({
       amountCents: view.totalCents,
       currency: view.currency,
       destinationAccountId: encaisseur.accountId,
       productName: `Commande ${supplier.name}`,
       captureMethod: 'automatic',
-      successUrl: `${webUrl}/commandes?paye=1`,
-      cancelUrl: `${webUrl}/panier?annule=1`,
+      successUrl: `${pont}&etat=ok`,
+      cancelUrl: `${pont}&etat=annule`,
       idempotencyKey: `cart_${cart.id}`,
       metadata: {
         cartId: cart.id,
@@ -575,6 +584,68 @@ export class CartService {
       select: { id: true },
     });
     return duLieu?.id ?? null;
+  }
+
+  /**
+   * L'adresse publique de cette API, telle que Stripe doit la rappeler.
+   *
+   * Deduite de `PUBLIC_API_URL` si elle est fournie, sinon de l'adresse du
+   * site (meme machine en production). Sans elle, `success_url` pointerait sur
+   * `localhost` et le client resterait bloque sur la page de Stripe apres avoir
+   * paye — le garde-fou de demarrage signale deja ce cas.
+   */
+  private apiUrl(): string {
+    // Pas de repli calcule depuis l'adresse du site : le site vit sur Vercel,
+    // l'API sur Railway. Un repli devinerait une adresse fausse, et l'erreur ne
+    // se verrait qu'apres un vrai paiement. La config porte deja son defaut de
+    // developpement, et le demarrage signale son absence en production.
+    return this.config.get<string>('app.publicApiUrl') ?? '';
+  }
+
+  /**
+   * La commande nee d'un panier — ou rien, si le paiement n'est pas encore
+   * arrive jusqu'a nous.
+   *
+   * L'app appelle cette route en boucle courte au retour de la page de
+   * paiement. Elle ne connait que l'id du panier : le PaymentIntent est cree
+   * par Stripe et ne redescend jamais au client.
+   *
+   * `null` n'est PAS une erreur. Entre le moment ou le client voit « paiement
+   * accepte » et celui ou notre webhook a cree la commande, il s'ecoule le plus
+   * souvent moins d'une seconde — mais parfois davantage. Repondre 404 ferait
+   * afficher une erreur pour un simple decalage.
+   */
+  async commandeDuPanier(cartId: string, userId: string) {
+    await this.requireOwnership(cartId, userId);
+    const order = await this.prisma.order.findUnique({
+      where: { cartId },
+      select: {
+        id: true,
+        publicOrderNumber: true,
+        totalCents: true,
+        status: true,
+        slot: { select: { startAt: true } },
+        supplierId: true,
+      },
+    });
+    if (!order) return { pret: false as const, order: null };
+
+    const buvette = await this.prisma.supplier.findUnique({
+      where: { id: order.supplierId },
+      select: { name: true, planUrl: true },
+    });
+    return {
+      pret: true as const,
+      order: {
+        id: order.id,
+        publicOrderNumber: order.publicOrderNumber,
+        totalCents: order.totalCents,
+        status: order.status,
+        supplierName: buvette?.name ?? null,
+        pickupPlanUrl: buvette?.planUrl ?? null,
+        slotStartAt: order.slot?.startAt?.toISOString() ?? null,
+      },
+    };
   }
 
   async computeView(cartId: string): Promise<CartWithTotals> {

@@ -1,5 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { StripeService } from './stripe.service';
+import { RetourPaiementController } from './retour-paiement.controller';
 
 /**
  * PaymentsModule owns the Stripe integration.
@@ -12,6 +13,7 @@ import { StripeService } from './stripe.service';
  */
 @Global()
 @Module({
+  controllers: [RetourPaiementController],
   providers: [StripeService],
   exports: [StripeService],
 })

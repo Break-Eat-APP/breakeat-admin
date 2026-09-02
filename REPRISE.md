@@ -56,6 +56,11 @@ Redis, donc **une seule instance serveur** ; pool Prisma non réglé.
 
 ## ⏭️ REPRISE IMMÉDIATE
 
+0. **`PUBLIC_API_URL` sur Railway** — `https://breakeat-admin-production.up.railway.app/api/v1`.
+   C'est l'adresse que Stripe rappelle au retour du paiement. Sans elle, le
+   client reste bloqué sur la page de Stripe après avoir payé, et l'app ne
+   revient jamais au premier plan. Le démarrage la réclame dans ses journaux.
+
 1. **`APNS_BUNDLE_ID = com.shapper.breakeat`** sur Railway. La build TestFlight porte l'identifiant réel ; avec une autre valeur, le topic APNs ne correspond pas et **aucune Live Activity ne démarrera**.
 2. **`APNS_ENV = production`** sur Railway. Sans cette valeur, le serveur pousse
    vers l'hôte *sandbox* alors que la build TestFlight porte un jeton de

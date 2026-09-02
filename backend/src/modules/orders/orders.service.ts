@@ -91,17 +91,29 @@ export class OrdersService {
     if (!cart) {
       throw new NotFoundException(`Cart ${cartId} not found for PaymentIntent ${paymentIntentId}`);
     }
-    if (cart.paymentIntentId !== paymentIntentId) {
+    // Le panier ne connait PAS toujours son PaymentIntent, et c'est normal.
+    //
+    // Avec une page de paiement hebergee, Stripe cree la Session d'abord et le
+    // PaymentIntent seulement quand le client engage le reglement. A l'ouverture
+    // de la page, `session.payment_intent` est donc souvent vide : le panier est
+    // enregistre avec un identifiant vide, et le vrai n'arrive qu'ici, porte par
+    // le webhook.
+    //
+    // Comparer bêtement les deux faisait echouer CHAQUE commande payee par
+    // carte : argent encaisse cote Stripe, ConflictException cote serveur,
+    // aucune commande en cuisine, et rien dans « Mes commandes ». Le garde-fou
+    // ne doit refuser qu'un panier deja lie a un AUTRE paiement — pas un panier
+    // qui n'en connaissait encore aucun.
+    if (cart.paymentIntentId && cart.paymentIntentId !== paymentIntentId) {
       throw new ConflictException(
         `Cart ${cartId} is bound to a different PaymentIntent (${cart.paymentIntentId}) — refusing to create Order`,
       );
     }
     if (cart.status === CartStatus.CONVERTED) {
-      // Edge case: cart converted but Payment row missing — recover by linking
-      const order = await this.prisma.order.findFirst({
-        where: { userId: cart.userId, eventId: cart.eventId, supplierId: cart.supplierId },
-        orderBy: { createdAt: 'desc' },
-      });
+      // Panier deja converti : on rend SA commande. La retrouver par
+      // (client, evenement, buvette) reviendrait a rendre la plus recente du
+      // client sur cette buvette — pas forcement celle-ci.
+      const order = await this.prisma.order.findUnique({ where: { cartId } });
       if (order) return order;
     }
     const pickupPointId = cart.pickupPointId;
@@ -173,6 +185,9 @@ export class OrdersService {
       const createdOrder = await tx.order.create({
         data: {
           publicOrderNumber,
+          // Le fil qui relie la commande au panier : c'est par lui que l'app
+          // retrouve sa commande au retour de la page de paiement.
+          cartId: cart.id,
           userId: cart.userId,
           organizationId: cart.event.organizationId,
           eventId: cart.eventId,

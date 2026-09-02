@@ -98,6 +98,9 @@ async function bootstrap(): Promise<void> {
  *     sur ce projet, et on a cherché du côté des mots de passe ;
  *   • `PUBLIC_WEB_URL` absent ⇒ après avoir payé, le client est renvoyé vers
  *     `localhost` : il voit une page morte alors que son argent est parti ;
+ *   • `PUBLIC_API_URL` absent ⇒ Stripe rappelle `localhost` au retour du
+ *     paiement : l'app native ne revient jamais au premier plan, et le client
+ *     reste sur la page de Stripe sans savoir si sa commande existe ;
  *   • `STRIPE_*` absent ⇒ plus aucun encaissement, donc plus aucune commande.
  *
  * Aucune de ces pannes ne se signale d'elle-même. Ce rapport les rend visibles
@@ -114,6 +117,7 @@ function verifierConfigurationProduction(logger: LoggerService): void {
     ['JWT_SECRET', process.env.JWT_SECRET],
     ['CORS_ORIGINS', process.env.CORS_ORIGINS],
     ['PUBLIC_WEB_URL', process.env.PUBLIC_WEB_URL],
+    ['PUBLIC_API_URL', process.env.PUBLIC_API_URL],
     ['STRIPE_SECRET_KEY', process.env.STRIPE_SECRET_KEY],
     ['STRIPE_WEBHOOK_SECRET', process.env.STRIPE_WEBHOOK_SECRET],
     ['STRIPE_CONNECT_RETURN_URL', process.env.STRIPE_CONNECT_RETURN_URL],

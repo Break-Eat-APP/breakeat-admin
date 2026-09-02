@@ -5,6 +5,89 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.59.0] — 2026-09-02 — Le paiement revient dans l'application
+
+Quatre symptômes signalés, une seule séance de test : « ça sort de l'app pour
+payer », « ça met du temps », « ça ne me renvoie pas sur l'app », « rien ne se
+passe, pas de commande, pas de Live Activity ». Deux causes distinctes.
+
+### 1. Le webhook refusait CHAQUE commande payée par carte
+
+Le garde-fou qui relie un paiement à son panier comparait le PaymentIntent reçu
+à celui enregistré sur le panier :
+
+```ts
+if (cart.paymentIntentId !== paymentIntentId) throw new ConflictException(...)
+```
+
+Avec une page de paiement **hébergée**, Stripe crée la Session d'abord et le
+PaymentIntent seulement quand le client engage le règlement :
+`session.payment_intent` est donc **vide à l'ouverture de la page**. Le panier
+était enregistré avec un identifiant vide, le webhook arrivait avec le vrai, et
+la comparaison échouait.
+
+Conséquence : **argent encaissé, aucune commande créée**. Rien en cuisine, rien
+dans « Mes commandes », donc aucune Live Activity — elle démarre depuis l'écran
+de confirmation, qui n'était jamais atteint. Le garde-fou ne refuse désormais
+qu'un panier lié à un **autre** paiement, pas un panier qui n'en connaissait
+encore aucun. Deux tests couvrent le cas ; l'un d'eux a été vérifié en
+réintroduisant volontairement le bug.
+
+### 2. Le paiement quittait l'application, et rien n'y ramenait
+
+`Linking.openURL` catapultait le client dans Safari. Il payait ailleurs, et
+`success_url` pointait vers le **site web** — jamais vers l'app. Il revenait
+donc à la main, sur une liste de commandes chargée *avant* le paiement.
+
+Trois pièces neuves :
+
+- **`WebBrowser.openBrowserAsync`** — la page Stripe s'affiche dans une feuille
+  Safari intégrée, aux couleurs de l'app. Elle reste **hébergée par Stripe** :
+  aucun numéro de carte ne traverse notre code, Apple Pay fonctionne toujours.
+- **`GET /paiement/retour`** — Stripe n'accepte que du http(s) comme adresse de
+  retour : `breakeat://` y serait refusé. Cette page minuscule fait le rebond
+  vers l'app, et affiche un bouton si iOS bloque la redirection automatique — on
+  ne laisse pas quelqu'un qui vient de payer devant un écran blanc. La
+  destination est un choix **fermé** (`app` / `web`), jamais une URL fournie par
+  l'appelant : ce serait une redirection ouverte sur notre domaine.
+- **`Order.cartId`** + **`GET /carts/:id/commande`** — l'app ne connaît que l'id
+  du panier ; le PaymentIntent est créé par Stripe et ne redescend jamais au
+  client. Au retour, elle interroge cette route en boucle courte (20 s max)
+  jusqu'à ce que la commande existe, puis ouvre l'écran de confirmation — qui
+  démarre la Live Activity. `UNIQUE` sur la colonne : un webhook livré deux fois
+  devient une erreur bruyante, pas une deuxième tournée en cuisine.
+
+Si les 20 secondes s'écoulent sans commande, l'app le **dit** au lieu d'afficher
+une liste vide, et **ne vide pas le panier** : le client a peut-être annulé.
+
+### Nouvelle variable — à renseigner sur Railway
+
+`PUBLIC_API_URL` = `https://breakeat-admin-production.up.railway.app/api/v1`
+
+Elle n'est pas déductible de `PUBLIC_WEB_URL` (le site est sur Vercel, l'API sur
+Railway). Absente, Stripe rappellerait `localhost` : le client resterait bloqué
+sur la page de paiement, argent débité. `verifierConfigurationProduction()` le
+signale au démarrage.
+
+### Fichiers
+- `+ backend/src/modules/payments/retour-paiement.controller.ts`
+- `+ backend/prisma/migrations/20260902_order_cart_id/migration.sql`
+- `~ backend/src/modules/orders/orders.service.ts` — le garde-fou, et `cartId` sur la commande
+- `~ backend/src/modules/cart/cart.service.ts` — adresses de retour, `commandeDuPanier()`
+- `~ backend/src/modules/cart/cart.controller.ts` — `?plateforme=`, `GET :id/commande`
+- `~ backend/src/config/app.config.ts`, `main.ts`, `.env.example` — `PUBLIC_API_URL`
+- `~ apps/mobile/src/screens/checkout.screen.tsx` — paiement intégré, attente, confirmation
+- `~ apps/mobile/src/lib/hooks/use-deep-links.ts` — `breakeat://paiement` ferme la feuille
+- `~ apps/mobile/package.json`, `app.config.js` — `expo-web-browser`
+
+486 tests au vert. `tsc` propre sur les quatre paquets, `lint` sans erreur,
+bundle web reconstruit.
+
+**Build 10 nécessaire** : `expo-web-browser` est un module natif, la build 9 ne
+le contient pas.
+
+---
+
 ## [0.58.0] — 2026-09-01 — La TVA suit le produit, pas le commerçant
 
 La comptabilité dérivait le CA HT d'un taux unique, 10 %, lu dans une variable

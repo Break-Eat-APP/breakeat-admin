@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Query,
   ParseUUIDPipe,
   Patch,
   Post,
@@ -90,8 +91,27 @@ export class CartController {
    */
   @Post(':id/checkout')
   @HttpCode(HttpStatus.OK)
-  checkout(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
-    return this.cartService.checkout(id, user.sub);
+  checkout(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    // D'ou vient l'appel : l'app installee ou un navigateur. Cela ne change que
+    // l'adresse de RETOUR apres paiement — rebond vers `breakeat://` d'un cote,
+    // page web de l'autre. Valeur libre refusee : voir RetourPaiementController.
+    @Query('plateforme') plateforme?: string,
+  ) {
+    return this.cartService.checkout(id, user.sub, plateforme === 'native' ? 'native' : 'web');
+  }
+
+  /**
+   * GET /api/v1/carts/:id/commande
+   *
+   * « Ma commande est-elle nee ? » — interroge par l'app au retour de la page
+   * de paiement, en boucle courte. Repond `{ pret: false }` tant que le webhook
+   * Stripe n'a pas cree la commande : c'est un delai, pas une erreur.
+   */
+  @Get(':id/commande')
+  commandeDuPanier(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.cartService.commandeDuPanier(id, user.sub);
   }
 
   /**

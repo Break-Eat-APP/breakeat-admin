@@ -712,6 +712,12 @@ model Order {
   pickupPointId     String        @map("pickup_point_id")
   /// Phase 7 — slot assignment.
   slotId            String?       @map("slot_id")
+  /// Le panier d'ou vient cette commande. C'est LE lien qui permet a l'app de
+  /// retrouver sa commande au retour du paiement : elle ne connait que l'id du
+  /// panier, jamais celui du PaymentIntent (cree par Stripe, cote serveur).
+  /// Unique : un panier ne produit qu'une commande, meme si le webhook est
+  /// livre deux fois.
+  cartId            String?       @unique @map("cart_id")
   status            OrderStatus   @default(PAID)
   paymentStatus     PaymentStatus @default(SUCCEEDED) @map("payment_status")
   /// PHASE 21 — heure de disponibilité estimée, telle que calculée par Flaix

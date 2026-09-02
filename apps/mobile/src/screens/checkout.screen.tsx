@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { THEME } from '@lib/theme';
 import {
   ActivityIndicator,
-  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,12 +10,14 @@ import {
   Text,
   View,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import {
   apiCreateCart,
   apiAddCartItem,
   apiCheckout,
+  apiCommandeDuPanier,
   apiGetLoyaltyStatus,
   apiSetCartPoints,
   formatPrice,
@@ -36,6 +38,51 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Checkout'>;
  * l'échec au moment de payer.
  */
 const MIN_PAYABLE_CENTS = 50;
+
+/**
+ * Affiche la page de paiement dans l'application.
+ *
+ * Sur le web il n'y a pas de navigateur a ouvrir : on remplace la page en
+ * cours. Stripe y renverra ensuite vers le site, pas vers `breakeat://`.
+ */
+async function ouvrirPaiement(url: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    const g = globalThis as { location?: { assign?: (u: string) => void } };
+    g.location?.assign?.(url);
+    // La page va etre remplacee : plus rien ne s'executera apres.
+    await new Promise<void>((r) => setTimeout(r, 3_000));
+    return;
+  }
+  await WebBrowser.openBrowserAsync(url, {
+    // Aux couleurs de l'app : le client doit sentir qu'il n'a pas quitte
+    // Break Eat pour un site inconnu au moment de donner sa carte.
+    toolbarColor: THEME.bg,
+    controlsColor: THEME.orange,
+    dismissButtonStyle: 'cancel',
+  });
+}
+
+/**
+ * Attend que le webhook Stripe ait cree la commande, sans bloquer indefiniment.
+ *
+ * On interroge le serveur a intervalle court pendant une vingtaine de secondes.
+ * Au-dela, ce n'est plus un delai de traitement : soit le client a annule, soit
+ * quelque chose ne va pas — et dans les deux cas il vaut mieux le dire que
+ * laisser tourner un sablier.
+ */
+async function attendreLaCommande(cartId: string) {
+  const FIN = Date.now() + 20_000;
+  while (Date.now() < FIN) {
+    try {
+      const reponse = await apiCommandeDuPanier(cartId);
+      if (reponse.pret && reponse.order) return reponse.order;
+    } catch {
+      // Reseau capricieux au retour d'un navigateur : on retente.
+    }
+    await new Promise<void>((r) => setTimeout(r, 1_200));
+  }
+  return null;
+}
 
 export function CheckoutScreen({ navigation }: Props) {
   const { user, token } = useAuthStore();
@@ -137,15 +184,49 @@ export function CheckoutScreen({ navigation }: Props) {
       setStep('Ouverture du paiement…');
       const { checkoutUrl } = await apiCheckout(cart.id);
 
-      // 4. On quitte l'app le temps du reglement.
+      // 4. Le reglement se fait SANS quitter l'application.
       //
-      // La commande n'est pas creee ici mais par le webhook Stripe, une fois
-      // l'argent encaisse : c'est la seule facon d'etre sur qu'aucune commande
-      // ne parte en cuisine sans paiement. Elle apparait donc dans « Mes
-      // commandes », qui se recharge au retour au premier plan.
+      // `openBrowserAsync` presente la page de Stripe dans une feuille Safari
+      // integree : le client reste dans Break Eat, voit notre en-tete, et le
+      // retour se fait tout seul. `Linking.openURL` le catapultait dans Safari,
+      // d'ou rien ne le ramenait — il payait, puis restait bloque sur une page
+      // web en croyant que sa commande n'existait pas.
+      //
+      // La page reste HEBERGEE par Stripe : aucun numero de carte ne transite
+      // par notre code, et Apple Pay continue de fonctionner.
+      await ouvrirPaiement(checkoutUrl);
+
+      // 5. Attendre que la commande NAISSE.
+      //
+      // Elle n'est pas creee par l'app mais par le webhook Stripe, une fois
+      // l'argent encaisse : c'est la seule facon qu'aucune commande ne parte en
+      // cuisine sans paiement. Le delai est court — souvent moins d'une seconde
+      // — mais il n'est pas nul, et afficher « aucune commande » pendant ce
+      // temps-la ferait croire a un echec.
+      setStep('Confirmation du paiement…');
+      const commande = await attendreLaCommande(cart.id);
+
+      if (!commande) {
+        // Paiement peut-etre annule, peut-etre juste lent. On ne vide donc PAS
+        // le panier : si le client a renonce, il le retrouve intact ; si le
+        // webhook a pris du retard, la commande apparaitra dans « Mes commandes ».
+        navigation.navigate('Commandes');
+        showAlert(
+          'Paiement en cours de confirmation',
+          'Si vous avez payé, votre commande apparaîtra dans « Mes commandes » ' +
+            'd’un instant à l’autre. Si vous avez annulé, votre panier est intact.',
+        );
+        return;
+      }
+
+      // 6. La commande existe : le panier a fait son office.
       resetCart();
-      navigation.navigate('Commandes');
-      await Linking.openURL(checkoutUrl);
+      navigation.replace('OrderConfirmation', {
+        orderId: commande.id,
+        publicOrderNumber: commande.publicOrderNumber,
+        totalCents: commande.totalCents,
+        buvettePlanUrl: commande.pickupPlanUrl,
+      });
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Erreur inconnue';
 

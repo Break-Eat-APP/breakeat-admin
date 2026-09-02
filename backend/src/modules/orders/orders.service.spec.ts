@@ -276,6 +276,77 @@ describe('OrdersService', () => {
       ).rejects.toThrow(); // ConflictException
     });
 
+    it('accepte un panier qui ne connaît PAS encore son PaymentIntent', async () => {
+      // LE bug qui a bloqué toutes les commandes par carte.
+      //
+      // Avec une page de paiement hébergée, Stripe crée la Session d'abord et
+      // le PaymentIntent seulement quand le client engage le règlement :
+      // `session.payment_intent` est vide à l'ouverture, donc le panier est
+      // enregistré sans identifiant. Comparer les deux sans nuance faisait
+      // échouer le webhook — argent encaissé, aucune commande en cuisine, et
+      // « Mes commandes » désespérément vide.
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue({
+        ...mockCart(),
+        paymentIntentId: '',
+      });
+      transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+        cb({
+          cart: { update: jest.fn() },
+          order: {
+            create: jest
+              .fn()
+              .mockResolvedValue({ id: 'order-1', publicOrderNumber: 'BE-00000001' }),
+          },
+          payment: { upsert: jest.fn() },
+          orderAuditTrail: { create: jest.fn() },
+          stock: {
+            findFirst: jest.fn().mockResolvedValue({ id: 's', quantity: 50, isAvailable: true }),
+            findUnique: jest.fn().mockResolvedValue({ id: 's', quantity: 48, isAvailable: true }),
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+            update: jest.fn(),
+          },
+        }),
+      );
+
+      const order = await service.createFromPaymentIntent(
+        PAYMENT_INTENT_ID,
+        mockIntent(),
+        {} as never,
+      );
+      expect(order.publicOrderNumber).toBe('BE-00000001');
+    });
+
+    it('relie la commande à SON panier', async () => {
+      // Sans ce lien, l'app qui revient de la page de paiement ne peut pas
+      // demander « où est ma commande ? » : elle ne connaît que l'id du panier.
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+      const creerCommande = jest
+        .fn()
+        .mockResolvedValue({ id: 'order-1', publicOrderNumber: 'BE-00000001' });
+      transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+        cb({
+          cart: { update: jest.fn() },
+          order: { create: creerCommande },
+          payment: { upsert: jest.fn() },
+          orderAuditTrail: { create: jest.fn() },
+          stock: {
+            findFirst: jest.fn().mockResolvedValue({ id: 's', quantity: 50, isAvailable: true }),
+            findUnique: jest.fn().mockResolvedValue({ id: 's', quantity: 48, isAvailable: true }),
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+            update: jest.fn(),
+          },
+        }),
+      );
+
+      await service.createFromPaymentIntent(PAYMENT_INTENT_ID, mockIntent(), {} as never);
+
+      expect(creerCommande).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ cartId: CART_ID }) }),
+      );
+    });
+
     it('refuses when CartItem has no price snapshot (checkout was skipped)', async () => {
       (prisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
       const cartNoSnapshot = mockCart();

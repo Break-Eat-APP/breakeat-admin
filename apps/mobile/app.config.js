@@ -103,6 +103,10 @@ module.exports = {
     // Le SDK 57 exige que tout module a reglages natifs soit declare ici :
     // il ne les deduit plus de la seule presence dans package.json.
     'expo-font',
+    // Le navigateur INTEGRE (SFSafariViewController) qui affiche la page de
+    // paiement Stripe. Sans lui, `Linking.openURL` sortait de l'app vers
+    // Safari : le client payait ailleurs, et rien ne le ramenait.
+    'expo-web-browser',
     [
       // Le SDK 57 a retire `splash` de la racine du schema : la clé y est
       // simplement IGNOREE, sans erreur, et l'app demarre sur l'ecran blanc

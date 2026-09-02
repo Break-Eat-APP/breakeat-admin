@@ -84,6 +84,19 @@ export default registerAs('app', () => ({
     webUrl: (process.env.PUBLIC_WEB_URL ?? 'http://localhost:8081').replace(/\/+$/, ''),
   },
 
+  /**
+   * Adresse publique de CETTE API, telle que Stripe doit la rappeler.
+   *
+   * Elle n'est pas deductible de `PUBLIC_WEB_URL` : le site vit sur Vercel,
+   * l'API sur Railway. Sans elle, `success_url` pointerait sur `localhost` et
+   * le client resterait bloque sur la page de paiement apres avoir paye.
+   * `verifierConfigurationProduction()` le signale au demarrage.
+   */
+  publicApiUrl: (process.env.PUBLIC_API_URL ?? 'http://localhost:3000/api/v1').replace(
+    /\/+$/,
+    '',
+  ),
+
 
   sentry: {
     dsn: process.env.SENTRY_DSN_BACKEND ?? '',

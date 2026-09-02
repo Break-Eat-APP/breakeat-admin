@@ -4492,3 +4492,61 @@ définie.
 rester synchronisées ; toute modification de l'une se reporte à l'autre.
 
 ---
+
+
+## Phase 27 — Le retour de paiement (2026-09-02)
+
+**Le bug le plus coûteux du projet, et sa forme.** Le passage des PaymentIntents
+créés par nous aux **Checkout Sessions hébergées** a changé une hypothèse sans
+que rien ne le signale : nous ne connaissons plus l'identifiant du PaymentIntent
+au moment d'ouvrir la page. `session.payment_intent` est vide — Stripe le crée
+quand le client engage le règlement. Le garde-fou
+`cart.paymentIntentId !== paymentIntentId` du webhook, écrit à l'époque où nous
+créions l'intent nous-mêmes, est alors devenu un refus systématique.
+
+Aucun test ne couvrait ce chemin avec un panier sans intent : le seul test
+existant vérifiait le REFUS d'un intent différent (`pi_OTHER`), et il passait.
+Les 484 tests étaient verts pendant que 100 % des paiements par carte
+échouaient. **La leçon : quand une dépendance externe change QUI produit un
+identifiant, chaque garde-fou qui le compare doit être relu.** Le test ajouté a
+été validé en réintroduisant le bug — un test qui n'échoue pas sur le bug qu'il
+prétend couvrir ne protège rien.
+
+**Pourquoi un pont HTTP, et pas `breakeat://` directement.** Stripe n'accepte
+que du http(s) en `success_url`. `GET /paiement/retour` sert donc une page qui
+rebondit. Deux exigences s'y croisent :
+
+- elle affiche un **bouton visible** en plus de la redirection automatique. Si
+  iOS bloque le rebond, la personne vient de payer : c'est le pire moment pour
+  un écran blanc.
+- la destination est un **choix fermé** (`cible=app|web`), jamais une URL de
+  l'appelant. Accepter une adresse libre ferait de cette route une redirection
+  ouverte, utilisable pour maquiller un lien de phishing derrière notre domaine.
+
+**Pourquoi `openBrowserAsync` et non `openAuthSessionAsync`.** Les deux
+reviennent automatiquement. Mais `openAuthSessionAsync` déclenche l'alerte iOS
+« Break Eat souhaite utiliser stripe.com pour se connecter » — un dialogue de
+CONNEXION affiché au moment de payer. `openBrowserAsync` ouvre la même feuille
+Safari sans cette invite ; le retour est assuré par le lien `breakeat://` que le
+gestionnaire de liens intercepte pour appeler `dismissBrowser()`.
+
+**Pourquoi `Order.cartId` plutôt que « la commande la plus récente ».** L'app ne
+connaît que l'id du panier. Le code de reprise cherchait auparavant la dernière
+commande du client sur cette buvette — ce qui, un soir à 5 000 commandes, peut
+désigner la commande précédente du même client. Le lien explicite est exact, et
+son `UNIQUE` transforme un webhook livré deux fois en erreur plutôt qu'en
+deuxième tournée en cuisine.
+
+**Pourquoi attendre côté app plutôt que faire confiance.** La commande naît du
+webhook, pas de l'app : c'est ce qui garantit qu'aucune commande ne part en
+cuisine sans paiement. Mais cela introduit un délai — court, jamais nul. L'app
+interroge donc `GET /carts/:id/commande` pendant 20 secondes. Au-delà, elle le
+DIT et conserve le panier : au bout de 20 secondes, ce n'est plus un délai de
+traitement, et un panier vidé à tort est irrécupérable.
+
+**Aucun repli calculé pour `PUBLIC_API_URL`.** Deviner l'adresse de l'API depuis
+celle du site produirait une URL fausse (Vercel ≠ Railway) dont l'erreur ne se
+verrait qu'après un vrai paiement. Mieux vaut une variable manquante, signalée
+au démarrage, qu'un repli plausible et faux.
+
+---
