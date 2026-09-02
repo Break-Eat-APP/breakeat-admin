@@ -93,6 +93,22 @@ export function OrderHistoryScreen() {
   // Commande dont on regarde le plan — porte le plan ET le nom de la buvette,
   // pour que le titre dise devant laquelle se presenter.
   const [planAffiche, setPlanAffiche] = useState<Order | null>(null);
+  /**
+   * Le client arrive-t-il de la page de paiement ?
+   *
+   * Sur le WEB, Stripe renvoie vers `/commandes?paye=1` : la page se recharge
+   * entierement, et le code qui attendait la commande cote application a
+   * disparu avec elle. Sans ce relais, la liste s'affiche vide pendant que le
+   * webhook cree la commande — le client vient de payer et croit avoir perdu
+   * son argent.
+   *
+   * `window` n'existe pas en natif : on le lit via globalThis plutot que
+   * d'elargir les types du projet pour trois mots.
+   */
+  const [vientDePayer, setVientDePayer] = useState(() => {
+    const g = globalThis as { location?: { search?: string } };
+    return (g.location?.search ?? '').includes('paye=1');
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -155,6 +171,29 @@ export function OrderHistoryScreen() {
     return () => sub.remove();
   }, [token, load]);
 
+  /**
+   * Attente courte apres un paiement web.
+   *
+   * La commande nait du webhook Stripe, pas de l'application : il s'ecoule le
+   * plus souvent moins d'une seconde, parfois davantage. On sonde donc jusqu'a
+   * ce qu'elle apparaisse, et au plus trente secondes — au-dela ce n'est plus
+   * un delai de traitement, et faire tourner un sablier indefiniment ne
+   * renseigne personne.
+   */
+  useEffect(() => {
+    if (!vientDePayer || !token) return;
+    if (orders.length > 0) {
+      setVientDePayer(false);
+      return;
+    }
+    const fin = setTimeout(() => setVientDePayer(false), 30_000);
+    const tic = setInterval(() => void load(), 2_000);
+    return () => {
+      clearTimeout(fin);
+      clearInterval(tic);
+    };
+  }, [vientDePayer, token, orders.length, load]);
+
   useFocusEffect(
     useCallback(() => {
       void load();
@@ -188,6 +227,15 @@ export function OrderHistoryScreen() {
         <Text style={styles.screenTitle}>Mes commandes</Text>
         {hasLive && <LiveBadge />}
       </View>
+
+      {vientDePayer && orders.length === 0 && (
+        <View style={styles.bandeauPaiement}>
+          <ActivityIndicator size="small" color={THEME.orange} />
+          <Text style={styles.bandeauTexte}>
+            Paiement accepté — ta commande arrive.
+          </Text>
+        </View>
+      )}
 
       {loading && orders.length === 0 ? (
         <View style={styles.centered}>
@@ -382,6 +430,18 @@ const styles = StyleSheet.create({
 
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 14 },
   emptyText: { color: THEME.grey, fontSize: 14, textAlign: 'center', fontFamily: HEAD.medium },
+  bandeauPaiement: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: THEME.orangeTint,
+  },
+  bandeauTexte: { color: THEME.orangeDark, fontSize: 13.5, fontWeight: '700', flex: 1 },
   errorText: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center', fontFamily: HEAD.medium },
   cta: {
     backgroundColor: THEME.orange, paddingHorizontal: 28, paddingVertical: 13,

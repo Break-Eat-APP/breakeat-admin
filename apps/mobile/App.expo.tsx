@@ -98,7 +98,18 @@ const origineWeb = (): string[] => {
 
 const LIENS = {
   prefixes: ['breakeat://', ...origineWeb()],
-  config: { screens: { Split: 'split/:code' } },
+  config: {
+    screens: {
+      Split: 'split/:code',
+      // Retour de la page de paiement, sur le WEB. Stripe y renvoie apres le
+      // reglement : `/commandes` si la carte est passee, `/panier` sinon.
+      // Sans ces deux entrees, le navigateur chargeait bien l'application mais
+      // elle s'ouvrait sur l'accueil -- le client venait de payer et ne voyait
+      // aucune commande, ce qui ressemble trait pour trait a un echec.
+      Commandes: 'commandes',
+      Cart: 'panier',
+    },
+  },
 };
 
 export default function AppPreview() {
