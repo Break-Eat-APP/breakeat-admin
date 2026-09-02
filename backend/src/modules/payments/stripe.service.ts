@@ -318,7 +318,39 @@ export class StripeService implements OnModuleInit {
    *
    * IMPORTANT: pass the RAW request body (Buffer), not a parsed JSON.
    */
+  /**
+   * Verifie la signature d'un webhook — avec PLUSIEURS secrets possibles.
+   *
+   * Stripe distingue deux familles d'evenements : ceux du compte (un paiement)
+   * et ceux des comptes CONNECTES (`account.updated`). Selon la facon dont le
+   * club configure son tableau de bord, cela peut demander deux points de
+   * terminaison — et Stripe attribue a chacun SON secret de signature.
+   *
+   * Avec un secret unique, le second point de terminaison echouerait a chaque
+   * livraison, sans autre signe qu'un « Invalid signature » dans les journaux :
+   * l'etat du compte du club cesserait d'etre suivi sans que personne ne le
+   * remarque. `STRIPE_WEBHOOK_SECRET` accepte donc plusieurs secrets separes
+   * par une virgule, essayes dans l'ordre.
+   */
   constructWebhookEvent(rawBody: Buffer | string, signature: string): Stripe.Event {
-    return this.stripe.webhooks.constructEvent(rawBody, signature, this.webhookSecret);
+    const secrets = this.webhookSecret
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (secrets.length === 0) {
+      throw new Error('STRIPE_WEBHOOK_SECRET absent — aucune signature ne peut etre verifiee');
+    }
+
+    let derniereErreur: unknown;
+    for (const secret of secrets) {
+      try {
+        return this.stripe.webhooks.constructEvent(rawBody, signature, secret);
+      } catch (e: unknown) {
+        derniereErreur = e;
+      }
+    }
+    throw derniereErreur instanceof Error
+      ? derniereErreur
+      : new Error('Signature Stripe invalide');
   }
 }
