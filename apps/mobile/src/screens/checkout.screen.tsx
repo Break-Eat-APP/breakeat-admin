@@ -25,7 +25,6 @@ import {
 } from '@lib/api/mobile-api';
 import { useCartStore } from '@store/cart.store';
 import { useAuthStore } from '@store/auth.store';
-import { Ionicons } from '@expo/vector-icons';
 import { PageHeader } from '@components/page-header';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { showAlert } from '@lib/alert';
@@ -360,12 +359,6 @@ export function CheckoutScreen({ navigation }: Props) {
             s'affiche dans l'app, et une consigne fausse inquiète plus qu'elle
             ne rassure. */}
         <View style={styles.mentionPaiement}>
-          <Ionicons
-            name="lock-closed"
-            size={15}
-            color={THEME.inkSoft}
-            style={{ marginTop: 1 }}
-          />
           <Text style={styles.mentionTexte}>
             Paiement sécurisé par Stripe, sans quitter l’application.
           </Text>
@@ -461,13 +454,7 @@ const styles = StyleSheet.create({
 
 
 
-  mentionPaiement: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    paddingHorizontal: 4,
-    paddingTop: 4,
-  },
+  mentionPaiement: { paddingHorizontal: 4, paddingTop: 4 },
   mentionTexte: { color: THEME.inkSoft, fontSize: 12.5, flex: 1, lineHeight: 18 },
 
   cta: {

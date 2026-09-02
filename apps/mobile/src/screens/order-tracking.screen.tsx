@@ -206,7 +206,6 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
       <ScrollView contentContainerStyle={styles.content}>
         {/* Status hero */}
         <View style={[styles.statusHero, { backgroundColor: statusCfg.bg }]}>
-          <Ionicons name={statusCfg.icon} size={44} color={statusCfg.color} />
           <Text style={[styles.statusLabel, { color: statusCfg.color }]}>
             {statusCfg.label}
           </Text>

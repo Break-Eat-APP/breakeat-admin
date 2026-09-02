@@ -89,7 +89,7 @@ export function CartScreen({ navigation }: Props) {
 
       {items.length === 0 ? (
         <View style={styles.centered}>
-          <Ionicons name="cart-outline" size={44} color={THEME.grey} />
+
           <Text style={styles.emptyTitle}>Votre panier est vide</Text>
           <Text style={styles.emptyText}>Ajoutez des articles depuis le catalogue.</Text>
         </View>
@@ -133,7 +133,6 @@ export function CartScreen({ navigation }: Props) {
                     choisir : il decrivait le parcours normal comme un defaut. */}
                 {selectedSlotLabel ? (
                   <View style={[styles.slotBox, styles.slotBoxActive]}>
-                    <Ionicons name="time-outline" size={20} color={THEME.orange} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.slotLabel}>Créneau sélectionné</Text>
                       <Text style={styles.slotValue}>{selectedSlotLabel}</Text>
@@ -153,9 +152,7 @@ export function CartScreen({ navigation }: Props) {
                   >
                     {invitationEnCours ? (
                       <ActivityIndicator size="small" color={THEME.orange} />
-                    ) : (
-                      <Ionicons name="people-outline" size={18} color={THEME.orange} />
-                    )}
+                    ) : null}
                     <Text style={styles.inviteBtnText}>Partager l’addition</Text>
                   </Pressable>
                 ) : null}

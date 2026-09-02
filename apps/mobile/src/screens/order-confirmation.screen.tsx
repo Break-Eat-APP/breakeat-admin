@@ -82,7 +82,6 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
         </View>
 
         <View style={styles.infoBox}>
-          <Ionicons name="information-circle-outline" size={16} color={THEME.inkSoft} />
           <Text style={styles.infoText}>
             Rendez-vous au stand à l'heure de votre créneau. Votre commande sera préparée !
           </Text>
@@ -93,7 +92,6 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
       <Animated.View style={[styles.actions, { opacity: fadeAnim }]}>
         {buvettePlanUrl ? (
           <Pressable style={styles.planBtn} onPress={() => setPlanOpen(true)}>
-            <Ionicons name="map" size={18} color="#fff" />
             <Text style={styles.planBtnText}>Voir le plan des buvettes</Text>
           </Pressable>
         ) : null}
