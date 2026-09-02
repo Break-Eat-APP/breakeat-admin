@@ -572,6 +572,17 @@ export async function apiOrgStripeStatus(orgId: string): Promise<Organization> {
   return req('GET', `/organizations/${orgId}/stripe/status`);
 }
 
+/**
+ * Oublie le compte Stripe du club — de NOTRE côté seulement.
+ *
+ * Le compte connecté continue d'exister chez Stripe, avec son historique. On
+ * efface le lien pour pouvoir en relier un autre : « Reprendre l'inscription »
+ * réutilise l'identifiant déjà enregistré et ne permet donc jamais d'en changer.
+ */
+export async function apiOrgStripeDelier(orgId: string): Promise<Organization> {
+  return req('DELETE', `/organizations/${orgId}/stripe`);
+}
+
 export async function apiUpdateSupplierStatus(
   orgId: string,
   supplierId: string,

@@ -107,6 +107,46 @@ export class OrganizationsService {
     return { accountId, url: link.url, expiresAt: link.expires_at };
   }
 
+  /**
+   * Oublie le compte Stripe du club, pour repartir de zero.
+   *
+   * Ne touche a RIEN chez Stripe : le compte connecte continue d'exister, avec
+   * son historique et son solde. On efface seulement le lien de notre cote.
+   *
+   * Sans cette porte de sortie, un club qui a lie le mauvais compte -- celui
+   * d'un environnement de test, un doublon cree en reprenant l'inscription --
+   * n'avait aucun moyen d'en changer : « Reprendre l'inscription » reutilise
+   * l'identifiant deja enregistre, et le rattrapage passait par la base.
+   *
+   * Le prochain appui sur « Se connecter a Stripe » creera un compte NEUF.
+   */
+  async delierStripe(organizationId: string, userId: string) {
+    await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { stripeAccountId: true },
+    });
+    if (!org) throw new NotFoundException('Organisation introuvable');
+
+    const ancien = org.stripeAccountId;
+    const maj = await this.prisma.organization.update({
+      where: { id: organizationId },
+      data: {
+        stripeAccountId: null,
+        stripeAccountStatus: StripeAccountStatus.NOT_ONBOARDED,
+        stripeChargesEnabled: false,
+        stripeOnboardedAt: null,
+      },
+    });
+
+    this.logger.warn(
+      `Club ${organizationId} delie de Stripe (ancien compte : ${ancien ?? 'aucun'}). ` +
+        'Le compte existe toujours chez Stripe ; seul le lien a ete efface.',
+    );
+    return maj;
+  }
+
   /** Relit l'etat chez Stripe et le recopie : c'est lui qui fait foi. */
   async refreshStripeStatus(organizationId: string, userId: string) {
     await requireOrgAccess(this.prisma, userId, organizationId, ALL_ORG_ROLES);

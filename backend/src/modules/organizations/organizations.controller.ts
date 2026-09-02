@@ -83,6 +83,18 @@ export class OrganizationsController {
     return this.organizationsService.refreshStripeStatus(id, user.sub);
   }
 
+  /**
+   * DELETE /api/v1/organizations/:id/stripe
+   *
+   * Oublie le compte Stripe du club. Ne supprime rien chez Stripe : le compte
+   * connecte reste intact, seul le lien disparait. Sert a repartir de zero
+   * quand le mauvais compte a ete relie.
+   */
+  @Delete(':id/stripe')
+  delierStripe(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.organizationsService.delierStripe(id, user.sub);
+  }
+
   @Get(':id/members')
   listMembers(@Param('id') id: string, @CurrentUser() user: JwtPayload) {
     return this.organizationsService.getMembers(id, user.sub, user.globalRole);

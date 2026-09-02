@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   apiGetOrganization,
   apiOrgStripeOnboardingLink,
+  apiOrgStripeDelier,
   apiOrgStripeStatus,
   getOrgId,
   type Organization,
@@ -96,6 +97,40 @@ export default function EncaissementPage() {
       window.location.assign(url);
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Erreur');
+      setOccupe(false);
+    }
+  }
+
+  /**
+   * Relier un AUTRE compte que celui enregistré.
+   *
+   * « Reprendre l'inscription » réutilise le compte déjà lié : impossible d'en
+   * changer sans cette porte de sortie. Le cas se produit dès qu'on s'est
+   * trompé de compte au moment de l'inscription — un doublon, un compte pris
+   * dans le mauvais environnement de test.
+   *
+   * Rien n'est supprimé chez Stripe : le compte garde son historique et son
+   * solde. La confirmation le dit, parce que « délier » se lit facilement
+   * comme « effacer ».
+   */
+  async function delier() {
+    const ok = window.confirm(
+      'Oublier ce compte Stripe ?\n\n' +
+        'Le compte n’est PAS supprimé chez Stripe : il garde son historique et son solde. ' +
+        'Seul le lien avec votre club est effacé, pour vous permettre d’en relier un autre.\n\n' +
+        'Tant qu’un nouveau compte n’est pas relié, vos clients ne pourront plus payer.',
+    );
+    if (!ok) return;
+
+    setOccupe(true);
+    setMessage('');
+    try {
+      await apiOrgStripeDelier(orgId);
+      setMessage('Compte oublié. Appuyez sur « Se connecter à Stripe » pour en relier un autre.');
+      await charger();
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Erreur');
+    } finally {
       setOccupe(false);
     }
   }
@@ -236,6 +271,27 @@ export default function EncaissementPage() {
               }}
             >
               Vérifier l’état
+            </button>
+          )}
+
+          {org?.stripeAccountId && (
+            <button
+              type="button"
+              onClick={() => void delier()}
+              disabled={occupe}
+              style={{
+                background: 'none',
+                color: BRAND.grey,
+                border: 'none',
+                padding: '11px 8px',
+                fontWeight: 600,
+                fontSize: 13.5,
+                cursor: occupe ? 'not-allowed' : 'pointer',
+                fontFamily: 'inherit',
+                textDecoration: 'underline',
+              }}
+            >
+              Relier un autre compte
             </button>
           )}
         </div>
