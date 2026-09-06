@@ -17,6 +17,7 @@ import {
   apiCreateCart,
   apiAddCartItem,
   apiCheckout,
+  apiChoisirCreneau,
   apiCommandeDuPanier,
   apiGetLoyaltyStatus,
   apiSetCartPoints,
@@ -94,6 +95,7 @@ export function CheckoutScreen({ navigation }: Props) {
     items,
     eventId,
     supplierId,
+    selectedSlotId,
     selectedSlotLabel,
     totalCents,
     venueId,
@@ -177,7 +179,15 @@ export function CheckoutScreen({ navigation }: Props) {
         await apiAddCartItem(cart.id, item.productId, item.quantity);
       }
 
-      // 2bis. Fidélité — applique les points APRÈS les articles (la remise est
+      // 2bis. Le créneau choisi — il doit voyager jusqu'au serveur.
+      //
+      // Sans cet appel, il restait dans l'application : la commande arrivait au
+      // comptoir sans heure de retrait, affichée « dès que prête ».
+      if (selectedSlotId) {
+        await apiChoisirCreneau(cart.id, selectedSlotId);
+      }
+
+      // 2ter. Fidélité — applique les points APRÈS les articles (la remise est
       // plafonnée au montant du panier, qui doit donc être complet).
       if (pointsToUse > 0) {
         setStep('Application de tes points…');

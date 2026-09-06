@@ -18,6 +18,7 @@ import { UpdateCartDto } from './dto/update-cart.dto';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 import { RedeemPointsDto } from './dto/redeem-points.dto';
+import { ChoisirCreneauDto } from './dto/choisir-creneau.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
@@ -112,6 +113,21 @@ export class CartController {
   @Get(':id/commande')
   commandeDuPanier(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
     return this.cartService.commandeDuPanier(id, user.sub);
+  }
+
+  /**
+   * PATCH /api/v1/carts/:id/creneau
+   *
+   * Le créneau de retrait choisi. `null` l'efface — un client peut renoncer à
+   * une heure precise et revenir au « des que pret ».
+   */
+  @Patch(':id/creneau')
+  choisirCreneau(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ChoisirCreneauDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.cartService.choisirCreneau(id, user.sub, dto.slotId ?? null);
   }
 
   /**

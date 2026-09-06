@@ -448,6 +448,16 @@ export function formatOrderNumber(order: {
   return order.dailyNumber != null ? `N° ${order.dailyNumber}` : order.publicOrderNumber;
 }
 
+/**
+ * Fixe le créneau de retrait du panier.
+ *
+ * Le choix ne vivait QUE dans l'application : le client choisissait « 17h45 »,
+ * l'écran le lui répétait, et la commande naissait sans créneau — le comptoir
+ * ignorait l'heure demandée. `null` efface le choix.
+ */
+export const apiChoisirCreneau = (cartId: string, slotId: string | null) =>
+  req(`/carts/${cartId}/creneau`, { method: 'PATCH', body: JSON.stringify({ slotId }) });
+
 export const apiLienRecu = (orderId: string) =>
   req<{ url: string }>(`/orders/${orderId}/recu/lien`, { method: 'POST' });
 

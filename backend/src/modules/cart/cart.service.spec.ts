@@ -9,6 +9,7 @@ import {
   CartStatus,
   EventStatus,
   ProductStatus,
+  SlotStatus,
   StripeAccountStatus,
 } from '@prisma/client';
 import { CartService } from './cart.service';
@@ -125,6 +126,7 @@ describe('CartService', () => {
             // commande, et chaque test de creation partirait sinon en erreur.
             // Le compte encaisseur est celui du CLUB : la buvette ne fournit
             // plus que son nom, son etat et l'organisation dont elle depend.
+            slot: { findUnique: jest.fn() },
             organization: {
               findUnique: jest.fn().mockResolvedValue({
                 stripeAccountId: 'acct_club',
@@ -323,6 +325,64 @@ describe('CartService', () => {
   });
 
   // ─── checkout ────────────────────────────────────────────────
+
+  describe('choisirCreneau — le creneau doit ARRIVER au serveur', () => {
+    it('enregistre un créneau du bon événement', async () => {
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+      (prisma.slot.findUnique as jest.Mock).mockResolvedValue({
+        eventId: EVENT_ID,
+        status: SlotStatus.OPEN,
+        supplierId: null,
+      });
+
+      await service.choisirCreneau(CART_ID, USER_ID, 'slot-1');
+
+      expect(prisma.cart.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { selectedSlotId: 'slot-1' } }),
+      );
+    });
+
+    it('refuse un créneau d’un AUTRE événement', async () => {
+      // Sans ce controle, on reserverait une place chez un autre club.
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+      (prisma.slot.findUnique as jest.Mock).mockResolvedValue({
+        eventId: 'autre-evenement',
+        status: SlotStatus.OPEN,
+        supplierId: null,
+      });
+
+      await expect(service.choisirCreneau(CART_ID, USER_ID, 'slot-1')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('refuse le créneau d’une AUTRE buvette', async () => {
+      // « Mi-temps » au comptoir Sud pour une commande passee au Nord : le
+      // client se presenterait devant un stand qui n'attend rien.
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+      (prisma.slot.findUnique as jest.Mock).mockResolvedValue({
+        eventId: EVENT_ID,
+        status: SlotStatus.OPEN,
+        supplierId: 'autre-buvette',
+      });
+
+      await expect(service.choisirCreneau(CART_ID, USER_ID, 'slot-1')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it('accepte null — le client renonce à une heure précise', async () => {
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+
+      await service.choisirCreneau(CART_ID, USER_ID, null);
+
+      expect(prisma.cart.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { selectedSlotId: null } }),
+      );
+      // Aucun creneau a verifier : on n'interroge pas la base pour rien.
+      expect(prisma.slot.findUnique).not.toHaveBeenCalled();
+    });
+  });
 
   describe('checkout', () => {
     function setupValidCheckout() {

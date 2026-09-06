@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import {
   apiAddCartItem,
+  apiChoisirCreneau,
   apiCreateCart,
   apiOpenSplit,
   apiSplitEnabled,
@@ -30,6 +31,7 @@ export function CartScreen({ navigation }: Props) {
     totalCents,
     eventId,
     supplierId,
+    selectedSlotId,
     selectedSlotLabel,
     clearSlot,
   } = useCartStore();
@@ -53,12 +55,28 @@ export function CartScreen({ navigation }: Props) {
    */
   const handlePartagerAddition = async () => {
     if (!eventId || !supplierId || items.length === 0) return;
+
+    // L'HOTE choisit le creneau, et il le choisit AVANT de partager.
+    //
+    // La commande est unique : un creneau par convive n'aurait aucun sens, et
+    // demander l'heure au dernier payeur ferait dependre le retrait de celui
+    // qui traine. L'hote decide, les convives ne font que payer leur part.
+    //
+    // Sans creneau, l'ardoise partait sans heure de retrait et la tournee
+    // arrivait au comptoir en « des que prete ».
+    if (!selectedSlotId) {
+      navigation.navigate('SlotSelector', { eventId });
+      return;
+    }
+
     setInvitationEnCours(true);
     try {
       const cart = await apiCreateCart(eventId, supplierId);
       for (const item of items) {
         await apiAddCartItem(cart.id, item.productId, item.quantity);
       }
+      // Le creneau voyage AVEC le panier : l'ardoise en herite, puis la commande.
+      await apiChoisirCreneau(cart.id, selectedSlotId);
       const split = await apiOpenSplit(cart.id);
       navigation.navigate('Split', { code: split.code });
     } catch (e: unknown) {
@@ -153,7 +171,9 @@ export function CartScreen({ navigation }: Props) {
                     {invitationEnCours ? (
                       <ActivityIndicator size="small" color={THEME.orange} />
                     ) : null}
-                    <Text style={styles.inviteBtnText}>Partager l’addition</Text>
+                    <Text style={styles.inviteBtnText}>
+                      {selectedSlotId ? 'Partager l’addition' : 'Choisir un créneau puis partager'}
+                    </Text>
                   </Pressable>
                 ) : null}
 

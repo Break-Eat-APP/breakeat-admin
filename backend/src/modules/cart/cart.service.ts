@@ -10,6 +10,7 @@ import {
   EventStatus,
   PickupPointStatus,
   ProductStatus,
+  SlotStatus,
   SupplierStatus,
 } from '@prisma/client';
 import {
@@ -662,6 +663,45 @@ export class CartService {
         slotStartAt: order.slot?.startAt?.toISOString() ?? null,
       },
     };
+  }
+
+  /**
+   * Le créneau de retrait choisi par le client.
+   *
+   * Il ne vivait QUE dans l'application : le client choisissait « 17h45 »,
+   * l'écran le lui répétait, et la commande naissait sans créneau. Le comptoir
+   * ignorait donc l'heure demandée, et chaque commande s'affichait « Retrait
+   * dès que prête ». Un service de click & collect qui perd l'heure de retrait
+   * ne rend plus le service pour lequel on l'utilise.
+   *
+   * Le créneau est vérifié contre l'ÉVÉNEMENT du panier : accepter un
+   * identifiant quelconque laisserait réserver une place chez un autre club.
+   */
+  async choisirCreneau(cartId: string, userId: string, slotId: string | null) {
+    const cart = await this.requireOwnership(cartId, userId);
+
+    if (slotId) {
+      const creneau = await this.prisma.slot.findUnique({
+        where: { id: slotId },
+        select: { eventId: true, status: true, supplierId: true },
+      });
+      if (!creneau || creneau.eventId !== cart.eventId) {
+        throw new BadRequestException('Ce créneau n’appartient pas à cet événement.');
+      }
+      if (creneau.status !== SlotStatus.OPEN) {
+        throw new BadRequestException('Ce créneau vient d’être fermé. Choisissez-en un autre.');
+      }
+      // Un créneau rattaché à une buvette ne vaut que pour elle. Sans ce
+      // contrôle, on pourrait réserver « Mi-temps » au comptoir Sud pour une
+      // commande passée au Nord — et se présenter devant un stand qui n'attend
+      // rien.
+      if (creneau.supplierId && creneau.supplierId !== cart.supplierId) {
+        throw new BadRequestException('Ce créneau appartient à une autre buvette.');
+      }
+    }
+
+    await this.prisma.cart.update({ where: { id: cartId }, data: { selectedSlotId: slotId } });
+    return { cartId, selectedSlotId: slotId };
   }
 
   async computeView(cartId: string): Promise<CartWithTotals> {

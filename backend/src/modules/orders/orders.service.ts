@@ -349,6 +349,26 @@ export class OrdersService {
         }
       }
 
+      // Le créneau choisi au panier devient celui de la commande.
+      //
+      // Il ne suivait pas : le client choisissait « 17h45 », l'écran le lui
+      // répétait, et le comptoir recevait une commande sans heure — affichée
+      // « Retrait dès que prête ». Un service de click & collect qui perd
+      // l'heure de retrait ne rend plus le service pour lequel on l'utilise.
+      //
+      // L'échec est absorbé, comme pour l'ardoise : l'argent est DÉJÀ encaissé,
+      // et un créneau devenu complet ne doit pas faire disparaître la commande.
+      // On sert sans créneau, et l'incident est tracé.
+      if (cart.selectedSlotId) {
+        try {
+          await this.slotsService.assignOrderToSlot(createdOrder.id, cart.selectedSlotId, tx);
+        } catch (e: unknown) {
+          this.logger.warn(
+            `Commande ${publicOrderNumber} : créneau ${cart.selectedSlotId} non assigné (${String(e)})`,
+          );
+        }
+      }
+
       return createdOrder;
     }).catch(async (e: unknown) => {
       // `orders_cart_id_key` : l'autre evenement Stripe a gagne la course entre
