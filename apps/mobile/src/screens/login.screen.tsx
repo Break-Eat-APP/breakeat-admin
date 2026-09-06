@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -14,7 +14,14 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
-import { apiLogin, apiRegister } from '@lib/api/mobile-api';
+import * as AppleAuthentication from 'expo-apple-authentication';
+import {
+  apiConnexionSociale,
+  apiFournisseursSociaux,
+  apiLogin,
+  apiRegister,
+  type FournisseurSocial,
+} from '@lib/api/mobile-api';
 
 import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
@@ -28,17 +35,19 @@ const URL_CGU = 'https://breakeat.fr/conditions-generales';
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
 /**
- * Connexion par Apple / Google / Facebook.
+ * Connexion par Apple / Google.
  *
- * Les boutons existaient mais n'étaient branchés sur rien : ils affichaient
- * « bientôt disponible » — et sur le web, rien du tout. Trois boutons bien
- * visibles qui ne mènent nulle part font croire à une application cassée,
- * surtout devant de vrais utilisateurs.
+ * Les boutons ont longtemps affiché « bientôt disponible » : trois boutons bien
+ * visibles qui ne mènent nulle part font croire à une application cassée.
+ * Désormais, chacun n'apparaît QUE si le serveur sait vérifier ce
+ * fournisseur — c'est-à-dire s'il en connaît l'identifiant client. Un bouton
+ * visible est donc un bouton qui marche.
  *
- * Ils restent écrits et prêts : passer cette constante à `true` les rétablit
- * le jour où les fournisseurs seront branchés.
+ * Facebook n'y figure pas, et ce n'est pas un oubli : son jeton ne certifie pas
+ * l'adresse e-mail. Rattacher une inscription rapide à un compte existant sur
+ * une adresse non certifiée reviendrait à donner le compte d'un client — ses
+ * commandes, ses points — à qui saurait en déclarer l'adresse.
  */
-const SOCIAL_LOGIN_READY = false;
 
 export function LoginScreen({ navigation, route }: Props) {
   const { setAuth } = useAuthStore();
@@ -53,6 +62,31 @@ export function LoginScreen({ navigation, route }: Props) {
   const [displayName, setDisplayName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  /**
+   * Les fournisseurs annoncés par le serveur.
+   *
+   * Sur iOS on part d'Apple : le bouton est exigé par la règle 4.8 dès qu'une
+   * autre connexion tierce existe, et le masquer le temps d'un aller-retour
+   * réseau le ferait clignoter à l'ouverture de l'écran.
+   */
+  const [fournisseurs, setFournisseurs] = useState<FournisseurSocial[]>(
+    Platform.OS === 'ios' ? ['apple'] : [],
+  );
+  const [appleDispo, setAppleDispo] = useState(false);
+
+  useEffect(() => {
+    apiFournisseursSociaux()
+      .then(({ providers }) => setFournisseurs(providers))
+      .catch(() => {
+        // Réseau coupé : on garde la valeur de départ. Un écran de connexion
+        // qui perd ses boutons parce qu'un appel secondaire a échoué serait
+        // pire que le contraire.
+      });
+    // Apple ne répond présent que sur un iPhone à jour ; ailleurs le composant
+    // officiel ne doit pas être monté du tout.
+    void AppleAuthentication.isAvailableAsync().then(setAppleDispo).catch(() => setAppleDispo(false));
+  }, []);
 
   /** Après succès / passage invité : reprendre le parcours (événement en attente ou retour). */
   const proceed = () => {
@@ -145,10 +179,49 @@ export function LoginScreen({ navigation, route }: Props) {
     }
   };
 
-  const social = (provider: string) =>
-    // `Alert.alert` ne fait RIEN sur le web : le bouton semblait cassé plutôt
-    // qu'indisponible. Le helper couvre les deux plateformes.
-    showAlert('Bientôt', `Connexion avec ${provider} disponible prochainement.`);
+  /**
+   * « Continuer avec Apple ».
+   *
+   * Le nom n'arrive qu'à la TOUTE PREMIÈRE autorisation, et plus jamais
+   * ensuite : Apple considère qu'il nous appartient désormais de le conserver.
+   * S'il est là, on le transmet ; le serveur ne s'en sert que pour un compte
+   * neuf.
+   *
+   * L'annulation n'est pas une erreur — le client a refermé la feuille, il n'a
+   * pas besoin qu'on le lui annonce.
+   */
+  const connexionApple = async () => {
+    setLoading(true);
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (!credential.identityToken) {
+        showAlert('Connexion impossible', 'Apple n’a pas transmis de jeton d’identité.');
+        return;
+      }
+
+      const nom = [credential.fullName?.givenName, credential.fullName?.familyName]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+
+      const res = await apiConnexionSociale('apple', credential.identityToken, nom || undefined);
+      await setAuth(res.accessToken, res.user, res.refreshToken);
+      void requestLocation();
+      proceed();
+    } catch (e: unknown) {
+      const code = (e as { code?: string }).code;
+      if (code === 'ERR_REQUEST_CANCELED') return;
+      showAlert('Connexion impossible', (e as Error).message ?? 'Réessayez dans un instant.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
@@ -193,25 +266,17 @@ export function LoginScreen({ navigation, route }: Props) {
           </Pressable>
         </View>
 
-        {SOCIAL_LOGIN_READY && (
+        {fournisseurs.includes('apple') && appleDispo && (
           <>
-            <SocialButton
-              icon="logo-apple"
-              iconColor={THEME.ink}
-              label="Continuer avec Apple"
-              onPress={() => social('Apple')}
-            />
-            <SocialButton
-              icon="logo-google"
-              iconColor="#EA4335"
-              label="Continuer avec Google"
-              onPress={() => social('Google')}
-            />
-            <SocialButton
-              icon="logo-facebook"
-              iconColor="#1877F2"
-              label="Continuer avec Facebook"
-              onPress={() => social('Facebook')}
+            {/* Le bouton d'Apple, et pas une imitation : la règle 4.8 impose son
+                apparence, sa taille et son libellé. Un bouton dessiné à la main
+                se fait refuser à la revue. */}
+            <AppleAuthentication.AppleAuthenticationButton
+              buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+              cornerRadius={14}
+              style={styles.appleButton}
+              onPress={() => void connexionApple()}
             />
 
             <View style={styles.orRow}>
@@ -320,27 +385,6 @@ export function LoginScreen({ navigation, route }: Props) {
   );
 }
 
-function SocialButton({
-  icon,
-  iconColor,
-  label,
-  onPress,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  iconColor: string;
-  label: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.social, pressed && styles.pressed]}
-    >
-      <Ionicons name={icon} size={20} color={iconColor} style={styles.socialIcon} />
-      <Text style={styles.socialText}>{label}</Text>
-    </Pressable>
-  );
-}
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
@@ -388,6 +432,9 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   socialIcon: { marginRight: 10 },
   socialText: { color: THEME.ink, fontSize: 15, fontFamily: HEAD.semibold },
+
+  // 50 pt : la hauteur recommandee par Apple. Plus bas, le logo se tasse.
+  appleButton: { width: '100%', height: 50, marginBottom: 14 },
 
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 12 },
   orLine: { flex: 1, height: 1, backgroundColor: THEME.border },

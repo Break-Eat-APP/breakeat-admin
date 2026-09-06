@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
 import { GroupsService } from '../groups/groups.service';
 import { PrismaService } from '../../database/prisma.service';
+import { SocialIdentityService } from './social-identity.service';
 
 // ─── Mocks ────────────────────────────────────────────────────
 
@@ -44,6 +45,13 @@ const mockJwtService = {
   sign: jest.fn().mockReturnValue('mock-access-token'),
 };
 
+// Les fournisseurs d'identite sont testes a part (social-login.spec.ts) : ici
+// ils ne servent qu'a satisfaire l'injection.
+const mockSocialIdentityService = {
+  verifier: jest.fn(),
+  disponibles: jest.fn().mockReturnValue([]),
+};
+
 const mockConfigService = {
   get: jest.fn().mockReturnValue('test-secret'),
 };
@@ -58,6 +66,7 @@ describe('AuthService', () => {
       providers: [
         AuthService,
         { provide: UsersService, useValue: mockUsersService },
+        { provide: SocialIdentityService, useValue: mockSocialIdentityService },
         { provide: GroupsService, useValue: mockGroupsService },
         { provide: PrismaService, useValue: mockPrismaService },
         { provide: JwtService, useValue: mockJwtService },

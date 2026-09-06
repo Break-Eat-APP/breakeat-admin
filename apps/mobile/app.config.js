@@ -43,6 +43,13 @@ module.exports = {
   ios: {
     bundleIdentifier: BUNDLE_ID,
     supportsTablet: false,
+    // « Continuer avec Apple ». Pose l'entitlement dans le projet Xcode : sans
+    // lui, le bouton s'affiche et la demande echoue sur l'appareil, jamais a la
+    // compilation.
+    //
+    // A savoir : la regle 4.8 de l'App Store rend ce bouton OBLIGATOIRE des
+    // qu'une autre connexion tierce (Google, Facebook) est proposee sur iOS.
+    usesAppleSignIn: true,
     // PHASE 21 — requis par @bacons/apple-targets pour créer la cible du widget
     // (l'extension doit être signée avec la même équipe que l'app hôte).
     // Même valeur que `submit.production.ios.appleTeamId` dans eas.json.
@@ -92,6 +99,7 @@ module.exports = {
     ],
   },
   plugins: [
+    'expo-apple-authentication',
     // PHASE 21 — prérequis Live Activity : NSSupportsLiveActivities + cible iOS
     // 16.2. Le dossier ios/ étant régénéré à chaque build, ces réglages ne
     // peuvent pas vivre ailleurs que dans un plugin.

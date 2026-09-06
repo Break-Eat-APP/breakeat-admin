@@ -321,6 +321,34 @@ export const apiRegister = (email: string, password: string, displayName: string
     body: JSON.stringify({ email, password, displayName }),
   });
 
+/** Apple, Google — ceux que le serveur sait réellement vérifier. */
+export type FournisseurSocial = 'apple' | 'google';
+
+/**
+ * Inscription et connexion en un seul appel.
+ *
+ * Du point de vue du client, « se connecter avec Apple » et « s'inscrire avec
+ * Apple » sont le même geste : c'est au serveur de savoir s'il ouvre un compte
+ * ou en retrouve un.
+ *
+ * `displayName` n'est transmis qu'à la première autorisation — Apple ne donne
+ * le nom qu'une fois, jamais aux suivantes. Le serveur ne le croit que pour
+ * remplir un compte NEUF ; l'adresse, elle, est lue dans le jeton signé.
+ */
+export const apiConnexionSociale = (
+  provider: FournisseurSocial,
+  token: string,
+  displayName?: string,
+) =>
+  req<LoginResponse>('/auth/social', {
+    method: 'POST',
+    body: JSON.stringify({ provider, token, displayName }),
+  });
+
+/** Ce que l'application a le droit de proposer : un bouton sans serveur ment. */
+export const apiFournisseursSociaux = () =>
+  req<{ providers: FournisseurSocial[] }>('/auth/providers');
+
 // ─── Découverte des lieux (public, no auth required) ───────────
 
 export interface PublicVenue {

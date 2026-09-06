@@ -219,7 +219,10 @@ enum FlaixDecisionType {
 model User {
   id           String     @id @default(uuid())
   email        String     @unique
-  passwordHash String     @map("password_hash")
+  /// Nul pour un compte cree par Apple/Google : il n'y a jamais eu de mot de
+  /// passe. Un hachage bidon aurait laisse croire qu'il en existe un, et la
+  /// connexion par mot de passe aurait echoue sans jamais dire pourquoi.
+  passwordHash String?    @map("password_hash")
   displayName  String     @map("display_name")
   phone        String?
   globalRole   GlobalRole @default(CUSTOMER) @map("global_role")
@@ -228,6 +231,7 @@ model User {
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
   memberships      OrganizationMember[]
+  identities       UserIdentity[]
   refreshTokens    RefreshToken[]
   carts            Cart[]
   orders           Order[]
@@ -873,6 +877,30 @@ model OrderCounter {
 /// — y compris ceux arrives telephone eteint, ou avant l'installation d'un
 /// second appareil. Un compteur garde seulement dans l'application ne survivrait
 /// ni a une reinstallation ni au passage d'un telephone a l'autre.
+/// Un compte d'identite exterieur (Apple, Google) rattache a un utilisateur.
+///
+/// Le rattachement se fait sur le SUJET du fournisseur, jamais sur l'adresse :
+/// Apple peut donner une adresse relais differente a chaque application, et une
+/// adresse se change. Le sujet, lui, ne bouge pas.
+model UserIdentity {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  /// « apple » ou « google ».
+  provider  String
+  /// L'identifiant stable rendu par le fournisseur (claim `sub`).
+  subject   String
+  /// L'adresse au moment du rattachement — pour le support, pas pour retrouver
+  /// le compte.
+  email     String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, subject])
+  @@index([userId])
+  @@map("user_identities")
+}
+
 model UserNotification {
   id             String    @id @default(uuid())
   userId         String    @map("user_id")

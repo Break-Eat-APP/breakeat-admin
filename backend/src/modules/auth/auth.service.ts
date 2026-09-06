@@ -10,6 +10,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { UsersService } from '../users/users.service';
 import { GroupsService } from '../groups/groups.service';
 import type { SafeUser } from '../users/users.service';
+import { SocialIdentityService, type Fournisseur } from './social-identity.service';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { JwtPayload } from './strategies/jwt.strategy';
@@ -35,6 +36,18 @@ const ACCESS_TOKEN_EXPIRES = '15m';
  * - Controllers stay thin — no business logic in controller
  * - Every important action must produce structured logs
  */
+/**
+ * Le hachage ne sort JAMAIS du service.
+ *
+ * Trois chemins ramenaient une ligne complete depuis la base ; en oublier un
+ * seul aurait envoye le hachage du mot de passe jusque dans l'application.
+ */
+function sansMotDePasse(ligne: SafeUser & { passwordHash?: string | null }): SafeUser {
+  const copie = { ...ligne };
+  delete copie.passwordHash;
+  return copie;
+}
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -45,6 +58,7 @@ export class AuthService {
     private readonly groupsService: GroupsService,
     private readonly jwtService: JwtService,
     private readonly config: ConfigService,
+    private readonly socialIdentity: SocialIdentityService,
   ) {}
 
   /**
@@ -84,6 +98,16 @@ export class AuthService {
       throw new UnauthorizedException('Account is disabled');
     }
 
+    // Un compte créé par Apple ou Google n'a JAMAIS eu de mot de passe. Le
+    // dire clairement évite au client de s'acharner sur un mot de passe qui
+    // n'a jamais existé — et de demander une réinitialisation qui n'aboutirait
+    // à rien.
+    if (!user.passwordHash) {
+      throw new UnauthorizedException(
+        'Ce compte se connecte avec Apple ou Google.',
+      );
+    }
+
     const passwordValid = await this.usersService.validatePassword(
       dto.password,
       user.passwordHash,
@@ -105,6 +129,94 @@ export class AuthService {
     this.logger.log(`User logged in: ${user.id} (${user.email})`);
 
     return { user: safeUser, ...tokens };
+  }
+
+  /**
+   * Connexion par Apple ou Google.
+   *
+   * L'ordre compte, et c'est tout le sujet :
+   *
+   * 1. le SUJET du fournisseur d'abord — stable, il désigne le même humain même
+   *    si son adresse a changé depuis ;
+   * 2. l'adresse ensuite, et seulement si le fournisseur la certifie : elle
+   *    rattache l'inscription rapide au compte déjà ouvert par mot de passe,
+   *    pour que le client n'en découvre pas un second, vide de ses commandes ;
+   * 3. la création enfin.
+   *
+   * Rattacher sur une adresse NON certifiée reviendrait à donner le compte de
+   * quelqu'un à qui saurait en déclarer l'adresse. C'est exactement pour cela
+   * que Facebook n'est pas branché ici : son jeton ne certifie pas l'adresse.
+   */
+  async connexionSociale(dto: {
+    provider: Fournisseur;
+    token: string;
+    displayName?: string;
+  }): Promise<AuthResponse> {
+    const identite = await this.socialIdentity.verifier(dto.provider, dto.token);
+
+    const existante = await this.prisma.userIdentity.findUnique({
+      where: {
+        provider_subject: { provider: identite.provider, subject: identite.subject },
+      },
+      include: { user: true },
+    });
+
+    let user: SafeUser;
+
+    if (existante) {
+      if (!existante.user.isActive) throw new UnauthorizedException('Account is disabled');
+      user = sansMotDePasse(existante.user);
+    } else {
+      if (!identite.email || !identite.emailVerifie) {
+        // Sans adresse certifiée, impossible de créer un compte (l'adresse est
+        // la clé) ni de rattacher sans risque. Apple en fournit toujours une à
+        // la première autorisation : y arriver signifie que quelque chose s'est
+        // perdu en route.
+        throw new UnauthorizedException(
+          'Le fournisseur n’a pas transmis d’adresse e-mail vérifiée.',
+        );
+      }
+
+      const deja = await this.prisma.user.findUnique({ where: { email: identite.email } });
+
+      if (deja) {
+        if (!deja.isActive) throw new UnauthorizedException('Account is disabled');
+        user = sansMotDePasse(deja);
+        this.logger.log(`Identité ${identite.provider} rattachée au compte ${user.id}`);
+      } else {
+        const cree = await this.prisma.user.create({
+          data: {
+            email: identite.email,
+            // Aucun mot de passe : il n'y en a jamais eu.
+            passwordHash: null,
+            // Apple ne donne le nom qu'à la PREMIÈRE autorisation, et jamais
+            // ensuite : s'il manque, la partie gauche de l'adresse vaut mieux
+            // qu'un champ vide en tête de « Mes commandes ».
+            displayName: dto.displayName?.trim() || identite.email.split('@')[0],
+          },
+        });
+        user = sansMotDePasse(cree);
+        this.logger.log(`Compte créé via ${identite.provider} : ${user.id}`);
+      }
+
+      await this.prisma.userIdentity.create({
+        data: {
+          userId: user.id,
+          provider: identite.provider,
+          subject: identite.subject,
+          email: identite.email,
+        },
+      });
+    }
+
+    await this.syncDomainGroups(user.id, user.email);
+    const tokens = await this.generateTokens(user);
+    return { user, ...tokens };
+  }
+
+  /** Ce que l'application peut proposer — un bouton sans serveur derrière ment. */
+  fournisseursDisponibles(): Fournisseur[] {
+    return this.socialIdentity.disponibles();
   }
 
   /**
