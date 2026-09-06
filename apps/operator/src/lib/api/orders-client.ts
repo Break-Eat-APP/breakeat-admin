@@ -159,6 +159,15 @@ export interface DashboardData {
   eventId: string;
   counts: Record<string, number>;
   orders: Record<string, Order[]>;
+  /**
+   * La buvette que le SERVEUR a réellement appliquée — pas celle demandée.
+   *
+   * Un compte rattaché à un comptoir ne voit que le sien, quelle que soit la
+   * demande du poste. Sans cette réponse, l'écran affichait le nom qu'il avait
+   * en mémoire tout en recevant les commandes d'un autre comptoir : deux
+   * vérités, aucune visible, et un tableau vide sans explication.
+   */
+  supplier: { id: string; name: string } | null;
 }
 
 // ─── Me + memberships ─────────────────────────────────────────────────────────
@@ -206,6 +215,10 @@ export async function fetchMeWithMemberships(token: string): Promise<MeWithMembe
 
 /**
  * Fetches the operator dashboard snapshot.
+ *
+ * `supplier` est la buvette que le SERVEUR a réellement appliquée — pas celle
+ * demandée. Un compte rattaché à un comptoir ne peut voir que le sien, quelle
+ * que soit la demande : c'est cette valeur-là qui doit s'afficher.
  * Phase 12.9: pass supplierId to filter orders to a specific supplier.
  */
 export async function fetchDashboard(

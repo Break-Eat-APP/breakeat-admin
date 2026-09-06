@@ -898,7 +898,21 @@ export class OrdersService {
       }
     }
 
-    return { eventId, counts, orders: grouped };
+    // La buvette REELLEMENT appliquee est renvoyee avec les commandes.
+    //
+    // Le poste ne peut pas la deduire : le serveur peut imposer celle a
+    // laquelle le compte est rattache, quelle que soit la demande. Sans cette
+    // reponse, l'ecran affichait « Buvette Nord » -- son souvenir local -- tout
+    // en recevant les commandes d'un autre comptoir. Deux verites, aucune
+    // visible, et un tableau vide sans explication.
+    const buvette = supplierId
+      ? await this.prisma.supplier.findUnique({
+          where: { id: supplierId },
+          select: { id: true, name: true },
+        })
+      : null;
+
+    return { eventId, counts, orders: grouped, supplier: buvette };
   }
 
   /**

@@ -124,7 +124,7 @@ describe('OrdersService', () => {
               findMany: jest.fn(),
               update: jest.fn(),
             },
-            supplier: { findMany: jest.fn() },
+            supplier: { findMany: jest.fn(), findUnique: jest.fn() },
             venue: { findMany: jest.fn() },
             orderAuditTrail: {
               create: jest.fn(),
@@ -740,6 +740,22 @@ describe('OrdersService', () => {
   // ─── findDashboardByEvent ─────────────────────────────────────
 
   describe('findDashboardByEvent', () => {
+    it('renvoie la buvette REELLEMENT appliquée avec les commandes', async () => {
+      // Le poste ne peut pas la deduire : le serveur impose celle a laquelle le
+      // compte est rattache, quelle que soit la demande. Sans cette reponse,
+      // l'ecran affichait son propre souvenir -- « Buvette Nord » -- tout en
+      // recevant les commandes d'un autre comptoir.
+      (prisma.order.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.supplier.findUnique as jest.Mock).mockResolvedValue({
+        id: SUPPLIER_ID,
+        name: 'Buvette Nord',
+      });
+
+      const res = await service.findDashboardByEvent(EVENT_ID, SUPPLIER_ID);
+
+      expect(res.supplier).toEqual({ id: SUPPLIER_ID, name: 'Buvette Nord' });
+    });
+
     it('returns orders grouped by status with counts', async () => {
       const orders = [
         { ...mockOrder(OrderStatus.PAID), items: [] },

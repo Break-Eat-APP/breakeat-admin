@@ -141,6 +141,15 @@ export default function DashboardPage() {
   const [buvettes, setBuvettes] = useState<Array<{ id: string; name: string }>>([]);
   const [choixOuvert, setChoixOuvert] = useState(false);
   const [supplierName, setSupplierName] = useState<string | null>(null);
+  /**
+   * La buvette que le SERVEUR applique vraiment.
+   *
+   * Elle peut differer de celle demandee : un compte rattache a un comptoir ne
+   * voit que le sien, quelle que soit la demande. Tant que l'ecran affichait
+   * son propre souvenir, un poste pouvait annoncer « Buvette Nord » en
+   * recevant les commandes du Sud -- et rester vide sans que rien ne l'explique.
+   */
+  const [buvetteServeur, setBuvetteServeur] = useState<{ id: string; name: string } | null>(null);
   const { playNewOrder, playOrderReady } = useSound();
   const prevNotification = useRef<string | null>(null);
 
@@ -314,6 +323,25 @@ export default function DashboardPage() {
     withLoading,
     isOrderLoading,
   } = useDashboard({ eventId, token: token ?? '', apiUrl: API_URL, supplierId });
+
+  /**
+   * Le serveur fait foi sur la buvette.
+   *
+   * Il peut imposer celle a laquelle le compte est rattache, quelle que soit la
+   * demande du poste. On aligne donc l'affichage sur sa reponse : un ecran qui
+   * annonce un comptoir et en affiche un autre est pire qu'un ecran vide.
+   */
+  useEffect(() => {
+    const duServeur = data?.supplier ?? null;
+    if (!duServeur) return;
+    setBuvetteServeur(duServeur);
+    setSupplierName(duServeur.name);
+    if (duServeur.id !== supplierId) {
+      setSupplierId(duServeur.id);
+      localStorage.setItem('operator_supplier_id', duServeur.id);
+      localStorage.setItem('operator_supplier_name', duServeur.name);
+    }
+  }, [data?.supplier, supplierId]);
 
   // Récap produits — masqué par défaut, ouvert à la demande pendant le service.
   const [recapOpen, setRecapOpen] = useState(false);
@@ -587,6 +615,34 @@ export default function DashboardPage() {
       )}
 
       {/* Screen tabs (Phase 11.4) — only when screens are configured */}
+      {/* Un tableau vide doit dire POURQUOI.
+          « Aucune commande » est indiscernable de « mauvaise buvette » ou
+          « mauvais evenement ». Une soiree entiere s'est perdue sur cette
+          ambiguite : la commande existait, le poste regardait ailleurs. */}
+      {data && supplierId && (data.counts?.PAID ?? 0) === 0 &&
+        Object.values(data.counts ?? {}).every((n) => n === 0) && (
+          <div
+            style={{
+              margin: '0 16px 12px',
+              padding: '10px 14px',
+              borderRadius: 10,
+              background: BRAND.surface,
+              border: `1px solid ${BRAND.border}`,
+              color: BRAND.grey,
+              fontSize: 12.5,
+              lineHeight: 1.6,
+            }}
+          >
+            Ce poste affiche les commandes de{' '}
+            <strong style={{ color: BRAND.ink }}>
+              {buvetteServeur?.name ?? supplierName ?? '—'}
+            </strong>{' '}
+            pour l’événement <code style={{ fontSize: 11.5 }}>{eventId.slice(0, 8)}…</code>.
+            Une commande passée sur une autre buvette, ou sur un autre événement,
+            n’apparaîtra pas ici.
+          </div>
+        )}
+
       {/* Choix de la buvette — tant qu'on ne l'a pas, on n'affiche RIEN.
           Montrer les commandes de tout le lieu « en attendant » serait pire
           que ne rien montrer : l'opératrice croirait que ce sont les siennes. */}

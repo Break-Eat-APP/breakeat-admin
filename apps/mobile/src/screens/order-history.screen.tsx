@@ -356,36 +356,43 @@ function OrderCard({
         </View>
       </View>
 
-      {/* Statut — pastille pleine, points d'étape à droite.
-          Les trois barres légendées prenaient deux lignes pour dire ce qu'un
-          chapelet de points dit d'un coup d'œil. */}
-      <View style={styles.statusRow}>
-        <View style={[styles.statusPill, { backgroundColor: cfg.tint }]}>
-          <Ionicons name={cfg.icon} size={14} color={cfg.color} />
-          <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
-        </View>
+      {/* Statut */}
+      <View style={[styles.statusPill, { backgroundColor: cfg.tint }]}>
+        <Ionicons name={cfg.icon} size={14} color={cfg.color} />
+        <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+      </View>
 
-        {cfg.phase !== 'cancelled' && (
-          <View style={styles.pistes}>
-            {STEPS.map((s, i) => {
-              const atteint = stepIndex >= i || cfg.phase === 'done';
-              const actif = stepIndex === i && cfg.phase !== 'done';
-              return (
+      {/* Progression — trois traits légendés, arrondis.
+          Le libellé compte : « Préparation » dit ce qui se passe, là où un point
+          demande de deviner. L'étape EN COURS est plus épaisse, pour se repérer
+          sans lire. */}
+      {cfg.phase !== 'cancelled' && (
+        <View style={styles.steps}>
+          {STEPS.map((s, i) => {
+            const atteint = stepIndex >= i || cfg.phase === 'done';
+            const actif = stepIndex === i && cfg.phase !== 'done';
+            return (
+              <View key={s.phase} style={styles.step}>
                 <View
-                  key={s.phase}
                   style={[
-                    styles.piste,
+                    styles.stepBar,
                     { backgroundColor: atteint ? s.color : THEME.border },
-                    // L'étape EN COURS s'allonge : la progression se lit sans
-                    // légende, même de loin et même en noir et blanc.
-                    actif && styles.pisteActive,
+                    actif && styles.stepBarActive,
                   ]}
                 />
-              );
-            })}
-          </View>
-        )}
-      </View>
+                <Text
+                  style={[
+                    styles.stepLabel,
+                    atteint && { color: s.color, fontFamily: HEAD.bold },
+                  ]}
+                >
+                  {s.label}
+                </Text>
+              </View>
+            );
+          })}
+        </View>
+      )}
 
       {/* Retrait : l'information qu'on relit dix fois en attendant. */}
       <View style={styles.retrait}>
@@ -517,10 +524,13 @@ const styles = StyleSheet.create({
   },
   statusText: { fontSize: 13, fontFamily: HEAD.bold },
 
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  pistes: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  piste: { width: 14, height: 5, borderRadius: 999 },
-  pisteActive: { width: 26 },
+  steps: { flexDirection: 'row', gap: 8 },
+  step: { flex: 1, gap: 6 },
+  // Extremites arrondies : un trait a angles vifs jurait avec des cartes a
+  // rayon 22 et des boutons en gelule.
+  stepBar: { height: 6, borderRadius: THEME.radius.pill },
+  stepBarActive: { height: 8 },
+  stepLabel: { color: THEME.grey, fontSize: 11, fontFamily: HEAD.medium },
 
   retrait: {
     flexDirection: 'row',
