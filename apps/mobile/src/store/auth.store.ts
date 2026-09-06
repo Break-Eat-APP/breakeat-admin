@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { oublierPush } from '@lib/push-notifications';
 
 const TOKEN_KEY = 'break_eat_token';
 const REFRESH_KEY = 'break_eat_refresh';
@@ -78,6 +79,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   clearAuth: async () => {
+    // Le jeton push part avec le compte : sinon l'appareil continuerait de
+    // recevoir les campagnes du club de l'ancien utilisateur — y compris entre
+    // les mains de quelqu'un d'autre.
+    await oublierPush();
     await Promise.all([
       AsyncStorage.removeItem(TOKEN_KEY),
       AsyncStorage.removeItem(REFRESH_KEY),

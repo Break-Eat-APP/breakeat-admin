@@ -55,6 +55,7 @@ import { OrderConfirmationScreen } from '@screens/order-confirmation.screen';
 import { OrderTrackingScreen } from '@screens/order-tracking.screen';
 import { SplitScreen } from '@screens/split.screen';
 import { useDeepLinks } from '@lib/hooks/use-deep-links';
+import { enregistrerPush } from '@lib/push-notifications';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -137,6 +138,23 @@ export default function AppPreview() {
     setReady(true);
     void rehydrate();
   }, [setReady, rehydrate]);
+
+  /**
+   * Le jeton push, une fois le client connecté.
+   *
+   * Rien ne l'enregistrait : `expo-notifications` n'était pas installé, et les
+   * campagnes partaient vers ZÉRO appareil — `envoyé à 0 appareil(s)` dans les
+   * journaux. Le mécanisme d'envoi marchait ; il n'avait pas de destinataire.
+   *
+   * Après connexion, et pas avant : le jeton se rattache à un compte, et
+   * réclamer la permission à un visiteur anonyme — avant d'avoir quoi que ce
+   * soit à lui annoncer — est la façon la plus sûre de se la faire refuser
+   * définitivement.
+   */
+  useEffect(() => {
+    if (!token) return;
+    void enregistrerPush();
+  }, [token]);
 
   // « Je suis arrive » depuis l'ecran verrouille, et appui sur la Live Activity.
   useDeepLinks(navigationPrete);

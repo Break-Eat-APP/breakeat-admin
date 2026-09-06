@@ -12,7 +12,6 @@ import {
   Store,
   Tags,
   Palette,
-  Bell,
   Megaphone,
   Building2,
   Users,
@@ -82,7 +81,10 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Communication',
     items: [
-      { href: '/notifications', icon: Bell, label: 'Notifications' },
+      // « Notifications » — un push par ETAPE de commande — a ete retiree le
+      // 07/09/2026 : la Live Activity raconte deja la progression, et le push
+      // la doublait. Ce qui compte reste la CAMPAGNE, adressee a tous les
+      // clients d'un club.
       { href: '/campaigns', icon: Megaphone, label: 'Campagnes & push' },
     ],
   },

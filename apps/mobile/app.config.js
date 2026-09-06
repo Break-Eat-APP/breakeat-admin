@@ -107,6 +107,9 @@ module.exports = {
     // paiement Stripe. Sans lui, `Linking.openURL` sortait de l'app vers
     // Safari : le client payait ailleurs, et rien ne le ramenait.
     'expo-web-browser',
+    // Les notifications push du client. Sans cette declaration, le SDK 57 ne
+    // configure pas la cible native et aucun jeton n'est delivre.
+    'expo-notifications',
     [
       // Le SDK 57 a retire `splash` de la racine du schema : la clé y est
       // simplement IGNOREE, sans erreur, et l'app demarre sur l'ecran blanc

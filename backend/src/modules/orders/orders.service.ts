@@ -18,7 +18,6 @@ import { PrismaService } from '../../database/prisma.service';
 import { OrderStateMachineService } from './order-state-machine.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { SlotsService } from '../slots/slots.service';
-import { OrderNotificationsService } from '../notifications/order-notifications.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { LiveActivityService } from '../live-activity/live-activity.service';
 import { jourDeService } from '../../common/helpers/jour-de-service';
@@ -44,7 +43,6 @@ export class OrdersService {
     private readonly stateMachine: OrderStateMachineService,
     private readonly realtimeService: RealtimeService,
     private readonly slotsService: SlotsService,
-    private readonly orderNotifications: OrderNotificationsService,
     private readonly loyaltyService: LoyaltyService,
     private readonly liveActivityService: LiveActivityService,
   ) {}
@@ -675,15 +673,20 @@ export class OrdersService {
       void this.awardLoyaltyPoints(updated);
     }
 
-    // C1 — notification push au client selon le modèle configuré pour ce statut.
-    // Fire-and-forget : un échec d'envoi ne doit pas impacter la transition.
-    void this.orderNotifications.notifyStatusChange({
-      id: updated.id,
-      userId: updated.userId,
-      organizationId: updated.organizationId,
-      status: updated.status,
-      publicOrderNumber: updated.publicOrderNumber,
-    });
+    // PUSH PAR ÉTAPE — RETIRÉ le 07/09/2026.
+    //
+    // La Live Activity raconte déjà la progression sur l'écran verrouillé et
+    // dans l'îlot dynamique. Un push à chaque étape la doublait : le client
+    // recevait deux fois la même nouvelle, à la seconde près.
+    //
+    // L'écran de réglage qui l'accompagnait a disparu du back-office. Laisser
+    // l'envoi tourner sans lui aurait rendu ce comportement invisible ET non
+    // modifiable — le pire des deux.
+    //
+    // Ce qui reste : les CAMPAGNES, adressées à tous les clients d'un club.
+    // Elles n'ont rien d'un doublon. Le service `OrderNotificationsService` et
+    // les modèles déjà écrits par des clubs restent en base — même précaution
+    // que pour les tables du board opérateur : effacer des données se décide.
 
     return updated;
   }
