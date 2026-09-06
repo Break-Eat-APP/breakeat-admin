@@ -71,8 +71,8 @@ const STATUS_UI: Record<string, StatusUi> = {
   ACCEPTED: { phase: 'received', label: 'Commande reçue', color: THEME.ink, tint: THEME.bgSubtle, icon: 'receipt-outline' },
   PREPARING: { phase: 'preparing', label: 'En préparation', color: THEME.orange, tint: THEME.orangeTint, icon: 'flame-outline' },
   READY: { phase: 'ready', label: 'Prête à retirer', color: GREEN, tint: GREEN_TINT, icon: 'checkmark-circle-outline' },
-  PICKED_UP: { phase: 'done', label: 'Récupérée', color: THEME.grey, tint: THEME.bgSubtle, icon: 'bag-check-outline' },
-  COMPLETED: { phase: 'done', label: 'Terminée', color: THEME.grey, tint: THEME.bgSubtle, icon: 'bag-check-outline' },
+  PICKED_UP: { phase: 'done', label: 'Récupérée', color: GREEN, tint: GREEN_TINT, icon: 'bag-check-outline' },
+  COMPLETED: { phase: 'done', label: 'Terminée', color: GREEN, tint: GREEN_TINT, icon: 'bag-check-outline' },
   RECOVERED: { phase: 'done', label: 'Restituée', color: THEME.grey, tint: THEME.bgSubtle, icon: 'refresh-outline' },
   CANCELLED: { phase: 'cancelled', label: 'Annulée', color: RED, tint: RED_TINT, icon: 'close-circle-outline' },
 };

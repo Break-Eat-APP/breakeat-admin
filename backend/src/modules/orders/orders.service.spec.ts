@@ -420,6 +420,54 @@ describe('OrdersService', () => {
       );
     });
 
+    it('rend la commande GAGNANTE quand les deux evenements Stripe se croisent', async () => {
+      // `checkout.session.completed` et `payment_intent.succeeded` decrivent le
+      // meme encaissement et arrivent a quelques millisecondes d'intervalle. Le
+      // perdant heurte la contrainte d'unicite sur le panier. Lever la rendrait
+      // une 500 a Stripe, qui rejouerait pour aboutir au meme constat une minute
+      // plus tard : un doublon empeche n'est pas une panne.
+      const existante = { id: 'order-1', publicOrderNumber: 'BE-00000001' };
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.order.findUnique as jest.Mock)
+        // Le coup d'oeil avant ecriture : rien encore.
+        .mockResolvedValueOnce(null)
+        // Apres l'echec : l'autre evenement est passe.
+        .mockResolvedValueOnce(existante);
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+      transactionMock.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), {
+          code: 'P2002',
+          meta: { target: ['cart_id'] },
+        }),
+      );
+
+      const order = await service.createFromPaymentIntent(
+        PAYMENT_INTENT_ID,
+        mockIntent(),
+        {} as never,
+      );
+
+      expect(order).toEqual(existante);
+    });
+
+    it('laisse remonter une contrainte qui n’est PAS celle du panier', async () => {
+      // Une autre violation d'unicite est un vrai defaut : l'absorber
+      // silencieusement ferait disparaitre une commande sans trace.
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+      transactionMock.mockRejectedValue(
+        Object.assign(new Error('Unique constraint failed'), {
+          code: 'P2002',
+          meta: { target: ['public_order_number'] },
+        }),
+      );
+
+      await expect(
+        service.createFromPaymentIntent(PAYMENT_INTENT_ID, mockIntent(), {} as never),
+      ).rejects.toThrow(/Unique constraint/);
+    });
+
     it('cree la commande pour un produit SANS ligne de stock', async () => {
       // Un club qui ne compte pas ses articles n'a aucune ligne de stock. Ce
       // n'est pas une anomalie -- et c'est pourtant ce qui a fait echouer

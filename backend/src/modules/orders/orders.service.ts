@@ -172,14 +172,32 @@ export class OrdersService {
       );
     }
 
+    // Un dernier regard, juste avant d'ecrire.
+    //
+    // `checkout.session.completed` et `payment_intent.succeeded` decrivent le
+    // MEME encaissement et arrivent a quelques millisecondes d'intervalle. La
+    // verification d'entree (par PaymentIntent) ne les separe pas : le premier
+    // n'a pas encore ecrit sa ligne de paiement quand le second la cherche.
+    // Ce coup d'oeil par PANIER attrape la quasi-totalite des cas ; le filet
+    // ci-dessous attrape le reste.
+    const dejaCreee = await this.prisma.order.findUnique({ where: { cartId } });
+    if (dejaCreee) {
+      this.logger.log(`Commande deja creee pour le panier ${cartId} — rien a faire`);
+      return dejaCreee;
+    }
+
     const publicOrderNumber = await this.generatePublicOrderNumber();
-    const dailyNumber = await this.numeroDuJour(
-      cart.event.venueId,
-      cart.event.venue?.timezone || 'Europe/Paris',
-    );
 
     // ─── Single transaction: cart→CONVERTED + Order + Items + Payment + Audit + Stock ───
     const order = await this.prisma.$transaction(async (tx) => {
+      // Le numero du jour est pris DANS la transaction : si la commande echoue,
+      // le numero revient au compteur. Hors transaction, un echec laisserait un
+      // trou dans la numerotation criee au comptoir.
+      const dailyNumber = await this.numeroDuJourTx(
+        tx,
+        cart.event.venueId,
+        cart.event.venue?.timezone || 'Europe/Paris',
+      );
       // 1. Mark cart converted
       await tx.cart.update({
         where: { id: cart.id },
@@ -332,6 +350,27 @@ export class OrdersService {
       }
 
       return createdOrder;
+    }).catch(async (e: unknown) => {
+      // `orders_cart_id_key` : l'autre evenement Stripe a gagne la course entre
+      // notre coup d'oeil et notre ecriture. La contrainte a fait son travail —
+      // une seule commande par panier — et il n'y a rien a reparer : on rend
+      // celle qui existe.
+      //
+      // Lever ici rendrait une 500 a Stripe, qui rejouerait l'evenement, pour
+      // aboutir au meme constat une minute plus tard. Un doublon empeche n'est
+      // pas une panne.
+      const cause = e as { code?: string; meta?: { target?: unknown } };
+      const surLePanier =
+        cause?.code === 'P2002' && JSON.stringify(cause.meta?.target ?? '').includes('cart');
+      if (!surLePanier) throw e;
+
+      const gagnante = await this.prisma.order.findUnique({ where: { cartId } });
+      if (!gagnante) throw e;
+      this.logger.log(
+        `Course gagnee par l'autre evenement Stripe sur le panier ${cartId} — ` +
+          `commande ${gagnante.publicOrderNumber} conservee`,
+      );
+      return gagnante;
     });
 
     this.logger.log(
@@ -999,6 +1038,31 @@ export class OrdersService {
    * l'argent est déjà encaissé, et un numéro d'affichage ne vaut pas une
    * commande perdue. La référence longue reste, et l'app retombe dessus.
    */
+  private async numeroDuJourTx(
+    tx: Prisma.TransactionClient,
+    venueId: string,
+    fuseau: string,
+  ): Promise<number | null> {
+    try {
+      const jour = jourDeService(new Date(), fuseau);
+      const [ligne] = await tx.$queryRaw<Array<{ last_number: number }>>`
+        INSERT INTO order_counters ("venue_id", "service_date", "last_number")
+        VALUES (${venueId}::uuid, ${jour}::date, 1)
+        ON CONFLICT ("venue_id", "service_date")
+        DO UPDATE SET "last_number" = order_counters."last_number" + 1
+        RETURNING "last_number"
+      `;
+      return ligne?.last_number ?? null;
+    } catch (e: unknown) {
+      this.logger.warn(
+        `Numéro du jour indisponible pour le lieu ${venueId} : ${
+          e instanceof Error ? e.message : e
+        }. La commande garde sa référence longue.`,
+      );
+      return null;
+    }
+  }
+
   private async numeroDuJour(venueId: string, fuseau: string): Promise<number | null> {
     try {
       const jour = jourDeService(new Date(), fuseau);
