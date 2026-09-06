@@ -25,7 +25,7 @@ Modules et à quoi ils servent :
 | `loyalty` | Fidélité : solde par organisation, registre immuable |
 | `live-activity` | Live Activity iOS : client APNs + webhook Flaix signé |
 | `bootstrap` | Reprise de l'accès principal (route inerte sans secret) |
-| `realtime` | Temps réel (Socket.IO) vers l'écran opérateur |
+| `realtime` | Temps réel (Socket.IO) vers l'écran opérateur. **Rejoindre un salon `supplier:` est VÉRIFIÉ** : membre du club, et son comptoir si le compte y est rattaché — sinon le temps réel serait une porte dérobée vers ce que l'API refuse (`isolation-buvettes.spec.ts`) |
 | `notifications` | Push Expo : par statut de commande + programmées |
 | `stats`, `backoffice` | Analytics club + KPIs super-admin. **Le CA HT se déduit du taux de TVA figé sur chaque ligne de commande** (5,5 / 10 / 20 %), jamais d'un taux global — voir `common/helpers/tva.ts` |
 | `feature-flags`, `app-settings` | Config sans redéploiement (CMS clé/valeur) |
@@ -39,6 +39,15 @@ ils créaient de vraies commandes sans qu'un centime ne bouge ;
 `operator-screens` côté serveur — le board est passé à trois colonnes fixes
 (ses tables subsistent, annotées dans le schéma) ; `order-groups` — il supposait
 que tous les convives installent l'app.
+
+**Le reçu d'une commande** (`orders/recu.service.ts` + `recu.controller.ts`) —
+rendu en HTML, pas en PDF : une page s'imprime et s'enregistre en PDF depuis
+n'importe quel navigateur, sans moteur de rendu serveur ni dépendance native.
+La route de lecture n'a **pas** de garde d'authentification (elle s'ouvre dans un
+navigateur, qui ne porte pas notre jeton) : l'accès repose sur un jeton signé de
+quinze minutes portant `usage: 'recu'` et l'identifiant de la commande. Les deux
+sont vérifiés — un jeton de session ne vaut pas laissez-passer, et le jeton
+d'une autre commande non plus.
 
 **Helpers transverses** (`backend/src/common/helpers/`) — chacun est la SEULE
 source de sa décision ; contourner l'un d'eux fait diverger deux écrans :
@@ -100,6 +109,11 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
 **À savoir sur les apps web :**
 - **`NEXT_PUBLIC_API_URL` est gravée dans chaque `vercel.json`.** Elle est inlinée à la compilation : absente ce jour-là, le repli `localhost` part en production et l'app appelle la machine du visiteur. Un filet console le signale.
 - **La TVA se saisit à DEUX endroits** : le wizard (colonne TVA du tableau produits) et la fiche buvette (pastille colorée cliquable sur chaque produit). `apps/admin/src/lib/tva.ts` reflète `backend/src/common/helpers/tva.ts` — **toute modification vaut pour les deux**. Une carte saisie avant le 01/09/2026 est entièrement à 10 %, bières comprises : elle se corrige par les pastilles.
+- **Le poste opérateur ne choisit PAS sa buvette.** Elle vient du compte
+  (`membership.supplierId`, rattaché dans le back-office → Équipe), et le serveur
+  l'impose : la réponse du tableau porte la buvette réellement appliquée, et
+  l'écran s'aligne dessus. Le sélecteur a existé — il permettait d'afficher un
+  comptoir et d'en recevoir un autre. Ne pas le réintroduire.
 - **`src/lib/coords.ts` existe en DOUBLE** — `apps/admin` et `apps/backoffice`. Pas de paquet d'utilitaires partagé dans le monorepo. Il convertit DMS ↔ décimal et répartit une paire collée. **Toute correction vaut pour les deux fichiers.**
 - **Remise à zéro et suppressions** vivent dans le back-office : `organizations/[id]/page.tsx` (vider un club) et `users/page.tsx` (supprimer un compte). Voir `REPRISE.md` pour ce qui est conservé.
 - **Le lieu s'édite depuis TROIS écrans** — back-office, page Organisation du dashboard manager, et wizard. Trois occasions de diverger : à resserrer.

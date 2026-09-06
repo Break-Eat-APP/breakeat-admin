@@ -15,51 +15,86 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-09-01 (TVA par produit, sélecteur de buvette, créneaux au fuseau du lieu)_
+_Dernière mise à jour : 2026-09-06 (parcours de paiement bouclé, cloisonnement des buvettes, reçu)_
 
-## 🔴 ÉTAT AU 29/08/2026 — LIRE D'ABORD
+## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
-**Le mode démo n'existe plus.** Toute commande passe par un vrai paiement Stripe
-(page hébergée). Conséquence directe : **l'app publiée sur le store et la build
-TestFlight actuelle ne peuvent plus commander** — elles n'appellent que
-`demo-checkout`, supprimé. Il faut livrer la build 8.
+**Le parcours de commande fonctionne de bout en bout**, vérifié en réel sur le
+web : panier → paiement Stripe → commande créée → visible dans « Mes commandes »
+ET sur le poste opérateur de la bonne buvette.
+
+Ce que ça a demandé, et qui explique l'état actuel :
+
+| Ce qui bloquait | Où c'était | Corrigé |
+|---|---|---|
+| Le stock refusait des commandes DÉJÀ PAYÉES | `orders.service` | 06/09 |
+| La clé Stripe appartenait au compte encaisseur | configuration | 06/09 |
+| Le retour de paiement atterrissait sur l'accueil | liens de l'app | 06/09 |
+| Le panier restait plein après paiement | app web | 06/09 |
+| Le poste filtrait sur une buvette périmée | poste opérateur | 06/09 |
 
 **Stripe est en mode TEST** (`sk_test_…`). Aucun paiement réel n'est encaissé.
-Le serveur l'annonce au démarrage : `Stripe en mode TEST — aucun paiement réel`.
+Le serveur l'annonce au démarrage, avec l'identifiant du compte plateforme :
 
-**Une buvette ne peut encaisser que si son compte Stripe Connect est actif.**
-Le bouton « Se connecter à Stripe » vit sur sa fiche dans le backoffice manager.
-Sans compte actif, la page de paiement refuse de s'ouvrir.
+```
+Stripe en mode TEST — aucun paiement réel ne sera encaissé.
+Stripe — compte PLATEFORME : acct_XXXX
+```
 
-**Le client Prisma est REGENERE au démarrage** (`railway.json`), pas seulement
-à la construction de l'image. Sans cela, un cache de build peut laisser un
-client généré sur un ANCIEN schéma face à une base déjà migrée : chaque requête
-échoue alors en `P2022 — la colonne n'existe pas`, le serveur répond « Internal
-server error », et rien ne dit que le coupable est le client. C'est arrivé le
-01/09 : commander et partager l'addition échouaient toutes deux, sans indice.
+Cette seconde ligne compte : le compte du club, affiché dans **Encaissement**,
+doit être DIFFÉRENT. Stripe refuse un virement d'un compte vers lui-même, et son
+refus ne dit pas lequel des deux est mal renseigné. La page Encaissement affiche
+les deux côte à côte.
 
-**Dette technique datée — Stripe « Accounts v1 ».** Notre code crée les comptes
-des buvettes avec `stripe.accounts.create()`, que Stripe ne recommande plus pour
-une nouvelle intégration : il faut avoir activé
-[Accounts v1 support](https://dashboard.stripe.com/settings/features/feat_accounts_v1_support)
-dans le tableau de bord, sinon la création est refusée.
+**Un compte Stripe par CLUB**, créé dans Encaissement. Le compte par buvette a
+existé (cas d'un exploitant tiers) : il est retiré, les colonnes restent en base
+annotées INERTES.
 
-Migrer vers `POST /v2/core/accounts` changerait la forme des appels ET le
-parcours d'inscription (les liens d'inscription actuels ne s'y appliquent pas),
-et demanderait de monter la bibliothèque Stripe (17 → 19+) avec la version d'API
-épinglée. À traiter comme un chantier à part entière, **jamais au milieu d'autre
-chose** : c'est le chemin du paiement.
+**Chaque opérateur tient UNE buvette**, rattachée dans le back-office → Équipe.
+Le poste ne permet plus d'en changer, et un compte non rattaché ne voit rien.
 
-**Non traité, et assumé** (voir `brain/ENGINEERING_MANUAL.md`, phases 24-25) :
-aucune limitation de débit sur les routes publiques ; Socket.IO sans adaptateur
-Redis, donc **une seule instance serveur** ; pool Prisma non réglé.
+**La build TestFlight est la 11.** Elle ne contient ni le reçu, ni le violet, ni
+le libellé « devant le point de retrait » : la 12 les apporte.
+
+## 🔎 MÉTHODE — À LIRE AVANT DE CHERCHER UN BUG
+
+**Devant un bug, on lit les journaux. On ne devine pas.**
+
+Le 06/09/2026, une panne « je paie et il ne se passe rien » a occupé la journée.
+Cinq hypothèses ont été poursuivies et corrigées à l'aveugle ; quatre étaient
+justes et utiles, **aucune ne réglait le problème signalé**. La cause tenait en
+une ligne dans Railway : `Stock row missing for product … during order creation`.
+
+| Symptôme | Où regarder |
+|---|---|
+| L'app affiche une erreur, ou rien ne se passe | **Railway** → Deployments → Logs |
+| Un paiement se comporte mal | **Stripe** → Développeurs → Webhooks → *Tentatives récentes* |
+| Un dashboard ne charge pas | **Vercel** → Logs du déploiement |
+| Un bouton ne réagit pas | **console du navigateur** (F12) |
+
+Deux pièges à connaître :
+
+- un **« 200 vert »** chez Stripe dit seulement que le serveur n'a pas planté,
+  pas qu'une commande existe. Le bloc « Événements reçus » de la page
+  Encaissement dit ce que NOUS avons reçu, et combien de paiements n'ont produit
+  aucune commande ;
+- une erreur affichée dans l'app porte une **`réf. xxxxxxxx`** : c'est la clé
+  pour retrouver la trace complète dans Railway.
+
+**Et vérifier le DÉPLOIEMENT avant d'annoncer « à tester ».** Un changement dans
+le dépôt n'est pas un changement chez le client. Le bundle web se contrôle en
+cherchant une chaîne distinctive dans le `.js` servi ; une route serveur en
+l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
 
 ## ⏭️ REPRISE IMMÉDIATE
 
 0. **`PUBLIC_API_URL` sur Railway** — `https://breakeat-admin-production.up.railway.app/api/v1`.
-   C'est l'adresse que Stripe rappelle au retour du paiement. Sans elle, le
-   client reste bloqué sur la page de Stripe après avoir payé, et l'app ne
-   revient jamais au premier plan. Le démarrage la réclame dans ses journaux.
+   Deux usages, tous deux invisibles tant qu'on teste sur le web :
+   le **retour de paiement de l'app installée** (Stripe n'accepte que du http(s),
+   un pont sur notre API rebondit vers `breakeat://`) et **le lien du reçu**.
+   Sur le web, le retour vise le site directement et ne dépend pas d'elle — d'où
+   un test web qui passe et une app native qui reste bloquée sur la page de
+   Stripe. Le démarrage la réclame dans ses journaux.
 
 1. **`APNS_BUNDLE_ID = com.shapper.breakeat`** sur Railway. La build TestFlight porte l'identifiant réel ; avec une autre valeur, le topic APNs ne correspond pas et **aucune Live Activity ne démarrera**.
 2. **`APNS_ENV = production`** sur Railway. Sans cette valeur, le serveur pousse
@@ -83,7 +118,7 @@ Redis, donc **une seule instance serveur** ; pool Prisma non réglé.
    clubs — ça se décide, ça ne se fait pas en passant. Tant qu'elles existent,
    elles ne coûtent rien.
 7. **Nettoyer les données de test** du wizard et de « Démo Spartiates » : événements d'abord, puis points de retrait, puis comptes.
-8. **Régler la TVA des produits déjà en ligne.** Toute carte saisie avant le
+8. **Régler la TVA des produits déjà en ligne** — toujours à faire. Toute carte saisie avant le
    01/09/2026 est à **10 %**, bières comprises : c'était le seul taux que
    l'application connaissait. Les taux de la restauration sont trois — 5,5 %
    (à emporter, produit emballé), 10 % (consommation immédiate), 20 % (alcools
@@ -92,6 +127,22 @@ Redis, donc **une seule instance serveur** ; pool Prisma non réglé.
    page Comptabilité surévalue le CA HT et sous-évalue la TVA collectée. Les
    commandes DÉJÀ passées gardent leur taux d'origine — c'est voulu : on ne
    réécrit pas une déclaration déposée.
+
+9. **Rattacher chaque compte opérateur à SA buvette** — back-office → **Équipe**.
+   C'est désormais la seule chose qui détermine ce qu'un poste affiche : le
+   sélecteur a été retiré (il permettait d'afficher un comptoir et d'en recevoir
+   un autre, le serveur imposant de toute façon celui du compte). Un compte non
+   rattaché ne voit rien, et l'écran le dit. **À faire avant d'ouvrir un lieu à
+   plusieurs buvettes.**
+
+10. **Supprimer la commande `DEMO-MTBUTM82`** et les autres restes du mode démo,
+    qui traînent encore dans « Mes commandes » de certains comptes.
+
+11. **Nettoyer les comptes Stripe connectés inutiles.** Il en subsiste plusieurs
+    portant le même nom (« Buvette Nord » en double), créés lors d'inscriptions
+    reprises. Un seul reçoit l'argent, celui affiché dans **Encaissement** ;
+    chercher un paiement dans un autre fait conclure à tort qu'il n'a pas été
+    encaissé. Les renommer suffit.
 
 ## 🧱 Montée Expo SDK 53 → 57 (25/08)
 

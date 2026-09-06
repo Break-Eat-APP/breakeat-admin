@@ -4588,3 +4588,161 @@ compte : sans ce suivi, une restriction Stripe se serait manifestee par des
 paiements refuses, sans explication nulle part.
 
 ---
+
+
+## Phase 29 — La journée où une commande payée n'arrivait nulle part (06/09/2026)
+
+Une seule panne, signalée en une phrase — « je paie et il ne se passe rien » —
+et une journée entière pour l'atteindre. Elle mérite d'être racontée en entier,
+parce que **ce qui a coûté cher n'est pas le défaut, c'est la méthode**.
+
+### Le défaut, en une ligne
+
+```
+Webhook handler error for payment_intent.succeeded
+Stock row missing for product 7c22cdb2-… during order creation
+```
+
+Un produit sans ligne de stock faisait échouer la création de commande. Or ce
+code s'exécute **après le débit** : le webhook arrive une fois l'argent pris.
+Lever une exception ne rend pas l'argent — elle supprime seulement la commande.
+Le client payait, rien n'arrivait en cuisine, aucune trace de son attente. Et
+Stripe rejouait le webhook toutes les minutes, échouant à l'identique.
+
+Un produit sans ligne de stock n'est même pas une anomalie : c'est l'état normal
+d'un club qui ne compte pas ses articles.
+
+**La règle qui en sort, et qui vaut au-delà du stock :** *rien, après
+l'encaissement, ne peut refuser la commande.* Le refus a sa place AVANT le
+règlement — il y est déjà, à l'ajout au panier et au départ du paiement. Passé
+le débit, un contrôle ne refuse plus : il constate. Le stock manquant est ignoré,
+le stock dépassé met l'étagère à zéro et sort de la carte, et la commande arrive.
+
+### Ce qui a coûté la journée
+
+Avant d'atteindre cette ligne de log, cinq hypothèses ont été poursuivies et
+corrigées **à l'aveugle**, sur la seule foi des symptômes :
+
+| Hypothèse | Verdict |
+|---|---|
+| Mauvais compte Stripe relié | vraie, mais pas la cause |
+| Événement webhook non coché | fausse — il était livré |
+| Panier non vidé après paiement | vraie, mais pas la cause |
+| Retour web atterrissant sur l'accueil | vraie, mais pas la cause |
+| Garde-fou du PaymentIntent | vraie, et corrigée la veille |
+
+Quatre de ces cinq corrections étaient justes et utiles. **Aucune ne réglait le
+problème signalé.** Dix secondes de journal valaient mieux que six heures de
+déduction.
+
+**La règle posée par le client, et à tenir :** devant un bug, demander le journal
+AVANT d'ouvrir un fichier. Railway pour les exceptions serveur, Stripe →
+Webhooks → *Tentatives récentes* pour les paiements, Vercel pour les
+déploiements, la console du navigateur pour le client. Voir la mémoire
+`debug-par-les-logs`.
+
+**Corollaire appris le même jour :** vérifier le DÉPLOIEMENT avant d'annoncer
+« à tester ». Un bouton livré dans le dépôt n'est pas un bouton livré au client.
+Le bundle web se contrôle sans rien demander (`curl` la page, chercher une
+chaîne distinctive dans le `.js`, lire son `Last-Modified`) ; une route serveur
+se contrôle en l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
+
+### Le piège de fond : « vert » ne veut pas dire « fait »
+
+Le tableau de bord Stripe affichait des livraisons **vertes, en 200**, alors
+qu'aucune commande n'était créée. C'est logique : notre serveur répond 200 dès
+qu'il a *traité* l'événement, y compris quand il l'ignore légitimement. Deux
+tableaux disaient des choses différentes, et il fallait basculer de l'un à
+l'autre en se fiant à sa mémoire.
+
+**La réponse a été d'instrumenter l'application plutôt que de mieux deviner.**
+La page Encaissement porte désormais deux blocs :
+
+- **les deux comptes en présence** — celui qui appelle Stripe et celui qui
+  encaisse, côte à côte, avec le mode de la clé. Ils doivent différer ; Stripe
+  refuse un virement d'un compte vers lui-même, et son refus ne dit pas lequel
+  des deux est mal renseigné ;
+- **les événements réellement REÇUS** par le serveur, et le nombre de paiements
+  n'ayant produit aucune commande. Un chiffre non nul est une anomalie visible.
+
+Le poste opérateur dit de même, quand son tableau est vide, **sur quoi il
+filtre** : « Aucune commande » est indiscernable de « mauvaise buvette » ou
+« mauvais événement ».
+
+Règle générale : **quand un diagnostic manque dans le produit, l'ajouter est
+plus rentable que de deviner.** Ces écrans coûtent une heure et suppriment la
+navette pour toujours.
+
+---
+
+## Phase 30 — Un poste, une buvette (06/09/2026)
+
+En vue de quatre comptoirs dans un même lieu. Trois chemins mènent une commande
+à un poste ; ils doivent répondre la même chose, et qu'un seul s'écarte, le
+cloisonnement ne tient plus.
+
+**Ce qui était déjà juste.** La liste REST a toujours été filtrée côté serveur
+par buvette : un comptoir n'a jamais reçu la liste d'un autre. Le client choisit
+son stand, `cart.supplierId` devient `order.supplierId`, et le tableau interroge
+`where { eventId, supplierId }`.
+
+**Le vrai trou : le temps réel.** Rejoindre un salon ne vérifiait rien. Le
+commentaire d'origine s'en expliquait — « les noms de salon sont des UUID et ne
+sont jamais publiés ». C'est **faux** : la route publique d'un événement liste
+ses buvettes AVEC leur identifiant, puisque le client doit choisir son stand.
+N'importe quel équipier connecté pouvait donc écouter le flux du comptoir voisin
+et voir ses commandes arriver. Avec un seul comptoir, invisible ; avec quatre,
+une confusion quotidienne autant qu'une fuite.
+
+L'accès suit désormais la règle du tableau : membre du club, et son comptoir si
+le compte y est rattaché. Un responsable non épinglé garde la vue sur les
+quatre. Sinon le temps réel resterait une porte dérobée vers ce que l'API refuse.
+
+**Le sélecteur de buvette, retiré.** Il ne pouvait pas fonctionner : le serveur
+impose de toute façon la buvette du COMPTE (`membership.supplierId` l'emporte
+sur la demande). Le poste pouvait donc afficher un comptoir et en recevoir un
+autre — deux vérités à l'écran, dont une fausse. C'est ce qui a fait chercher
+pendant des heures une commande qui arrivait ailleurs.
+
+La buvette vient du compte, rattaché dans le back-office. Le souvenir du
+navigateur est supprimé, et effacé au montage : il survivait aux changements
+d'événement et aux buvettes recréées, et faisait interroger un comptoir disparu.
+
+**Le serveur dit ce qu'il applique.** La réponse du tableau porte la buvette
+réellement retenue, et l'écran s'aligne dessus. Un écran qui annonce un comptoir
+et en affiche un autre est pire qu'un écran vide.
+
+`isolation-buvettes.spec.ts` fige les quatre cas : le bon comptoir passe, le
+voisin est refusé, le responsable non épinglé voit tout, une buvette d'un autre
+club est refusée.
+
+---
+
+## Phase 31 — Le reçu (06/09/2026)
+
+Un justificatif téléchargeable sur chaque commande, disponible à tout moment —
+y compris longtemps après le service, quand la commande a quitté les écrans de
+suivi.
+
+**HTML, pas PDF.** Une page s'imprime et s'enregistre en PDF depuis n'importe
+quel navigateur, sur téléphone comme sur ordinateur, sans embarquer de moteur de
+rendu côté serveur ni de dépendance native côté application — donc sans nouvelle
+build pour en profiter. Le client obtient le même document partout.
+
+**L'accès, et pourquoi il ne réutilise pas le jeton de session.** Le reçu s'ouvre
+dans un navigateur, qui ne porte pas notre jeton : l'accès doit voyager dans
+l'adresse. Un jeton de session y ouvrirait TOUT le compte, et resterait dans
+l'historique du navigateur et les journaux du serveur. La route de fabrication
+(authentifiée, réservée au propriétaire) rend donc un jeton **signé, valable
+quinze minutes, portant `usage: 'recu'` et l'identifiant de la commande**.
+
+Le contrôleur vérifie les deux : l'usage — un jeton de session ne vaut pas
+laissez-passer même valide par ailleurs — et l'identifiant, qui doit être celui
+de l'adresse, sinon il suffirait d'échanger un numéro pour lire le ticket d'un
+autre client. Cinq tests gardent cette porte.
+
+Le contenu est celui d'un justificatif : buvette, club, lignes, remise fidélité,
+**TVA taux par taux**, total, date. Rien de plus — ni adresse du client, ni
+moyen de paiement.
+
+---

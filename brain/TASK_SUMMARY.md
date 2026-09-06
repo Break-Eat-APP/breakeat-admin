@@ -2381,3 +2381,55 @@ régler leur taux — ils sont tous à 10 % par héritage. Voir `REPRISE.md`, po
 
 **Vérifié.** 484 tests, `tsc` sur les quatre paquets, `lint` sans erreur,
 `next build` vert sur admin et back-office.
+
+
+---
+
+## Session 2026-09-06 — Le parcours de paiement, bouclé
+
+**Le point de départ.** « Je paie et il ne se passe rien. » Une journée pour
+l'atteindre, dix secondes de journal Railway pour la comprendre.
+
+### La cause
+
+`Stock row missing for product … during order creation`. Un produit sans ligne
+de stock faisait échouer la création de commande — après le débit. Lever une
+exception ne rend pas l'argent : elle supprime la commande. Client débité, rien
+en cuisine, aucune trace.
+
+**Règle posée :** rien, après l'encaissement, ne peut refuser la commande. Le
+refus a sa place avant le règlement, où il est déjà.
+
+### Ce qui a été corrigé en chemin (tout utile, rien de décisif)
+
+- la clé Stripe appartenait au compte qui devait encaisser → message français
+  explicite, et le compte plateforme annoncé au démarrage ;
+- deux écrans proposaient de relier Stripe sans dire lequel encaissait → un seul
+  compte, celui du club, et un bloc qui affiche les deux comptes en présence ;
+- le retour de paiement web atterrissait sur l'accueil → `/commandes` et
+  `/panier` mènent aux bons écrans, et le panier se vide ;
+- `checkout.session.completed` crée aussi la commande → une case à cocher chez
+  Stripe ne décide plus si une commande existe ;
+- `/auth/refresh` rendait une 500 sur deux appels simultanés → 401 propre.
+
+### Cloisonnement des buvettes
+
+Le vrai trou n'était pas le sélecteur mais le **temps réel** : rejoindre un salon
+ne vérifiait rien, et les identifiants de buvette sont publics. Un équipier
+pouvait écouter le flux du voisin. Fermé, et couvert par quatre tests.
+
+Le sélecteur est retiré : le serveur imposant la buvette du compte, il permettait
+d'afficher un comptoir et d'en recevoir un autre.
+
+### Livré aussi
+
+Reçu téléchargeable (HTML imprimable, TVA taux par taux, lien signé 15 min),
+créneaux du jour seulement sur le poste, flèches « retour » qui reviennent en
+arrière au lieu d'ouvrir la caméra, carte de commande redessinée.
+
+### Méthode
+
+**Les journaux avant les hypothèses**, et **vérifier le déploiement avant
+d'annoncer**. Les deux sont dans `REPRISE.md` et en mémoire.
+
+**511 tests au vert.** Build 12 à pousser.
