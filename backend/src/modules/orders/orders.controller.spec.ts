@@ -6,6 +6,8 @@ import { OrdersService } from './orders.service';
 import { PrismaService } from '../../database/prisma.service';
 import { GlobalRole, OrgRole } from '../../common/enums/role.enum';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 /**
  * Le board applique l'épinglage à la buvette EN LECTURE depuis la phase 12.9.
@@ -43,6 +45,9 @@ describe('OrdersController — qui peut faire avancer une commande', () => {
       providers: [
         { provide: PrismaService, useValue: prisma },
         { provide: OrdersService, useValue: orders },
+        // Le controleur signe des liens de recu a duree limitee.
+        { provide: JwtService, useValue: { signAsync: jest.fn().mockResolvedValue('jeton') } },
+        { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('https://api') } },
       ],
     }).compile();
 

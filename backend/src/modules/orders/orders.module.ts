@@ -4,6 +4,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { OrdersService } from './orders.service';
 import { OrdersController } from './orders.controller';
 import { PublicOrdersController } from './public-orders.controller';
+import { RecuController } from './recu.controller';
+import { RecuService } from './recu.service';
 import { OrderStateMachineService } from './order-state-machine.service';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { SlotsModule } from '../slots/slots.module';
@@ -31,8 +33,8 @@ import { LiveActivityModule } from '../live-activity/live-activity.module';
     LoyaltyModule,
     LiveActivityModule,
   ],
-  controllers: [OrdersController, PublicOrdersController],
-  providers: [OrdersService, OrderStateMachineService],
+  controllers: [OrdersController, PublicOrdersController, RecuController],
+  providers: [OrdersService, OrderStateMachineService, RecuService],
   exports: [OrdersService, OrderStateMachineService],
 })
 export class OrdersModule {}

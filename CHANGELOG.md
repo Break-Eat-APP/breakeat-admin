@@ -5,6 +5,61 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.61.0] — 2026-09-06 — Reçu téléchargeable, et un poste par buvette
+
+### Le reçu
+Un bouton « Reçu » sur chaque commande, disponible **à tout moment** — y compris
+longtemps après le service. C'est un justificatif : il sert souvent une fois la
+commande sortie des écrans de suivi, pour une note de frais ou une comptabilité.
+
+Rendu en **HTML**, pas en PDF. Une page s'imprime et s'enregistre en PDF depuis
+n'importe quel navigateur, sur téléphone comme sur ordinateur, sans embarquer de
+moteur de rendu côté serveur ni de dépendance native côté application. Le client
+obtient le même document partout, et le bouton « Enregistrer en PDF / Imprimer »
+disparaît à l'impression.
+
+Il porte ce qu'un justificatif doit porter : la buvette, le club, les lignes,
+la remise fidélité s'il y en a une, le **détail TVA taux par taux**, le total et
+la date. Rien de plus — ni adresse du client, ni moyen de paiement.
+
+**L'accès.** Le reçu s'ouvre dans un navigateur, qui ne porte pas le jeton de
+session : l'accès voyage donc dans l'adresse. `POST /orders/:id/recu/lien`
+(authentifié, réservé au propriétaire) fabrique un jeton **signé, valable quinze
+minutes, n'ouvrant QUE ce reçu**. Le jeton de session, lui, ouvrirait tout le
+compte et resterait dans l'historique du navigateur et les journaux du serveur.
+
+Cinq tests gardent cette porte : sans jeton, jeton expiré, jeton d'une AUTRE
+commande (sinon il suffirait de changer un numéro dans l'URL), et jeton de
+session — qui ne vaut pas laissez-passer même s'il est valide par ailleurs.
+
+### Un poste, une buvette
+Le sélecteur de buvette du poste opérateur est retiré. Il ne pouvait pas
+fonctionner : le serveur impose de toute façon la buvette du COMPTE
+(`membership.supplierId` l'emporte), si bien qu'un poste pouvait afficher un
+comptoir et recevoir les commandes d'un autre.
+
+La buvette vient du compte, rattaché dans le back-office. Un compte non rattaché
+ne voit rien, et on lui dit pourquoi. Le souvenir du navigateur est supprimé et
+effacé au montage : il survivait aux changements d'événement et aux buvettes
+recréées, et faisait interroger un comptoir disparu.
+
+### Cloisonnement des comptoirs, verrouillé
+Rejoindre un salon temps réel ne vérifiait rien — le commentaire d'origine
+invoquait le secret des identifiants, alors que la route publique d'un événement
+les publie tous. N'importe quel équipier pouvait écouter le flux du voisin.
+L'accès suit maintenant la règle du tableau : membre du club, et son comptoir
+s'il y est rattaché. `isolation-buvettes.spec.ts` fige les quatre cas.
+
+### Divers
+- Les flèches « retour » de trois écrans ouvraient le **scanner QR**
+- « Je suis arrivé » → « Je suis arrivé devant le point de retrait »
+- « Nos lieux » retiré du profil
+- Carte de commande : buvette en tête, traits de progression arrondis
+
+511 tests au vert.
+
+---
+
 ## [0.60.0] — 2026-09-02 — Un stade, un compte Stripe
 
 Le back-office proposait DEUX inscriptions Stripe : une par buvette

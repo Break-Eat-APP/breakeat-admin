@@ -414,6 +414,17 @@ export interface CommandeDuPanier {
   } | null;
 }
 
+/**
+ * Le lien du reçu — signé, valable quinze minutes.
+ *
+ * Le reçu s'ouvre dans un navigateur, qui ne porte pas notre jeton de session :
+ * l'accès voyage donc dans l'adresse. Ce jeton-là n'ouvre QUE ce reçu, à la
+ * différence du jeton de session, qui ouvrirait tout le compte et resterait
+ * dans l'historique.
+ */
+export const apiLienRecu = (orderId: string) =>
+  req<{ url: string }>(`/orders/${orderId}/recu/lien`, { method: 'POST' });
+
 export const apiCommandeDuPanier = (cartId: string) =>
   req<CommandeDuPanier>(`/carts/${cartId}/commande`);
 

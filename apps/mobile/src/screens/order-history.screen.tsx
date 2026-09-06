@@ -5,6 +5,7 @@ import {
   AppState,
   DeviceEventEmitter,
   FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -16,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
-import { apiGetMyOrders, apiMarkArrived, formatPrice, formatTime, type Order } from '@lib/api/mobile-api';
+import { apiLienRecu, apiGetMyOrders, apiMarkArrived, formatPrice, formatTime, type Order } from '@lib/api/mobile-api';
 import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
@@ -25,6 +26,7 @@ import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { endTrackingForFinishedOrders } from '@lib/live-activity-tracking';
 import { EVT_COMMANDES_A_RECHARGER } from '@lib/hooks/use-deep-links';
 import { useCartStore } from '@store/cart.store';
+import * as WebBrowser from 'expo-web-browser';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -321,6 +323,35 @@ function LiveBadge() {
   );
 }
 
+/**
+ * Ouvre le reçu d'une commande.
+ *
+ * Le serveur le rend en HTML plutôt qu'en PDF : une page s'imprime et
+ * s'enregistre en PDF depuis n'importe quel navigateur, sur téléphone comme sur
+ * ordinateur, sans embarquer de moteur de rendu côté serveur ni de dépendance
+ * native côté application. Le client obtient le même document partout.
+ *
+ * Le lien est signé et vaut quinze minutes : on le demande donc au moment du
+ * clic, jamais à l'avance.
+ */
+async function ouvrirRecu(orderId: string, setOccupe: (v: boolean) => void) {
+  setOccupe(true);
+  try {
+    const { url } = await apiLienRecu(orderId);
+    if (Platform.OS === 'web') {
+      const g = globalThis as { open?: (u: string, c?: string) => unknown };
+      g.open?.(url, '_blank');
+    } else {
+      await WebBrowser.openBrowserAsync(url);
+    }
+  } catch (e: unknown) {
+    console.warn('Reçu indisponible:', e);
+    showAlert('Reçu indisponible', 'Réessaie dans un instant.');
+  } finally {
+    setOccupe(false);
+  }
+}
+
 function OrderCard({
   order,
   onPress,
@@ -334,6 +365,7 @@ function OrderCard({
 }) {
   const cfg = ui(order.status);
   const live = isLive(order.status);
+  const [recuEnCours, setRecuEnCours] = useState(false);
   const stepIndex = STEPS.findIndex((s) => s.phase === cfg.phase);
   const arrived = Boolean(order.customerArrivedAt);
 
@@ -414,6 +446,22 @@ function OrderCard({
           <Text style={styles.planBtnText}>Y aller — voir le plan</Text>
         </Pressable>
       ) : null}
+
+      {/* Le reçu — disponible à tout moment, y compris longtemps après.
+          C'est un justificatif : il sert souvent APRÈS le service, pour une
+          note de frais ou une comptabilité, quand la commande a quitté les
+          écrans de suivi. */}
+      <Pressable
+        style={({ pressed }) => [styles.recuBtn, pressed && styles.pressed]}
+        onPress={() => void ouvrirRecu(order.id, setRecuEnCours)}
+        disabled={recuEnCours}
+        hitSlop={4}
+      >
+        <Ionicons name="receipt-outline" size={16} color={THEME.inkSoft} />
+        <Text style={styles.recuBtnText}>
+          {recuEnCours ? 'Ouverture…' : 'Reçu'}
+        </Text>
+      </Pressable>
 
       {/* « Je suis arrivé » — uniquement tant que la commande est en cours. */}
       {live &&
@@ -565,7 +613,19 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.orange, borderRadius: THEME.radius.pill,
     paddingVertical: 11, marginTop: 2,
   },
-  arrivedBtnText: { color: '#fff', fontSize: 14, fontFamily: HEAD.bold },
+  arrivedBtnText: { color: '#fff', fontSize: 13.5, fontFamily: HEAD.bold, textAlign: 'center' },
+  recuBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 10,
+    paddingVertical: 11,
+    borderRadius: THEME.radius.pill,
+    borderWidth: 1,
+    borderColor: THEME.border,
+  },
+  recuBtnText: { color: THEME.inkSoft, fontSize: 13.5, fontFamily: HEAD.semibold },
   arrivedBadge: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
     backgroundColor: GREEN_TINT, borderRadius: THEME.radius.pill,

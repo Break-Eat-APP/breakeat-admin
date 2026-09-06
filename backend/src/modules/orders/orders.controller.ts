@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  HttpCode,
+  HttpStatus,
   ForbiddenException,
   Get,
   NotFoundException,
@@ -20,6 +22,8 @@ import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { OrdersService } from './orders.service';
 import { TransitionOrderDto } from './dto/transition-order.dto';
 import { AssignSlotDto } from './dto/assign-slot.dto';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 
 /**
  * OrdersController
@@ -63,6 +67,8 @@ export class OrdersController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordersService: OrdersService,
+    private readonly jwt: JwtService,
+    private readonly config: ConfigService,
   ) {}
 
   // ─── Customer ────────────────────────────────────────────────
@@ -117,6 +123,38 @@ export class OrdersController {
       throw new ForbiddenException('You do not own this order');
     }
     return this.ordersService.findAuditTrail(id);
+  }
+
+  /**
+   * POST /api/v1/orders/:id/recu/lien
+   *
+   * Fabrique un lien de recu a duree limitee. Le reçu s'ouvre dans un
+   * navigateur, qui ne porte pas notre jeton de session : il faut donc un
+   * laissez-passer qui voyage dans l'adresse. Celui-ci est signe, vaut quinze
+   * minutes, et n'ouvre QUE ce recu -- a la difference du jeton de session,
+   * qui ouvrirait tout le compte et resterait dans l'historique du navigateur.
+   */
+  @Post(':id/recu/lien')
+  @HttpCode(HttpStatus.OK)
+  async lienRecu(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+  ): Promise<{ url: string }> {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+      select: { userId: true },
+    });
+    if (!order) throw new NotFoundException('Commande introuvable');
+    if (order.userId !== user.sub) {
+      throw new ForbiddenException('Cette commande n’est pas la vôtre');
+    }
+
+    const jeton = await this.jwt.signAsync(
+      { orderId: id, usage: 'recu' },
+      { secret: this.config.get<string>('app.jwt.secret'), expiresIn: '15m' },
+    );
+    const base = (this.config.get<string>('app.publicApiUrl') ?? '').replace(/\/+$/, '');
+    return { url: `${base}/orders/${id}/recu?jeton=${jeton}` };
   }
 
   // ─── Operator dashboard snapshot ─────────────────────────────
