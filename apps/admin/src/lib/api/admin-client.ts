@@ -580,6 +580,17 @@ export interface DiagnosticStripe {
   verdict: 'OK' | 'MEME_COMPTE' | 'CLUB_NON_RELIE' | 'CLE_INVALIDE';
 }
 
+/** Ce que le serveur a RECU de Stripe — pas ce que Stripe dit avoir envoyé. */
+export interface JournalWebhooks {
+  evenements: Array<{ id: string; type: string; recuLe: string; traite: boolean }>;
+  paiementsAvecCommande: number;
+  paiementsSansCommande: number;
+}
+
+export async function apiOrgStripeEvenements(orgId: string): Promise<JournalWebhooks> {
+  return req('GET', `/organizations/${orgId}/stripe/evenements`);
+}
+
 export async function apiOrgStripeDiagnostic(orgId: string): Promise<DiagnosticStripe> {
   return req('GET', `/organizations/${orgId}/stripe/diagnostic`);
 }

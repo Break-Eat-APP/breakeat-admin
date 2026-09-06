@@ -108,6 +108,60 @@ export class OrganizationsService {
   }
 
   /**
+   * Les derniers evenements Stripe RECUS par le serveur.
+   *
+   * Le tableau de bord de Stripe montre ce qu'il a ENVOYE et le code de
+   * reponse. Un « 200 vert » y signifie seulement que le serveur a repondu sans
+   * erreur -- pas qu'une commande est nee : un evenement peut etre recu, traite,
+   * et volontairement ignore. Comparer les deux listes demandait jusqu'ici de
+   * faire l'aller-retour entre deux ecrans, en se fiant a la memoire.
+   *
+   * Ce journal dit ce que NOUS avons recu, quand, et si le traitement est alle
+   * au bout. Pour un paiement, il dit surtout si une commande porte bien cet
+   * identifiant de paiement -- la seule question qui compte.
+   *
+   * Volontairement pauvre : type, horodatage, etat. Aucune charge utile, aucun
+   * montant, aucune donnee de client. Un journal de diagnostic n'a pas a
+   * recopier le contenu des paiements.
+   */
+  async journalWebhooks(organizationId: string, userId: string) {
+    await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
+
+    const evenements = await this.prisma.webhookEvent.findMany({
+      orderBy: { receivedAt: 'desc' },
+      take: 12,
+      select: {
+        stripeEventId: true,
+        eventType: true,
+        receivedAt: true,
+        processedAt: true,
+      },
+    });
+
+    // Pour un paiement, l'identifiant d'intention est ce qui relie l'evenement
+    // a une commande. On le lit depuis la ligne de paiement, jamais depuis la
+    // charge utile brute.
+    const paiements = await this.prisma.payment.findMany({
+      where: { createdAt: { gte: new Date(Date.now() - 7 * 24 * 3600 * 1000) } },
+      select: { stripePaymentIntentId: true, orderId: true },
+    });
+    const commandeParIntention = new Map(
+      paiements.map((p) => [p.stripePaymentIntentId, p.orderId]),
+    );
+
+    return {
+      evenements: evenements.map((e) => ({
+        id: e.stripeEventId,
+        type: e.eventType,
+        recuLe: e.receivedAt.toISOString(),
+        traite: e.processedAt !== null,
+      })),
+      paiementsAvecCommande: [...commandeParIntention.entries()].filter(([, o]) => o).length,
+      paiementsSansCommande: [...commandeParIntention.entries()].filter(([, o]) => !o).length,
+    };
+  }
+
+  /**
    * Les deux comptes en presence, cote a cote.
    *
    * Un paiement Connect met en jeu DEUX comptes : celui qui appelle Stripe

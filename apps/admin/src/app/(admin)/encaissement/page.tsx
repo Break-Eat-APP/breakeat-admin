@@ -6,9 +6,11 @@ import {
   apiOrgStripeOnboardingLink,
   apiOrgStripeDelier,
   apiOrgStripeDiagnostic,
+  apiOrgStripeEvenements,
   apiOrgStripeStatus,
   getOrgId,
   type DiagnosticStripe,
+  type JournalWebhooks,
   type Organization,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
@@ -146,6 +148,101 @@ function BlocDiagnostic({ diag }: { diag: DiagnosticStripe }) {
   );
 }
 
+/**
+ * Ce que le serveur a RECU de Stripe.
+ *
+ * Le tableau de bord de Stripe montre ce qu'il a ENVOYE, et le code de reponse.
+ * Un « 200 vert » y signifie que le serveur a repondu sans erreur -- pas qu'une
+ * commande est nee : un evenement peut etre recu, traite, et volontairement
+ * ignore. Les deux listes se lisent donc ensemble, et jusqu'ici cela demandait
+ * de basculer entre deux sites en se fiant a sa memoire.
+ *
+ * `payment_intent.succeeded` est la ligne qui compte : c'est elle, et elle
+ * seule, qui cree la commande.
+ */
+function BlocJournal({ journal }: { journal: JournalWebhooks }) {
+  const paiements = journal.evenements.filter((e) => e.type === 'payment_intent.succeeded');
+  const heure = (iso: string) =>
+    new Date(iso).toLocaleString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        padding: '14px 16px',
+        borderRadius: 10,
+        background: BRAND.bgSubtle,
+        border: `1px solid ${BRAND.border}`,
+      }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.ink, marginBottom: 4 }}>
+        Événements reçus de Stripe
+      </div>
+      <div style={{ fontSize: 12, color: BRAND.grey, marginBottom: 10, lineHeight: 1.5 }}>
+        Ce que <strong>notre serveur</strong> a reçu — à ne pas confondre avec ce que Stripe dit
+        avoir envoyé. Seul <code>payment_intent.succeeded</code> crée une commande.
+      </div>
+
+      {journal.evenements.length === 0 ? (
+        <div style={{ fontSize: 13, color: '#991b1b' }}>
+          Aucun événement reçu. Stripe n’a jamais appelé ce serveur : vérifiez l’URL du point de
+          terminaison, et qu’il vit bien dans le compte de la plateforme.
+        </div>
+      ) : (
+        <>
+          {paiements.length === 0 && (
+            <div style={{ fontSize: 12.5, color: '#991b1b', marginBottom: 8, lineHeight: 1.5 }}>
+              Aucun <code>payment_intent.succeeded</code> parmi les derniers événements — c’est
+              pourtant le seul qui crée une commande. Ajoutez-le aux événements écoutés sur votre
+              point de terminaison Stripe.
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {journal.evenements.map((e) => {
+              const paiement = e.type === 'payment_intent.succeeded';
+              return (
+                <div
+                  key={e.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    fontSize: 12.5,
+                    color: paiement ? BRAND.ink : BRAND.grey,
+                    fontWeight: paiement ? 700 : 400,
+                  }}
+                >
+                  <span style={{ color: e.traite ? '#059669' : '#dc2626', width: 14 }}>
+                    {e.traite ? '✓' : '✕'}
+                  </span>
+                  <span style={{ fontFamily: 'monospace', flex: 1 }}>{e.type}</span>
+                  <span>{heure(e.recuLe)}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ fontSize: 12.5, color: BRAND.inkSoft, marginTop: 10, lineHeight: 1.5 }}>
+            Paiements des 7 derniers jours ayant produit une commande :{' '}
+            <strong>{journal.paiementsAvecCommande}</strong>
+            {journal.paiementsSansCommande > 0 && (
+              <>
+                {' '}— <strong style={{ color: '#991b1b' }}>{journal.paiementsSansCommande}</strong>{' '}
+                encaissé(s) sans commande
+              </>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function EncaissementPage() {
   const orgId = getOrgId();
   const [org, setOrg] = useState<Organization | null>(null);
@@ -153,6 +250,7 @@ export default function EncaissementPage() {
   const [occupe, setOccupe] = useState(false);
   const [message, setMessage] = useState('');
   const [diag, setDiag] = useState<DiagnosticStripe | null>(null);
+  const [journal, setJournal] = useState<JournalWebhooks | null>(null);
 
   const charger = useCallback(async () => {
     try {
@@ -160,6 +258,7 @@ export default function EncaissementPage() {
       // Le diagnostic ne doit JAMAIS empêcher la page de s'afficher : c'est un
       // outil de dépannage, pas une dépendance.
       setDiag(await apiOrgStripeDiagnostic(orgId).catch(() => null));
+      setJournal(await apiOrgStripeEvenements(orgId).catch(() => null));
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Erreur');
     } finally {
@@ -386,6 +485,7 @@ export default function EncaissementPage() {
         </div>
 
         {diag && <BlocDiagnostic diag={diag} />}
+        {journal && <BlocJournal journal={journal} />}
 
         <p style={{ color: BRAND.grey, fontSize: 12.5, margin: '16px 0 0', lineHeight: 1.6 }}>
           L’inscription s’ouvre sur le site de Stripe : vous pouvez vous y connecter avec un compte

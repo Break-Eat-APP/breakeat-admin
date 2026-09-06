@@ -84,6 +84,17 @@ export class OrganizationsController {
   }
 
   /**
+   * GET /api/v1/organizations/:id/stripe/evenements
+   *
+   * Ce que le serveur a RECU de Stripe, et si le traitement est alle au bout.
+   * Le tableau de bord de Stripe, lui, ne montre que ce qu'il a envoye.
+   */
+  @Get(':id/stripe/evenements')
+  journalWebhooks(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
+    return this.organizationsService.journalWebhooks(id, user.sub);
+  }
+
+  /**
    * GET /api/v1/organizations/:id/stripe/diagnostic
    *
    * Le compte qui APPELLE Stripe et le compte qui ENCAISSE, cote a cote. Ils
