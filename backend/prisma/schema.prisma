@@ -467,6 +467,12 @@ model Supplier {
   isExternal           Boolean             @default(false) @map("is_external")
   /// Code de parrainage unique — partagé à l'exploitant externe pour le rattacher au club.
   referralCode         String?             @unique @map("referral_code")
+  /// Image de la buvette, montree au client au moment de choisir son stand.
+  ///
+  /// Une URL, comme le logo du club et les photos de produits : le projet n'a
+  /// pas de depot de fichier, et le stockage n'est pas branche. Le club colle
+  /// donc un lien. Vide, l'app retombe sur l'initiale du nom.
+  imageUrl             String?             @map("image_url")
   /// ─── INERTES depuis le 02/09/2026 — NE PLUS LIRE ───────────────────────
   /// Une buvette n'a plus de compte Stripe propre : l'argent va au compte du
   /// CLUB (`Organization.stripeAccountId`), decide par

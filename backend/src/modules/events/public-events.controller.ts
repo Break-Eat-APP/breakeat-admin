@@ -75,6 +75,7 @@ export class PublicEventsController {
                 preparationZone: true,
                 status: true,
                 planUrl: true,
+                imageUrl: true,
               },
             },
           },
@@ -120,6 +121,9 @@ export class PublicEventsController {
         status: es.supplier.status,
         // Plan propre à cette buvette ; à défaut, celui du lieu.
         planUrl: es.supplier.planUrl ?? event.venue?.buvettePlanUrl ?? null,
+        // L'enseigne du comptoir. Vide, l'app dessine l'initiale du nom : on ne
+        // laisse jamais un trou a la place d'une image.
+        imageUrl: es.supplier.imageUrl ?? null,
       })),
     };
   }

@@ -174,6 +174,7 @@ export class SuppliersService {
         // Chaine vide ⇒ null : « je retire le plan de cette buvette », et le
         // client retombe sur le plan general du lieu.
         ...(dto.planUrl !== undefined && { planUrl: dto.planUrl || null }),
+        ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl || null }),
       },
     });
 

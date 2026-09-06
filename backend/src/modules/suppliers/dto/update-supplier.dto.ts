@@ -22,4 +22,17 @@ export class UpdateSupplierDto {
   @IsUrl({ protocols: ['http', 'https'], require_protocol: true },
     { message: 'planUrl doit etre une URL http(s) valide' })
   planUrl?: string | null;
+
+  /**
+   * Image de la buvette, montrée au client au moment de choisir son stand.
+   *
+   * Chaîne vide = « effacer » : l'app retombe alors sur l'initiale du nom. Une
+   * URL et non un fichier : le projet n'a pas de dépôt, et le stockage n'est
+   * pas branché.
+   */
+  @IsOptional()
+  @ValidateIf((_o: unknown, valeur: unknown) => valeur !== null && valeur !== '')
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true },
+    { message: 'imageUrl doit etre une URL http(s) valide' })
+  imageUrl?: string | null;
 }

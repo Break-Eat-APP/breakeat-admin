@@ -283,6 +283,8 @@ export interface Supplier {
   preparationZone?: string | null;
   /** Plan d'accès propre à cette buvette (null ⇒ plan général du lieu). */
   planUrl?: string | null;
+  /** Enseigne de la buvette, montrée au client au moment de choisir son stand. */
+  imageUrl?: string | null;
   /** Compte Stripe Connect de la buvette — c'est là que l'argent arrive. */
   stripeAccountId?: string | null;
   stripeAccountStatus?: 'NOT_ONBOARDED' | 'PENDING' | 'ACTIVE' | 'RESTRICTED' | 'REJECTED';
@@ -545,7 +547,12 @@ export async function apiCancelScheduledPush(orgId: string, id: string): Promise
 export async function apiUpdateSupplier(
   orgId: string,
   supplierId: string,
-  data: { name?: string; preparationZone?: string; planUrl?: string | null },
+  data: {
+    name?: string;
+    preparationZone?: string;
+    planUrl?: string | null;
+    imageUrl?: string | null;
+  },
 ): Promise<Supplier> {
   return req<Supplier>('PATCH', `/organizations/${orgId}/suppliers/${supplierId}`, data);
 }

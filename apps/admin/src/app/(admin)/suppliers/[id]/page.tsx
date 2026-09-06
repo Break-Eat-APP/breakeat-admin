@@ -96,6 +96,7 @@ export default function SupplierDetailPage() {
   const [events, setEvents] = useState<AdminEvent[]>([]);
   const [settingsName, setSettingsName] = useState('');
   const [settingsPlan, setSettingsPlan] = useState('');
+  const [settingsImage, setSettingsImage] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMsg, setSettingsMsg] = useState('');
   const [statusSaving, setStatusSaving] = useState(false);
@@ -126,6 +127,7 @@ export default function SupplierDetailPage() {
       setSupplier(found ?? null);
       setSettingsName(found?.name ?? '');
       setSettingsPlan(found?.planUrl ?? '');
+      setSettingsImage(found?.imageUrl ?? '');
       setCategories(Array.isArray(cats) ? cats : []);
       setProducts(Array.isArray(prods) ? prods : []);
       setEvents(Array.isArray(evs) ? evs : []);
@@ -244,6 +246,7 @@ export default function SupplierDetailPage() {
         name: settingsName.trim(),
         // Chaîne vide = « retirer » : le client retombe alors sur le plan du lieu.
         planUrl: settingsPlan.trim(),
+        imageUrl: settingsImage.trim(),
       });
       setSettingsMsg('✓ Buvette mise à jour.');
       await load();
@@ -344,6 +347,37 @@ export default function SupplierDetailPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label style={fieldLabel}>Nom *</label>
               <input value={settingsName} onChange={(e) => setSettingsName(e.target.value)} style={fieldInput} placeholder="Buvette Nord" />
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={fieldLabel}>Image de la buvette (URL)</label>
+              <input
+                value={settingsImage}
+                onChange={(e) => setSettingsImage(e.target.value)}
+                style={fieldInput}
+                placeholder="https://…/buvette-nord.jpg"
+              />
+              <span style={{ fontSize: 12, color: BRAND.grey, lineHeight: 1.5 }}>
+                Montrée au client quand il choisit son stand — dans un stade, on reconnaît un
+                comptoir à son enseigne avant d&apos;en lire le nom. Laissez vide pour afficher
+                l&apos;initiale du nom.
+              </span>
+              {settingsImage.trim() ? (
+                // Un aperçu, parce qu'une URL ne se vérifie pas à l'œil : une
+                // adresse morte ne se verrait qu'une fois sur le téléphone d'un
+                // client, au moment de choisir sa buvette.
+                <img
+                  src={settingsImage.trim()}
+                  alt=""
+                  style={{
+                    width: 72, height: 72, objectFit: 'cover', borderRadius: 12,
+                    border: `1px solid ${BRAND.border}`, marginTop: 6,
+                  }}
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              ) : null}
             </div>
           </div>
 

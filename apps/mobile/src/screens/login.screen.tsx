@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -14,11 +15,15 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiLogin, apiRegister } from '@lib/api/mobile-api';
+
 import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
 import { BreakEatLogo } from '@components/break-eat-logo';
+
+/** Les conditions generales, hebergees sur le site vitrine. */
+const URL_CGU = 'https://breakeat.fr/conditions-generales';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -60,6 +65,16 @@ export function LoginScreen({ navigation, route }: Props) {
     }
   };
 
+  /**
+   * Acceptation des conditions — decochee par defaut, et jamais deduite.
+   *
+   * Un consentement pre-coche ne vaut rien : c'est precisement ce qu'exige le
+   * RGPD (un acte positif) et ce que verifie Apple a la revue. La case ne
+   * s'affiche qu'a l'INSCRIPTION : la redemander a chaque connexion en ferait
+   * une formalite qu'on coche sans lire.
+   */
+  const [cguAcceptees, setCguAcceptees] = useState(false);
+
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
       showAlert('Champs requis', 'Email et mot de passe sont obligatoires.');
@@ -71,6 +86,19 @@ export function LoginScreen({ navigation, route }: Props) {
     }
     if (mode === 'register' && displayName.trim().length < 2) {
       showAlert('Champ requis', 'Indiquez un nom (au moins 2 caractères).');
+      return;
+    }
+    // L'acceptation des conditions ne se déduit PAS d'un clic sur « S'inscrire ».
+    //
+    // Une case décochée par défaut, et un refus explicite : c'est ce qui rend
+    // le consentement démontrable. Pré-cocher, ou considérer que l'inscription
+    // vaut acceptation, priverait la trace de toute valeur le jour où elle
+    // servirait.
+    if (mode === 'register' && !cguAcceptees) {
+      showAlert(
+        'Conditions à accepter',
+        'Cochez la case pour confirmer que vous acceptez les conditions générales d’utilisation.',
+      );
       return;
     }
     setLoading(true);
@@ -245,6 +273,31 @@ export function LoginScreen({ navigation, route }: Props) {
           </Pressable>
         )}
 
+        {/* Les conditions générales — à l'inscription seulement.
+            Les redemander à chaque connexion transformerait un consentement en
+            formalité qu'on coche sans lire. */}
+        {mode === 'register' && (
+          <Pressable
+            style={styles.cguRow}
+            onPress={() => setCguAcceptees((v) => !v)}
+            hitSlop={6}
+          >
+            <View style={[styles.cguCase, cguAcceptees && styles.cguCaseCochee]}>
+              {cguAcceptees ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+            </View>
+            <Text style={styles.cguTexte}>
+              J’ai pris connaissance et j’accepte les{' '}
+              <Text
+                style={styles.cguLien}
+                onPress={() => void Linking.openURL(URL_CGU)}
+              >
+                conditions générales d’utilisation
+              </Text>
+              .
+            </Text>
+          </Pressable>
+        )}
+
         <Pressable
           style={[styles.submit, loading && styles.submitDisabled]}
           onPress={handleSubmit}
@@ -381,6 +434,21 @@ const styles = StyleSheet.create({
 
   skip: { alignItems: 'center', paddingVertical: 16 },
   skipText: { color: THEME.orange, fontSize: 15, fontFamily: HEAD.semibold },
+
+  cguRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 16, paddingHorizontal: 2 },
+  cguCase: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: THEME.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  cguCaseCochee: { backgroundColor: THEME.orange, borderColor: THEME.orange },
+  cguTexte: { flex: 1, color: THEME.inkSoft, fontSize: 13, lineHeight: 19 },
+  cguLien: { color: THEME.orange, textDecorationLine: 'underline' },
 
   mentions: { color: THEME.grey, fontSize: 12, textAlign: 'center', marginTop: 4, fontFamily: HEAD.medium },
 });

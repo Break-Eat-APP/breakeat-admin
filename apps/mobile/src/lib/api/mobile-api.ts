@@ -192,6 +192,8 @@ export interface PublicEvent {
     status: string;
     /** Plan de CETTE buvette ; le serveur retombe sur celui du lieu si elle n'en a pas. */
     planUrl?: string | null;
+    /** Enseigne du comptoir. Vide, l'app dessine l'initiale du nom. */
+    imageUrl?: string | null;
   }>;
 }
 

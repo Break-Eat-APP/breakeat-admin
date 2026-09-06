@@ -230,10 +230,22 @@ export function EventHomeScreen({ route, navigation }: Props) {
                 onPress={() => handleSelectSupplier(item.id)}
                 disabled={!ouverte}
               >
+                {/* L'enseigne du comptoir.
+                    Dans un stade, on reconnait un stand a son image avant d'en
+                    lire le nom. Sans image, l'initiale reste : on ne laisse
+                    jamais un carre vide a la place. */}
                 <View style={styles.supplierAvatar}>
-                  <Text style={styles.supplierInitial}>
-                    {item.name.charAt(0).toUpperCase()}
-                  </Text>
+                  {item.imageUrl ? (
+                    <Image
+                      source={{ uri: item.imageUrl }}
+                      style={StyleSheet.absoluteFill}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Text style={styles.supplierInitial}>
+                      {item.name.charAt(0).toUpperCase()}
+                    </Text>
+                  )}
                 </View>
                 <View style={styles.supplierInfo}>
                   <Text style={styles.supplierName}>{item.name}</Text>
@@ -467,6 +479,8 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.orange,
     justifyContent: 'center',
     alignItems: 'center',
+    // Sans cela, l'image deborde du rond et s'affiche carree.
+    overflow: 'hidden',
   },
   supplierInitial: { color: '#fff', fontSize: 20, fontWeight: '800' },
   supplierInfo: { flex: 1 },
