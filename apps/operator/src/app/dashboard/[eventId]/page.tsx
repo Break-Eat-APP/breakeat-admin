@@ -179,9 +179,42 @@ export default function DashboardPage() {
    * l'epinglage du compte. A defaut, on DEMANDE — plutot que de tout montrer.
    */
   useEffect(() => {
-    if (!token || supplierId) return;
+    if (!token) return;
     let annule = false;
     void (async () => {
+      // La liste FAIT FOI. On la lit toujours, meme quand une buvette est deja
+      // retenue : c'est elle qui permet de verifier que le souvenir du
+      // navigateur correspond encore a quelque chose.
+      const liste = await fetchEventSuppliers(eventId).catch(() => []);
+      if (annule) return;
+      setBuvettes(liste);
+
+      // Un identifiant memorise qui n'appartient PLUS a cet evenement.
+      //
+      // `operator_supplier_id` survit a tout : changement d'evenement, buvette
+      // supprimee puis recreee sous un nouvel identifiant. Le poste continuait
+      // alors d'afficher le nom retenu — « Buvette Nord » — tout en filtrant
+      // sur un comptoir qui ne recevait plus rien. Le tableau restait vide sans
+      // que rien n'explique pourquoi : ni erreur, ni commande.
+      if (supplierId) {
+        if (liste.length > 0 && !liste.some((b) => b.id === supplierId)) {
+          localStorage.removeItem('operator_supplier_id');
+          localStorage.removeItem('operator_supplier_name');
+          setSupplierId(null);
+          setSupplierName(null);
+          setChoixOuvert(true);
+          return;
+        }
+        // Le nom vient du serveur, pas de la memoire : renommer une buvette ne
+        // doit pas laisser l'ancien nom affiche au comptoir.
+        const aJour = liste.find((b) => b.id === supplierId);
+        if (aJour) {
+          setSupplierName(aJour.name);
+          localStorage.setItem('operator_supplier_name', aJour.name);
+        }
+        return;
+      }
+
       try {
         const moi = await fetchMeWithMemberships(token);
         const epingle = moi.memberships.find((m) => m.supplierId);
@@ -194,14 +227,13 @@ export default function DashboardPage() {
       } catch {
         // Sans reponse, on tombe sur le choix manuel — jamais sur « tout ».
       }
-      const liste = await fetchEventSuppliers(eventId);
       if (annule) return;
-      setBuvettes(liste);
       // Une seule buvette : la choisir soi-meme serait une question inutile.
       if (liste.length === 1) {
         setSupplierId(liste[0].id);
         setSupplierName(liste[0].name);
         localStorage.setItem('operator_supplier_id', liste[0].id);
+        localStorage.setItem('operator_supplier_name', liste[0].name);
       } else if (liste.length > 1) {
         setChoixOuvert(true);
       }
