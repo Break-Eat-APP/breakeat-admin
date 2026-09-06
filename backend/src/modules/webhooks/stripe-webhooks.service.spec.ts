@@ -124,6 +124,71 @@ describe('StripeWebhooksService', () => {
     );
   });
 
+  it('cree la commande depuis checkout.session.completed aussi', async () => {
+    // `payment_intent.succeeded` et `checkout.session.completed` decrivent le
+    // MEME encaissement. Rien ne garantit que les deux soient coches sur le
+    // point de terminaison : n'en ecouter qu'un faisait de cette case a cocher
+    // un point de defaillance unique -- argent encaisse, 200 rendu a Stripe, et
+    // aucune commande en cuisine.
+    (prisma.webhookEvent.findUnique as jest.Mock).mockResolvedValue(null);
+
+    const event = makeEvent('checkout.session.completed', {
+      id: 'cs_test_1',
+      object: 'checkout.session',
+      payment_status: 'paid',
+      payment_intent: PAYMENT_INTENT_ID,
+      amount_total: 200,
+      currency: 'eur',
+      metadata: { cartId: 'cart-1' },
+    });
+
+    await service.handleEvent(event);
+
+    expect(orders.createFromPaymentIntent).toHaveBeenCalledWith(
+      PAYMENT_INTENT_ID,
+      expect.objectContaining({ amount: 200, metadata: { cartId: 'cart-1' } }),
+      expect.anything(),
+    );
+  });
+
+  it('ignore une session non reglee', async () => {
+    // Une session peut se terminer sans paiement (virement en attente). Creer
+    // la commande la enverrait en cuisine avant l'argent.
+    (prisma.webhookEvent.findUnique as jest.Mock).mockResolvedValue(null);
+
+    const event = makeEvent('checkout.session.completed', {
+      id: 'cs_test_2',
+      object: 'checkout.session',
+      payment_status: 'unpaid',
+      payment_intent: PAYMENT_INTENT_ID,
+      amount_total: 200,
+      currency: 'eur',
+      metadata: { cartId: 'cart-1' },
+    });
+
+    await service.handleEvent(event);
+
+    expect(orders.createFromPaymentIntent).not.toHaveBeenCalled();
+  });
+
+  it('ignore une session sans panier', async () => {
+    (prisma.webhookEvent.findUnique as jest.Mock).mockResolvedValue(null);
+
+    const event = makeEvent('checkout.session.completed', {
+      id: 'cs_test_3',
+      object: 'checkout.session',
+      payment_status: 'paid',
+      payment_intent: PAYMENT_INTENT_ID,
+      amount_total: 200,
+      currency: 'eur',
+      metadata: {},
+    });
+
+    await service.handleEvent(event);
+
+    expect(orders.createFromPaymentIntent).not.toHaveBeenCalled();
+  });
+
   it('met a jour l’etat Stripe DU CLUB sur account.updated', async () => {
     // Sans ce suivi, un club dont Stripe restreint le compte l'apprendrait en
     // decouvrant que plus personne ne peut payer.

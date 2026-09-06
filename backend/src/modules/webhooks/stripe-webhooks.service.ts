@@ -133,19 +133,63 @@ export class StripeWebhooksService {
    */
   private async onCheckoutSessionCompleted(event: Stripe.Event): Promise<void> {
     const session = event.data.object as Stripe.Checkout.Session;
-    if (!session.metadata?.orderSplitShareId) {
-      this.logger.log(`Checkout session sans ardoise (${session.id}) — ignorée`);
-      return;
-    }
     const intentId =
       typeof session.payment_intent === 'string'
         ? session.payment_intent
         : session.payment_intent?.id;
-    if (!intentId) {
-      this.logger.warn(`Checkout session ${session.id} sans PaymentIntent`);
+
+    // Une part d'ardoise : l'ardoise gère elle-même son cycle de vie.
+    if (session.metadata?.orderSplitShareId) {
+      if (!intentId) {
+        this.logger.warn(`Checkout session ${session.id} sans PaymentIntent`);
+        return;
+      }
+      await this.splits.marquerPartAutorisee(session.id, intentId);
       return;
     }
-    await this.splits.marquerPartAutorisee(session.id, intentId);
+
+    // ─── Commande ordinaire ────────────────────────────────────
+    //
+    // La commande naît normalement de `payment_intent.succeeded`. Elle peut
+    // AUSSI naître ici, et c'est délibéré : ces deux événements décrivent le
+    // même encaissement, et rien ne garantit que les deux soient cochés sur le
+    // point de terminaison. Ne dépendre que du premier faisait de cette case à
+    // cocher un point de défaillance unique — l'argent partait chez le club,
+    // Stripe répondait 200, et aucune commande n'arrivait en cuisine. Le
+    // symptôme, « j'ai payé et il ne se passe rien », ne désignait nulle part
+    // sa cause.
+    //
+    // Le doublon est impossible : `createFromPaymentIntent` rend la commande
+    // existante dès qu'un paiement porte déjà cet identifiant, et `Order.cartId`
+    // est unique en base. Si les deux événements arrivent, le second ne fait
+    // que relire ce que le premier a créé.
+    if (!session.metadata?.cartId) {
+      this.logger.log(`Checkout session ${session.id} sans panier — ignorée`);
+      return;
+    }
+    if (session.payment_status !== 'paid') {
+      this.logger.log(
+        `Checkout session ${session.id} non réglée (${session.payment_status}) — ignorée`,
+      );
+      return;
+    }
+    if (!intentId) {
+      this.logger.warn(
+        `Checkout session ${session.id} réglée mais sans PaymentIntent — ` +
+          'impossible de rattacher le paiement à une commande.',
+      );
+      return;
+    }
+
+    await this.orders.createFromPaymentIntent(
+      intentId,
+      {
+        amount: session.amount_total ?? 0,
+        currency: session.currency ?? 'eur',
+        metadata: session.metadata,
+      },
+      event as unknown as Prisma.InputJsonValue,
+    );
   }
 
   /**
