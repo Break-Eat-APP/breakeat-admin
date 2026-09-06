@@ -444,16 +444,31 @@ export class CartService {
     // Stripe n'accepte que du http(s) : `breakeat://` y serait refuse. Le pont
     // rebondit vers l'app quand elle est native, vers le site quand elle tourne
     // dans un navigateur.
-    const pont = `${this.apiUrl()}/paiement/retour?panier=${cart.id}` +
-      `&cible=${plateforme === 'native' ? 'app' : 'web'}`;
+    // OU Stripe renvoie le client apres le reglement.
+    //
+    // Sur le WEB, on vise directement le site : c'est deja une adresse http, il
+    // n'y a rien a traduire. Passer par le pont n'apportait qu'une redirection
+    // de plus -- et une dependance a `PUBLIC_API_URL`, dont l'absence renvoyait
+    // le client sur `localhost` apres avoir paye.
+    //
+    // En NATIF, le pont reste indispensable : Stripe n'accepte que du http(s)
+    // en adresse de retour, donc impossible d'y mettre `breakeat://`.
+    const site = (this.config.get<string>('app.split.webUrl') ?? '').replace(/\/+$/, '');
+    const retour =
+      plateforme === 'native'
+        ? {
+            ok: `${this.apiUrl()}/paiement/retour?panier=${cart.id}&cible=app&etat=ok`,
+            annule: `${this.apiUrl()}/paiement/retour?panier=${cart.id}&cible=app&etat=annule`,
+          }
+        : { ok: `${site}/commandes?paye=1`, annule: `${site}/panier?annule=1` };
     const session = await this.stripe.createHostedCheckout({
       amountCents: view.totalCents,
       currency: view.currency,
       destinationAccountId: encaisseur.accountId,
       productName: `Commande ${supplier.name}`,
       captureMethod: 'automatic',
-      successUrl: `${pont}&etat=ok`,
-      cancelUrl: `${pont}&etat=annule`,
+      successUrl: retour.ok,
+      cancelUrl: retour.annule,
       idempotencyKey: `cart_${cart.id}`,
       metadata: {
         cartId: cart.id,

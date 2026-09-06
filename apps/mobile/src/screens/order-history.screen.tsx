@@ -24,6 +24,7 @@ import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { endTrackingForFinishedOrders } from '@lib/live-activity-tracking';
 import { EVT_COMMANDES_A_RECHARGER } from '@lib/hooks/use-deep-links';
+import { useCartStore } from '@store/cart.store';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -180,6 +181,23 @@ export function OrderHistoryScreen() {
    * un delai de traitement, et faire tourner un sablier indefiniment ne
    * renseigne personne.
    */
+  /**
+   * Le panier a fait son office : on le vide.
+   *
+   * Sur le WEB, la page est entierement rechargee par le retour de Stripe :
+   * le code qui vidait le panier apres paiement a disparu avec elle. Le panier
+   * restait donc plein, et l'application reproposait de regler ce qui venait de
+   * l'etre -- « je reste sur une page ou je dois valider mon paiement ».
+   *
+   * On vide sur la seule presence de `paye=1`, sans attendre la commande :
+   * Stripe ne renvoie sur cette adresse qu'apres un reglement accepte. Garder
+   * les articles ferait courir le risque bien pire d'un second paiement.
+   */
+  useEffect(() => {
+    if (!vientDePayer) return;
+    useCartStore.getState().resetCart();
+  }, [vientDePayer]);
+
   useEffect(() => {
     if (!vientDePayer || !token) return;
     if (orders.length > 0) {

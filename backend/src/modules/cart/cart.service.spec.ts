@@ -367,6 +367,46 @@ describe('CartService', () => {
       );
     });
 
+    it('renvoie le client du WEB sur le site, sans passer par le pont', async () => {
+      // Le pont ne sert qu'a traduire une adresse http en `breakeat://` pour
+      // l'application installee. Sur le web il n'ajoutait qu'une redirection --
+      // et une dependance a PUBLIC_API_URL, dont l'absence renvoyait le client
+      // sur `localhost` apres avoir paye.
+      setupValidCheckout();
+      const stripe = (service as unknown as { stripe: { createHostedCheckout: jest.Mock } }).stripe;
+      stripe.createHostedCheckout.mockResolvedValue({
+        id: 'cs_test',
+        url: 'https://stripe/pay/cs_test',
+        payment_intent: 'pi_test',
+      });
+
+      await service.checkout(CART_ID, USER_ID, 'web');
+
+      const args = stripe.createHostedCheckout.mock.calls[0][0];
+      expect(args.successUrl).toContain('/commandes?paye=1');
+      expect(args.successUrl).not.toContain('/paiement/retour');
+      expect(args.cancelUrl).toContain('/panier?annule=1');
+    });
+
+    it('renvoie le client NATIF sur le pont, seul capable de rejoindre l’app', async () => {
+      setupValidCheckout();
+      const stripe = (service as unknown as { stripe: { createHostedCheckout: jest.Mock } }).stripe;
+      stripe.createHostedCheckout.mockResolvedValue({
+        id: 'cs_test',
+        url: 'https://stripe/pay/cs_test',
+        payment_intent: 'pi_test',
+      });
+
+      await service.checkout(CART_ID, USER_ID, 'native');
+
+      const args = stripe.createHostedCheckout.mock.calls[0][0];
+      // Stripe refuse un schema personnalise : le rebond vers `breakeat://` se
+      // fait donc par une page a nous.
+      expect(args.successUrl).toContain('/paiement/retour');
+      expect(args.successUrl).toContain('cible=app');
+      expect(args.cancelUrl).toContain('etat=annule');
+    });
+
     it('refuse le paiement tant que le CLUB ne peut pas encaisser', async () => {
       // L'argent va au compte du club, jamais a celui d'une buvette : c'est
       // donc son etat a lui qui autorise ou non le paiement.
