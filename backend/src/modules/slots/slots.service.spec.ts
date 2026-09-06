@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SlotSource, SlotStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { SlotsService } from './slots.service';
+import { SlotTemplatesService } from './slot-templates.service';
 
 // ─── Helpers ─────────────────────────────────────────────────
 
@@ -99,6 +100,12 @@ describe('SlotsService', () => {
       providers: [
         SlotsService,
         { provide: PrismaService, useValue: prismaInstance },
+        // La lecture du poste operateur materialise les creneaux du jour au
+        // passage : le poste ouvre souvent avant le premier client.
+        {
+          provide: SlotTemplatesService,
+          useValue: { ensureTodaySlots: jest.fn().mockResolvedValue([]) },
+        },
       ],
     }).compile();
 
@@ -181,14 +188,27 @@ describe('SlotsService', () => {
   // ─── findByEvent ───────────────────────────────────────────
 
   describe('findByEvent', () => {
-    it('returns slots ordered by startAt asc', async () => {
+    it('ne rend que les créneaux DU JOUR, triés par heure', async () => {
+      // Un lieu ouvert en continu materialise un jeu de creneaux par journee.
+      // Sans filtre de date, l'equipier voyait sept « Mi-temps » alignes au
+      // bout d'une semaine, sans moyen de reconnaitre celui d'aujourd'hui.
       const result = await service.findByEvent(EVENT_ID);
-      expect(mockPrisma.slotFindMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where:   { eventId: EVENT_ID },
-          orderBy: { startAt: 'asc' },
-        }),
+
+      const args = mockPrisma.slotFindMany.mock.calls[0][0];
+      expect(args.where.eventId).toBe(EVENT_ID);
+      expect(args.orderBy).toEqual({ startAt: 'asc' });
+
+      // Aujourd'hui, ou bien un creneau ponctuel non date.
+      const aujourdhui = new Date();
+      const journee = new Date(
+        Date.UTC(aujourdhui.getUTCFullYear(), aujourdhui.getUTCMonth(), aujourdhui.getUTCDate()),
       );
+      expect(args.where.OR).toEqual([{ serviceDate: null }, { serviceDate: journee }]);
+
+      // Le statut n'est PAS filtre : c'est ici qu'un creneau ferme doit rester
+      // visible pour etre rouvert.
+      expect(args.where.status).toBeUndefined();
+
       expect(result).toHaveLength(1);
     });
   });

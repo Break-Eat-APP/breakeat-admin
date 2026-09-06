@@ -11,6 +11,7 @@ import { requireOrgAccess } from '../../common/helpers/require-org-access';
 import { OrgRole } from '../../common/enums/role.enum';
 import { CreateSlotDto } from './dto/create-slot.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
+import { SlotTemplatesService } from './slot-templates.service';
 
 const WRITE_ROLES: OrgRole[] = [OrgRole.ORG_ADMIN, OrgRole.MANAGER];
 
@@ -18,7 +19,10 @@ const WRITE_ROLES: OrgRole[] = [OrgRole.ORG_ADMIN, OrgRole.MANAGER];
 export class SlotsService {
   private readonly logger = new Logger(SlotsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly slotTemplates: SlotTemplatesService,
+  ) {}
 
   // ─── CRUD ────────────────────────────────────────────────────
 
@@ -86,9 +90,45 @@ export class SlotsService {
     });
   }
 
+  /**
+   * Les créneaux du poste opérateur — CEUX DU JOUR.
+   *
+   * Sans filtre de date, un lieu ouvert en continu accumule un jeu de créneaux
+   * par journée de service : au bout d'une semaine, l'équipier voyait sept
+   * « Mi-temps » et sept « 17:45 » alignés, sans aucun moyen de distinguer
+   * celui d'aujourd'hui. Ouvrir le mauvais revenait à ouvrir celui d'un jour
+   * passé — sans effet visible pour le client, et sans explication pour
+   * personne.
+   *
+   * Les créneaux PONCTUELS d'un événement (`serviceDate` nul) ne sont pas
+   * datés : ils restent visibles tant que l'événement dure.
+   *
+   * Contrairement à la lecture client, on ne filtre PAS sur `status` : c'est
+   * précisément ici qu'un créneau fermé doit rester visible pour être rouvert.
+   *
+   * La matérialisation du jour se fait au passage. Le poste ouvre souvent avant
+   * le premier client — sans cela, l'équipier arriverait devant une barre vide
+   * jusqu'à ce que quelqu'un ouvre l'application.
+   */
   async findByEvent(eventId: string) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { venueId: true },
+    });
+    if (event) {
+      await this.slotTemplates.ensureTodaySlots(eventId, event.venueId);
+    }
+
+    const maintenant = new Date();
+    const journee = new Date(
+      Date.UTC(maintenant.getUTCFullYear(), maintenant.getUTCMonth(), maintenant.getUTCDate()),
+    );
+
     return this.prisma.slot.findMany({
-      where: { eventId },
+      where: {
+        eventId,
+        OR: [{ serviceDate: null }, { serviceDate: journee }],
+      },
       orderBy: { startAt: 'asc' },
     });
   }
