@@ -37,6 +37,19 @@ const GREEN = '#16a34a';
 const GREEN_TINT = 'rgba(22, 163, 74, 0.10)';
 const RED = '#dc2626';
 const RED_TINT = 'rgba(220, 38, 38, 0.10)';
+/**
+ * Le violet du reçu.
+ *
+ * Une couleur À ELLE, distincte de l'orange de la marque : le reçu n'est pas
+ * une étape du parcours, c'est un document qu'on va chercher. Lui donner
+ * l'orange le mettrait en concurrence avec « Je suis arrivé », qui est LE geste
+ * du moment. Le violet se repère sans réclamer le premier regard.
+ *
+ * Même teinte que la vignette « TVA collectée » du back-office : un reçu et une
+ * TVA parlent de la même chose, la comptabilité.
+ */
+const VIOLET = '#7c3aed';
+const VIOLET_TINT = 'rgba(124, 58, 237, 0.10)';
 
 /**
  * Parcours client résumé en 3 étapes visibles : reçue → en préparation → prête.
@@ -457,7 +470,7 @@ function OrderCard({
         disabled={recuEnCours}
         hitSlop={4}
       >
-        <Ionicons name="receipt-outline" size={16} color={THEME.inkSoft} />
+        <Ionicons name="receipt-outline" size={16} color={VIOLET} />
         <Text style={styles.recuBtnText}>
           {recuEnCours ? 'Ouverture…' : 'Reçu'}
         </Text>
@@ -620,12 +633,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 7,
     marginTop: 10,
-    paddingVertical: 11,
+    paddingVertical: 12,
     borderRadius: THEME.radius.pill,
+    backgroundColor: VIOLET_TINT,
     borderWidth: 1,
-    borderColor: THEME.border,
+    borderColor: 'rgba(124, 58, 237, 0.28)',
   },
-  recuBtnText: { color: THEME.inkSoft, fontSize: 13.5, fontFamily: HEAD.semibold },
+  recuBtnText: { color: VIOLET, fontSize: 14, fontFamily: HEAD.bold },
   arrivedBadge: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
     backgroundColor: GREEN_TINT, borderRadius: THEME.radius.pill,
