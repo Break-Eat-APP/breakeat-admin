@@ -490,7 +490,9 @@ function OrderCard({
             hitSlop={4}
           >
             <Ionicons name="hand-left-outline" size={16} color="#fff" />
-            <Text style={styles.arrivedBtnText}>Je suis arrivé devant le point de retrait</Text>
+            <Text style={styles.arrivedBtnText}>
+              Cliquez ici et signalez-nous quand vous êtes devant le point de retrait
+            </Text>
           </Pressable>
         ))}
     </Pressable>
@@ -626,7 +628,7 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.orange, borderRadius: THEME.radius.pill,
     paddingVertical: 11, marginTop: 2,
   },
-  arrivedBtnText: { color: '#fff', fontSize: 13.5, fontFamily: HEAD.bold, textAlign: 'center' },
+  arrivedBtnText: { color: '#fff', fontSize: 13, fontFamily: HEAD.bold, textAlign: 'center', flex: 1, lineHeight: 18 },
   recuBtn: {
     flexDirection: 'row',
     alignItems: 'center',

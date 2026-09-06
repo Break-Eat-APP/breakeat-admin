@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Linking,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -28,6 +28,8 @@ import { useCartStore } from '@store/cart.store';
 import { showAlert, confirmAction } from '@lib/alert';
 import { PageHeader } from '@components/page-header';
 import { THEME, shadowCard, FONT } from '@lib/theme';
+import * as WebBrowser from 'expo-web-browser';
+import { useBottomBarSpace } from '@components/app-bottom-bar';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Split'>;
 
@@ -48,6 +50,9 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Split'>;
 const POLL_MS = 8_000;
 
 export function SplitScreen({ route, navigation }: Props) {
+  // La barre du bas flotte : tout element pose en bas doit lui laisser la
+  // place, encoche de l'appareil comprise.
+  const espaceBas = useBottomBarSpace();
   const { code } = route.params;
   const { token } = useAuthStore();
   const resetCart = useCartStore((s) => s.resetCart);
@@ -106,9 +111,25 @@ export function SplitScreen({ route, navigation }: Props) {
     try {
       const { checkoutUrl } = await apiClaimSplitUnits(code, unitIds, prenom.trim() || undefined);
       setChoisis(new Set());
-      // La page de paiement est hébergée par Stripe : on quitte l'app (ou
-      // l'onglet) le temps du règlement, et le lien de retour ramène ici.
-      await Linking.openURL(checkoutUrl);
+
+      // La page reste HÉBERGÉE par Stripe — aucun numéro de carte ne traverse
+      // notre code — mais elle s'affiche DANS l'application, dans une feuille
+      // Safari intégrée. `Linking.openURL` catapultait le convive dans son
+      // navigateur : il payait ailleurs, et rien ne le ramenait à l'ardoise.
+      //
+      // Sur le web il n'y a pas de navigateur à ouvrir : on remplace la page.
+      if (Platform.OS === 'web') {
+        const g = globalThis as { location?: { assign?: (u: string) => void } };
+        g.location?.assign?.(checkoutUrl);
+      } else {
+        await WebBrowser.openBrowserAsync(checkoutUrl, {
+          toolbarColor: THEME.bg,
+          controlsColor: THEME.orange,
+          dismissButtonStyle: 'cancel',
+        });
+        // Au retour, l'état a changé : la part vient d'être réglée.
+        await charger();
+      }
     } catch (e: unknown) {
       showAlert('Paiement impossible', e instanceof Error ? e.message : 'Réessaie dans un instant.');
       void charger();
@@ -263,8 +284,11 @@ export function SplitScreen({ route, navigation }: Props) {
         })}
       </ScrollView>
 
+      {/* La barre du bas flotte au-dessus des écrans : sans cette marge,
+          « Partager l'addition » et « Je paie ma part » passaient DERRIÈRE
+          elle — coupés en deux, et l'appui tombait sur l'onglet. */}
       {split.status === 'OPEN' && (
-        <View style={styles.bas}>
+        <View style={[styles.bas, { paddingBottom: espaceBas }]}>
           {choisis.size > 0 ? (
             <>
               <TextInput

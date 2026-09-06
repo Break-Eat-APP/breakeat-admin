@@ -35,7 +35,7 @@ private func statusSymbol(for state: BreakEatOrderAttributes.ContentState) -> St
   if state.isReady { return "checkmark.circle.fill" }
   if state.status == "COLLECTED" { return "bag.circle.fill" }
   if state.status == "DELAYED" { return "clock.badge.exclamationmark.fill" }
-  return "flame.circle.fill"
+  return "bolt.circle.fill"
 }
 
 // MARK: - Liens de retour vers l'app
