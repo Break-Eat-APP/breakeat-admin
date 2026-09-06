@@ -46,6 +46,7 @@ export type RootStackParamList = {
   Login: { pendingEventId?: string; defaultTab?: 'login' | 'register' } | undefined;
 
   // Flux de commande / deep links
+  Notifications: undefined;
   QRScanner: undefined;
   EventHome: { eventId: string };
   FlaixOrder: { venueId: string; flaixVenueId: string | null };

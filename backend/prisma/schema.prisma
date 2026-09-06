@@ -231,6 +231,7 @@ model User {
   refreshTokens    RefreshToken[]
   carts            Cart[]
   orders           Order[]
+  notifications    UserNotification[]
   groupMemberships GroupMember[]
   pushTokens       PushToken[]
   loyaltyAccounts  LoyaltyAccount[]
@@ -863,6 +864,32 @@ model OrderCounter {
 
   @@id([venueId, serviceDate])
   @@map("order_counters")
+}
+
+/// Une notification recue par un client, conservee pour etre RELUE.
+///
+/// Un push est ephemere : balaye de l'ecran, il n'existe plus. La cloche de
+/// l'application doit pourtant dire combien de messages attendent, et lesquels
+/// — y compris ceux arrives telephone eteint, ou avant l'installation d'un
+/// second appareil. Un compteur garde seulement dans l'application ne survivrait
+/// ni a une reinstallation ni au passage d'un telephone a l'autre.
+model UserNotification {
+  id             String    @id @default(uuid())
+  userId         String    @map("user_id")
+  /// Le club a l'origine du message. Nul pour une annonce de la plateforme.
+  organizationId String?   @map("organization_id")
+  title          String
+  body           String
+  /// Horodatage de LECTURE. Nul = non lue, et donc comptee sur la cloche.
+  readAt         DateTime? @map("read_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Lire « mes notifications non lues, les plus recentes d'abord » est LE seul
+  /// acces : l'index suit cette lecture, et elle seule.
+  @@index([userId, readAt, createdAt])
+  @@map("user_notifications")
 }
 
 model WebhookEvent {

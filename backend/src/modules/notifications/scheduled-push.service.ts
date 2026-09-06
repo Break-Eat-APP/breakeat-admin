@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../database/prisma.service';
 import { requireOrgAccess, MANAGE_ROLES, ALL_ORG_ROLES } from '../../common/helpers/require-org-access';
 import { ExpoPushService } from './expo-push.service';
+import { UserNotificationsService } from './user-notifications.service';
 import { PushTokensService } from './push-tokens.service';
 
 /**
@@ -34,6 +35,7 @@ export class ScheduledPushService {
     private readonly prisma: PrismaService,
     private readonly expoPush: ExpoPushService,
     private readonly pushTokens: PushTokensService,
+    private readonly userNotifications: UserNotificationsService,
   ) {}
 
   async create(orgId: string, userId: string, dto: CreateScheduledPushInput) {
@@ -86,10 +88,31 @@ export class ScheduledPushService {
    * - orgId défini → membres ayant commandé dans l'org (+ event si précisé).
    */
   async resolveAudience(orgId: string | null, eventId: string | null): Promise<string[]> {
+    return (await this.destinataires(orgId, eventId)).tokens;
+  }
+
+  /**
+   * Le public d'une campagne : ses JETONS pour l'envoi, ses UTILISATEURS pour
+   * la cloche.
+   *
+   * Les deux se calculent ensemble parce qu'ils décrivent le même public. Les
+   * séparer laisserait dériver l'un de l'autre — une notification archivée pour
+   * quelqu'un qui ne l'a pas reçue, ou l'inverse.
+   *
+   * Un client sans jeton (permission refusée, appareil neuf) est tout de même
+   * archivé : il retrouvera l'annonce sur sa cloche à sa prochaine ouverture.
+   */
+  private async destinataires(
+    orgId: string | null,
+    eventId: string | null,
+  ): Promise<{ tokens: string[]; userIds: string[] }> {
     if (orgId === null) {
-      // Broadcast plateforme : tous les push tokens enregistrés.
-      const rows = await this.prisma.pushToken.findMany({ select: { token: true } });
-      return rows.map((r) => r.token);
+      // Diffusion plateforme : on ne connaît que les appareils enregistrés.
+      const rows = await this.prisma.pushToken.findMany({ select: { token: true, userId: true } });
+      return {
+        tokens: rows.map((r) => r.token),
+        userIds: [...new Set(rows.map((r) => r.userId))],
+      };
     }
     const orders = await this.prisma.order.findMany({
       where: { organizationId: orgId, ...(eventId ? { eventId } : {}) },
@@ -97,7 +120,7 @@ export class ScheduledPushService {
       distinct: ['userId'],
     });
     const userIds = [...new Set(orders.map((o) => o.userId))];
-    return this.pushTokens.tokensForUsers(userIds);
+    return { tokens: await this.pushTokens.tokensForUsers(userIds), userIds };
   }
 
   /** Traite une entrée due : envoie le push, met à jour le statut. */
@@ -110,7 +133,18 @@ export class ScheduledPushService {
     const sp = await this.prisma.scheduledPush.findUnique({ where: { id } });
     if (!sp) return;
     try {
-      const tokens = await this.resolveAudience(sp.organizationId, sp.eventId);
+      const { tokens, userIds } = await this.destinataires(sp.organizationId, sp.eventId);
+
+      // Archivé AVANT l'envoi, et sans dépendre de son succès : un push balayé
+      // de l'écran n'existe plus, la cloche est le seul endroit où l'annonce
+      // survit. Un client sans jeton la retrouvera quand même.
+      await this.userNotifications.archiver({
+        userIds,
+        organizationId: sp.organizationId,
+        title: sp.title,
+        body: sp.body,
+      });
+
       const result = await this.expoPush.send(
         tokens.map((to) => ({ to, title: sp.title, body: sp.body, data: { kind: sp.kind, eventId: sp.eventId } })),
       );

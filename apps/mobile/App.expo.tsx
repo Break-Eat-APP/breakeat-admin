@@ -55,7 +55,9 @@ import { OrderConfirmationScreen } from '@screens/order-confirmation.screen';
 import { OrderTrackingScreen } from '@screens/order-tracking.screen';
 import { SplitScreen } from '@screens/split.screen';
 import { useDeepLinks } from '@lib/hooks/use-deep-links';
-import { enregistrerPush } from '@lib/push-notifications';
+import { ecouterPush, enregistrerPush } from '@lib/push-notifications';
+import { useNotifStore } from '@store/notif.store';
+import { NotificationsScreen } from '@screens/notifications.screen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -154,6 +156,13 @@ export default function AppPreview() {
   useEffect(() => {
     if (!token) return;
     void enregistrerPush();
+
+    // Le compte de la cloche : lu une fois à la connexion — une annonce a pu
+    // arriver téléphone éteint — puis tenu à jour par les push reçus app
+    // ouverte, sinon la pastille n'apparaîtrait qu'au prochain retour sur
+    // l'accueil, après une bannière déjà oubliée.
+    void useNotifStore.getState().rafraichir();
+    return ecouterPush(() => useNotifStore.getState().pushReceived());
   }, [token]);
 
   // « Je suis arrive » depuis l'ecran verrouille, et appui sur la Live Activity.
@@ -201,6 +210,7 @@ export default function AppPreview() {
               {/* Stubs (caméra / événement live) */}
               <Stack.Screen name="EventHome" component={EventHomeScreen} />
               <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
+              <Stack.Screen name="Notifications" component={NotificationsScreen} />
               <Stack.Screen name="QRScanner" component={QRScannerStub} />
             </Stack.Navigator>
 

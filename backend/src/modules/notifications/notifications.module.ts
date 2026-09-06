@@ -3,6 +3,8 @@ import { ExpoPushService } from './expo-push.service';
 import { PushTokensService } from './push-tokens.service';
 import { PushTokensController } from './push-tokens.controller';
 import { OrderNotificationsService } from './order-notifications.service';
+import { UserNotificationsService } from './user-notifications.service';
+import { UserNotificationsController } from './user-notifications.controller';
 import { ScheduledPushService } from './scheduled-push.service';
 import { ScheduledPushController } from './scheduled-push.controller';
 
@@ -17,8 +19,8 @@ import { ScheduledPushController } from './scheduled-push.controller';
  * C2 (push programmés) et C3 (campagne -50 % auto), qui s'appuieront dessus.
  */
 @Module({
-  controllers: [PushTokensController, ScheduledPushController],
-  providers: [ExpoPushService, PushTokensService, OrderNotificationsService, ScheduledPushService],
-  exports: [ExpoPushService, PushTokensService, OrderNotificationsService, ScheduledPushService],
+  controllers: [PushTokensController, ScheduledPushController, UserNotificationsController],
+  providers: [ExpoPushService, PushTokensService, OrderNotificationsService, ScheduledPushService, UserNotificationsService],
+  exports: [ExpoPushService, PushTokensService, OrderNotificationsService, ScheduledPushService, UserNotificationsService],
 })
 export class NotificationsModule {}

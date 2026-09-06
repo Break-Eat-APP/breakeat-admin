@@ -72,6 +72,21 @@ export async function enregistrerPush(): Promise<void> {
 }
 
 /**
+ * Écoute les push reçus application ouverte.
+ *
+ * Sans cela, la pastille de la cloche n'apparaîtrait qu'au prochain retour sur
+ * l'accueil : le client verrait passer la bannière, puis une cloche muette.
+ *
+ * Rend de quoi cesser d'écouter. Deux abonnements survivants compteraient deux
+ * fois la même annonce.
+ */
+export function ecouterPush(onRecu: () => void): () => void {
+  if (Platform.OS === 'web') return () => undefined;
+  const abonnement = Notifications.addNotificationReceivedListener(() => onRecu());
+  return () => abonnement.remove();
+}
+
+/**
  * Retire le jeton à la déconnexion.
  *
  * Sans cela, l'appareil continuerait de recevoir les campagnes du club auquel

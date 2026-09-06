@@ -460,6 +460,29 @@ export function formatOrderNumber(order: {
 export const apiChoisirCreneau = (cartId: string, slotId: string | null) =>
   req(`/carts/${cartId}/creneau`, { method: 'PATCH', body: JSON.stringify({ slotId }) });
 
+/** Une notification reçue, telle que la cloche la montre. */
+export interface NotificationCliente {
+  id: string;
+  title: string;
+  body: string;
+  lue: boolean;
+  createdAt: string;
+}
+
+/**
+ * Ce qui attend le client, et combien.
+ *
+ * Le compte vient du SERVEUR : gardé dans l'application, il ne survivrait ni à
+ * une réinstallation ni au passage d'un téléphone à l'autre, et ne compterait
+ * pas ce qui est arrivé téléphone éteint.
+ */
+export const apiNotifications = () =>
+  req<{ nonLues: number; notifications: NotificationCliente[] }>('/notifications');
+
+/** La cloche revient à zéro. */
+export const apiMarquerNotificationsLues = () =>
+  req<{ marquees: number }>('/notifications/lues', { method: 'POST' });
+
 export const apiLienRecu = (orderId: string) =>
   req<{ url: string }>(`/orders/${orderId}/recu/lien`, { method: 'POST' });
 
