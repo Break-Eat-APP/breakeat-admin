@@ -97,28 +97,50 @@ l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
    Stripe. Le démarrage la réclame dans ses journaux.
 
 1. **`APNS_BUNDLE_ID = com.shapper.breakeat`** sur Railway. La build TestFlight porte l'identifiant réel ; avec une autre valeur, le topic APNs ne correspond pas et **aucune Live Activity ne démarrera**.
-2. **`APNS_ENV = production`** sur Railway. Sans cette valeur, le serveur pousse
+2. **La CLÉ APNs (`.p8`) doit couvrir la PRODUCTION.** ← constaté le 06/09/2026
+
+   Journal Railway au moment d'une transition de commande :
+
+   ```
+   Échec d'envoi APNs (403 BadEnvironmentKeyInToken) pour l'activité …
+   ```
+
+   Ce message ne désigne PAS `APNS_ENV`, qui peut être parfaitement réglé. Il
+   dit : *cette clé d'API n'est pas valable pour cet hôte*. Apple permet de
+   créer une clé APNs limitée au **Sandbox** ; utilisée contre l'hôte de
+   production — celui qu'exige une build TestFlight — elle est refusée à chaque
+   envoi. L'activité s'affiche quand même (iOS la crée localement) mais reste
+   **figée sur son premier état**.
+
+   Le remède n'est pas une variable : recréer une clé dans le portail Apple
+   (Certificates, Identifiers & Profiles → Keys) en cochant **APNs**, valable
+   Sandbox ET Production, puis remplacer `APNS_KEY_ID` et `APNS_PRIVATE_KEY`.
+   Le serveur nomme désormais la clé refusée dans son avertissement.
+
+   Le `.p8` ne doit JAMAIS être collé dans une conversation ni commité.
+
+3. **`APNS_ENV = production`** sur Railway. Sans cette valeur, le serveur pousse
    vers l'hôte *sandbox* alors que la build TestFlight porte un jeton de
    production : Apple rejette chaque mise à jour (`BadDeviceToken`). La Live
    Activity s'affiche quand même — iOS la crée localement — mais reste **figée
    sur son premier état**, et rien ne la termine. C'est la cause des trois
    symptômes observés le 27/08. Le serveur trace maintenant l'hôte visé au
    démarrage : la ligne `APNs — hôte …` dit lequel est utilisé.
-3. **TestFlight** — App Store Connect → onglet TestFlight → remplir les *informations de test* (obligatoire), puis s'ajouter en testeur interne.
-4. **Renseigner les coordonnées GPS des lieux** — sans elles, un lieu n'apparaît jamais par proximité. Il reste trouvable par la recherche.
-5. **Activer l'ardoise pour la tester** : `GROUP_SPLIT_ENABLED=true` et
+4. **TestFlight** — App Store Connect → onglet TestFlight → remplir les *informations de test* (obligatoire), puis s'ajouter en testeur interne.
+5. **Renseigner les coordonnées GPS des lieux** — sans elles, un lieu n'apparaît jamais par proximité. Il reste trouvable par la recherche.
+6. **Activer l'ardoise pour la tester** : `GROUP_SPLIT_ENABLED=true` et
    `PUBLIC_WEB_URL=https://breakeat-admin-mobile-rho.vercel.app` sur Railway.
    Exige aussi des clés Stripe valides et une buvette avec un compte Connect
    actif — sans compte, la page de paiement ne peut pas s'ouvrir. À `false`,
    le bouton disparaît et le parcours normal ne change pas.
-6. **Décider du sort des tables `operator_screen_templates` et
+7. **Décider du sort des tables `operator_screen_templates` et
    `event_operator_screens`.** Le board opérateur est passé à trois colonnes
    fixes : l'interface et l'API de configuration ont été retirées, mais les
    TABLES restent. Les supprimer effacerait les écrans déjà enregistrés par les
    clubs — ça se décide, ça ne se fait pas en passant. Tant qu'elles existent,
    elles ne coûtent rien.
-7. **Nettoyer les données de test** du wizard et de « Démo Spartiates » : événements d'abord, puis points de retrait, puis comptes.
-8. **Régler la TVA des produits déjà en ligne** — toujours à faire. Toute carte saisie avant le
+8. **Nettoyer les données de test** du wizard et de « Démo Spartiates » : événements d'abord, puis points de retrait, puis comptes.
+9. **Régler la TVA des produits déjà en ligne** — toujours à faire. Toute carte saisie avant le
    01/09/2026 est à **10 %**, bières comprises : c'était le seul taux que
    l'application connaissait. Les taux de la restauration sont trois — 5,5 %
    (à emporter, produit emballé), 10 % (consommation immédiate), 20 % (alcools
@@ -128,17 +150,17 @@ l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
    commandes DÉJÀ passées gardent leur taux d'origine — c'est voulu : on ne
    réécrit pas une déclaration déposée.
 
-9. **Rattacher chaque compte opérateur à SA buvette** — back-office → **Équipe**.
+10. **Rattacher chaque compte opérateur à SA buvette** — back-office → **Équipe**.
    C'est désormais la seule chose qui détermine ce qu'un poste affiche : le
    sélecteur a été retiré (il permettait d'afficher un comptoir et d'en recevoir
    un autre, le serveur imposant de toute façon celui du compte). Un compte non
    rattaché ne voit rien, et l'écran le dit. **À faire avant d'ouvrir un lieu à
    plusieurs buvettes.**
 
-10. **Supprimer la commande `DEMO-MTBUTM82`** et les autres restes du mode démo,
+11. **Supprimer la commande `DEMO-MTBUTM82`** et les autres restes du mode démo,
     qui traînent encore dans « Mes commandes » de certains comptes.
 
-11. **Nettoyer les comptes Stripe connectés inutiles.** Il en subsiste plusieurs
+12. **Nettoyer les comptes Stripe connectés inutiles.** Il en subsiste plusieurs
     portant le même nom (« Buvette Nord » en double), créés lors d'inscriptions
     reprises. Un seul reçoit l'argent, celui affiché dans **Encaissement** ;
     chercher un paiement dans un autre fait conclure à tort qu'il n'a pas été

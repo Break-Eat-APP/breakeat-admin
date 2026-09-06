@@ -279,8 +279,23 @@ export class LiveActivityService {
           `Token de Live Activity invalide (${result.reason}) — activité ${activity.id} marquée STALE${piste}`,
         );
       } else {
+        // `BadEnvironmentKeyInToken` designe la CLE, pas le token de l'appareil
+        // ni le reglage d'environnement : Apple dit « cette cle d'API n'est pas
+        // valable pour cet hote ». Une cle `.p8` creee en « Sandbox » seulement
+        // est refusee sur l'hote de production -- et le message brut envoie
+        // chercher du cote de APNS_ENV, qui peut etre parfaitement correct.
+        //
+        // Le remede n'est pas une variable : c'est une cle a recreer dans le
+        // portail Apple, avec APNs actif pour Sandbox ET Production.
+        const piste =
+          result.reason === 'BadEnvironmentKeyInToken'
+            ? ` — la CLÉ APNs (KEY_ID ${this.apns.keyIdLabel()}) n'est pas valable pour l'hôte ` +
+              `${this.apns.environmentLabel()}. Ce n'est PAS APNS_ENV : recréez une clé APNs dans ` +
+              'le portail Apple en cochant Sandbox ET Production, puis remplacez APNS_KEY_ID et ' +
+              'APNS_PRIVATE_KEY.'
+            : '';
         this.logger.warn(
-          `Échec d'envoi APNs (${result.status} ${result.reason ?? ''}) pour l'activité ${activity.id}`,
+          `Échec d'envoi APNs (${result.status} ${result.reason ?? ''}) pour l'activité ${activity.id}${piste}`,
         );
       }
     }

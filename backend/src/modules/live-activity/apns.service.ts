@@ -100,6 +100,17 @@ export class ApnsService implements OnModuleInit, OnModuleDestroy {
     return this.host === APNS_HOST_PROD ? 'production' : 'sandbox';
   }
 
+  /**
+   * L'identifiant de la clé APNs, pour un diagnostic.
+   *
+   * Ce n'est pas un secret — il figure en clair dans le nom du fichier `.p8` et
+   * dans le portail Apple. Le nommer permet de dire QUELLE clé Apple refuse,
+   * quand un compte en porte plusieurs.
+   */
+  keyIdLabel(): string {
+    return this.keyId || '—';
+  }
+
   /** Le programme est-il configurable ? (sinon on n'essaie même pas d'émettre) */
   isConfigured(): boolean {
     return Boolean(this.keyId && this.teamId && this.privateKey && this.bundleId);
