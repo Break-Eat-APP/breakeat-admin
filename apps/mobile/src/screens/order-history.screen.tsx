@@ -339,54 +339,62 @@ function OrderCard({
 
   return (
     <Pressable style={({ pressed }) => [styles.card, shadowCard, pressed && styles.pressed]} onPress={onPress}>
-      {/* En-tête : n° + montant */}
+      {/* En-tête.
+          La BUVETTE d'abord, en gros : c'est ce que le client cherche des yeux
+          quand il tient son téléphone devant un stade. Le numéro de commande
+          n'est utile qu'au comptoir, une fois arrivé — il descend en seconde
+          ligne, dans une graisse tabulaire qui le rend lisible à voix haute. */}
       <View style={styles.cardHeader}>
-        <Text style={styles.orderNumber}>Commande n°{order.publicOrderNumber}</Text>
-        <Text style={styles.price}>{formatPrice(order.totalCents)}</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.supplierText} numberOfLines={1}>
+            {order.supplierName ?? 'Commande'}
+          </Text>
+          <Text style={styles.orderNumber}>N° {order.publicOrderNumber}</Text>
+        </View>
+        <View style={styles.priceBlock}>
+          <Text style={styles.price}>{formatPrice(order.totalCents)}</Text>
+        </View>
       </View>
 
-      {/* La buvette de retrait — un lieu peut en avoir plusieurs, et le client
-          doit savoir DEVANT LAQUELLE se présenter. */}
-      {order.supplierName ? (
-        <View style={styles.supplierRow}>
-          <Ionicons name="storefront-outline" size={14} color={THEME.inkSoft} />
-          <Text style={styles.supplierText}>{order.supplierName}</Text>
+      {/* Statut — pastille pleine, points d'étape à droite.
+          Les trois barres légendées prenaient deux lignes pour dire ce qu'un
+          chapelet de points dit d'un coup d'œil. */}
+      <View style={styles.statusRow}>
+        <View style={[styles.statusPill, { backgroundColor: cfg.tint }]}>
+          <Ionicons name={cfg.icon} size={14} color={cfg.color} />
+          <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
         </View>
-      ) : null}
 
-      {/* Statut coloré */}
-      <View style={[styles.statusPill, { backgroundColor: cfg.tint }]}>
-        <Ionicons name={cfg.icon} size={15} color={cfg.color} />
-        <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+        {cfg.phase !== 'cancelled' && (
+          <View style={styles.pistes}>
+            {STEPS.map((s, i) => {
+              const atteint = stepIndex >= i || cfg.phase === 'done';
+              const actif = stepIndex === i && cfg.phase !== 'done';
+              return (
+                <View
+                  key={s.phase}
+                  style={[
+                    styles.piste,
+                    { backgroundColor: atteint ? s.color : THEME.border },
+                    // L'étape EN COURS s'allonge : la progression se lit sans
+                    // légende, même de loin et même en noir et blanc.
+                    actif && styles.pisteActive,
+                  ]}
+                />
+              );
+            })}
+          </View>
+        )}
       </View>
 
-      {/* Progression 3 étapes — masquée si annulée */}
-      {cfg.phase !== 'cancelled' && (
-        <View style={styles.steps}>
-          {STEPS.map((s, i) => {
-            const reached = stepIndex >= i || cfg.phase === 'done';
-            return (
-              <View key={s.phase} style={styles.step}>
-                <View style={[styles.stepBar, { backgroundColor: reached ? s.color : THEME.border }]} />
-                <Text style={[styles.stepLabel, reached && { color: s.color, fontFamily: HEAD.bold }]}>
-                  {s.label}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      )}
-
-      <View style={styles.divider} />
-
-      {/* Horaires : créneau de retrait (mis à jour s'il est réassigné) + heure de commande */}
-      <View style={styles.timeRow}>
-        <Ionicons name="time-outline" size={14} color={live ? cfg.color : THEME.inkSoft} />
+      {/* Retrait : l'information qu'on relit dix fois en attendant. */}
+      <View style={styles.retrait}>
+        <Ionicons name="time-outline" size={15} color={live ? cfg.color : THEME.inkSoft} />
         <Text style={[styles.timeStrong, live && { color: cfg.color }]}>{pickupLabel(order)}</Text>
-        <Text style={styles.timeSoft}>· commandé à {formatTime(order.createdAt)}</Text>
+        <Text style={styles.timeSoft}>
+          {formatDate(order.createdAt)} · {formatTime(order.createdAt)}
+        </Text>
       </View>
-
-      <Text style={styles.dateLine}>{formatDate(order.createdAt)}</Text>
 
       {/* « Y aller » — le plan de CETTE buvette, pas celui du lieu entier. */}
       {live && order.pickupPlanUrl ? (
@@ -467,13 +475,41 @@ const styles = StyleSheet.create({
   },
   ctaText: { color: '#fff', fontFamily: HEAD.bold, fontSize: 15 },
 
-  list: { padding: 16, gap: 12 },
+  list: { padding: 16, gap: 14 },
 
-  card: { backgroundColor: THEME.surface, borderRadius: THEME.radius.card, padding: 14, gap: 10 },
+  /**
+   * Carte de commande.
+   *
+   * Rayon large et bord clair plutôt qu'une ombre marquée : sur un fond blanc
+   * cassé, l'ombre seule donnait des cartes molles, aux limites incertaines.
+   * Le trait fin les pose ; l'ombre ne fait plus que les décoller.
+   */
+  card: {
+    backgroundColor: THEME.surface,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    padding: 18,
+    gap: 14,
+  },
   pressed: { opacity: 0.85 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  orderNumber: { flex: 1, color: THEME.ink, fontSize: 15, fontFamily: HEAD.bold },
-  price: { color: THEME.ink, fontSize: 15, fontFamily: HEAD.bold },
+  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
+  headerLeft: { flex: 1, gap: 3 },
+  orderNumber: {
+    color: THEME.grey,
+    fontSize: 12,
+    fontFamily: HEAD.medium,
+    // Chiffres de largeur fixe : un numéro de commande se lit et se dicte.
+    fontVariant: ['tabular-nums'],
+    letterSpacing: 0.4,
+  },
+  priceBlock: {
+    backgroundColor: THEME.bgSubtle,
+    borderRadius: THEME.radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  price: { color: THEME.ink, fontSize: 15, fontFamily: HEAD.bold, fontVariant: ['tabular-nums'] },
 
   statusPill: {
     flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
@@ -481,28 +517,34 @@ const styles = StyleSheet.create({
   },
   statusText: { fontSize: 13, fontFamily: HEAD.bold },
 
-  steps: { flexDirection: 'row', gap: 6 },
-  step: { flex: 1, gap: 4 },
-  stepBar: { height: 4, borderRadius: 2 },
-  stepLabel: { color: THEME.grey, fontSize: 10.5, fontFamily: HEAD.medium },
+  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  pistes: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  piste: { width: 14, height: 5, borderRadius: 999 },
+  pisteActive: { width: 26 },
 
-  divider: { height: 1, backgroundColor: THEME.border },
-
-  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  retrait: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    flexWrap: 'wrap',
+    backgroundColor: THEME.bgSubtle,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
   timeStrong: { color: THEME.ink, fontSize: 13, fontFamily: HEAD.semibold },
   timeSoft: { color: THEME.inkSoft, fontSize: 12, fontFamily: HEAD.medium },
   dateLine: { color: THEME.grey, fontSize: 11.5, fontFamily: HEAD.medium },
 
-  supplierRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, marginBottom: 8 },
-  supplierText: { color: THEME.inkSoft, fontSize: 13, fontFamily: HEAD.semibold },
+  supplierText: { color: THEME.ink, fontSize: 16.5, fontFamily: HEAD.bold, letterSpacing: -0.2 },
   planBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 7,
     marginTop: 10,
-    paddingVertical: 11,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: THEME.radius.pill,
     borderWidth: 1.5,
     borderColor: THEME.orange,
     backgroundColor: THEME.orangeTint,

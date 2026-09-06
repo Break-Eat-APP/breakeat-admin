@@ -28,6 +28,24 @@ import { useFloatingBarBottom } from '@components/app-bottom-bar';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EventHome'>;
 
+/**
+ * Retour en arriere — l'ecran precedent, ou l'accueil a defaut.
+ *
+ * Ces fleches naviguaient vers le SCANNER QR. Un client qui suivait sa commande
+ * et appuyait sur « retour » se retrouvait devant une camera, sans rapport avec
+ * ce qu'il faisait. `goBack()` seul ne suffit pas : quand l'ecran a ete atteint
+ * par un lien (retour de paiement, notification), il n'y a rien a depiler et
+ * l'appui reste sans effet — le pire des deux, un bouton mort.
+ */
+function retourEnArriere(navigation: {
+  canGoBack: () => boolean;
+  goBack: () => void;
+  navigate: (ecran: 'Lieux') => void;
+}) {
+  if (navigation.canGoBack()) navigation.goBack();
+  else navigation.navigate('Lieux');
+}
+
 export function EventHomeScreen({ route, navigation }: Props) {
   const { eventId } = route.params;
   const { token } = useAuthStore();
@@ -153,7 +171,7 @@ export function EventHomeScreen({ route, navigation }: Props) {
           train de choisir son stand. */}
       <PageHeader
         title="Choisir un stand"
-        onBack={() => navigation.navigate('QRScanner')}
+        onBack={() => retourEnArriere(navigation)}
       />
 
       {/* Ou l'on se trouve */}

@@ -103,11 +103,15 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
           <Text style={styles.primaryBtnText}>Suivre ma commande →</Text>
         </Pressable>
 
+        {/* « Scanner un autre evenement » envoyait vers une camera — hors sujet
+            juste apres une commande, et purement decorative sur le web ou la
+            camera n'existe pas. Ce qu'on veut a cet instant, c'est retrouver
+            ses commandes. */}
         <Pressable
           style={styles.secondaryBtn}
-          onPress={() => navigation.navigate('QRScanner')}
+          onPress={() => navigation.navigate('Commandes')}
         >
-          <Text style={styles.secondaryBtnText}>Scanner un autre événement</Text>
+          <Text style={styles.secondaryBtnText}>Voir mes commandes</Text>
         </Pressable>
       </Animated.View>
 

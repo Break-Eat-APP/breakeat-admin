@@ -91,6 +91,24 @@ const STATUS_MAP: Record<string, StatusConfig> = {
 
 const STEPS = ['PAID', 'ACCEPTED', 'PREPARING', 'READY', 'PICKED_UP'];
 
+/**
+ * Retour en arriere — l'ecran precedent, ou l'accueil a defaut.
+ *
+ * Ces fleches naviguaient vers le SCANNER QR. Un client qui suivait sa commande
+ * et appuyait sur « retour » se retrouvait devant une camera, sans rapport avec
+ * ce qu'il faisait. `goBack()` seul ne suffit pas : quand l'ecran a ete atteint
+ * par un lien (retour de paiement, notification), il n'y a rien a depiler et
+ * l'appui reste sans effet — le pire des deux, un bouton mort.
+ */
+function retourEnArriere(navigation: {
+  canGoBack: () => boolean;
+  goBack: () => void;
+  navigate: (ecran: 'Lieux') => void;
+}) {
+  if (navigation.canGoBack()) navigation.goBack();
+  else navigation.navigate('Lieux');
+}
+
 export function OrderTrackingScreen({ route, navigation }: Props) {
   const { orderId } = route.params;
   const [order, setOrder] = useState<Order | null>(null);
@@ -192,7 +210,7 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
     <View style={styles.root}>
       <PageHeader
         title={`Suivi #${order.publicOrderNumber}`}
-        onBack={() => navigation.navigate('QRScanner')}
+        onBack={() => retourEnArriere(navigation)}
         right={
           !STATUS_MAP[order.status]?.isFinal ? (
             <View style={styles.liveBadge}>
