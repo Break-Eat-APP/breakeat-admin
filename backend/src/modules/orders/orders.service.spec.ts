@@ -740,6 +740,24 @@ describe('OrdersService', () => {
   // ─── findDashboardByEvent ─────────────────────────────────────
 
   describe('findDashboardByEvent', () => {
+    it('n’interroge QUE la buvette demandée — jamais tout le lieu', async () => {
+      // Avec quatre comptoirs, une requete sans filtre ferait apparaitre la
+      // meme commande sur les quatre postes. Elle serait preparee plusieurs
+      // fois : produit sorti du stock autant de fois, equipiers mobilises pour
+      // rien, et un client qui n'en recupere qu'une.
+      (prisma.order.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.supplier.findUnique as jest.Mock).mockResolvedValue({
+        id: SUPPLIER_ID,
+        name: 'Buvette Nord',
+      });
+
+      await service.findDashboardByEvent(EVENT_ID, SUPPLIER_ID);
+
+      const where = (prisma.order.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(where.eventId).toBe(EVENT_ID);
+      expect(where.supplierId).toBe(SUPPLIER_ID);
+    });
+
     it('renvoie la buvette REELLEMENT appliquée avec les commandes', async () => {
       // Le poste ne peut pas la deduire : le serveur impose celle a laquelle le
       // compte est rattache, quelle que soit la demande. Sans cette reponse,

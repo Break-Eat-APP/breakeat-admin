@@ -13,6 +13,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Server, Socket } from 'socket.io';
 import { JoinRoomDto } from './dto/join-room.dto';
+import { PrismaService } from '../../database/prisma.service';
 
 /**
  * RealtimeGateway — Socket.IO entry point.
@@ -44,6 +45,7 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   readonly server!: Server;
 
   constructor(
+    private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
   ) {}
@@ -75,16 +77,66 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   // ─── Room management ─────────────────────────────────────────
 
-  /** Subscribe to a room. Clients must be authenticated to join. */
+  /**
+   * Rejoindre un salon.
+   *
+   * Les salons de BUVETTE sont verifies. L'ancienne regle -- « les noms de
+   * salon sont des UUID et ne sont jamais publies » -- etait fausse : la route
+   * publique d'un evenement liste ses buvettes AVEC leur identifiant, pour que
+   * le client choisisse son stand. N'importe quel equipier connecte pouvait
+   * donc ecouter le flux du comptoir d'a cote, et voir ses commandes arriver.
+   *
+   * Avec quatre buvettes dans un meme lieu, cette porte ouverte devient une
+   * confusion quotidienne autant qu'une fuite : un poste qui recoit les
+   * commandes d'un autre les prepare.
+   */
   @SubscribeMessage('join_room')
-  handleJoinRoom(
+  async handleJoinRoom(
     @ConnectedSocket() client: Socket,
     @MessageBody() dto: JoinRoomDto,
-  ): { joined: string } {
-    if (!client.data.user) throw new WsException('Unauthorized');
+  ): Promise<{ joined: string }> {
+    const utilisateur = client.data.user as { sub?: string } | undefined;
+    if (!utilisateur?.sub) throw new WsException('Unauthorized');
+
+    if (!(await this.peutRejoindre(utilisateur.sub, dto.room))) {
+      this.logger.warn(`WS [${client.id}] refuse sur ${dto.room} — pas sa buvette`);
+      throw new WsException('Forbidden');
+    }
+
     client.join(dto.room);
     this.logger.debug(`WS [${client.id}] joined room ${dto.room}`);
     return { joined: dto.room };
+  }
+
+  /**
+   * Qui a le droit d'ecouter le flux d'une buvette.
+   *
+   * Membre de l'organisation qui la detient — et, si le compte est rattache a
+   * un comptoir precis, celui-la et aucun autre. La meme regle que le tableau
+   * de bord applique deja cote REST : les deux chemins doivent repondre la
+   * meme chose, sinon le temps reel devient une porte derobee vers ce que
+   * l'API refuse.
+   */
+  private async peutRejoindre(userId: string, salon: string): Promise<boolean> {
+    const prefixe = 'supplier:';
+    if (!salon.startsWith(prefixe)) return true;
+
+    const supplierId = salon.slice(prefixe.length);
+    const buvette = await this.prisma.supplier.findUnique({
+      where: { id: supplierId },
+      select: { organizationId: true },
+    });
+    if (!buvette) return false;
+
+    const membre = await this.prisma.organizationMember.findUnique({
+      where: {
+        userId_organizationId: { userId, organizationId: buvette.organizationId },
+      },
+      select: { supplierId: true },
+    });
+    if (!membre) return false;
+
+    return !membre.supplierId || membre.supplierId === supplierId;
   }
 
   /** Unsubscribe from a room. */

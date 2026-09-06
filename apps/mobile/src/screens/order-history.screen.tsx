@@ -429,7 +429,7 @@ function OrderCard({
             hitSlop={4}
           >
             <Ionicons name="hand-left-outline" size={16} color="#fff" />
-            <Text style={styles.arrivedBtnText}>Je suis arrivé</Text>
+            <Text style={styles.arrivedBtnText}>Je suis arrivé devant le point de retrait</Text>
           </Pressable>
         ))}
     </Pressable>

@@ -62,12 +62,6 @@ export function ProfileScreen() {
 
       {/* Liens secondaires */}
       <View style={[styles.menu, shadowCard]}>
-        <MenuItem
-          icon="storefront-outline"
-          label="Nos lieux"
-          onPress={() => navigation.navigate('Partners')}
-        />
-        <View style={styles.divider} />
         <LocationMenuItem
           locStatus={locStatus}
           optedOut={optedOut}

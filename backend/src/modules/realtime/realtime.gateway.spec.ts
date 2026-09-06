@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { WsException } from '@nestjs/websockets';
 import { RealtimeGateway } from './realtime.gateway';
 import type { Socket } from 'socket.io';
+import { PrismaService } from '../../database/prisma.service';
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -29,6 +30,15 @@ describe('RealtimeGateway', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         RealtimeGateway,
+        {
+          // Le gateway verifie desormais l'acces aux salons de buvette :
+          // membre du club, et son comptoir s'il est epingle.
+          provide: PrismaService,
+          useValue: {
+            supplier: { findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-1' }) },
+            organizationMember: { findUnique: jest.fn().mockResolvedValue({ supplierId: null }) },
+          },
+        },
         {
           provide: JwtService,
           useValue: { verify: jest.fn() },
@@ -122,23 +132,23 @@ describe('RealtimeGateway', () => {
   // ─── handleJoinRoom ───────────────────────────────────────────
 
   describe('handleJoinRoom', () => {
-    it('joins the room and returns { joined } when authenticated', () => {
+    it('joins the room and returns { joined } when authenticated', async () => {
       const roomId = 'organization:123e4567-e89b-12d3-a456-426614174000';
       const client = makeSocket();
       client.data.user = VALID_PAYLOAD;
 
-      const result = gateway.handleJoinRoom(client, { room: roomId });
+      const result = await gateway.handleJoinRoom(client, { room: roomId });
 
       expect(client.join).toHaveBeenCalledWith(roomId);
       expect(result).toEqual({ joined: roomId });
     });
 
-    it('throws WsException when client is not authenticated', () => {
+    it('throws WsException when client is not authenticated', async () => {
       const client = makeSocket(); // no data.user
 
-      expect(() =>
+      await expect(
         gateway.handleJoinRoom(client, { room: 'order:123e4567-e89b-12d3-a456-426614174000' }),
-      ).toThrow(WsException);
+      ).rejects.toBeInstanceOf(WsException);
 
       expect(client.join).not.toHaveBeenCalled();
     });
