@@ -138,8 +138,6 @@ export default function DashboardPage() {
   // Phase 12.9 — supplier filter
   const [supplierId, setSupplierId] = useState<string | null>(null);
   /** Buvettes du lieu, pour le choix quand le poste n'en connait aucune. */
-  const [buvettes, setBuvettes] = useState<Array<{ id: string; name: string }>>([]);
-  const [choixOuvert, setChoixOuvert] = useState(false);
   const [supplierName, setSupplierName] = useState<string | null>(null);
   /**
    * La buvette que le SERVEUR applique vraiment.
@@ -159,21 +157,22 @@ export default function DashboardPage() {
   const [statusBusy, setStatusBusy] = useState(false);
   const [statusError, setStatusError] = useState('');
 
-  // Read token + supplier assignment from localStorage on mount
+  /**
+   * Jeton et organisation au montage. La BUVETTE, elle, ne vient plus d'ici.
+   *
+   * Le navigateur en gardait le souvenir (`operator_supplier_id`), qui survivait
+   * a tout : changement d'evenement, buvette supprimee puis recreee sous un
+   * autre identifiant. Le poste affichait alors le nom retenu tout en
+   * interrogeant un comptoir disparu, et restait vide sans rien expliquer.
+   * C'est le compte qui repond desormais — une seule source, toujours a jour.
+   */
   useEffect(() => {
     const stored = localStorage.getItem('operator_token');
     if (stored) setToken(stored);
-    // Buvette transmise dans l'adresse (bouton « Ouvrir le poste » du dashboard
-    // manager) : elle l'emporte sur celle memorisee. Un responsable qui ouvre le
-    // poste de la buvette Sud doit voir le Sud, meme si son navigateur garde le
-    // souvenir du Nord.
-    const depuisUrl = new URLSearchParams(window.location.search).get('supplierId');
-    const sid = depuisUrl ?? localStorage.getItem('operator_supplier_id');
-    const sname = depuisUrl
-      ? null
-      : localStorage.getItem('operator_supplier_name');
-    if (sid) { setSupplierId(sid); setSupplierName(sname); }
     setOrgId(localStorage.getItem('operator_org_id'));
+    // Nettoyage des souvenirs devenus nuisibles.
+    localStorage.removeItem('operator_supplier_id');
+    localStorage.removeItem('operator_supplier_name');
   }, []);
 
   /**
@@ -184,86 +183,52 @@ export default function DashboardPage() {
    * « Ouvrir le poste » du back-office ne transmet pas la buvette. Une commande
    * du Sud apparaissait donc au Nord.
    *
-   * On cherche donc, dans l'ordre : l'adresse, la memoire du navigateur,
-   * l'epinglage du compte. A defaut, on DEMANDE — plutot que de tout montrer.
+   * C'est le COMPTE qui repond, et lui seul : chaque equipier tient un
+   * comptoir, rattache dans le back-office. Le poste ne propose plus d'en
+   * changer -- ce selecteur permettait d'afficher une buvette tout en recevant
+   * les commandes d'une autre, puisque le serveur impose de toute facon celle
+   * du compte. Deux verites a l'ecran, dont une fausse.
+   *
+   * Un compte NON rattache ne voit rien, et on lui dit pourquoi. Le lien
+   * « Ouvrir le poste » du back-office reste la seule autre entree : il sert au
+   * responsable qui surveille un comptoir sans y etre affecte.
    */
   useEffect(() => {
     if (!token) return;
     let annule = false;
     void (async () => {
-      // La liste FAIT FOI. On la lit toujours, meme quand une buvette est deja
-      // retenue : c'est elle qui permet de verifier que le souvenir du
-      // navigateur correspond encore a quelque chose.
-      const liste = await fetchEventSuppliers(eventId).catch(() => []);
-      if (annule) return;
-      setBuvettes(liste);
-
-      // Un identifiant memorise qui n'appartient PLUS a cet evenement.
-      //
-      // `operator_supplier_id` survit a tout : changement d'evenement, buvette
-      // supprimee puis recreee sous un nouvel identifiant. Le poste continuait
-      // alors d'afficher le nom retenu — « Buvette Nord » — tout en filtrant
-      // sur un comptoir qui ne recevait plus rien. Le tableau restait vide sans
-      // que rien n'explique pourquoi : ni erreur, ni commande.
-      if (supplierId) {
-        if (liste.length > 0 && !liste.some((b) => b.id === supplierId)) {
-          localStorage.removeItem('operator_supplier_id');
-          localStorage.removeItem('operator_supplier_name');
-          setSupplierId(null);
-          setSupplierName(null);
-          setChoixOuvert(true);
-          return;
-        }
-        // Le nom vient du serveur, pas de la memoire : renommer une buvette ne
-        // doit pas laisser l'ancien nom affiche au comptoir.
-        const aJour = liste.find((b) => b.id === supplierId);
-        if (aJour) {
-          setSupplierName(aJour.name);
-          localStorage.setItem('operator_supplier_name', aJour.name);
-        }
-        return;
-      }
-
       try {
         const moi = await fetchMeWithMemberships(token);
+        if (annule) return;
         const epingle = moi.memberships.find((m) => m.supplierId);
-        if (!annule && epingle?.supplierId) {
+        if (epingle?.supplierId) {
           setSupplierId(epingle.supplierId);
           setSupplierName(epingle.supplier?.name ?? null);
-          localStorage.setItem('operator_supplier_id', epingle.supplierId);
           return;
         }
+        // Compte NON rattache : seul le lien du back-office peut designer un
+        // comptoir. C'est le cas d'un responsable qui ouvre un poste ; ce n'est
+        // pas censé être celui d'un équipier.
+        const depuisUrl = new URLSearchParams(window.location.search).get('supplierId');
+        if (depuisUrl) {
+          setSupplierId(depuisUrl);
+          const liste = await fetchEventSuppliers(eventId).catch(() => []);
+          if (!annule) setSupplierName(liste.find((b) => b.id === depuisUrl)?.name ?? null);
+          return;
+        }
+        setSupplierId(null);
+        setSupplierName(null);
       } catch {
-        // Sans reponse, on tombe sur le choix manuel — jamais sur « tout ».
-      }
-      if (annule) return;
-      // Une seule buvette : la choisir soi-meme serait une question inutile.
-      if (liste.length === 1) {
-        setSupplierId(liste[0].id);
-        setSupplierName(liste[0].name);
-        localStorage.setItem('operator_supplier_id', liste[0].id);
-        localStorage.setItem('operator_supplier_name', liste[0].name);
-      } else if (liste.length > 1) {
-        setChoixOuvert(true);
+        // Sans reponse du serveur, on n'affiche RIEN. Montrer les commandes de
+        // tout le lieu « en attendant » ferait croire a l'equipier que ce sont
+        // les siennes.
+        if (!annule) setSupplierId(null);
       }
     })();
     return () => {
       annule = true;
     };
-  }, [token, supplierId, eventId]);
-
-  const choisirBuvette = (id: string, nom: string) => {
-    setSupplierId(id);
-    setSupplierName(nom);
-    localStorage.setItem('operator_supplier_id', id);
-    localStorage.setItem('operator_supplier_name', nom);
-    setChoixOuvert(false);
-  };
-
-  const ouvrirChoix = async () => {
-    if (buvettes.length === 0) setBuvettes(await fetchEventSuppliers(eventId));
-    setChoixOuvert(true);
-  };
+  }, [token, eventId]);
 
   // Le serveur a refusé le jeton : on revient au formulaire, UNE fois.
   //
@@ -336,11 +301,7 @@ export default function DashboardPage() {
     if (!duServeur) return;
     setBuvetteServeur(duServeur);
     setSupplierName(duServeur.name);
-    if (duServeur.id !== supplierId) {
-      setSupplierId(duServeur.id);
-      localStorage.setItem('operator_supplier_id', duServeur.id);
-      localStorage.setItem('operator_supplier_name', duServeur.name);
-    }
+    if (duServeur.id !== supplierId) setSupplierId(duServeur.id);
   }, [data?.supplier, supplierId]);
 
   // Récap produits — masqué par défaut, ouvert à la demande pendant le service.
@@ -465,13 +426,12 @@ export default function DashboardPage() {
           </span>
         </div>
         <span style={{ color: BRAND.grey, fontSize: 13 }}>Dashboard opérateur</span>
-        {/* La buvette tenue par ce poste — cliquable pour en changer.
-            Le nom n'est pas decoratif : c'est lui qui dit quelles commandes
-            s'affichent. Il doit donc etre visible ET modifiable. */}
-        <button
-          type="button"
-          onClick={() => void ouvrirChoix()}
-          title="Changer de buvette"
+        {/* La buvette tenue par ce poste — en lecture seule.
+            Elle vient du COMPTE, rattaché dans le back-office. Ce libellé était
+            un bouton permettant d'en changer : le serveur imposant de toute
+            façon la buvette du compte, on pouvait afficher un comptoir et en
+            recevoir un autre. */}
+        <span
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -483,13 +443,11 @@ export default function DashboardPage() {
             fontSize: 13,
             fontWeight: 700,
             color: supplierName ? BRAND.orangeDark : BRAND.grey,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
           }}
         >
           <Store size={14} strokeWidth={2} style={{ flexShrink: 0 }} />{' '}
-          {supplierName ?? 'Choisir une buvette'}
-        </button>
+          {supplierName ?? 'Aucune buvette'}
+        </span>
 
         {/* Ouverture de la buvette — décidée par l'équipier, à son poste.
             Lui seul sait s'il a du monde, du stock et de quoi servir : ce
@@ -643,84 +601,31 @@ export default function DashboardPage() {
           </div>
         )}
 
-      {/* Choix de la buvette — tant qu'on ne l'a pas, on n'affiche RIEN.
-          Montrer les commandes de tout le lieu « en attendant » serait pire
-          que ne rien montrer : l'opératrice croirait que ce sont les siennes. */}
-      {choixOuvert && (
+      {/* Compte sans buvette — on n'affiche RIEN, et on dit pourquoi.
+          Montrer les commandes de tout le lieu « en attendant » ferait croire à
+          l'équipier que ce sont les siennes. Et le rattachement se décide dans
+          le back-office : le laisser choisir ici reviendrait à lui confier une
+          règle d'organisation, en plus de ne pas fonctionner — le serveur
+          impose de toute façon la buvette du compte. */}
+      {token && !supplierId && (
         <div
           style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(45,41,38,0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 50,
-            padding: 20,
+            margin: '24px 16px',
+            padding: '22px 24px',
+            borderRadius: 14,
+            background: BRAND.surface,
+            border: `2px solid ${BRAND.orange}`,
+            maxWidth: 520,
           }}
         >
-          <div
-            style={{
-              background: '#fff',
-              borderRadius: 16,
-              padding: 26,
-              width: 420,
-              maxWidth: '100%',
-              border: `2px solid ${BRAND.orange}`,
-            }}
-          >
-            <h2 style={{ margin: '0 0 6px', fontSize: 19, fontWeight: 800, color: BRAND.ink }}>
-              Quelle buvette tenez-vous ?
-            </h2>
-            <p style={{ margin: '0 0 18px', fontSize: 13.5, color: BRAND.grey, lineHeight: 1.5 }}>
-              Vous ne verrez que les commandes de ce comptoir.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {buvettes.map((b) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => choisirBuvette(b.id, b.name)}
-                  style={{
-                    textAlign: 'left',
-                    padding: '13px 16px',
-                    borderRadius: 10,
-                    border: `1.5px solid ${b.id === supplierId ? BRAND.orange : BRAND.border}`,
-                    background: b.id === supplierId ? BRAND.orangeTint : '#fff',
-                    fontSize: 15,
-                    fontWeight: 700,
-                    color: BRAND.ink,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  {b.name}
-                </button>
-              ))}
-              {buvettes.length === 0 && (
-                <span style={{ color: BRAND.grey, fontSize: 13.5 }}>
-                  Aucune buvette rattachée à cet événement.
-                </span>
-              )}
-            </div>
-            {supplierId && (
-              <button
-                type="button"
-                onClick={() => setChoixOuvert(false)}
-                style={{
-                  marginTop: 16,
-                  background: 'none',
-                  border: 'none',
-                  color: BRAND.grey,
-                  fontSize: 13,
-                  cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                Annuler
-              </button>
-            )}
-          </div>
+          <h2 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 800, color: BRAND.ink }}>
+            Ce compte n’est rattaché à aucune buvette
+          </h2>
+          <p style={{ margin: 0, fontSize: 13.5, color: BRAND.grey, lineHeight: 1.6 }}>
+            Un poste affiche les commandes d’un seul comptoir, celui auquel son compte est
+            rattaché. Demandez au responsable du club de l’affecter à une buvette depuis le
+            back-office, section <strong>Équipe</strong>.
+          </p>
         </div>
       )}
 
