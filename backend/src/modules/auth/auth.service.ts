@@ -121,9 +121,10 @@ export class AuthService {
     });
 
     if (!stored || stored.expiresAt < new Date()) {
-      // Delete the token if it exists but is expired
+      // `deleteMany` et non `delete` : la ligne peut avoir disparu entre la
+      // lecture et la suppression, et un jeton deja parti n'est pas une panne.
       if (stored) {
-        await this.prisma.refreshToken.delete({ where: { id: stored.id } });
+        await this.prisma.refreshToken.deleteMany({ where: { id: stored.id } });
       }
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
@@ -132,8 +133,20 @@ export class AuthService {
       throw new UnauthorizedException('Account is disabled');
     }
 
-    // Rotate: delete old, issue new
-    await this.prisma.refreshToken.delete({ where: { id: stored.id } });
+    // Rotation : on retire l'ancien jeton avant d'en emettre un nouveau.
+    //
+    // `deleteMany` plutot que `delete`, et le compte est VERIFIE. Deux appels
+    // simultanes (deux onglets, ou un ecran qui rejoue sa requete) lisaient le
+    // meme jeton puis tentaient tous deux de le supprimer : le second levait
+    // une erreur Prisma « No record was found for a delete », rendue au client
+    // en 500. Une session perdue s'affichait donc comme une panne du serveur.
+    //
+    // Perdre la course signifie qu'un autre appel a deja consomme ce jeton :
+    // c'est un refus d'authentification, pas une erreur interne.
+    const rotation = await this.prisma.refreshToken.deleteMany({ where: { id: stored.id } });
+    if (rotation.count === 0) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash: _hash, ...safeUser } = stored.user;

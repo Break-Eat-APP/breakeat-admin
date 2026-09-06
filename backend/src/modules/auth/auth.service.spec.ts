@@ -170,6 +170,26 @@ describe('AuthService', () => {
     });
   });
 
+  describe('refresh — course entre deux appels', () => {
+    it('rend une 401, pas une 500, quand le jeton vient d’être consommé', async () => {
+      // Deux appels simultanes (deux onglets, un ecran qui rejoue sa requete)
+      // lisent le meme jeton puis tentent tous deux de le supprimer. Avec
+      // `delete`, le second levait une erreur Prisma rendue en 500 : une
+      // session perdue s'affichait comme une panne du serveur.
+      mockPrismaService.refreshToken.findFirst.mockResolvedValue({
+        id: 'rt-1',
+        userId: 'user-1',
+        tokenHash: 'peu-importe',
+        expiresAt: new Date(Date.now() + 60_000),
+        user: { id: 'user-1', isActive: true, passwordHash: 'x', email: 'a@b.c' },
+      });
+      // La suppression ne touche AUCUNE ligne : l'autre appel est passe avant.
+      mockPrismaService.refreshToken.deleteMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.refresh('jeton-brut')).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
+
   describe('logout', () => {
     it('is idempotent — does not throw if token not found', async () => {
       mockPrismaService.refreshToken.deleteMany.mockResolvedValue({ count: 0 });

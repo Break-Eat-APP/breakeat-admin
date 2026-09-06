@@ -379,31 +379,82 @@ describe('OrdersService', () => {
       ).rejects.toThrow(/does not match PaymentIntent amount/);
     });
 
-    it('throws ConflictException when stock is insufficient (P1 #1 oversell guard)', async () => {
+    it('cree la commande MEME si le stock est insuffisant, et vide l’étagère', async () => {
+      // L'argent est deja encaisse quand ce code s'execute. Lever une exception
+      // ne le rend pas : elle supprime seulement la commande. Le client a paye,
+      // rien ne part en cuisine, et il ne reste aucune trace de son attente.
       (prisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
       (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
 
-      // Transaction: updateMany.count === 0 means the WHERE quantity >= N failed
-      transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) => {
-        const tx = {
+      const majStock = jest.fn();
+      transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+        cb({
           cart: { update: jest.fn() },
-          order: { create: jest.fn().mockResolvedValue({ id: 'order-1', publicOrderNumber: 'BE-00000001' }) },
+          order: {
+            create: jest
+              .fn()
+              .mockResolvedValue({ id: 'order-1', publicOrderNumber: 'BE-00000001' }),
+          },
           payment: { upsert: jest.fn() },
           orderAuditTrail: { create: jest.fn() },
           stock: {
             findFirst: jest.fn().mockResolvedValue({ id: 'stock-1', quantity: 1, isAvailable: true }),
             findUnique: jest.fn(),
-            // updateMany returns count=0 because WHERE quantity >= 2 failed
+            // count=0 : le WHERE « quantite >= 2 » n'a trouve personne.
             updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+            update: majStock,
+          },
+        }),
+      );
+
+      const order = await service.createFromPaymentIntent(
+        PAYMENT_INTENT_ID,
+        mockIntent(),
+        {} as never,
+      );
+
+      expect(order.publicOrderNumber).toBe('BE-00000001');
+      // L'etagere est vidée et retirée de la carte : c'est la verite du comptoir.
+      expect(majStock).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { quantity: 0, isAvailable: false } }),
+      );
+    });
+
+    it('cree la commande pour un produit SANS ligne de stock', async () => {
+      // Un club qui ne compte pas ses articles n'a aucune ligne de stock. Ce
+      // n'est pas une anomalie -- et c'est pourtant ce qui a fait echouer
+      // CHAQUE commande pendant une journee entiere, Stripe rejouant le webhook
+      // toutes les minutes pour echouer a l'identique.
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+
+      transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+        cb({
+          cart: { update: jest.fn() },
+          order: {
+            create: jest
+              .fn()
+              .mockResolvedValue({ id: 'order-1', publicOrderNumber: 'BE-00000001' }),
+          },
+          payment: { upsert: jest.fn() },
+          orderAuditTrail: { create: jest.fn() },
+          stock: {
+            // Aucune ligne, ni au comptoir ni au niveau du produit.
+            findFirst: jest.fn().mockResolvedValue(null),
+            findUnique: jest.fn(),
+            updateMany: jest.fn(),
             update: jest.fn(),
           },
-        };
-        return cb(tx);
-      });
+        }),
+      );
 
-      await expect(
-        service.createFromPaymentIntent(PAYMENT_INTENT_ID, mockIntent(), {} as never),
-      ).rejects.toThrow(/Insufficient stock/);
+      const order = await service.createFromPaymentIntent(
+        PAYMENT_INTENT_ID,
+        mockIntent(),
+        {} as never,
+      );
+
+      expect(order.publicOrderNumber).toBe('BE-00000001');
     });
 
     it('upserts Payment when a FAILED row already exists (P1 #3 retry guard)', async () => {

@@ -265,10 +265,26 @@ export class OrdersService {
           (await tx.stock.findFirst({
             where: { productId: item.productId, pickupPointId: null },
           }));
+        // ─── RIEN, ICI, NE PEUT REFUSER LA COMMANDE ──────────────
+        //
+        // L'argent est DEJA encaisse quand ce code s'execute : le webhook
+        // arrive apres le debit. Lever une exception ne rend pas l'argent —
+        // elle supprime seulement la commande. Le client a paye, rien ne part
+        // en cuisine, et il ne reste aucune trace de ce qu'il attendait.
+        //
+        // C'est exactement ce qui s'est produit : un produit sans ligne de
+        // stock faisait echouer CHAQUE commande le contenant, Stripe rejouait
+        // le webhook toutes les minutes, et chaque tentative echouait de la
+        // meme facon.
+        //
+        // Le stock est une affaire de SERVICE, pas de paiement. Le refus a sa
+        // place AVANT le reglement — il y est deja, a l'ajout au panier et au
+        // depart du paiement (`assertCumulativeQuantityWithinStock`). Passe le
+        // debit, il n'a plus rien a refuser : il constate.
         if (!target) {
-          throw new ConflictException(
-            `Stock row missing for product ${item.productId} during order creation`,
-          );
+          // Produit sans suivi de stock : c'est un etat normal pour un club
+          // qui ne compte pas ses articles. Il n'y a rien a decrementer.
+          continue;
         }
 
         const decremented = await tx.stock.updateMany({
@@ -282,9 +298,20 @@ export class OrdersService {
         });
 
         if (decremented.count === 0) {
-          throw new ConflictException(
-            `Insufficient stock for product ${item.productId}: requested ${item.quantity}, available ${target.quantity}`,
+          // Vendu plus que ce qui restait — deux clients sur le dernier
+          // article, par exemple. On met l'etagere a zero et on la retire de la
+          // carte : c'est la verite du comptoir. La commande, elle, existe, et
+          // l'equipier la voit arriver comme les autres.
+          await tx.stock.update({
+            where: { id: target.id },
+            data: { quantity: 0, isAvailable: false },
+          });
+          this.logger.warn(
+            `Stock depasse sur ${item.productId} : ${item.quantity} demande(s) pour ` +
+              `${target.quantity} restant(s). La commande est CREEE malgre tout — ` +
+              'le paiement est encaisse. Produit retire de la carte.',
           );
+          continue;
         }
 
         // After decrement: if remaining quantity is 0, flip isAvailable=false.
