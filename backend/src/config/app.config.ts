@@ -57,13 +57,22 @@ export default registerAs('app', () => ({
      * compte Stripe du club.
      */
     platformFeeBps: parseInt(process.env.STRIPE_PLATFORM_FEE_BPS ?? '0', 10),
+    /**
+     * Ou Stripe renvoie le club apres son inscription.
+     *
+     * Les deux adresses menent a la page ENCAISSEMENT : c'est la que l'etat du
+     * compte s'affiche, que « Verifier l'etat » se trouve, et que le diagnostic
+     * compare les deux comptes en presence. Renvoyer ailleurs obligerait a
+     * naviguer pour savoir si l'inscription a pris.
+     *
+     * `refreshUrl` est appelee quand le lien a usage unique a expire : la page
+     * porte le bouton qui en produit un nouveau.
+     */
     connect: {
       returnUrl:
-        process.env.STRIPE_CONNECT_RETURN_URL ??
-        'http://localhost:3001/suppliers/onboarding/complete',
+        process.env.STRIPE_CONNECT_RETURN_URL ?? 'http://localhost:3001/encaissement',
       refreshUrl:
-        process.env.STRIPE_CONNECT_REFRESH_URL ??
-        'http://localhost:3001/suppliers/onboarding/refresh',
+        process.env.STRIPE_CONNECT_REFRESH_URL ?? 'http://localhost:3001/encaissement',
     },
   },
 
