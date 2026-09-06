@@ -637,6 +637,7 @@ export class CartService {
       select: {
         id: true,
         publicOrderNumber: true,
+        dailyNumber: true,
         totalCents: true,
         status: true,
         slot: { select: { startAt: true } },

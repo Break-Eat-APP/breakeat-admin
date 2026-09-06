@@ -21,6 +21,7 @@ import { SlotsService } from '../slots/slots.service';
 import { OrderNotificationsService } from '../notifications/order-notifications.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { LiveActivityService } from '../live-activity/live-activity.service';
+import { jourDeService } from '../../common/helpers/jour-de-service';
 
 /**
  * OrdersService — owns the Order lifecycle from PaymentIntent.succeeded onward.
@@ -85,7 +86,7 @@ export class OrdersService {
       where: { id: cartId },
       include: {
         items: { include: { product: true } },
-        event: { select: { venueId: true, organizationId: true } },
+        event: { select: { venueId: true, organizationId: true, venue: { select: { timezone: true } } } },
       },
     });
     if (!cart) {
@@ -172,6 +173,10 @@ export class OrdersService {
     }
 
     const publicOrderNumber = await this.generatePublicOrderNumber();
+    const dailyNumber = await this.numeroDuJour(
+      cart.event.venueId,
+      cart.event.venue?.timezone || 'Europe/Paris',
+    );
 
     // ─── Single transaction: cart→CONVERTED + Order + Items + Payment + Audit + Stock ───
     const order = await this.prisma.$transaction(async (tx) => {
@@ -185,6 +190,7 @@ export class OrdersService {
       const createdOrder = await tx.order.create({
         data: {
           publicOrderNumber,
+          dailyNumber,
           // Le fil qui relie la commande au panier : c'est par lui que l'app
           // retrouve sa commande au retour de la page de paiement.
           cartId: cart.id,
@@ -409,12 +415,18 @@ export class OrdersService {
       (sh) => sh.status === 'CAPTURED' && sh.stripePaymentIntentId,
     );
     const publicOrderNumber = await this.generatePublicOrderNumber();
+    const lieu = await this.prisma.venue.findUnique({
+      where: { id: split.venueId },
+      select: { timezone: true },
+    });
+    const dailyNumber = await this.numeroDuJour(split.venueId, lieu?.timezone || 'Europe/Paris');
     const pickupPointId = split.pickupPointId;
 
     const order = await this.prisma.$transaction(async (tx) => {
       const createdOrder = await tx.order.create({
         data: {
           publicOrderNumber,
+          dailyNumber,
           userId: split.hostUserId,
           organizationId: split.organizationId,
           eventId: split.eventId,
@@ -818,6 +830,7 @@ export class OrdersService {
       select: {
         id: true,
         publicOrderNumber: true,
+        dailyNumber: true,
         status: true,
         supplierId: true,
         pickupPointId: true,
@@ -969,6 +982,44 @@ export class OrdersService {
    * Generates a human-readable, unique order number using a PostgreSQL sequence.
    * Format: BE-XXXXXXXX (8 digits zero-padded).
    */
+  /**
+   * Le numéro COURT du client : « N° 18 ».
+   *
+   * Reparti à 1 à chaque jour de service, unique PAR LIEU. Deux buvettes du même
+   * stade ne peuvent donc pas servir deux « 18 » le même soir — un client qui se
+   * trompe de comptoir s'en aperçoit au lieu de repartir avec la commande d'un
+   * autre.
+   *
+   * L'incrément tient en UNE instruction SQL. Compter les commandes puis ajouter
+   * un laisserait deux paiements simultanés obtenir le même numéro : entre le
+   * `SELECT` et le `INSERT`, rien n'empêche l'autre de passer. Ici PostgreSQL
+   * sérialise sur la clé primaire du compteur.
+   *
+   * En cas d'échec, on rend `null` plutôt que de faire échouer la commande :
+   * l'argent est déjà encaissé, et un numéro d'affichage ne vaut pas une
+   * commande perdue. La référence longue reste, et l'app retombe dessus.
+   */
+  private async numeroDuJour(venueId: string, fuseau: string): Promise<number | null> {
+    try {
+      const jour = jourDeService(new Date(), fuseau);
+      const [ligne] = await this.prisma.$queryRaw<Array<{ last_number: number }>>`
+        INSERT INTO order_counters ("venue_id", "service_date", "last_number")
+        VALUES (${venueId}::uuid, ${jour}::date, 1)
+        ON CONFLICT ("venue_id", "service_date")
+        DO UPDATE SET "last_number" = order_counters."last_number" + 1
+        RETURNING "last_number"
+      `;
+      return ligne?.last_number ?? null;
+    } catch (e: unknown) {
+      this.logger.warn(
+        `Numéro du jour indisponible pour le lieu ${venueId} : ${
+          e instanceof Error ? e.message : e
+        }. La commande garde sa référence longue.`,
+      );
+      return null;
+    }
+  }
+
   private async generatePublicOrderNumber(): Promise<string> {
     const rows = await this.prisma.$queryRaw<Array<{ nextval: bigint }>>`
       SELECT nextval('order_public_seq') AS nextval

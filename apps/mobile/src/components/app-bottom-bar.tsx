@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { THEME, shadowSoft, FONT } from '@lib/theme';
+import { THEME, shadowSoft, HEAD } from '@lib/theme';
 import { BreakEatLogo } from '@components/break-eat-logo';
 import { navigateTo } from '@navigation/nav-ref';
 import type { RootStackParamList } from '@navigation/root-navigator';
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
   },
 
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 4 },
-  tabLabel: { fontSize: 10, fontFamily: FONT.medium, color: THEME.grey, marginTop: 2 },
+  tabLabel: { fontSize: 10, fontFamily: HEAD.semibold, color: THEME.grey, marginTop: 2, letterSpacing: 0.2 },
   tabLabelActive: { color: THEME.orange },
 
   fabWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
@@ -138,5 +138,5 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
     ...shadowSoft,
   },
-  fabLabel: { fontSize: 10, fontFamily: FONT.semibold, color: THEME.orange, marginTop: 2 },
+  fabLabel: { fontSize: 10, fontFamily: HEAD.bold, color: THEME.orange, marginTop: 2, letterSpacing: 0.2 },
 });

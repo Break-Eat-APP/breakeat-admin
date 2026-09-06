@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
-import { apiGetOrder, formatPrice, type Order } from '@lib/api/mobile-api';
+import { apiGetOrder, formatOrderNumber, formatPrice, type Order } from '@lib/api/mobile-api';
 import { PageHeader } from '@components/page-header';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -209,7 +209,7 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
   return (
     <View style={styles.root}>
       <PageHeader
-        title={`Suivi #${order.publicOrderNumber}`}
+        title={`Suivi ${formatOrderNumber(order)}`}
         onBack={() => retourEnArriere(navigation)}
         right={
           !STATUS_MAP[order.status]?.isFinal ? (

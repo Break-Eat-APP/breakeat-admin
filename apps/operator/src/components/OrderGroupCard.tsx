@@ -6,6 +6,7 @@ import { OrderCard, elapsed, type OrderCardProps } from './OrderCard';
 import { StatusBadge, STATUS_COLORS, type StatusVariant } from './StatusBadge';
 import type { Order } from '@/lib/api/orders-client';
 import type { OrderGroup } from '@/lib/screens/grouping';
+import { numeroAffiche } from '@/lib/api/orders-client';
 
 /**
  * OrderGroupCard (Phase 11.4c) — renders one cluster of identical baskets.
@@ -166,7 +167,7 @@ export function OrderGroupCard({
                 padding: '1px 6px',
               }}
             >
-              #{o.publicOrderNumber}
+              #{numeroAffiche(o)}
             </span>
           ))}
           {extraBadges > 0 && (

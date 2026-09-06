@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { BRAND } from '@break-eat/brand';
 import { StatusBadge, type StatusVariant } from './StatusBadge';
 import type { Order } from '@/lib/api/orders-client';
+import { numeroAffiche } from '@/lib/api/orders-client';
 
 /**
  * RecapPanel (Phase 11.4) — the right-hand side panel of the operator board.
@@ -164,7 +165,7 @@ export function RecapPanel({ orders, screenName, onHide }: RecapPanelProps) {
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                   <span style={{ fontWeight: 800, fontSize: 13, color: BRAND.ink }}>
-                    #{o.publicOrderNumber}
+                    #{numeroAffiche(o)}
                   </span>
                   {o.customerName && (
                     <span

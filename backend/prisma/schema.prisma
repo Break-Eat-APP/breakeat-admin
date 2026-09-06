@@ -721,6 +721,17 @@ model Order {
   pickupPointId     String        @map("pickup_point_id")
   /// Phase 7 — slot assignment.
   slotId            String?       @map("slot_id")
+  /// Numero COURT montre au client et crie au comptoir : « N° 18 ».
+  ///
+  /// Reparti a 1 chaque jour de service, et unique PAR LIEU -- pas par buvette.
+  /// Un client qui se presente au mauvais comptoir avec le « 18 » ne doit pas
+  /// y trouver un autre « 18 » : dans un stade, on se trompe de buvette, jamais
+  /// de stade.
+  ///
+  /// `publicOrderNumber` reste la reference de support, unique a vie.
+  /// Nul pour les commandes anterieures au 06/09/2026 : l'affichage retombe
+  /// alors sur la reference longue.
+  dailyNumber       Int?          @map("daily_number")
   /// Le panier d'ou vient cette commande. C'est LE lien qui permet a l'app de
   /// retrouver sa commande au retour du paiement : elle ne connait que l'id du
   /// panier, jamais celui du PaymentIntent (cree par Stripe, cote serveur).
@@ -833,6 +844,21 @@ model OrderAuditTrail {
 
 /// Stripe webhook event log — store every received event for idempotency.
 /// One row per Stripe event id. Duplicates are rejected on insert.
+/// Compteur de numeros courts, un par LIEU et par jour de service.
+///
+/// Une table plutot qu'un `count()` sur les commandes : compter puis ajouter un
+/// laisse deux paiements simultanes obtenir le meme numero. L'increment se fait
+/// ici en une seule instruction SQL, que PostgreSQL serialise.
+model OrderCounter {
+  venueId     String   @map("venue_id")
+  /// Jour de service (bascule a 4h locales) — voir `helpers/jour-de-service.ts`.
+  serviceDate DateTime @map("service_date") @db.Date
+  lastNumber  Int      @default(0) @map("last_number")
+
+  @@id([venueId, serviceDate])
+  @@map("order_counters")
+}
+
 model WebhookEvent {
   id            String    @id @default(uuid())
   stripeEventId String    @unique @map("stripe_event_id")

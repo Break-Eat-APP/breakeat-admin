@@ -133,6 +133,12 @@ export interface OrderItem {
 export interface Order {
   id: string;
   publicOrderNumber: string;
+  /**
+   * Numéro COURT du jour — « 18 ». C'est celui qu'on crie au comptoir. Reparti
+   * à 1 chaque jour de service, unique par LIEU. `null` sur les commandes
+   * antérieures : on retombe alors sur la référence longue.
+   */
+  dailyNumber?: number | null;
   status: string;
   supplierId: string;
   pickupPointId: string;
@@ -153,6 +159,17 @@ export interface Order {
    */
   customerArrivedAt?: string | null;
   items: OrderItem[];
+}
+
+/**
+ * Le numéro tel qu'on le crie au comptoir.
+ *
+ * « 18 » plutôt que « BE-00000023 » : un numéro se lance à voix haute par-dessus
+ * le bruit d'un stade. La référence longue reste pour le support, et sert de
+ * repli pour les commandes qui n'ont pas de numéro court.
+ */
+export function numeroAffiche(o: { dailyNumber?: number | null; publicOrderNumber: string }): string {
+  return o.dailyNumber != null ? String(o.dailyNumber) : o.publicOrderNumber;
 }
 
 export interface DashboardData {

@@ -23,6 +23,7 @@ import {
   SESSION_EXPIREE,
   setSupplierStatus as apiSetSupplierStatus,
   type SupplierStatus,
+  numeroAffiche,
 } from '@/lib/api/orders-client';
 import type { StatusVariant } from '@/components/StatusBadge';
 
@@ -353,7 +354,7 @@ export default function DashboardPage() {
   // Map an Order to OrderCard props (actions + loading flag bound per order).
   const toCardProps = (order: Order) => ({
     id: order.id,
-    orderNumber: order.publicOrderNumber,
+    orderNumber: numeroAffiche(order),
     status: order.status as StatusVariant,
     items: order.items,
     createdAt: order.createdAt,

@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
-import { apiLienRecu, apiGetMyOrders, apiMarkArrived, formatPrice, formatTime, type Order } from '@lib/api/mobile-api';
+import { formatOrderNumber, apiLienRecu, apiGetMyOrders, apiMarkArrived, formatPrice, formatTime, type Order } from '@lib/api/mobile-api';
 import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
@@ -394,7 +394,7 @@ function OrderCard({
           <Text style={styles.supplierText} numberOfLines={1}>
             {order.supplierName ?? 'Commande'}
           </Text>
-          <Text style={styles.orderNumber}>N° {order.publicOrderNumber}</Text>
+          <Text style={styles.orderNumber}>{formatOrderNumber(order)}</Text>
         </View>
         <View style={styles.priceBlock}>
           <Text style={styles.price}>{formatPrice(order.totalCents)}</Text>
@@ -502,7 +502,7 @@ function OrderCard({
 /** Libellé du retrait : créneau si présent (label du club, sinon plage horaire). */
 function pickupLabel(order: Order): string {
   const slot = order.slot;
-  if (!slot) return 'Retrait dès que prête';
+  if (!slot) return 'Retrait';
   if (slot.label) return `Retrait ${slot.label}`;
   return `Retrait ${formatTime(slot.startAt)} – ${formatTime(slot.endAt)}`;
 }

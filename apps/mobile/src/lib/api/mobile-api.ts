@@ -275,6 +275,13 @@ export interface OrderSlot {
 export interface Order {
   id: string;
   publicOrderNumber: string;
+  /**
+   * Numéro COURT du jour — « 18 ». Reparti à 1 chaque jour de service, unique
+   * par LIEU. `null` pour les commandes d'avant le 06/09/2026, et si le
+   * compteur n'a pas répondu : l'affichage retombe alors sur la référence
+   * longue plutôt que d'afficher un vide.
+   */
+  dailyNumber?: number | null;
   status: string;
   totalCents: number;
   currency: string;
@@ -406,6 +413,7 @@ export interface CommandeDuPanier {
   order: {
     id: string;
     publicOrderNumber: string;
+    dailyNumber?: number | null;
     totalCents: number;
     status: string;
     supplierName: string | null;
@@ -422,6 +430,24 @@ export interface CommandeDuPanier {
  * différence du jeton de session, qui ouvrirait tout le compte et resterait
  * dans l'historique.
  */
+/**
+ * Le numéro de commande, tel qu'on le montre et le crie.
+ *
+ * « N° 18 » plutôt que « BE-00000023 » : au comptoir, un numéro se lance à voix
+ * haute et se lit de loin. Six chiffres et un préfixe ne servent qu'au support,
+ * et la référence longue reste en base pour lui.
+ *
+ * Le repli n'est pas décoratif : les commandes passées avant l'introduction du
+ * compteur n'ont pas de numéro court, et afficher un vide à leur place ferait
+ * croire à une commande abîmée.
+ */
+export function formatOrderNumber(order: {
+  dailyNumber?: number | null;
+  publicOrderNumber: string;
+}): string {
+  return order.dailyNumber != null ? `N° ${order.dailyNumber}` : order.publicOrderNumber;
+}
+
 export const apiLienRecu = (orderId: string) =>
   req<{ url: string }>(`/orders/${orderId}/recu/lien`, { method: 'POST' });
 
