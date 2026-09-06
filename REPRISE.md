@@ -15,7 +15,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-09-06 (parcours de paiement bouclé, cloisonnement des buvettes, reçu)_
+_Dernière mise à jour : 2026-09-07 (cloche de notifications, inscription rapide Apple)_
 
 ## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
@@ -53,8 +53,19 @@ annotées INERTES.
 **Chaque opérateur tient UNE buvette**, rattachée dans le back-office → Équipe.
 Le poste ne permet plus d'en changer, et un compte non rattaché ne voit rien.
 
-**La build TestFlight est la 11.** Elle ne contient ni le reçu, ni le violet, ni
-le libellé « devant le point de retrait » : la 12 les apporte.
+**La build TestFlight est la 12.** La 13 apporte la cloche de notifications et
+l'inscription par Apple ; rien de tout cela n'est sur le téléphone avant elle.
+
+**Les notifications ont un destinataire, enfin.** `expo-notifications` n'était
+pas installé et `apiRegisterPushToken` n'avait aucun appelant : les campagnes
+partaient vers zéro appareil (`envoyé à 0 appareil(s)` dans les journaux). Le
+jeton s'enregistre désormais après connexion, chaque envoi archive le message
+pour ses destinataires, et la cloche lit ce compte au serveur.
+
+**« Continuer avec Apple » est branché.** Google attend ses identifiants
+clients ; **Facebook ne le sera pas** — son jeton ne certifie pas l'adresse, et
+rattacher une inscription rapide à un compte existant sur une adresse non
+certifiée donnerait le compte d'un client à qui saurait en déclarer l'adresse.
 
 ## 🔎 MÉTHODE — À LIRE AVANT DE CHERCHER UN BUG
 
@@ -87,6 +98,16 @@ cherchant une chaîne distinctive dans le `.js` servi ; une route serveur en
 l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
 
 ## ⏭️ REPRISE IMMÉDIATE
+
+00. **`APPLE_CLIENT_IDS` sur Railway** —
+    `com.shapper.breakeat,com.shapper.breakeat.preview`.
+    Ce n'est pas un secret : c'est le destinataire attendu dans le jeton d'Apple
+    (`aud`). Sans elle, `/auth/providers` répond une liste vide et le bouton
+    « Continuer avec Apple » **ne s'affiche pas** dans l'application — c'est
+    voulu : un bouton visible est un bouton qui marche. Les deux identifiants
+    car la build `preview` porte le suffixe `.preview` et se présente donc sous
+    ce destinataire-là ; n'en mettre qu'un ferait échouer les essais TestFlight
+    pendant que la production marche.
 
 0. **`PUBLIC_API_URL` sur Railway** — `https://breakeat-admin-production.up.railway.app/api/v1`.
    Deux usages, tous deux invisibles tant qu'on teste sur le web :
