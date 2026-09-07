@@ -334,6 +334,30 @@ L'app Break Eat = **porte d'entrée du click-and-collect Flaix**. Flaix gèrera 
 10. **Connexions Apple / Google / Facebook** — masquées derrière `SOCIAL_LOGIN_READY`, jamais branchées.
 11. **Comptoirs (`PickupPoint`)** — supprimables uniquement depuis la fiche d'un événement, donc inatteignables sur un lieu permanent.
 
+## 🍏 Ajouter une capability iOS — l'ordre compte
+
+Ajouter `usesAppleSignIn` (ou toute autre capability) dans `app.config.js` ne
+suffit pas : le **profil de provisionnement** ne la porte pas, et Xcode refuse
+la build en fin de course, après l'upload et vingt minutes d'attente.
+
+```
+Provisioning profile "[expo] com.shapper.breakeat AppStore …"
+doesn't include the Sign In with Apple capability.
+```
+
+L'ordre qui marche :
+
+1. **Portail Apple** — [Identifiers](https://developer.apple.com/account/resources/identifiers/list)
+   → `com.shapper.breakeat` → cocher la capability → **Save**.
+2. **Relancer la build SANS `--non-interactive`.** C'est le point clé : en
+   non-interactif, EAS réutilise le profil existant sans le valider. En
+   interactif, il détecte « Provisioning profile is no longer valid », le
+   régénère et repart tout seul — avec la clé App Store Connect déjà stockée,
+   donc **sans demander le mot de passe Apple**.
+
+Et `autoIncrement` ne recycle pas le numéro d'une build refusée : une tentative
+ratée consomme son numéro pour de bon.
+
 ## 🧨 Migrations — la convention qui a coûté vingt minutes
 
 **Les identifiants sont des `UUID`, jamais du `TEXT`.** Toutes les tables du
