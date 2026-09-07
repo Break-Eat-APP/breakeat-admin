@@ -334,6 +334,26 @@ L'app Break Eat = **porte d'entrée du click-and-collect Flaix**. Flaix gèrera 
 10. **Connexions Apple / Google / Facebook** — masquées derrière `SOCIAL_LOGIN_READY`, jamais branchées.
 11. **Comptoirs (`PickupPoint`)** — supprimables uniquement depuis la fiche d'un événement, donc inatteignables sur un lieu permanent.
 
+## 🧨 Migrations — la convention qui a coûté vingt minutes
+
+**Les identifiants sont des `UUID`, jamais du `TEXT`.** Toutes les tables du
+projet suivent `"id" UUID NOT NULL DEFAULT gen_random_uuid()`. Une clé étrangère
+`TEXT` vers un `UUID` est refusée par Postgres, et l'échec ne se voit qu'en
+production.
+
+**Une migration en échec bloque toutes les suivantes** (`P3009`). Prisma
+l'inscrit dans `_prisma_migrations` et refuse tout déploiement ultérieur : le
+conteneur redémarre en boucle et **l'ancienne version continue de répondre**.
+Symptôme trompeur : une route fraîchement poussée reste en 404 alors que le
+build passe en local.
+
+Réflexe : sonder une route livrée à la version PRÉCÉDENTE. Si elle répond, c'est
+l'ancienne version qui est en ligne — la question n'est pas « où est ma route »
+mais « pourquoi le démarrage échoue-t-il ». Puis lire le journal Railway.
+
+Corriger le SQL ne suffit pas : il faut marquer la ligne annulée
+(`prisma migrate resolve --rolled-back <nom>`).
+
 ## ⚠️ Dette technique et pièges connus
 
 - **Mot de passe d'un membre** : `inviteByEmail` ne le pose qu'à la CRÉATION du compte. Pour un compte existant, passer par `POST /organizations/:id/members/:memberId/reset-password` (bouton « Mot de passe » sur la page Équipe). Réinviter un membre existant échoue sur « déjà membre » — ce n'est pas un chemin de secours.

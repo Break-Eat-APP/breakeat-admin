@@ -4746,3 +4746,101 @@ Le contenu est celui d'un justificatif : buvette, club, lignes, remise fidélit�
 moyen de paiement.
 
 ---
+
+---
+
+## Phase 32 — La cloche, et l'inscription par Apple (07/09/2026)
+
+### Les notifications n'avaient pas de destinataire
+
+Le journal le disait depuis des jours, en toutes lettres :
+
+```
+ScheduledPush … envoyé à 0 appareil(s)
+```
+
+Le mécanisme d'envoi fonctionnait. Ce qui manquait était en amont :
+`expo-notifications` n'était pas installé, et `apiRegisterPushToken` — la
+fonction qui enregistre le jeton d'un téléphone — **n'avait aucun appelant**
+dans tout le dépôt. Aucun appareil ne s'était jamais annoncé.
+
+C'est le genre de panne qu'aucun test ne rattrape : chaque moitié est correcte,
+il n'y a simplement rien entre les deux. Un `grep` du nom de la fonction
+d'enregistrement aurait suffi, et c'est ce qui a fini par la trouver.
+
+Le jeton se demande **après connexion**, jamais avant : il se rattache à un
+compte, et réclamer la permission de notifier à un visiteur anonyme — avant
+d'avoir quoi que ce soit à lui annoncer — est la façon la plus sûre de se la
+faire refuser définitivement.
+
+### Un push est éphémère ; la cloche ne peut pas l'être
+
+Balayée de l'écran verrouillé, une notification n'existe plus. Le compteur de la
+cloche ne pouvait donc pas être tenu dans l'application : il n'aurait survécu ni
+à une réinstallation, ni au second téléphone du même client, et n'aurait rien su
+des annonces arrivées appareil éteint.
+
+Chaque envoi **archive** donc le message pour ses destinataires, et la cloche lit
+ce compte au serveur. La pastille s'éteint à **l'ouverture** de l'écran, pas à sa
+fermeture : le geste du client est de venir regarder, pas d'accuser réception
+ligne par ligne — la laisser allumée derrière lui serait faux.
+
+### Le rattachement d'une identité extérieure
+
+Une inscription rapide pose une question qu'un mot de passe ne pose pas : *à quel
+compte cette personne correspond-elle ?* L'ordre retenu, et pourquoi :
+
+1. **Le sujet du fournisseur d'abord** (`sub`). Il est stable ; l'adresse ne
+   l'est pas — Apple délivre une adresse relais qui peut changer.
+2. **L'adresse ensuite, et seulement si le fournisseur la CERTIFIE.** Elle sert à
+   rattacher l'inscription rapide au compte déjà ouvert par mot de passe, pour
+   que le client n'en découvre pas un second, vide de ses commandes et de ses
+   points.
+3. **La création enfin.**
+
+Rattacher sur une adresse non certifiée reviendrait à donner le compte d'un
+client à qui saurait en déclarer l'adresse. C'est précisément pour cela que
+**Facebook n'est pas branché** : son jeton ne certifie pas l'adresse. Ce n'est
+pas un manque de temps, c'est un refus.
+
+La vérification du jeton contrôle la signature, l'émetteur, **le destinataire**
+et la date. Omettre le destinataire laisserait passer un jeton parfaitement
+valide émis pour une AUTRE application : quiconque possède un compte Apple
+pourrait alors se présenter avec le jeton d'un tiers. Elle passe par `jose` et
+non par un décodage maison : la confusion d'algorithme (`alg: none`, ou HS256
+signé avec la clé publique) est la faute classique du JWT écrit à la main, et
+elle ne se voit pas aux tests.
+
+`jose` **version 5**, et non 6 : la 6 est distribuée en ESM seul, que le build
+CommonJS de Nest ne peut pas charger. Les tests l'ont dit avant la production —
+mais de justesse.
+
+### Une migration en échec bloque toutes les suivantes
+
+`users.id` est un `UUID` dans cette base. La migration des identités déclarait
+`user_id` en `TEXT` : Postgres refuse une clé étrangère entre deux types
+incompatibles.
+
+Ce qui compte n'est pas l'erreur — c'est ce qu'elle provoque :
+
+```
+P3009 migrate found failed migrations in the target database,
+new migrations will not be applied.
+```
+
+Prisma inscrit l'échec dans `_prisma_migrations` et refuse **tout** déploiement
+suivant. Le conteneur redémarrait en boucle, et l'ancienne version continuait
+de répondre : de l'extérieur, une route fraîchement poussée restait en 404
+pendant que tout semblait normal. Vingt minutes passées à guetter un
+déploiement qui ne pouvait pas arriver.
+
+**Corriger le SQL ne suffit pas.** La ligne en échec reste, et continue de
+bloquer. Il faut la marquer annulée (`prisma migrate resolve --rolled-back`).
+Fait ici depuis la commande de démarrage — ligne temporaire, retirée dès le
+déploiement passé — pour ne pas avoir à ouvrir la base de production.
+
+**La leçon opérationnelle** : une route poussée qui répond 404 alors que le build
+passe en local n'est pas un problème de route. C'est le serveur qui n'a jamais
+démarré. Le premier réflexe est de sonder une route déployée à la livraison
+PRÉCÉDENTE — si elle répond, la version en ligne est l'ancienne, et la question
+devient « pourquoi le démarrage échoue-t-il ? ».
