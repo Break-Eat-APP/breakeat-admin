@@ -27,4 +27,13 @@ describe('HealthController', () => {
     const result = controller.check();
     expect(result.environment).toBeDefined();
   });
+
+  // Sans ce champ, on ne peut pas savoir QUELLE version repond : Railway laisse
+  // l'ancien conteneur servir tant que le nouveau ne passe pas son controle de
+  // sante, et une livraison en echec ressemble alors a une livraison reussie.
+  it('nomme le commit deploye', () => {
+    const result = controller.check();
+    expect(result.commit).toBeDefined();
+    expect(result.commit.length).toBeGreaterThan(0);
+  });
 });
