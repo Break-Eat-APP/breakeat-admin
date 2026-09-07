@@ -118,7 +118,7 @@ l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
    Stripe. Le démarrage la réclame dans ses journaux.
 
 1. **`APNS_BUNDLE_ID = com.shapper.breakeat`** sur Railway. La build TestFlight porte l'identifiant réel ; avec une autre valeur, le topic APNs ne correspond pas et **aucune Live Activity ne démarrera**.
-2. **La CLÉ APNs (`.p8`) doit couvrir la PRODUCTION.** ← constaté le 06/09/2026
+2. ~~**La CLÉ APNs (`.p8`) doit couvrir la PRODUCTION.**~~ ✅ **FAIT le 07/09/2026** — clé recréée valable Sandbox ET Production, `APNS_KEY_ID` et `APNS_PRIVATE_KEY` remplacées. Reste à confirmer par une vraie transition de commande : plus de `BadEnvironmentKeyInToken` dans les journaux. Historique conservé ci-dessous, le symptôme étant trompeur.
 
    Journal Railway au moment d'une transition de commande :
 
