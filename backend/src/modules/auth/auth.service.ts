@@ -95,7 +95,7 @@ export class AuthService {
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException('Account is disabled');
+      throw new UnauthorizedException('Ce compte a été désactivé.');
     }
 
     // Un compte créé par Apple ou Google n'a JAMAIS eu de mot de passe. Le
@@ -170,7 +170,7 @@ export class AuthService {
     if (existante) {
       if (!existante.user.isActive) {
         this.logger.warn(`Connexion ${dto.provider} refusée : compte ${existante.user.id} désactivé`);
-        throw new UnauthorizedException('Account is disabled');
+        throw new UnauthorizedException('Ce compte a été désactivé.');
       }
       user = sansMotDePasse(existante.user);
       this.logger.log(`Connexion ${dto.provider} réussie : compte existant ${user.id}`);
@@ -195,7 +195,7 @@ export class AuthService {
       if (deja) {
         if (!deja.isActive) {
           this.logger.warn(`Connexion ${dto.provider} refusée : compte ${deja.id} désactivé`);
-          throw new UnauthorizedException('Account is disabled');
+          throw new UnauthorizedException('Ce compte a été désactivé.');
         }
         user = sansMotDePasse(deja);
         this.logger.log(`Identité ${identite.provider} rattachée au compte ${user.id}`);
@@ -258,7 +258,7 @@ export class AuthService {
     }
 
     if (!stored.user.isActive) {
-      throw new UnauthorizedException('Account is disabled');
+      throw new UnauthorizedException('Ce compte a été désactivé.');
     }
 
     // Rotation : on retire l'ancien jeton avant d'en emettre un nouveau.
