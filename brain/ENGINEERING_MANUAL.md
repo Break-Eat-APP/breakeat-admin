@@ -4844,3 +4844,68 @@ passe en local n'est pas un problème de route. C'est le serveur qui n'a jamais
 démarré. Le premier réflexe est de sonder une route déployée à la livraison
 PRÉCÉDENTE — si elle répond, la version en ligne est l'ancienne, et la question
 devient « pourquoi le démarrage échoue-t-il ? ».
+
+---
+
+## Phase 33 — Le dashboard qui « sautait » au clic (16/09/2026)
+
+### Le symptôme
+
+Un manager ouvre la page **Campagnes & marketing** : le dashboard perd son
+organisation et renvoie vers la connexion, alors que tout fonctionnait une
+seconde plus tôt. Rien dans les journaux du serveur ne ressemble à une panne.
+
+### La cause : deux renouvellements pour un seul jeton
+
+Le serveur fait **tourner** le jeton de renouvellement : son premier usage le
+consomme, un second usage est refusé (401). Ce refus a été rendu propre à la
+phase 29 — il produisait auparavant une erreur 500. Les clients, eux, n'avaient
+jamais été protégés contre la course.
+
+La page Campagnes lance **deux requêtes à la fois**. Jeton d'accès expiré (il vit
+15 minutes), chacune reçoit son 401 et lance SON renouvellement avec le même
+jeton. Le premier réussit ; le second est refusé ; le client prend ce refus pour
+une session morte et **efface tout** — organisation choisie comprise.
+
+Les pages qui n'envoient qu'une requête survivaient. D'où l'impression qu'une
+page précise « cassait » le dashboard.
+
+Le même défaut existait à deux autres endroits, plus graves :
+
+- le **poste opérateur**, qui lance plusieurs requêtes au montage : l'opératrice
+  revenait au formulaire de connexion en plein service ;
+- l'**application mobile**, qui lance plusieurs requêtes au retour de Stripe :
+  le client était **déconnecté en revenant du paiement**.
+
+### Le correctif, identique dans les trois clients
+
+1. **Un seul renouvellement à la fois.** La promesse en cours est partagée ; les
+   requêtes qui arrivent pendant ce temps en attendent le résultat.
+2. **Le jeton a déjà changé** depuis l'envoi de la requête → on rejoue avec le
+   neuf, sans en consommer un autre.
+3. **Le serveur refuse, mais le jeton stocké a changé** → un autre onglet vient de
+   renouveler : la session est vivante, on ne l'efface pas.
+
+### La preuve
+
+Les clients web n'importent rien : ils ont été exécutés tels quels dans Node,
+face à un faux serveur qui fait tourner les jetons exactement comme le vrai. Le
+mobile, avec ses trois imports remplacés par des doublures. Chaque essai a été
+passé sur l'ANCIENNE version d'abord, pour prouver qu'il reproduisait la panne :
+
+| Client | Avant | Après |
+|---|---|---|
+| Manager (2 requêtes) | 2 renouvellements `R1, R1`, organisation EFFACÉE, `/login` | 1 renouvellement, organisation conservée |
+| Opérateur (3 requêtes) | 3 renouvellements, session EFFACÉE | 1 renouvellement, 3/3 |
+| Mobile (3 requêtes) | 3 renouvellements, client DÉCONNECTÉ | 1 renouvellement, 3/3 |
+| Deux onglets | requête échouée, organisation EFFACÉE | requête réussie |
+
+### La leçon
+
+Rendre un refus « propre » côté serveur ne suffit pas : un 401 est interprété
+par chaque client. Toute rotation de jeton appelle, côté client, une file
+d'attente unique pour le renouvellement.
+
+Le préréglage Jest du mobile (`@react-native/jest-preset`) ne fonctionne pas :
+il n'a jamais exécuté un seul test, d'où `--passWithNoTests`. À réparer avant de
+compter sur lui.

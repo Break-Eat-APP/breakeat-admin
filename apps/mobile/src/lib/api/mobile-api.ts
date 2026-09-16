@@ -29,7 +29,32 @@ export class ApiError extends Error {
  * l'app le deconnectait, en effacant au passage le panier qu'il venait de
  * regler. Le renouvellement rend ce trajet invisible.
  */
-async function renouvelerSession(): Promise<string | null> {
+/**
+ * Le renouvellement en cours, PARTAGE par toutes les requetes.
+ *
+ * Le serveur fait tourner le jeton de renouvellement : le premier usage le
+ * consomme, un second usage du meme jeton est refuse. Or l'app lance plusieurs requetes au retour de Stripe.
+ * Jeton d'acces expire, chaque requete recevait son 401 et lancait SON
+ * renouvellement avec le meme jeton : le premier reussissait, le second
+ * etait refuse, et ce refus etait pris pour une session morte. Tout etait
+ * efface -- et le client etait deconnecte au retour du
+ * paiement.
+ *
+ * Desormais un seul renouvellement part ; les requetes qui arrivent pendant
+ * ce temps en attendent le resultat.
+ */
+let renouvellementEnCours: Promise<string | null> | null = null;
+
+function renouvelerSession(): Promise<string | null> {
+  if (!renouvellementEnCours) {
+    renouvellementEnCours = renouveler().finally(() => {
+      renouvellementEnCours = null;
+    });
+  }
+  return renouvellementEnCours;
+}
+
+async function renouveler(): Promise<string | null> {
   const refresh = useAuthStore.getState().refreshToken;
   if (!refresh) return null;
   try {
@@ -82,6 +107,11 @@ async function req<T>(
   // route de renouvellement elle-meme (un jeton mort relancerait la reprise
   // indefiniment).
   if (res.status === 401 && token && !dejaRenouvele && !path.startsWith('/auth/refresh')) {
+    // Deja renouvele par une requete voisine pendant que celle-ci voyageait :
+    // on rejoue avec le jeton neuf, sans en consommer un autre.
+    const courant = useAuthStore.getState().token;
+    if (courant && courant !== token) return req<T>(path, options, true);
+
     const nouveau = await renouvelerSession();
     if (nouveau) return req<T>(path, options, true);
   }

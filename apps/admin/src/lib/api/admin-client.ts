@@ -89,7 +89,32 @@ export function clearSession(): void {
  * Renvoie faux si le renouvellement est impossible (pas de jeton, ou expiré) :
  * l'appelant déconnecte alors pour de bon.
  */
-async function renouvelerSession(): Promise<boolean> {
+/**
+ * Le renouvellement en cours, PARTAGE par toutes les requetes.
+ *
+ * Le serveur fait tourner le jeton de renouvellement : le premier usage le
+ * consomme, un second usage du meme jeton est refuse. Or la page Campagnes lance deux requetes a la fois.
+ * Jeton d'acces expire, chaque requete recevait son 401 et lancait SON
+ * renouvellement avec le meme jeton : le premier reussissait, le second
+ * etait refuse, et ce refus etait pris pour une session morte. Tout etait
+ * efface -- organisation choisie comprise, et le dashboard
+ * "sautait" au clic alors que la session etait valide.
+ *
+ * Desormais un seul renouvellement part ; les requetes qui arrivent pendant
+ * ce temps en attendent le resultat.
+ */
+let renouvellementEnCours: Promise<boolean> | null = null;
+
+function renouvelerSession(): Promise<boolean> {
+  if (!renouvellementEnCours) {
+    renouvellementEnCours = renouveler().finally(() => {
+      renouvellementEnCours = null;
+    });
+  }
+  return renouvellementEnCours;
+}
+
+async function renouveler(): Promise<boolean> {
   const refresh = getRefreshToken();
   if (!refresh) return false;
   try {
@@ -98,7 +123,12 @@ async function renouvelerSession(): Promise<boolean> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: refresh }),
     });
-    if (!res.ok) return false;
+    if (!res.ok) {
+      // Un AUTRE onglet a pu consommer ce jeton pendant l'aller-retour : le
+      // serveur refuse le notre, mais la session vit encore si le jeton stocke
+      // a change. L'effacer deconnecterait les deux onglets.
+      return getRefreshToken() !== refresh && Boolean(getToken());
+    }
     const data = (await res.json()) as { accessToken?: string; refreshToken?: string };
     if (!data.accessToken) return false;
     setSessionTokens(data.accessToken, data.refreshToken);
@@ -123,10 +153,8 @@ async function req<T>(
   dejaRenouvele = false,
 ): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (!noAuth) {
-    const token = getToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-  }
+  const jetonEnvoye = noAuth ? '' : getToken();
+  if (jetonEnvoye) headers['Authorization'] = `Bearer ${jetonEnvoye}`;
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
@@ -145,6 +173,11 @@ async function req<T>(
   // Une seule tentative, et jamais sur la route de renouvellement elle-même :
   // un jeton mort relancerait sinon la reprise à l'infini.
   if (res.status === 401 && !noAuth && !dejaRenouvele && !path.startsWith('/auth/refresh')) {
+    // Le jeton a change pendant que cette requete voyageait : une voisine l'a
+    // deja renouvele. On rejoue avec le neuf, sans en consommer un de plus.
+    const courant = getToken();
+    if (courant && courant !== jetonEnvoye) return req<T>(method, path, body, noAuth, true);
+
     const renouvele = await renouvelerSession();
     if (renouvele) return req<T>(method, path, body, noAuth, true);
   }

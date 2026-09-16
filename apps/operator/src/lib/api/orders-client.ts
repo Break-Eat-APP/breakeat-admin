@@ -39,7 +39,32 @@ export const SESSION_EXPIREE = 'breakeat:session-expiree';
  * Echange le jeton de renouvellement (7 jours) contre un nouveau jeton d'acces.
  * Renvoie le nouveau jeton, ou null si le renouvellement est impossible.
  */
-async function renouvelerSession(): Promise<string | null> {
+/**
+ * Le renouvellement en cours, PARTAGE par toutes les requetes.
+ *
+ * Le serveur fait tourner le jeton de renouvellement : le premier usage le
+ * consomme, un second usage du meme jeton est refuse. Or le tableau lance plusieurs requetes au montage.
+ * Jeton d'acces expire, chaque requete recevait son 401 et lancait SON
+ * renouvellement avec le meme jeton : le premier reussissait, le second
+ * etait refuse, et ce refus etait pris pour une session morte. Tout etait
+ * efface -- et l'operatrice revenait au formulaire de
+ * connexion en plein service.
+ *
+ * Desormais un seul renouvellement part ; les requetes qui arrivent pendant
+ * ce temps en attendent le resultat.
+ */
+let renouvellementEnCours: Promise<string | null> | null = null;
+
+function renouvelerSession(): Promise<string | null> {
+  if (!renouvellementEnCours) {
+    renouvellementEnCours = renouveler().finally(() => {
+      renouvellementEnCours = null;
+    });
+  }
+  return renouvellementEnCours;
+}
+
+async function renouveler(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
   const refresh = localStorage.getItem('operator_refresh');
   if (!refresh) return null;
@@ -49,7 +74,12 @@ async function renouvelerSession(): Promise<string | null> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refreshToken: refresh }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Un autre onglet a pu consommer ce jeton entre-temps : la session vit
+      // encore si le jeton stocke a change.
+      const autre = localStorage.getItem('operator_refresh');
+      return autre && autre !== refresh ? localStorage.getItem('operator_token') : null;
+    }
     const data = (await res.json()) as { accessToken?: string; refreshToken?: string };
     if (!data.accessToken) return null;
     localStorage.setItem('operator_token', data.accessToken);
@@ -97,7 +127,11 @@ async function apiFetch<T>(
   // Une seule tentative, jamais sur la route de renouvellement : un jeton mort
   // relancerait sinon la reprise a l'infini.
   if (res.status === 401 && !dejaRenouvele && !path.startsWith('/auth/refresh')) {
-    const nouveau = await renouvelerSession();
+    // Le jeton passe par la page peut etre perime alors que le stockage en
+    // porte deja un neuf, renouvele par une requete voisine : on le reprend
+    // plutot que d'en consommer un autre.
+    const courant = typeof window !== 'undefined' ? localStorage.getItem('operator_token') : null;
+    const nouveau = courant && courant !== token ? courant : await renouvelerSession();
     if (nouveau) return apiFetch<T>(path, nouveau, init, true);
     if (typeof window !== 'undefined') {
       localStorage.removeItem('operator_token');
