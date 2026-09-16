@@ -152,6 +152,10 @@ export class AuthService {
     token: string;
     displayName?: string;
   }): Promise<AuthResponse> {
+    // Chaque issue laisse une trace. Sans cela, une connexion REUSSIE sur un
+    // compte existant etait muette : « aucune ligne » ne distinguait plus une
+    // requete jamais arrivee d'une connexion reussie suivie d'une autre panne.
+    this.logger.log(`Connexion ${dto.provider} : demande reçue`);
     const identite = await this.socialIdentity.verifier(dto.provider, dto.token);
 
     const existante = await this.prisma.userIdentity.findUnique({
@@ -164,8 +168,12 @@ export class AuthService {
     let user: SafeUser;
 
     if (existante) {
-      if (!existante.user.isActive) throw new UnauthorizedException('Account is disabled');
+      if (!existante.user.isActive) {
+        this.logger.warn(`Connexion ${dto.provider} refusée : compte ${existante.user.id} désactivé`);
+        throw new UnauthorizedException('Account is disabled');
+      }
       user = sansMotDePasse(existante.user);
+      this.logger.log(`Connexion ${dto.provider} réussie : compte existant ${user.id}`);
     } else {
       if (!identite.email || !identite.emailVerifie) {
         this.logger.warn(
@@ -185,7 +193,10 @@ export class AuthService {
       const deja = await this.prisma.user.findUnique({ where: { email: identite.email } });
 
       if (deja) {
-        if (!deja.isActive) throw new UnauthorizedException('Account is disabled');
+        if (!deja.isActive) {
+          this.logger.warn(`Connexion ${dto.provider} refusée : compte ${deja.id} désactivé`);
+          throw new UnauthorizedException('Account is disabled');
+        }
         user = sansMotDePasse(deja);
         this.logger.log(`Identité ${identite.provider} rattachée au compte ${user.id}`);
       } else {
