@@ -168,6 +168,11 @@ export class AuthService {
       user = sansMotDePasse(existante.user);
     } else {
       if (!identite.email || !identite.emailVerifie) {
+        this.logger.warn(
+          `Connexion ${identite.provider} refusée : adresse ` +
+            (identite.email ? 'NON certifiée par le fournisseur' : 'ABSENTE du jeton') +
+            ` (sujet ${identite.subject.slice(0, 8)}…)`,
+        );
         // Sans adresse certifiée, impossible de créer un compte (l'adresse est
         // la clé) ni de rattacher sans risque. Apple en fournit toujours une à
         // la première autorisation : y arriver signifie que quelque chose s'est

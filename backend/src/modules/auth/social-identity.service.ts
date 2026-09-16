@@ -1,6 +1,6 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
+import { createRemoteJWKSet, decodeJwt, jwtVerify, type JWTPayload } from 'jose';
 
 /**
  * Ce qu'un fournisseur d'identité affirme, et ce qu'on accepte d'en croire.
@@ -35,7 +35,7 @@ const GOOGLE_JWKS = 'https://www.googleapis.com/oauth2/v3/certs';
 const GOOGLE_ISS = ['https://accounts.google.com', 'accounts.google.com'];
 
 @Injectable()
-export class SocialIdentityService {
+export class SocialIdentityService implements OnModuleInit {
   private readonly logger = new Logger(SocialIdentityService.name);
 
   /**
@@ -50,6 +50,25 @@ export class SocialIdentityService {
   private readonly googleKeys = createRemoteJWKSet(new URL(GOOGLE_JWKS));
 
   constructor(private readonly config: ConfigService) {}
+
+  /**
+   * Annonce, au démarrage, les destinataires attendus.
+   *
+   * Ce ne sont pas des secrets — des identifiants de paquet. Mais une valeur
+   * mal saisie sur Railway (le nom de la variable recopié dans la valeur, des
+   * guillemets en trop) laisse la liste NON vide : le bouton s'affiche, et
+   * chaque connexion est refusée sans que rien ne dise pourquoi. Cette ligne
+   * le montre au premier coup d'œil.
+   */
+  onModuleInit(): void {
+    for (const provider of ['apple', 'google'] as const) {
+      const liste = this.audiences(provider);
+      this.logger.log(
+        `Connexion ${provider} — destinataires attendus : ` +
+          (liste.length ? liste.map((a) => `« ${a} »`).join(', ') : 'aucun (bouton masqué)'),
+      );
+    }
+  }
 
   /** Les fournisseurs réellement utilisables — l'app n'affiche que ceux-là. */
   disponibles(): Fournisseur[] {
@@ -84,7 +103,22 @@ export class SocialIdentityService {
         },
       ));
     } catch (e: unknown) {
-      this.logger.warn(`Jeton ${provider} refusé : ${(e as Error).message}`);
+      // Le motif SEUL ne suffit pas : « unexpected "aud" claim value » ne dit
+      // pas quelle valeur est arrivée. On lit donc l'émetteur et le
+      // destinataire du jeton SANS le vérifier — uniquement pour le journal,
+      // jamais pour décider — et on les pose à côté de ce qu'on attendait.
+      let recu = 'illisible';
+      try {
+        const brut = decodeJwt(jeton);
+        recu = `aud=${JSON.stringify(brut.aud)} iss=${JSON.stringify(brut.iss)}`;
+      } catch {
+        /* jeton mal formé : le motif ci-dessous le dit déjà */
+      }
+      const err = e as Error & { code?: string };
+      this.logger.warn(
+        `Jeton ${provider} refusé [${err.code ?? err.name}] ${err.message} — ` +
+          `reçu ${recu} ; attendu aud parmi ${JSON.stringify(audiences)}`,
+      );
       throw new UnauthorizedException('Connexion refusée par le fournisseur.');
     }
 

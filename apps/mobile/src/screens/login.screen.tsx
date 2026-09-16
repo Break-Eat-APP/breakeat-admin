@@ -49,6 +49,25 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
  * commandes, ses points — à qui saurait en déclarer l'adresse.
  */
 
+/**
+ * La phrase du serveur, extraite de sa réponse.
+ *
+ * Une erreur d'API porte le CORPS brut de la réponse — du JSON. L'afficher tel
+ * quel montrait au client `{"message":…,"statusCode":401}` : il retenait « 401 »
+ * et perdait la seule information utile, la phrase qui dit POURQUOI.
+ */
+function messageServeur(e: unknown): string {
+  const brut = e instanceof Error ? e.message : '';
+  try {
+    const { message } = JSON.parse(brut) as { message?: string | string[] };
+    const m = Array.isArray(message) ? message[0] : message;
+    if (m) return m;
+  } catch {
+    /* pas du JSON : le message est déjà lisible */
+  }
+  return brut;
+}
+
 export function LoginScreen({ navigation, route }: Props) {
   const { setAuth } = useAuthStore();
   const { request: requestLocation } = useUserLocation();
@@ -161,13 +180,7 @@ export function LoginScreen({ navigation, route }: Props) {
       }
       proceed();
     } catch (e: unknown) {
-      const raw = e instanceof Error ? e.message : 'Erreur inconnue';
-      let msg = raw;
-      try {
-        const parsed = JSON.parse(raw) as { message?: string | string[] };
-        const m = parsed.message;
-        msg = Array.isArray(m) ? m[0] ?? raw : (m ?? raw);
-      } catch { /* raw n'est pas du JSON */ }
+      let msg = messageServeur(e) || 'Erreur inconnue';
       if (msg.includes('401') || msg.toLowerCase().includes('invalid credentials')) {
         msg = 'Email ou mot de passe incorrect.';
       } else if (msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('conflict')) {
@@ -217,7 +230,7 @@ export function LoginScreen({ navigation, route }: Props) {
     } catch (e: unknown) {
       const code = (e as { code?: string }).code;
       if (code === 'ERR_REQUEST_CANCELED') return;
-      showAlert('Connexion impossible', (e as Error).message ?? 'Réessayez dans un instant.');
+      showAlert('Connexion impossible', messageServeur(e) || 'Réessayez dans un instant.');
     } finally {
       setLoading(false);
     }
