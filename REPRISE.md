@@ -117,7 +117,7 @@ l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
    un test web qui passe et une app native qui reste bloquée sur la page de
    Stripe. Le démarrage la réclame dans ses journaux.
 
-1. **`APNS_BUNDLE_ID = com.shapper.breakeat`** sur Railway. La build TestFlight porte l'identifiant réel ; avec une autre valeur, le topic APNs ne correspond pas et **aucune Live Activity ne démarrera**.
+1. ✅ **VÉRIFIÉ le 16/09/2026** (journal de démarrage : `bundle com.shapper.breakeat`) — **`APNS_BUNDLE_ID = com.shapper.breakeat`** sur Railway. La build TestFlight porte l'identifiant réel ; avec une autre valeur, le topic APNs ne correspond pas et **aucune Live Activity ne démarrera**.
 2. ~~**La CLÉ APNs (`.p8`) doit couvrir la PRODUCTION.**~~ ✅ **FAIT le 07/09/2026** — clé recréée valable Sandbox ET Production, `APNS_KEY_ID` et `APNS_PRIVATE_KEY` remplacées. Reste à confirmer par une vraie transition de commande : plus de `BadEnvironmentKeyInToken` dans les journaux. Historique conservé ci-dessous, le symptôme étant trompeur.
 
    Journal Railway au moment d'une transition de commande :
@@ -140,7 +140,7 @@ l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
 
    Le `.p8` ne doit JAMAIS être collé dans une conversation ni commité.
 
-3. **`APNS_ENV = production`** sur Railway. Sans cette valeur, le serveur pousse
+3. ✅ **VÉRIFIÉ le 16/09/2026** (journal de démarrage : `APNs — hote PRODUCTION`) — **`APNS_ENV = production`** sur Railway. Sans cette valeur, le serveur pousse
    vers l'hôte *sandbox* alors que la build TestFlight porte un jeton de
    production : Apple rejette chaque mise à jour (`BadDeviceToken`). La Live
    Activity s'affiche quand même — iOS la crée localement — mais reste **figée
