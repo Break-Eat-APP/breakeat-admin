@@ -32,7 +32,18 @@ export interface LiveActivityContentState {
    * confirmation, sans que l'extension ait à interroger quoi que ce soit.
    */
   customerArrived: boolean;
+  /**
+   * Produits que le comptoir n'a pas pu servir, prêts à afficher (« 1× Bière »).
+   * Vide si rien ne manque.
+   *
+   * OPTIONNEL côté Swift : une app plus ancienne ignore la clé, et voit tout de
+   * même le libellé « Produit manquant » porté par `statusLabel`.
+   */
+  missingItems: string[];
 }
+
+/** Le libellé qui remplace l'étape quand le comptoir signale un manque. */
+const LIBELLE_MANQUANT = 'Produit manquant · passez au comptoir';
 
 /**
  * Statuts d'AFFICHAGE de la Live Activity.
@@ -186,11 +197,16 @@ export class LiveActivityService {
       where: { id: orderId },
       select: {
         publicOrderNumber: true,
+        dailyNumber: true,
         status: true,
         estimatedReadyAt: true,
         pickupPointId: true,
         customerArrivedAt: true,
         slot: { select: { startAt: true, endAt: true } },
+        items: {
+          where: { missingQuantity: { gt: 0 } },
+          select: { productNameSnapshot: true, missingQuantity: true },
+        },
       },
     });
     if (!order) return null;
@@ -204,16 +220,27 @@ export class LiveActivityService {
     });
 
     const status = overrideStatus ?? this.mapWidgetStatus(order.status);
+    // `?? []` : les doublures de test ne portent pas toujours les lignes.
+    const missingItems = (order.items ?? []).map(
+      (l) => `${l.missingQuantity}× ${l.productNameSnapshot}`,
+    );
+    // Le manque prend la place de l'étape tant que la commande est en cours :
+    // c'est ce que le client doit lire en premier. Une fois récupérée ou
+    // annulée, l'étape finale reprend ses droits.
+    const enCours = status !== 'COLLECTED' && status !== 'CANCELLED';
     return {
       status,
-      statusLabel: WIDGET_LABELS[status],
-      orderNumber: order.publicOrderNumber,
+      statusLabel: missingItems.length > 0 && enCours ? LIBELLE_MANQUANT : WIDGET_LABELS[status],
+      // Le numéro court que le client voit dans l'app (le widget ajoute « N° ») ;
+      // le numéro long seulement pour une commande antérieure à la numérotation.
+      orderNumber: order.dailyNumber != null ? String(order.dailyNumber) : order.publicOrderNumber,
       pickupPoint: pickupPoint?.name ?? null,
       estimatedReadyAt: order.estimatedReadyAt?.toISOString() ?? null,
       slotStartAt: order.slot?.startAt.toISOString() ?? null,
       slotEndAt: order.slot?.endAt.toISOString() ?? null,
       updatedAt: new Date().toISOString(),
       customerArrived: Boolean(order.customerArrivedAt),
+      missingItems,
     };
   }
 
@@ -226,7 +253,12 @@ export class LiveActivityService {
    * Termine automatiquement l'activité quand la commande atteint un état final :
    * une commande récupérée ou annulée n'a plus rien à suivre.
    */
-  async pushOrderUpdate(orderId: string, overrideStatus?: WidgetStatus): Promise<number> {
+  async pushOrderUpdate(
+    orderId: string,
+    overrideStatus?: WidgetStatus,
+    /** Allume l'écran : seulement pour une nouvelle qui demande un geste. */
+    alerte?: { title: string; body: string },
+  ): Promise<number> {
     const activities = await this.prisma.liveActivity.findMany({
       where: { orderId, status: LiveActivityStatus.ACTIVE },
     });
@@ -248,6 +280,7 @@ export class LiveActivityService {
         {
           dismissalDate: isFinal ? new Date(now + DISMISS_AFTER_MS) : undefined,
           staleDate: isFinal ? undefined : new Date(now + STALE_AFTER_MS),
+          alert: isFinal ? undefined : alerte,
         },
       );
 

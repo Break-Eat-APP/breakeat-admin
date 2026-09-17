@@ -13,6 +13,7 @@ import { GroupsModule } from '../groups/groups.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { LoyaltyModule } from '../loyalty/loyalty.module';
 import { LiveActivityModule } from '../live-activity/live-activity.module';
+import { ProduitsManquantsService } from './produits-manquants.service';
 
 @Module({
   imports: [
@@ -34,7 +35,7 @@ import { LiveActivityModule } from '../live-activity/live-activity.module';
     LiveActivityModule,
   ],
   controllers: [OrdersController, PublicOrdersController, RecuController],
-  providers: [OrdersService, OrderStateMachineService, RecuService],
+  providers: [OrdersService, OrderStateMachineService, RecuService, ProduitsManquantsService],
   exports: [OrdersService, OrderStateMachineService],
 })
 export class OrdersModule {}

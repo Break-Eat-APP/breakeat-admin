@@ -770,6 +770,9 @@ model Order {
   /// d'attente. null = pas encore annoncé. Remis à null n'est jamais nécessaire :
   /// la commande quitte le board une fois récupérée.
   customerArrivedAt DateTime?     @map("customer_arrived_at")
+  /// Dernier signalement de produits manquants par le comptoir ; nul si rien
+  /// ne manque. Le détail est porté par les lignes (`OrderItem.missingQuantity`).
+  missingReportedAt DateTime?     @map("missing_reported_at")
   /// Frozen totals at order creation. Never recomputed.
   subtotalCents     Int           @map("subtotal_cents")
   /// PHASE 20 — remise fidélité figée au paiement. totalCents = subtotal - discount.
@@ -814,6 +817,9 @@ model OrderItem {
   vatRateBps             Int      @default(1000) @map("vat_rate_bps")
   quantity               Int
   lineTotalCents         Int      @map("line_total_cents")
+  /// Unités de cette ligne que le comptoir n'a pas pu servir (0 ≤ n ≤ quantity,
+  /// vérifié par la base). Signalé depuis le poste opérateur.
+  missingQuantity        Int      @default(0) @map("missing_quantity")
   createdAt              DateTime @default(now()) @map("created_at")
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)

@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
@@ -12,7 +13,8 @@ import {
 } from '../../common/helpers/require-org-access';
 import type { CreateProductDto } from './dto/create-product.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
-import type { Product } from '@prisma/client';
+import { ProductStatus, type Product } from '@prisma/client';
+import { OrgRole } from '../../common/enums/role.enum';
 import { TAUX_TVA_DEFAUT } from '../../common/helpers/tva';
 
 /**
@@ -198,5 +200,56 @@ export class ProductsService {
     if (category.supplierId !== supplierId) {
       throw new BadRequestException('Category does not belong to this supplier');
     }
+  }
+
+  /**
+   * HS ⇄ en vente, depuis le comptoir.
+   *
+   * L'opérateur est celui qui sait quand un produit manque et quand il revient :
+   * c'est lui qui doit pouvoir le remettre en vente, sans attendre un manager.
+   * Deux limites :
+   *  - SA buvette seulement — un poste ne touche jamais la carte d'un autre ;
+   *  - ces deux états seulement. Un produit masqué (INACTIVE) ou archivé l'a été
+   *    par un manager, pour une raison que le comptoir ne connaît pas.
+   */
+  async changerDisponibilite(
+    organizationId: string,
+    supplierId: string,
+    productId: string,
+    userId: string,
+    enVente: boolean,
+  ): Promise<Product> {
+    await requireOrgAccess(this.prisma, userId, organizationId, [
+      ...MANAGE_ROLES,
+      OrgRole.OPERATOR,
+    ]);
+
+    const membre = await this.prisma.organizationMember.findUnique({
+      where: { userId_organizationId: { userId, organizationId } },
+      select: { supplierId: true },
+    });
+    if (membre?.supplierId && membre.supplierId !== supplierId) {
+      throw new ForbiddenException('Ce produit appartient à une autre buvette.');
+    }
+
+    const produit = await this.prisma.product.findFirst({
+      where: { id: productId, supplierId, supplier: { organizationId } },
+      select: { id: true, name: true, status: true },
+    });
+    if (!produit) throw new NotFoundException('Produit introuvable');
+
+    const modifiables: ProductStatus[] = [ProductStatus.ACTIVE, ProductStatus.OUT_OF_STOCK];
+    if (!modifiables.includes(produit.status)) {
+      throw new BadRequestException(
+        `« ${produit.name} » a été masqué par un manager : il se remet en vente depuis le dashboard.`,
+      );
+    }
+
+    const maj = await this.prisma.product.update({
+      where: { id: productId },
+      data: { status: enVente ? ProductStatus.ACTIVE : ProductStatus.OUT_OF_STOCK },
+    });
+    this.logger.log(`Produit ${productId} ${enVente ? 'remis en vente' : 'passé HS'} par ${userId}`);
+    return maj;
   }
 }

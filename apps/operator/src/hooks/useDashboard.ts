@@ -207,6 +207,12 @@ export function useDashboard({
           orderId: event.orderId as string,
           nextStatus: event.nextStatus as string,
         });
+        // Un signalement de produits manquants ne change pas le statut : seul
+        // un rechargement montre les lignes concernées, sur tous les écrans de
+        // la buvette — pas seulement celui qui a signalé.
+        if (String(event.reason ?? '').startsWith('missing_items')) {
+          void loadSnapshot();
+        }
         break;
       }
 

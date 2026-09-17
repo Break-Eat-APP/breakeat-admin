@@ -381,6 +381,7 @@ function OrderCard({
   const [recuEnCours, setRecuEnCours] = useState(false);
   const stepIndex = STEPS.findIndex((s) => s.phase === cfg.phase);
   const arrived = Boolean(order.customerArrivedAt);
+  const manquantes = live ? order.items.filter((l) => (l.missingQuantity ?? 0) > 0) : [];
 
   return (
     <Pressable style={({ pressed }) => [styles.card, shadowCard, pressed && styles.pressed]} onPress={onPress}>
@@ -406,6 +407,21 @@ function OrderCard({
         <Ionicons name={cfg.icon} size={14} color={cfg.color} />
         <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
       </View>
+
+      {/* Produit manquant — signalé par le comptoir.
+          Juste sous le statut : c'est la nouvelle qui change ce que le client
+          doit faire. Le détail dit QUOI manque, la phrase dit OÙ aller. Masqué
+          une fois la commande terminée : il n'appelle plus aucun geste. */}
+      {manquantes.length > 0 && (
+        <View style={styles.manquant}>
+          <Text style={styles.manquantTitre}>Produit manquant</Text>
+          <Text style={styles.manquantTexte}>
+            Il manque{' '}
+            {manquantes.map((l) => `${l.missingQuantity}× ${l.productNameSnapshot}`).join(', ')}.
+            Rendez-vous au point de retrait{order.supplierName ? ` ${order.supplierName}` : ''}.
+          </Text>
+        </View>
+      )}
 
       {/* Progression — trois traits légendés, arrondis.
           Le libellé compte : « Préparation » dit ce qui se passe, là où un point
@@ -594,6 +610,21 @@ const styles = StyleSheet.create({
   stepBar: { height: 6, borderRadius: THEME.radius.pill },
   stepBarActive: { height: 8 },
   stepLabel: { color: THEME.grey, fontSize: 11, fontFamily: HEAD.medium },
+
+  // Même rouge que le poste opérateur et la Live Activity : un manque se
+  // reconnaît au premier coup d'œil, où qu'on le voie.
+  manquant: {
+    backgroundColor: '#fef2f2',
+    borderColor: 'rgba(185, 28, 28, 0.25)',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 10,
+    gap: 3,
+  },
+  manquantTitre: { color: '#b91c1c', fontSize: 14, fontFamily: HEAD.bold },
+  manquantTexte: { color: '#7f1d1d', fontSize: 13.5, lineHeight: 19, fontFamily: HEAD.medium },
 
   retrait: {
     flexDirection: 'row',

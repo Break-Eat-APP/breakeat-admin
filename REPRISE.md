@@ -15,7 +15,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-09-17 (comptes archivés et supprimés, purge de la démonstration)_
+_Dernière mise à jour : 2026-09-17 (produits manquants, bouton HS ; comptes archivés, purge de la démonstration)_
 
 ## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
@@ -352,6 +352,22 @@ L'app Break Eat = **porte d'entrée du click-and-collect Flaix**. Flaix gèrera 
 9. **Restyler `order-tracking.screen.tsx`** — encore en thème sombre.
 10. **Connexions Apple / Google / Facebook** — masquées derrière `SOCIAL_LOGIN_READY`, jamais branchées.
 11. **Comptoirs (`PickupPoint`)** — supprimables uniquement depuis la fiche d'un événement, donc inatteignables sur un lieu permanent.
+
+## 🧃 Produits manquants — ce qui demande une build
+
+Le poste (bouton « Manquant », bandeau « Hors carte »), le dashboard manager
+(bouton « En vente / HS ») et le serveur sont en ligne dès le déploiement.
+
+Côté client :
+- **Live Activity** : le libellé « Produit manquant · passez au comptoir » et
+  l'alerte qui allume l'écran fonctionnent AVEC la build actuelle ;
+- **build 15 nécessaire** pour : le détail rouge dans le widget et l'îlot, le
+  bandeau dans « Mes commandes », l'ouverture de « Mes commandes » au toucher
+  de la notification — et, déjà en attente, la correction de la déconnexion au
+  retour de Stripe (phase 33).
+
+Le remboursement d'un produit manquant se fait au comptoir : rien d'automatique.
+Détail : `brain/ENGINEERING_MANUAL.md`, phase 35.
 
 ## 🗃️ Archivés et supprimés — la règle
 

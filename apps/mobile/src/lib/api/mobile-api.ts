@@ -328,12 +328,16 @@ export interface Order {
   supplierName?: string | null;
   /** Plan menant à CETTE buvette (à défaut, plan général du lieu). */
   pickupPlanUrl?: string | null;
+  /** Le comptoir a signalé un produit manquant (null si rien ne manque). */
+  missingReportedAt?: string | null;
   items: Array<{
     productId: string;
     productNameSnapshot: string;
     unitPriceCentsSnapshot: number;
     quantity: number;
     lineTotalCents: number;
+    /** Unités que le comptoir n'a pas pu servir. */
+    missingQuantity?: number;
   }>;
 }
 

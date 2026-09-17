@@ -87,6 +87,34 @@ export function ecouterPush(onRecu: () => void): () => void {
 }
 
 /**
+ * Écoute les notifications TOUCHÉES par le client, y compris celle qui a
+ * rouvert l'app alors qu'elle était fermée.
+ *
+ * Sans cela, toucher « Produit manquant » ouvrait l'app sur l'accueil : le
+ * client devait deviner où lire ce qui manquait.
+ */
+export function ecouterOuvertures(onOuvrir: (data: Record<string, unknown>) => void): () => void {
+  if (Platform.OS === 'web') return () => undefined;
+  let actif = true;
+
+  // L'app était fermée : la notification qui l'a lancée n'arrive pas par
+  // l'écouteur, elle attend d'être lue.
+  void Notifications.getLastNotificationResponseAsync()
+    .then((r) => {
+      if (actif && r) onOuvrir(r.notification.request.content.data ?? {});
+    })
+    .catch(() => undefined);
+
+  const abonnement = Notifications.addNotificationResponseReceivedListener((r) =>
+    onOuvrir(r.notification.request.content.data ?? {}),
+  );
+  return () => {
+    actif = false;
+    abonnement.remove();
+  };
+}
+
+/**
  * Retire le jeton à la déconnexion.
  *
  * Sans cela, l'appareil continuerait de recevoir les campagnes du club auquel

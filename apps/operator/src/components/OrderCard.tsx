@@ -1,7 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { BRAND } from '@break-eat/brand';
 import { StatusBadge, STATUS_COLORS, type StatusVariant } from './StatusBadge';
+import {
+  MissingItemsPanel,
+  ROUGE_MANQUANT,
+  FOND_MANQUANT,
+  type LigneManquante,
+} from './MissingItemsPanel';
 
 /**
  * OrderCard — displays a single order on the operator dashboard.
@@ -15,6 +22,8 @@ export interface OrderItem {
   productNameSnapshot: string;
   unitPriceCentsSnapshot: number;
   quantity: number;
+  /** Unités que le comptoir n'a pas pu servir. */
+  missingQuantity?: number;
 }
 
 export interface OrderCardProps {
@@ -28,12 +37,19 @@ export interface OrderCardProps {
    * attend au point de retrait : la carte pulse et affiche depuis combien de temps.
    */
   customerArrivedAt?: string | null;
+  /** Dernier signalement de produits manquants ; nul si rien ne manque. */
+  missingReportedAt?: string | null;
   isLoading?: boolean;
   onPrepare?: () => void;
   onReady?: () => void;
   onPickedUp?: () => void;
   onCancel?: () => void;
+  /** Signale (ou retire) des produits manquants ; rejette en cas d'échec. */
+  onMissing?: (lignes: LigneManquante[], retirerDeLaCarte: boolean) => Promise<void>;
 }
+
+/** Tant que le client n'est pas reparti, un manque peut encore être signalé. */
+const STATUTS_SIGNALABLES = ['PAID', 'RECOVERED', 'ACCEPTED', 'PREPARING', 'READY'];
 
 function formatCents(cents: number) {
   return `${(cents / 100).toFixed(2)} €`;
@@ -53,21 +69,29 @@ export function OrderCard({
   items,
   createdAt,
   customerArrivedAt = null,
+  missingReportedAt = null,
   isLoading = false,
   onPrepare,
   onReady,
   onPickedUp,
   onCancel,
+  onMissing,
 }: OrderCardProps) {
   const color = STATUS_COLORS[status] ?? '#6b7280';
   const arrived = Boolean(customerArrivedAt);
+  const [panneau, setPanneau] = useState(false);
+  const manquantes = items.filter((it) => (it.missingQuantity ?? 0) > 0);
+  const signalable = Boolean(onMissing) && STATUTS_SIGNALABLES.includes(status);
+  // La bordure dit l'urgence : le client présent prime (il attend là, tout
+  // de suite), puis le manque (il faudra lui parler), puis l'étape.
+  const bordure = arrived ? BRAND.orange : manquantes.length > 0 ? ROUGE_MANQUANT : color;
 
   return (
     <div
       className={arrived ? 'breakeat-arrived' : undefined}
       style={{
-        border: `1px solid ${arrived ? BRAND.orange : BRAND.border}`,
-        borderLeft: `4px solid ${arrived ? BRAND.orange : color}`,
+        border: `1px solid ${arrived ? BRAND.orange : manquantes.length > 0 ? `${ROUGE_MANQUANT}66` : BRAND.border}`,
+        borderLeft: `4px solid ${bordure}`,
         borderRadius: 12,
         padding: 14,
         width: '100%',
@@ -113,6 +137,24 @@ export function OrderCard({
         </div>
       )}
 
+      {/* Produits manquants — le comptoir devra en parler au client. */}
+      {manquantes.length > 0 && (
+        <div
+          style={{
+            background: FOND_MANQUANT,
+            color: ROUGE_MANQUANT,
+            border: `1px solid ${ROUGE_MANQUANT}55`,
+            borderRadius: 8,
+            padding: '5px 8px',
+            fontSize: 11.5,
+            fontWeight: 700,
+            marginBottom: 10,
+          }}
+        >
+          Manquant signalé{missingReportedAt ? ` · ${elapsed(missingReportedAt)}` : ''} — client prévenu
+        </div>
+      )}
+
       {/* Items */}
       <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 12px 0' }}>
         {items.map((it) => (
@@ -127,7 +169,21 @@ export function OrderCard({
               borderBottom: `1px solid ${BRAND.border}`,
             }}
           >
-            <span>{it.productNameSnapshot}</span>
+            <span
+              style={{
+                // Barré seulement si la ligne manque EN ENTIER : pour une
+                // bière sur deux, il en reste une à servir.
+                textDecoration: (it.missingQuantity ?? 0) >= it.quantity ? 'line-through' : undefined,
+                color: (it.missingQuantity ?? 0) > 0 ? ROUGE_MANQUANT : undefined,
+              }}
+            >
+              {it.productNameSnapshot}
+              {(it.missingQuantity ?? 0) > 0 && (
+                <span style={{ fontWeight: 800, fontSize: 11, marginLeft: 6 }}>
+                  {it.missingQuantity} manquant{(it.missingQuantity ?? 0) > 1 ? 's' : ''}
+                </span>
+              )}
+            </span>
             <span style={{ fontWeight: 700, color: BRAND.inkSoft }}>
               ×{it.quantity}
               <span style={{ fontWeight: 400, color: BRAND.grey, marginLeft: 4, fontSize: 11 }}>
@@ -137,6 +193,10 @@ export function OrderCard({
           </li>
         ))}
       </ul>
+
+      {panneau && onMissing && (
+        <MissingItemsPanel lignes={items} onValider={onMissing} onFermer={() => setPanneau(false)} />
+      )}
 
       {/* Un seul geste par carte : celui que l'etape appelle. */}
       <div style={{ display: 'flex', gap: 6 }}>
@@ -156,6 +216,15 @@ export function OrderCard({
             color={STATUS_COLORS.PICKED_UP}
             label="Remise au client"
             onClick={onPickedUp}
+            disabled={isLoading}
+          />
+        )}
+        {signalable && !panneau && (
+          <SmallButton
+            color={ROUGE_MANQUANT}
+            label="Manquant"
+            title="Signaler un produit manquant au client"
+            onClick={() => setPanneau(true)}
             disabled={isLoading}
           />
         )}

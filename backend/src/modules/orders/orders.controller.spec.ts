@@ -3,6 +3,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { OrdersController } from './orders.controller';
 import { OrdersService } from './orders.service';
+import { ProduitsManquantsService } from './produits-manquants.service';
 import { PrismaService } from '../../database/prisma.service';
 import { GlobalRole, OrgRole } from '../../common/enums/role.enum';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
@@ -23,6 +24,7 @@ describe('OrdersController — qui peut faire avancer une commande', () => {
     organizationMember: { findUnique: jest.Mock };
   };
   let orders: { transition: jest.Mock };
+  let manquants: { signaler: jest.Mock };
 
   const ORDER = 'order-nord';
   const ORG = 'org-1';
@@ -39,12 +41,14 @@ describe('OrdersController — qui peut faire avancer une commande', () => {
       organizationMember: { findUnique: jest.fn() },
     };
     orders = { transition: jest.fn().mockResolvedValue({ id: ORDER }) };
+    manquants = { signaler: jest.fn().mockResolvedValue({ id: ORDER }) };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OrdersController],
       providers: [
         { provide: PrismaService, useValue: prisma },
         { provide: OrdersService, useValue: orders },
+        { provide: ProduitsManquantsService, useValue: manquants },
         // Le controleur signe des liens de recu a duree limitee.
         { provide: JwtService, useValue: { signAsync: jest.fn().mockResolvedValue('jeton') } },
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('https://api') } },
@@ -127,5 +131,26 @@ describe('OrdersController — qui peut faire avancer une commande', () => {
       ForbiddenException,
     );
     expect(orders.transition).not.toHaveBeenCalled();
+  });
+
+  // Signaler un manque prévient le client et peut retirer un produit de la
+  // carte : un poste ne doit pas pouvoir le faire pour la buvette d'à côté.
+  it('applique la même règle au signalement de produits manquants', async () => {
+    const corps = { lignes: [{ orderItemId: 'ligne-1', missingQuantity: 1 }], retirerDeLaCarte: true };
+
+    membre(OrgRole.OPERATOR, SUD);
+    await expect(controller.signalerManquants(ORDER, corps, utilisateur)).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(manquants.signaler).not.toHaveBeenCalled();
+
+    membre(OrgRole.OPERATOR, NORD);
+    await controller.signalerManquants(ORDER, corps, utilisateur);
+    expect(manquants.signaler).toHaveBeenCalledWith({
+      orderId: ORDER,
+      actorId: 'user-1',
+      lignes: corps.lignes,
+      retirerDeLaCarte: true,
+    });
   });
 });

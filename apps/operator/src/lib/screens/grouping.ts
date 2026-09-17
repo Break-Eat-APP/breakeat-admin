@@ -41,8 +41,10 @@ export interface OrderGroup {
  * sorted by productId so line ordering never affects identity.
  */
 export function compositionSignature(order: Order): string {
+  // Les manquants font partie de l'identité : une commande à laquelle il
+  // manque une bière ne se prépare plus comme ses jumelles.
   return order.items
-    .map((it) => `${it.productId}:${it.quantity}`)
+    .map((it) => `${it.productId}:${it.quantity}:${it.missingQuantity ?? 0}`)
     .sort()
     .join('|');
 }

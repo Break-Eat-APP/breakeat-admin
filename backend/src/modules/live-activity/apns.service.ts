@@ -23,6 +23,47 @@ export interface ApnsSendResult {
 /** Événements APNs pour une Live Activity (champ `event` de l'enveloppe). */
 export type LiveActivityEvent = 'update' | 'end';
 
+/** Options d'une mise à jour de Live Activity, telles qu'APNs les attend. */
+export interface OptionsLiveActivity {
+  dismissalDate?: Date;
+  staleDate?: Date;
+  priority?: 5 | 10;
+  alert?: { title: string; body: string };
+}
+
+/**
+ * La charge utile APNs d'une Live Activity.
+ *
+ * Extraite de l'envoi pour être vérifiable sans réseau : une clé mal nommée
+ * (`content-state`, `dismissal-date`) ne fait pas échouer la requête — Apple
+ * l'accepte et l'ignore, et l'activité reste figée sans rien dire.
+ */
+export function construirePayloadLiveActivity(
+  event: LiveActivityEvent,
+  contentState: Record<string, unknown>,
+  options: OptionsLiveActivity = {},
+  maintenant: Date = new Date(),
+): Record<string, unknown> {
+  const secondes = (d: Date) => Math.floor(d.getTime() / 1000);
+  return {
+    aps: {
+      timestamp: secondes(maintenant),
+      event,
+      'content-state': contentState,
+      ...(options.staleDate ? { 'stale-date': secondes(options.staleDate) } : {}),
+      ...(event === 'end' && options.dismissalDate
+        ? { 'dismissal-date': secondes(options.dismissalDate) }
+        : {}),
+      // L'alerte allume l'écran et déploie l'activité : c'est elle qui fait
+      // qu'une nouvelle se VOIT. Sans `sound`, elle reste silencieuse.
+      ...(options.alert
+        ? { alert: { title: options.alert.title, body: options.alert.body, sound: 'default' } }
+        : {}),
+    },
+  };
+}
+
+
 /** Clé APNs inexploitable (format PEM invalide, variable tronquée…). */
 export class ApnsKeyError extends Error {
   constructor(message: string) {
@@ -302,12 +343,16 @@ export class ApnsService implements OnModuleInit, OnModuleDestroy {
    * @param contentState état affiché (doit correspondre au ContentState Swift)
    * @param options.dismissalDate  quand retirer l'activité de l'écran (event 'end')
    * @param options.staleDate      au-delà, iOS grise l'activité comme périmée
+   * @param options.alert          allume l'écran et déploie l'activité, avec un
+   *                               son. Réservé aux nouvelles qui demandent un
+   *                               geste (produit manquant) : une progression
+   *                               ordinaire se met à jour en silence.
    */
   async sendLiveActivityUpdate(
     pushToken: string,
     event: LiveActivityEvent,
     contentState: Record<string, unknown>,
-    options: { dismissalDate?: Date; staleDate?: Date; priority?: 5 | 10 } = {},
+    options: OptionsLiveActivity = {},
   ): Promise<ApnsSendResult> {
     if (!this.isConfigured()) {
       // Non configuré ⇒ échec explicite mais silencieux : en développement, on
@@ -315,19 +360,7 @@ export class ApnsService implements OnModuleInit, OnModuleDestroy {
       return { ok: false, status: 0, reason: 'ApnsNotConfigured', tokenInvalid: false };
     }
 
-    const payload: Record<string, unknown> = {
-      aps: {
-        timestamp: Math.floor(Date.now() / 1000),
-        event,
-        'content-state': contentState,
-        ...(options.staleDate
-          ? { 'stale-date': Math.floor(options.staleDate.getTime() / 1000) }
-          : {}),
-        ...(event === 'end' && options.dismissalDate
-          ? { 'dismissal-date': Math.floor(options.dismissalDate.getTime() / 1000) }
-          : {}),
-      },
-    };
+    const payload = construirePayloadLiveActivity(event, contentState, options);
 
     const body = Buffer.from(JSON.stringify(payload));
 

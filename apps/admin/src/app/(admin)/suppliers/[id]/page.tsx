@@ -89,6 +89,7 @@ export default function SupplierDetailPage() {
   });
   /** Produit dont le taux est en cours d'enregistrement (pastille grisée). */
   const [tvaEnCours, setTvaEnCours] = useState<string | null>(null);
+  const [dispoEnCours, setDispoEnCours] = useState<string | null>(null);
   const [creatingProduct, setCreatingProduct] = useState(false);
   const [productError, setProductError] = useState('');
 
@@ -173,6 +174,29 @@ export default function SupplierDetailPage() {
       setProductError(err instanceof Error ? err.message : 'Erreur');
     } finally {
       setTvaEnCours(null);
+    }
+  }
+
+  /**
+   * HS ⇄ en vente.
+   *
+   * HS retire le produit de la carte sans le masquer : c'est une rupture
+   * passagère (fût vide, erreur de stock), que le comptoir peut aussi signaler
+   * en déclarant un produit manquant. Un produit masqué ou archivé n'est pas
+   * concerné — voir BoutonDisponibilite.
+   */
+  async function basculerDisponibilite(productId: string, statut: string) {
+    setDispoEnCours(productId);
+    setProductError('');
+    try {
+      await apiUpdateProduct(orgId, supplierId, productId, {
+        status: statut === 'OUT_OF_STOCK' ? 'ACTIVE' : 'OUT_OF_STOCK',
+      });
+      await load();
+    } catch (err) {
+      setProductError(err instanceof Error ? err.message : 'Erreur');
+    } finally {
+      setDispoEnCours(null);
     }
   }
 
@@ -678,7 +702,7 @@ export default function SupplierDetailPage() {
                 {items.map((p) => (
                   <div
                     key={p.id}
-                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: BRAND.bgSubtle, borderRadius: 8, border: `1px solid ${BRAND.border}` }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: BRAND.bgSubtle, borderRadius: 8, border: `1px solid ${BRAND.border}`, opacity: p.status === 'OUT_OF_STOCK' ? 0.6 : 1 }}
                   >
                     {p.imageUrl ? (
                       <img src={p.imageUrl} alt={p.name} style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
@@ -694,6 +718,11 @@ export default function SupplierDetailPage() {
                       produit={p}
                       occupe={tvaEnCours === p.id}
                       onChange={(bps) => void changerTva(p.id, bps)}
+                    />
+                    <BoutonDisponibilite
+                      statut={p.status}
+                      occupe={dispoEnCours === p.id}
+                      onBasculer={() => void basculerDisponibilite(p.id, p.status)}
                     />
                     <button
                       onClick={() => void handleDeleteProduct(p.id)}
@@ -713,7 +742,7 @@ export default function SupplierDetailPage() {
             <div style={{ fontSize: 12, fontWeight: 700, color: BRAND.grey, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 }}>Sans catégorie</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {uncategorised.map((p) => (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: BRAND.bgSubtle, borderRadius: 8 }}>
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: BRAND.bgSubtle, borderRadius: 8, opacity: p.status === 'OUT_OF_STOCK' ? 0.6 : 1 }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{p.name}</div>
                   </div>
@@ -722,6 +751,11 @@ export default function SupplierDetailPage() {
                     produit={p}
                     occupe={tvaEnCours === p.id}
                     onChange={(bps) => void changerTva(p.id, bps)}
+                  />
+                  <BoutonDisponibilite
+                    statut={p.status}
+                    occupe={dispoEnCours === p.id}
+                    onBasculer={() => void basculerDisponibilite(p.id, p.status)}
                   />
                   <button onClick={() => void handleDeleteProduct(p.id)} style={{ background: 'none', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}>Suppr.</button>
                 </div>
@@ -747,3 +781,47 @@ export default function SupplierDetailPage() {
 
 const lbl: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 600, color: BRAND.inkSoft, marginBottom: 4 };
 const inp: React.CSSProperties = { width: '100%', padding: '8px 12px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 14, boxSizing: 'border-box', fontFamily: 'inherit' };
+
+/**
+ * En vente ⇄ HS, d'un clic.
+ *
+ * Seuls ces deux états se basculent ici. Un produit masqué (INACTIVE) ou
+ * archivé l'a été volontairement : il s'affiche comme tel, sans bouton qui le
+ * remettrait en vente par mégarde.
+ */
+function BoutonDisponibilite({
+  statut,
+  occupe,
+  onBasculer,
+}: {
+  statut: string;
+  occupe: boolean;
+  onBasculer: () => void;
+}) {
+  if (statut !== 'ACTIVE' && statut !== 'OUT_OF_STOCK') {
+    return <span style={{ fontSize: 12, color: BRAND.grey, minWidth: 64, textAlign: 'center' }}>Masqué</span>;
+  }
+  const hs = statut === 'OUT_OF_STOCK';
+  return (
+    <button
+      type="button"
+      onClick={onBasculer}
+      disabled={occupe}
+      title={hs ? 'Remettre en vente' : 'Retirer de la carte (HS)'}
+      style={{
+        minWidth: 64,
+        borderRadius: 999,
+        padding: '4px 10px',
+        fontSize: 12,
+        fontWeight: 700,
+        fontFamily: 'inherit',
+        cursor: occupe ? 'wait' : 'pointer',
+        border: `1px solid ${hs ? '#fca5a5' : '#86efac'}`,
+        background: hs ? '#fef2f2' : '#f0fdf4',
+        color: hs ? '#b91c1c' : '#15803d',
+      }}
+    >
+      {occupe ? '…' : hs ? 'HS' : 'En vente'}
+    </button>
+  );
+}

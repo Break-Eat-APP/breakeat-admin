@@ -9,6 +9,7 @@ import { NotificationPopup } from '@/components/NotificationPopup';
 import { RecapPanel } from '@/components/RecapPanel';
 import { LoginForm } from '@/components/LoginForm';
 import { SlotBar } from '@/components/SlotBar';
+import { ProduitsHsBar } from '@/components/ProduitsHsBar';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useSound } from '@/hooks/useSound';
 import {
@@ -24,6 +25,7 @@ import {
   setSupplierStatus as apiSetSupplierStatus,
   type SupplierStatus,
   numeroAffiche,
+  signalerProduitsManquants,
 } from '@/lib/api/orders-client';
 import type { StatusVariant } from '@/components/StatusBadge';
 
@@ -305,6 +307,10 @@ export default function DashboardPage() {
     if (duServeur.id !== supplierId) setSupplierId(duServeur.id);
   }, [data?.supplier, supplierId]);
 
+  // Chaque signalement de produit manquant peut en passer un en HS : le
+  // bandeau « Hors carte » se relit aussitôt.
+  const [versionHs, setVersionHs] = useState(0);
+
   // Récap produits — masqué par défaut, ouvert à la demande pendant le service.
   const [recapOpen, setRecapOpen] = useState(false);
 
@@ -346,6 +352,16 @@ export default function DashboardPage() {
       onReady:    withLoading(orderId, () => markOrderReady(orderId, tok).then(() => undefined)),
       onPickedUp: withLoading(orderId, () => markOrderPickedUp(orderId, tok).then(() => undefined)),
       onCancel:   withLoading(orderId, () => cancelOrder(orderId, tok).then(() => undefined)),
+      // Pas de `withLoading` ici : il avale les erreurs, et le panneau doit
+      // pouvoir dire au comptoir pourquoi le signalement n'est pas parti.
+      onMissing: async (
+        lignes: Array<{ orderItemId: string; missingQuantity: number }>,
+        retirerDeLaCarte: boolean,
+      ) => {
+        await signalerProduitsManquants(orderId, tok, lignes, retirerDeLaCarte);
+        setVersionHs((v) => v + 1);
+        await loadSnapshot();
+      },
     };
   }
 
@@ -360,6 +376,7 @@ export default function DashboardPage() {
     createdAt: order.createdAt,
     // Phase 19 — fait pulser la carte quand le client s'est annoncé au retrait.
     customerArrivedAt: order.customerArrivedAt ?? null,
+    missingReportedAt: order.missingReportedAt ?? null,
     isLoading: isOrderLoading(order.id),
     ...makeActions(order.id, token),
   });
@@ -548,6 +565,11 @@ export default function DashboardPage() {
           Placés juste sous l’en-tête : c’est le premier réglage qu’on
           touche en prenant son poste, avant même de regarder la file. */}
       {token && <SlotBar eventId={eventId} token={token} supplierId={supplierId} />}
+
+      {/* Les produits retirés de la carte, à remettre en vente d'un geste. */}
+      {token && (
+        <ProduitsHsBar orgId={orgId} supplierId={supplierId} token={token} version={versionHs} />
+      )}
 
       {/* Notification overlay */}
       <NotificationPopup notification={notification} onDismiss={dismissNotification} />

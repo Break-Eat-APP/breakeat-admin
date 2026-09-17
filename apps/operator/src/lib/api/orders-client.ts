@@ -162,6 +162,8 @@ export interface OrderItem {
   categoryId?: string | null;
   /** Phase 11.4 — readable category label for the Récap produits panel. */
   categoryName?: string | null;
+  /** Unités de la ligne que le comptoir n'a pas pu servir (0 si complète). */
+  missingQuantity?: number;
 }
 
 export interface Order {
@@ -192,6 +194,8 @@ export interface Order {
    * Non nul ⇒ il attend au point de retrait, la carte est mise en évidence.
    */
   customerArrivedAt?: string | null;
+  /** Dernier signalement de produits manquants ; nul si rien ne manque. */
+  missingReportedAt?: string | null;
   items: OrderItem[];
 }
 
@@ -446,4 +450,57 @@ export async function login(email: string, password: string): Promise<LoginRespo
     throw new Error(`Connexion refusée (HTTP ${res.status}). ${detail.slice(0, 200)}`);
   }
   return res.json() as Promise<LoginResponse>;
+}
+
+// ─── Produits manquants ──────────────────────────────────────────────────────
+
+/**
+ * Signale ce que le comptoir n'a pas pu servir ; le client est prévenu sur sa
+ * Live Activity (ou par notification). Une ligne remise à 0 retire le
+ * signalement.
+ */
+export async function signalerProduitsManquants(
+  orderId: string,
+  token: string,
+  lignes: Array<{ orderItemId: string; missingQuantity: number }>,
+  retirerDeLaCarte: boolean,
+): Promise<{ id: string; produitsRetiresDeLaCarte: number }> {
+  return apiFetch(`/orders/${orderId}/produits-manquants`, token, {
+    method: 'PATCH',
+    body: JSON.stringify({ lignes, retirerDeLaCarte }),
+  });
+}
+
+export interface ProduitCarte {
+  id: string;
+  name: string;
+  /** ACTIVE = en vente, OUT_OF_STOCK = HS ; INACTIVE/ARCHIVED relèvent du manager. */
+  status: string;
+}
+
+/** La carte de la buvette, pour lister ses produits HS. */
+export async function fetchProduitsBuvette(
+  organizationId: string,
+  supplierId: string,
+  token: string,
+): Promise<ProduitCarte[]> {
+  return apiFetch<ProduitCarte[]>(
+    `/organizations/${organizationId}/suppliers/${supplierId}/products`,
+    token,
+  );
+}
+
+/** HS ⇄ en vente, limité par le serveur à la buvette du poste. */
+export async function changerDisponibiliteProduit(
+  organizationId: string,
+  supplierId: string,
+  productId: string,
+  enVente: boolean,
+  token: string,
+): Promise<ProduitCarte> {
+  return apiFetch<ProduitCarte>(
+    `/organizations/${organizationId}/suppliers/${supplierId}/products/${productId}/disponibilite`,
+    token,
+    { method: 'PATCH', body: JSON.stringify({ enVente }) },
+  );
 }

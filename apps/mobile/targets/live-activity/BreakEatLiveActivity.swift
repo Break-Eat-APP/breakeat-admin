@@ -12,6 +12,8 @@ private enum Brand {
   static let green = Color(red: 0.086, green: 0.639, blue: 0.290)  // #16A34A
   static let ink = Color(red: 0.141, green: 0.122, blue: 0.114)    // #241F1D
   static let inkSoft = Color(red: 0.420, green: 0.392, blue: 0.376) // #6B6460
+  /// Produit manquant — même rouge que le poste opérateur.
+  static let red = Color(red: 0.725, green: 0.110, blue: 0.110)    // #B91C1C
   /// Fond des pastilles et du rail de progression — beige très clair.
   static let track = Color(red: 0.960, green: 0.945, blue: 0.933)  // #F5F1EE
 }
@@ -24,6 +26,7 @@ private enum Brand {
 /// c'est prêt, gris une fois terminé. Même code visuel que l'écran « Mes
 /// commandes » de l'app.
 private func statusColor(for state: BreakEatOrderAttributes.ContentState) -> Color {
+  if state.hasMissingItems { return Brand.red }
   if state.isCancelled { return Brand.inkSoft }
   if state.isReady { return Brand.green }
   if state.status == "COLLECTED" { return Brand.inkSoft }
@@ -31,6 +34,7 @@ private func statusColor(for state: BreakEatOrderAttributes.ContentState) -> Col
 }
 
 private func statusSymbol(for state: BreakEatOrderAttributes.ContentState) -> String {
+  if state.hasMissingItems { return "exclamationmark.triangle.fill" }
   if state.isCancelled { return "xmark.circle.fill" }
   if state.isReady { return "checkmark.circle.fill" }
   if state.status == "COLLECTED" { return "bag.circle.fill" }
@@ -111,7 +115,8 @@ private struct HeroRow: View {
         Text(state.statusLabel)
           .font(.system(size: 19, weight: .bold))
           .foregroundStyle(Brand.ink)
-          .lineLimit(1)
+          // « Produit manquant · passez au comptoir » ne tient pas sur une ligne.
+          .lineLimit(state.hasMissingItems ? 2 : 1)
           .minimumScaleFactor(0.8)
 
         if let subtitle {
@@ -245,6 +250,23 @@ private struct ArrivedBadge: View {
   }
 }
 
+/// Ce qui manque, en toutes lettres : le libellé dit « passez au comptoir »,
+/// cette ligne dit pourquoi.
+private struct MissingRow: View {
+  let summary: String
+
+  var body: some View {
+    Text("Manquant : \(summary)")
+      .font(.system(size: 13, weight: .semibold))
+      .foregroundStyle(Brand.red)
+      .lineLimit(2)
+      .padding(.horizontal, 10)
+      .padding(.vertical, 7)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(RoundedRectangle(cornerRadius: 10).fill(Brand.red.opacity(0.08)))
+  }
+}
+
 // MARK: - Écran verrouillé
 
 /// Vue affichée sur l'écran verrouillé et dans le centre de notifications.
@@ -256,6 +278,10 @@ private struct LockScreenView: View {
     VStack(alignment: .leading, spacing: 13) {
       BrandRow(orderNumber: state.orderNumber)
       HeroRow(state: state)
+
+      if state.hasMissingItems {
+        MissingRow(summary: state.missingSummary)
+      }
 
       // Progression — masquée si la commande est annulée (le parcours n'a plus
       // de sens) mais conservée une fois récupérée, pour montrer l'aboutissement.
@@ -330,36 +356,45 @@ struct BreakEatLiveActivity: Widget {
         }
 
         DynamicIslandExpandedRegion(.bottom) {
-          if context.state.canAnnounceArrival {
-            VStack(spacing: 8) {
-              if let point = context.state.pickupPoint {
-                HStack(spacing: 6) {
-                  Image(systemName: "mappin.circle.fill")
-                    .foregroundStyle(Brand.green)
-                  Text(point)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                }
-              }
-              if let url = arrivalURL(orderId: context.attributes.orderId) {
-                Link(destination: url) {
-                  Text("Je suis arrivé")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 9)
-                    .background(Capsule().fill(Brand.green))
-                }
-              }
-            }
-            .padding(.top, 2)
-          } else if context.state.hasArrived, !context.state.isFinished {
-            HStack(spacing: 6) {
-              Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(Brand.green)
-              Text("Le stand sait que tu es là")
+          VStack(alignment: .leading, spacing: 8) {
+            if context.state.hasMissingItems {
+              Text("Manquant : \(context.state.missingSummary)")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.white)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if context.state.canAnnounceArrival {
+              VStack(spacing: 8) {
+                if let point = context.state.pickupPoint {
+                  HStack(spacing: 6) {
+                    Image(systemName: "mappin.circle.fill")
+                      .foregroundStyle(Brand.green)
+                    Text(point)
+                      .font(.system(size: 13, weight: .semibold))
+                      .foregroundStyle(.white)
+                  }
+                }
+                if let url = arrivalURL(orderId: context.attributes.orderId) {
+                  Link(destination: url) {
+                    Text("Je suis arrivé")
+                      .font(.system(size: 15, weight: .bold))
+                      .foregroundStyle(.white)
+                      .frame(maxWidth: .infinity)
+                      .padding(.vertical, 9)
+                      .background(Capsule().fill(Brand.green))
+                  }
+                }
+              }
+              .padding(.top, 2)
+            } else if context.state.hasArrived, !context.state.isFinished {
+              HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill")
+                  .foregroundStyle(Brand.green)
+                Text("Le stand sait que tu es là")
+                  .font(.system(size: 13, weight: .semibold))
+                  .foregroundStyle(.white)
+              }
             }
           }
         }

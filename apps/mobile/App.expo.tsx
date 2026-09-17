@@ -55,7 +55,7 @@ import { OrderConfirmationScreen } from '@screens/order-confirmation.screen';
 import { OrderTrackingScreen } from '@screens/order-tracking.screen';
 import { SplitScreen } from '@screens/split.screen';
 import { useDeepLinks } from '@lib/hooks/use-deep-links';
-import { ecouterPush, enregistrerPush } from '@lib/push-notifications';
+import { ecouterOuvertures, ecouterPush, enregistrerPush } from '@lib/push-notifications';
 import { useNotifStore } from '@store/notif.store';
 import { NotificationsScreen } from '@screens/notifications.screen';
 
@@ -162,7 +162,21 @@ export default function AppPreview() {
     // ouverte, sinon la pastille n'apparaîtrait qu'au prochain retour sur
     // l'accueil, après une bannière déjà oubliée.
     void useNotifStore.getState().rafraichir();
-    return ecouterPush(() => useNotifStore.getState().pushReceived());
+    const arreterPush = ecouterPush(() => useNotifStore.getState().pushReceived());
+
+    // « Produit manquant » : toucher la notification mène là où le client lit
+    // ce qui manque. La navigation peut ne pas être prête au démarrage à froid.
+    const arreterOuvertures = ecouterOuvertures((data) => {
+      if (data.type !== 'missing_items') return;
+      const ouvrir = () => navigationRef.navigate('Commandes');
+      if (navigationRef.isReady()) ouvrir();
+      else setTimeout(() => navigationRef.isReady() && ouvrir(), 800);
+    });
+
+    return () => {
+      arreterPush();
+      arreterOuvertures();
+    };
   }, [token]);
 
   // « Je suis arrive » depuis l'ecran verrouille, et appui sur la Live Activity.

@@ -900,11 +900,16 @@ export class OrdersService {
         slotId: true,
         estimatedReadyAt: true,
         customerArrivedAt: true,
+        // Le comptoir doit voir depuis quand un manque est signalé.
+        missingReportedAt: true,
         totalCents: true,
         currency: true,
         createdAt: true,
         updatedAt: true,
-        items: true,
+        // Ordre FIXE des lignes : sans lui, la base les rend dans l'ordre où
+        // elle les trouve, qui change après une mise à jour (un signalement de
+        // manquant) — la carte se réordonnait sous les yeux du comptoir.
+        items: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
         slot: { select: { kind: true } },
         user: { select: { displayName: true } },
       },

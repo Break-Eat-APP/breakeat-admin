@@ -32,6 +32,11 @@ struct BreakEatOrderAttributes: ActivityAttributes {
     /// obligatoire ferait echouer le decodage — et iOS ignore SILENCIEUSEMENT une
     /// mise a jour qui ne se decode pas : l'activite paraitrait simplement figee.
     var customerArrived: Bool?
+    /// Produits que le comptoir n'a pas pu servir, prêts à afficher (« 1× Bière »).
+    ///
+    /// OPTIONNEL pour la même raison que `customerArrived` : une charge utile
+    /// sans cette clé doit continuer de se décoder.
+    var missingItems: [String]?
   }
 
   /// Identifiant de la commande suivie. Fixe pendant toute la vie de l'activité.
@@ -57,6 +62,13 @@ extension BreakEatOrderAttributes.ContentState {
   var canAnnounceArrival: Bool { isReady && !hasArrived }
   var isCancelled: Bool { status == "CANCELLED" }
   var isFinished: Bool { status == "COLLECTED" || status == "CANCELLED" }
+
+  /// Le comptoir a signalé un produit manquant, et la commande est en cours :
+  /// une fois récupérée ou annulée, le manque n'appelle plus aucun geste.
+  var hasMissingItems: Bool { !(missingItems ?? []).isEmpty && !isFinished }
+
+  /// « 1× Bière, 1× Frites ».
+  var missingSummary: String { (missingItems ?? []).joined(separator: ", ") }
 
   /// Heure de retrait à afficher : l'estimation prime (recalculée par Flaix),
   /// sinon le début du créneau. Nil quand aucune information n'est disponible.

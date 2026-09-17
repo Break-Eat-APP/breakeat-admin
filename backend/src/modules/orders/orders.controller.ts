@@ -24,6 +24,8 @@ import { TransitionOrderDto } from './dto/transition-order.dto';
 import { AssignSlotDto } from './dto/assign-slot.dto';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import { ProduitsManquantsService } from './produits-manquants.service';
+import { SignalerManquantsDto } from './dto/signaler-manquants.dto';
 
 /**
  * OrdersController
@@ -69,6 +71,7 @@ export class OrdersController {
     private readonly ordersService: OrdersService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
+    private readonly produitsManquants: ProduitsManquantsService,
   ) {}
 
   // ─── Customer ────────────────────────────────────────────────
@@ -84,7 +87,11 @@ export class OrdersController {
       orderBy: { createdAt: 'desc' },
       // `slot` : l'app affiche le créneau de retrait à côté du statut, et il doit
       // refléter une éventuelle réassignation (cf. PATCH /orders/:id/slot).
-      include: { items: true, slot: CUSTOMER_SLOT_SELECT },
+      include: {
+        // Même ordre de lignes que le poste, stable d'un chargement à l'autre.
+        items: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+        slot: CUSTOMER_SLOT_SELECT,
+      },
     });
     return this.ordersService.withPickupGuidance(orders);
   }
@@ -245,6 +252,28 @@ export class OrdersController {
   ) {
     await this.assertOperatorAccessByOrder(id, user.sub);
     return this.ordersService.transition(id, OrderStatus.READY, OrderActorType.OPERATOR, user.sub, dto.reason);
+  }
+
+  /**
+   * PATCH /api/v1/orders/:id/produits-manquants
+   *
+   * Le comptoir signale ce qu'il n'a pas pu servir ; le client est prévenu sur
+   * sa Live Activity et dans l'app. Mêmes droits qu'une transition : un poste
+   * ne touche que les commandes de SA buvette.
+   */
+  @Patch(':id/produits-manquants')
+  async signalerManquants(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: SignalerManquantsDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    await this.assertOperatorAccessByOrder(id, user.sub);
+    return this.produitsManquants.signaler({
+      orderId: id,
+      actorId: user.sub,
+      lignes: dto.lignes,
+      retirerDeLaCarte: dto.retirerDeLaCarte ?? false,
+    });
   }
 
   /** PATCH /api/v1/orders/:id/mark-picked-up — READY → PICKED_UP */

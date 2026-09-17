@@ -1151,7 +1151,14 @@ export async function apiUpdateProduct(
   orgId: string,
   supplierId: string,
   productId: string,
-  data: Partial<{ name: string; price: number; description: string; vatRateBps: number }>,
+  data: Partial<{
+    name: string;
+    price: number;
+    description: string;
+    vatRateBps: number;
+    /** ACTIVE = en vente ; OUT_OF_STOCK = HS, retiré de la carte sans être masqué. */
+    status: string;
+  }>,
 ): Promise<Product> {
   return req<Product>(
     'PATCH',

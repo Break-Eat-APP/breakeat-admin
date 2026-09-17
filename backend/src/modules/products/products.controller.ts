@@ -17,6 +17,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
+import { DisponibiliteProduitDto } from './dto/disponibilite-produit.dto';
 
 /**
  * Products routes — nested under supplier:
@@ -60,6 +61,27 @@ export class ProductsController {
     @CurrentUser() user: JwtPayload,
   ) {
     return this.productsService.findOne(orgId, supplierId, productId, user.sub);
+  }
+
+  /**
+   * PATCH /:productId/disponibilite — HS ⇄ en vente.
+   * Ouvert au comptoir, pour SA buvette : voir ProductsService.changerDisponibilite.
+   */
+  @Patch(':productId/disponibilite')
+  changerDisponibilite(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('supplierId', ParseUUIDPipe) supplierId: string,
+    @Param('productId', ParseUUIDPipe) productId: string,
+    @Body() dto: DisponibiliteProduitDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.productsService.changerDisponibilite(
+      orgId,
+      supplierId,
+      productId,
+      user.sub,
+      dto.enVente,
+    );
   }
 
   /** PATCH /:productId — update product fields */

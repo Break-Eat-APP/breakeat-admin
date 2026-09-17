@@ -5031,3 +5031,87 @@ Sans `DATABASE_URL_TEST`, la suite est ignorée : elle ne touche jamais une base
 qu'on ne lui a pas désignée. `scripts/api-essai-local.js` lance l'API compilée
 sur cette même base, services extérieurs neutralisés, pour voir les tableaux de
 bord réagir.
+
+
+---
+
+## Phase 35 — Produits manquants (17/09/2026)
+
+### Le besoin
+
+Un produit affiché disponible peut ne plus l'être au comptoir : erreur de
+gestion, fût vide. Le client le découvrait en arrivant, après avoir attendu.
+
+### Le geste du comptoir
+
+Sur chaque commande en cours (payée, en préparation, prête), un bouton
+**« Manquant »** ouvre un panneau : une touche par ligne pour la déclarer
+manquante en entier, un compteur quand le client en a pris plusieurs (une bière
+sur deux). « Retirer ces produits de la carte (HS) » est coché d'emblée : si le
+produit manque pour ce client, il manquera pour le suivant.
+
+Le manque est porté par la **ligne** (`order_items.missing_quantity`, borné par
+une contrainte CHECK en base : jamais plus que commandé), la commande garde la
+date du dernier signalement (`orders.missing_reported_at`). Remettre une ligne à
+zéro retire le signalement — une erreur de saisie se corrige.
+
+Le statut de la commande ne change pas. D'où deux ajustements côté poste :
+l'événement temps réel ne portait que le statut, le poste recharge donc la
+commande quand le motif est `missing_items` ; et les cartes identiques ne sont
+plus regroupées si l'une d'elles a un manque.
+
+Route : `PATCH /orders/:id/produits-manquants`, mêmes droits qu'une transition
+(un poste ne touche que SA buvette — test dédié dans `orders.controller.spec`).
+
+### Ce que voit le client
+
+- **Live Activity** : le libellé devient « Produit manquant · passez au
+  comptoir », et la mise à jour porte une **alerte** APNs qui allume l'écran —
+  une mise à jour ordinaire change l'affichage en silence, ce qui ne suffit pas
+  pour une nouvelle qui demande un geste. Le libellé suffit aux anciennes
+  versions de l'app ; la build 15 affiche en plus le détail (« Manquant : 1×
+  Bière ») en rouge, et l'îlot dynamique aussi.
+- **Sans Live Activity active** (Android, web, activité balayée), une
+  notification prend le relais — jamais les deux. La toucher ouvre « Mes
+  commandes ».
+- **« Mes commandes »** (build 15) : un bandeau « Produit manquant — Il manque
+  1× Bière. Rendez-vous au point de retrait Buvette Nord. »
+
+La charge utile APNs est désormais construite par une fonction pure
+(`construirePayloadLiveActivity`), testée : Apple accepte une clé mal nommée et
+l'ignore, et l'activité resterait figée sans rien dire.
+
+Au passage, la Live Activity envoie le **numéro court** (`18`) — elle envoyait
+encore le numéro long (`BE-000023`), le widget ajoutant « N° » devant.
+
+### HS : retirer un produit de la carte
+
+HS = statut `OUT_OF_STOCK` : le menu public ne montre que les produits
+`ACTIVE`. Aucun écran ne permettait de le poser. Désormais :
+
+- dans le **dashboard manager**, fiche de la buvette, un bouton « En vente / HS »
+  par produit (la ligne s'estompe quand il est HS) ;
+- au **poste**, un bandeau « Hors carte » liste les produits HS de la buvette,
+  chacun avec « Remettre en vente » — c'est le comptoir qui sait quand un fût
+  est changé. Route `PATCH …/products/:productId/disponibilite`, ouverte à
+  l'opérateur mais limitée à SA buvette et à ces deux états : un produit masqué
+  ou archivé par un manager ne se remet pas en vente depuis le comptoir.
+
+### Ce qui n'est PAS fait
+
+Le **remboursement** : il se règle au comptoir (remplacement ou geste
+commercial), là où le client est invité à se présenter. Un remboursement
+partiel automatique via Stripe est possible, mais il déplace de l'argent —
+c'est une décision à part.
+
+### Vérifications
+
+- 11 tests d'intégration sur base réelle (`produits-manquants.int-spec.ts`) :
+  signalement, carte, historique, alerte, relais par notification, annulation,
+  refus (quantité, ligne d'une autre commande, commande terminée), contrainte
+  CHECK, produit masqué intouché, remise en vente et ses refus.
+- Tests unitaires : charge utile APNs, isolation des buvettes sur la nouvelle
+  route. 539 au total.
+- Vérifié à l'écran, en local : poste (signalement, bandeau Hors carte,
+  annulation, remise en vente) et « Mes commandes » (bandeau client).
+- Le widget Swift ne se compile pas sous Windows : il le sera par la build EAS.
