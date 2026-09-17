@@ -42,8 +42,32 @@ export interface LiveActivityContentState {
   missingItems: string[];
 }
 
-/** Le libellé qui remplace l'étape quand le comptoir signale un manque. */
-const LIBELLE_MANQUANT = 'Produit manquant · passez au comptoir';
+/**
+ * Le libellé qui remplace l'étape quand le comptoir signale un manque.
+ *
+ * Court : sur l'écran verrouillé il tient sur une ligne, là où « Produit
+ * manquant · passez au comptoir » était tronqué. La consigne (« rendez-vous au
+ * point de retrait ») a sa propre ligne dans le widget.
+ */
+const LIBELLE_MANQUANT = 'Produit manquant';
+
+/** Au-delà, un « créneau » n'est pas une heure de retrait mais une journée. */
+const CRENEAU_UTILE_MAX_MS = 12 * 60 * 60 * 1000;
+
+type CreneauDate = { kind: string; startAt: Date; endAt: Date };
+
+/**
+ * Le créneau vaut-il une « heure de retrait prévue » ?
+ *
+ * Non pour un retrait IMMÉDIAT, ni pour un créneau qui couvre la journée : un
+ * lieu permanent génère chaque jour un créneau « immédiat » de 00:00 à 24:00, et
+ * le widget annonçait « Retrait prévu à 00:00 » — une heure fausse, qui laissait
+ * croire à un rendez-vous à minuit.
+ */
+export function creneauAffichable(slot: CreneauDate | null | undefined): slot is CreneauDate {
+  if (!slot || slot.kind === 'IMMEDIATE') return false;
+  return slot.endAt.getTime() - slot.startAt.getTime() < CRENEAU_UTILE_MAX_MS;
+}
 
 /**
  * Statuts d'AFFICHAGE de la Live Activity.
@@ -202,7 +226,7 @@ export class LiveActivityService {
         estimatedReadyAt: true,
         pickupPointId: true,
         customerArrivedAt: true,
-        slot: { select: { startAt: true, endAt: true } },
+        slot: { select: { kind: true, startAt: true, endAt: true } },
         items: {
           where: { missingQuantity: { gt: 0 } },
           select: { productNameSnapshot: true, missingQuantity: true },
@@ -228,6 +252,7 @@ export class LiveActivityService {
     // c'est ce que le client doit lire en premier. Une fois récupérée ou
     // annulée, l'étape finale reprend ses droits.
     const enCours = status !== 'COLLECTED' && status !== 'CANCELLED';
+    const creneau = creneauAffichable(order.slot) ? order.slot : null;
     return {
       status,
       statusLabel: missingItems.length > 0 && enCours ? LIBELLE_MANQUANT : WIDGET_LABELS[status],
@@ -236,8 +261,8 @@ export class LiveActivityService {
       orderNumber: order.dailyNumber != null ? String(order.dailyNumber) : order.publicOrderNumber,
       pickupPoint: pickupPoint?.name ?? null,
       estimatedReadyAt: order.estimatedReadyAt?.toISOString() ?? null,
-      slotStartAt: order.slot?.startAt.toISOString() ?? null,
-      slotEndAt: order.slot?.endAt.toISOString() ?? null,
+      slotStartAt: creneau?.startAt.toISOString() ?? null,
+      slotEndAt: creneau?.endAt.toISOString() ?? null,
       updatedAt: new Date().toISOString(),
       customerArrived: Boolean(order.customerArrivedAt),
       missingItems,

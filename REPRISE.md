@@ -372,6 +372,11 @@ Côté client :
 Le remboursement d'un produit manquant se fait au comptoir : rien d'automatique.
 Détail : `brain/ENGINEERING_MANUAL.md`, phase 35.
 
+**Build 16 nécessaire** pour la Live Activity réordonnée (plus de débordement ni
+de bouton vert coupé, numéro de commande à la place de l'heure) et le bandeau
+dans l'écran « Suivi » (phase 36). La suppression du « Retrait prévu à 00:00 »
+et le libellé court sont côté serveur : effectifs dès le déploiement.
+
 ## 🗃️ Archivés et supprimés — la règle
 
 **Archiver n'est pas bannir.** Un compte archivé ne se connecte plus, mais la

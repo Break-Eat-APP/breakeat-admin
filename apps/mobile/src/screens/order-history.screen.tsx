@@ -27,6 +27,7 @@ import { endTrackingForFinishedOrders } from '@lib/live-activity-tracking';
 import { EVT_COMMANDES_A_RECHARGER } from '@lib/hooks/use-deep-links';
 import { useCartStore } from '@store/cart.store';
 import * as WebBrowser from 'expo-web-browser';
+import { MissingItemsBanner } from '@components/missing-items-banner';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -381,7 +382,6 @@ function OrderCard({
   const [recuEnCours, setRecuEnCours] = useState(false);
   const stepIndex = STEPS.findIndex((s) => s.phase === cfg.phase);
   const arrived = Boolean(order.customerArrivedAt);
-  const manquantes = live ? order.items.filter((l) => (l.missingQuantity ?? 0) > 0) : [];
 
   return (
     <Pressable style={({ pressed }) => [styles.card, shadowCard, pressed && styles.pressed]} onPress={onPress}>
@@ -412,15 +412,12 @@ function OrderCard({
           Juste sous le statut : c'est la nouvelle qui change ce que le client
           doit faire. Le détail dit QUOI manque, la phrase dit OÙ aller. Masqué
           une fois la commande terminée : il n'appelle plus aucun geste. */}
-      {manquantes.length > 0 && (
-        <View style={styles.manquant}>
-          <Text style={styles.manquantTitre}>Produit manquant</Text>
-          <Text style={styles.manquantTexte}>
-            Il manque{' '}
-            {manquantes.map((l) => `${l.missingQuantity}× ${l.productNameSnapshot}`).join(', ')}.
-            Rendez-vous au point de retrait{order.supplierName ? ` ${order.supplierName}` : ''}.
-          </Text>
-        </View>
+      {live && (
+        <MissingItemsBanner
+          lignes={order.items}
+          comptoir={order.supplierName}
+          style={styles.manquant}
+        />
       )}
 
       {/* Progression — trois traits légendés, arrondis.
@@ -611,20 +608,7 @@ const styles = StyleSheet.create({
   stepBarActive: { height: 8 },
   stepLabel: { color: THEME.grey, fontSize: 11, fontFamily: HEAD.medium },
 
-  // Même rouge que le poste opérateur et la Live Activity : un manque se
-  // reconnaît au premier coup d'œil, où qu'on le voie.
-  manquant: {
-    backgroundColor: '#fef2f2',
-    borderColor: 'rgba(185, 28, 28, 0.25)',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginTop: 10,
-    gap: 3,
-  },
-  manquantTitre: { color: '#b91c1c', fontSize: 14, fontFamily: HEAD.bold },
-  manquantTexte: { color: '#7f1d1d', fontSize: 13.5, lineHeight: 19, fontFamily: HEAD.medium },
+  manquant: { marginTop: 10 },
 
   retrait: {
     flexDirection: 'row',

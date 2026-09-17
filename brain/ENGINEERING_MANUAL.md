@@ -5115,3 +5115,36 @@ c'est une décision à part.
 - Vérifié à l'écran, en local : poste (signalement, bandeau Hors carte,
   annulation, remise en vente) et « Mes commandes » (bandeau client).
 - Le widget Swift ne se compile pas sous Windows : il le sera par la build EAS.
+
+
+---
+
+## Phase 36 — L'alerte « produit manquant », lisible (17/09/2026)
+
+Premier essai sur iPhone (build 15), trois défauts :
+
+1. **L'écran verrouillé débordait.** iOS limite la hauteur d'une Live Activity
+   et ROGNE ce qui dépasse, en haut comme en bas. Marque, étape, détail du
+   manque, progression et bouton « Je suis arrivé » ne tenaient pas : la marque
+   disparaissait, le bouton vert était coupé à moitié. En cas de manque, le
+   widget s'en tient désormais à l'essentiel : un en-tête dédié (« Produit
+   manquant », « Rendez-vous au point de retrait », le numéro de commande à
+   droite), la ligne « Manquant : … », la progression. Plus de bouton
+   d'arrivée : la consigne est déjà d'y aller. L'îlot dynamique suit la même
+   logique (numéro à droite, consigne au centre, manque en bas, numéro en rouge
+   dans la pilule).
+
+2. **« Retrait prévu à 00:00 ».** Un lieu permanent génère chaque jour ses
+   créneaux à partir des modèles du club ; un modèle « immédiat » couvre la
+   journée et commence donc à minuit. Le widget en affichait le début comme une
+   heure de rendez-vous. Le serveur n'envoie plus d'heure pour un créneau
+   immédiat ni pour un créneau de 12 h ou plus (`creneauAffichable`, testé).
+   Corrigé côté serveur : effectif sans nouvelle build.
+
+3. **Le suivi de commande ne disait rien du manque.** L'écran « Suivi N° … »
+   affiche maintenant le même bandeau que « Mes commandes » (composant partagé
+   `MissingItemsBanner`, pour que le client lise la même phrase partout), et la
+   ligne concernée en rouge — barrée seulement si elle manque en entier.
+
+Le libellé serveur passe de « Produit manquant · passez au comptoir » (tronqué
+sur une ligne) à « Produit manquant » ; la consigne a sa propre ligne.

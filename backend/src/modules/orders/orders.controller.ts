@@ -101,7 +101,11 @@ export class OrdersController {
   async findOne(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: JwtPayload) {
     const order = await this.prisma.order.findUnique({
       where: { id },
-      include: { items: true, payments: true, slot: CUSTOMER_SLOT_SELECT },
+      include: {
+        items: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
+        payments: true,
+        slot: CUSTOMER_SLOT_SELECT,
+      },
     });
     if (!order) throw new NotFoundException('Order not found');
     if (order.userId !== user.sub) {

@@ -15,6 +15,7 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiGetOrder, formatOrderNumber, formatPrice, type Order } from '@lib/api/mobile-api';
 import { PageHeader } from '@components/page-header';
 import { Ionicons } from '@expo/vector-icons';
+import { MissingItemsBanner, ROUGE_MANQUANT } from '@components/missing-items-banner';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderTracking'>;
 
@@ -230,6 +231,13 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
           <Text style={styles.statusDesc}>{statusCfg.description}</Text>
         </View>
 
+        {/* Produit manquant — juste sous le statut : c'est la nouvelle qui
+            change ce que le client doit faire. Plus rien à faire une fois la
+            commande terminée. */}
+        {!statusCfg.isFinal && (
+          <MissingItemsBanner lignes={order.items} comptoir={order.supplierName} />
+        )}
+
         {/* Progress steps (only for non-final normal flow) */}
         {order.status !== 'CANCELLED' && order.status !== 'RECOVERED' && (
           <View style={styles.stepsCard}>
@@ -266,17 +274,30 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
         {/* Order items */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Votre commande</Text>
-          {order.items.map((item, i) => (
+          {order.items.map((item, i) => {
+            const manque = item.missingQuantity ?? 0;
+            return (
             <View key={i} style={styles.itemRow}>
               <Text style={styles.itemQty}>{item.quantity}×</Text>
-              <Text style={styles.itemName} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.itemName,
+                  manque > 0 && styles.itemManquant,
+                  // Barré seulement si la ligne manque EN ENTIER : pour une
+                  // bière sur deux, il en reste une à récupérer.
+                  manque >= item.quantity && styles.itemBarre,
+                ]}
+                numberOfLines={1}
+              >
                 {item.productNameSnapshot}
+                {manque > 0 ? ` · ${manque} manquant${manque > 1 ? 's' : ''}` : ''}
               </Text>
               <Text style={styles.itemPrice}>
                 {formatPrice(item.unitPriceCentsSnapshot * item.quantity)}
               </Text>
             </View>
-          ))}
+            );
+          })}
           <View style={styles.divider} />
           <View style={styles.itemRow}>
             <Text style={styles.totalLabel}>Total</Text>
@@ -409,6 +430,8 @@ const styles = StyleSheet.create({
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   itemQty: { color: THEME.inkSoft, fontSize: 14, minWidth: 24 },
   itemName: { color: THEME.ink, fontSize: 14, flex: 1 },
+  itemManquant: { color: ROUGE_MANQUANT, fontWeight: '700' },
+  itemBarre: { textDecorationLine: 'line-through' },
   itemPrice: { color: THEME.inkSoft, fontSize: 14 },
   divider: { height: 1, backgroundColor: THEME.bgSubtle },
   totalLabel: { color: THEME.ink, fontSize: 14, fontWeight: '700', flex: 1 },

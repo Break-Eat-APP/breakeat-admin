@@ -115,8 +115,7 @@ private struct HeroRow: View {
         Text(state.statusLabel)
           .font(.system(size: 19, weight: .bold))
           .foregroundStyle(Brand.ink)
-          // « Produit manquant · passez au comptoir » ne tient pas sur une ligne.
-          .lineLimit(state.hasMissingItems ? 2 : 1)
+          .lineLimit(1)
           .minimumScaleFactor(0.8)
 
         if let subtitle {
@@ -250,8 +249,57 @@ private struct ArrivedBadge: View {
   }
 }
 
-/// Ce qui manque, en toutes lettres : le libellé dit « passez au comptoir »,
-/// cette ligne dit pourquoi.
+/// En-tête d'un produit manquant : ce qui se passe, ce qu'il faut faire, et le
+/// numéro à donner au comptoir.
+///
+/// Pas d'heure de retrait : le client n'a plus de rendez-vous à attendre, il
+/// doit se présenter. L'heure affichée à la place (« 00:00 » pour un retrait
+/// immédiat) brouillait justement ce message.
+private struct MissingHeroRow: View {
+  let state: BreakEatOrderAttributes.ContentState
+
+  var body: some View {
+    HStack(alignment: .center, spacing: 12) {
+      ZStack {
+        Circle()
+          .fill(Brand.red.opacity(0.13))
+          .frame(width: 42, height: 42)
+        Image(systemName: "exclamationmark.triangle.fill")
+          .font(.system(size: 19, weight: .semibold))
+          .foregroundStyle(Brand.red)
+      }
+
+      VStack(alignment: .leading, spacing: 3) {
+        Text(state.statusLabel)
+          .font(.system(size: 19, weight: .bold))
+          .foregroundStyle(Brand.ink)
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+        Text("Rendez-vous au point de retrait")
+          .font(.system(size: 13, weight: .medium))
+          .foregroundStyle(Brand.inkSoft)
+          .lineLimit(1)
+          .minimumScaleFactor(0.85)
+      }
+
+      Spacer(minLength: 4)
+
+      VStack(alignment: .trailing, spacing: 0) {
+        Text("N° \(state.orderNumber)")
+          .font(.system(size: 17, weight: .bold).monospacedDigit())
+          .foregroundStyle(Brand.ink)
+          .lineLimit(1)
+        Text("commande")
+          .font(.system(size: 9, weight: .medium))
+          .tracking(0.6)
+          .foregroundStyle(Brand.inkSoft)
+      }
+    }
+  }
+}
+
+/// Ce qui manque, en toutes lettres : l'en-tête dit où aller, cette ligne dit
+/// pourquoi.
 private struct MissingRow: View {
   let summary: String
 
@@ -275,12 +323,18 @@ private struct LockScreenView: View {
   let state: BreakEatOrderAttributes.ContentState
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 13) {
-      BrandRow(orderNumber: state.orderNumber)
-      HeroRow(state: state)
-
+    // iOS limite la hauteur d'une Live Activity et ROGNE ce qui dépasse, en
+    // haut comme en bas. Avec un manque, la version complète (marque, étape,
+    // détail, progression, bouton) débordait : la marque disparaissait, le
+    // bouton vert était coupé à moitié. En cas de manque, on s'en tient donc à
+    // l'essentiel : quoi faire, ce qui manque, où en est la commande.
+    VStack(alignment: .leading, spacing: state.hasMissingItems ? 10 : 13) {
       if state.hasMissingItems {
+        MissingHeroRow(state: state)
         MissingRow(summary: state.missingSummary)
+      } else {
+        BrandRow(orderNumber: state.orderNumber)
+        HeroRow(state: state)
       }
 
       // Progression — masquée si la commande est annulée (le parcours n'a plus
@@ -291,10 +345,13 @@ private struct LockScreenView: View {
 
       // L'action n'apparaît qu'au moment où elle a un sens : la commande attend
       // au comptoir. Avant, le client n'a rien à signaler ; après, c'est fait.
-      if state.canAnnounceArrival {
-        ArrivalButton(orderId: orderId)
-      } else if state.hasArrived, !state.isFinished {
-        ArrivedBadge()
+      // Rien de tout cela en cas de manque : la consigne est déjà d'y aller.
+      if !state.hasMissingItems {
+        if state.canAnnounceArrival {
+          ArrivalButton(orderId: orderId)
+        } else if state.hasArrived, !state.isFinished {
+          ArrivedBadge()
+        }
       }
     }
     .padding(.horizontal, 16)
@@ -329,7 +386,17 @@ struct BreakEatLiveActivity: Widget {
         }
 
         DynamicIslandExpandedRegion(.trailing) {
-          if let time = context.state.pickupTimeLabel, !context.state.isFinished {
+          if context.state.hasMissingItems {
+            VStack(alignment: .trailing, spacing: 1) {
+              Text("N° \(context.state.orderNumber)")
+                .font(.system(size: 17, weight: .bold).monospacedDigit())
+                .foregroundStyle(.white)
+              Text("commande")
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.6))
+            }
+            .padding(.trailing, 4)
+          } else if let time = context.state.pickupTimeLabel, !context.state.isFinished {
             VStack(alignment: .trailing, spacing: 1) {
               Text(time)
                 .font(.system(size: 19, weight: .bold).monospacedDigit())
@@ -348,9 +415,12 @@ struct BreakEatLiveActivity: Widget {
               .font(.system(size: 15, weight: .bold))
               .foregroundStyle(.white)
               .lineLimit(1)
-            Text("N° \(context.state.orderNumber)")
+            Text(context.state.hasMissingItems
+              ? "Rendez-vous au point de retrait"
+              : "N° \(context.state.orderNumber)")
               .font(.system(size: 11))
               .foregroundStyle(.white.opacity(0.6))
+              .lineLimit(1)
           }
           .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -363,8 +433,7 @@ struct BreakEatLiveActivity: Widget {
                 .foregroundStyle(.white)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if context.state.canAnnounceArrival {
+            } else if context.state.canAnnounceArrival {
               VStack(spacing: 8) {
                 if let point = context.state.pickupPoint {
                   HStack(spacing: 6) {
@@ -405,7 +474,11 @@ struct BreakEatLiveActivity: Widget {
           .foregroundStyle(statusColor(for: context.state))
 
       } compactTrailing: {
-        if context.state.canAnnounceArrival {
+        if context.state.hasMissingItems {
+          Text("N° \(context.state.orderNumber)")
+            .font(.system(size: 13, weight: .semibold).monospacedDigit())
+            .foregroundStyle(Brand.red)
+        } else if context.state.canAnnounceArrival {
           Image(systemName: "figure.wave")
             .foregroundStyle(Brand.green)
         } else if let time = context.state.pickupTimeLabel, !context.state.isFinished {

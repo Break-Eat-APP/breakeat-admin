@@ -189,7 +189,7 @@ decrire('produits manquants (base réelle)', () => {
     expect(envoisApns[0].evenement).toBe('update');
     expect(envoisApns[0].etat).toMatchObject({
       status: 'READY',
-      statusLabel: 'Produit manquant · passez au comptoir',
+      statusLabel: 'Produit manquant',
       missingItems: ['1× Bière'],
       orderNumber: '18',
     });
