@@ -4909,3 +4909,125 @@ d'attente unique pour le renouvellement.
 Le préréglage Jest du mobile (`@react-native/jest-preset`) ne fonctionne pas :
 il n'a jamais exécuté un seul test, d'où `--passWithNoTests`. À réparer avant de
 compter sur lui.
+
+
+---
+
+## Phase 34 — Archivés, supprimés, démonstration : plus rien ne bloque (17/09/2026)
+
+### La demande
+
+« Tous les comptes et organisations archivés ou supprimés ne doivent causer
+aucun problème ; la personne doit pouvoir se réinscrire ; les démos non plus. »
+
+### La méthode : une vraie base, et un état des lieux AVANT de corriger
+
+Les règles qui décident de tout — `ON DELETE CASCADE / RESTRICT / SET NULL`,
+index uniques, contraintes `CHECK` — vivent dans le SQL des migrations. Et ce
+SQL **diverge** par endroits de `schema.prisma` (un `Restrict` annoncé au
+schéma est un `SET NULL` en base). Des tests à doublures ne voient ni l'un ni
+l'autre.
+
+D'où `test/integration/` : les vrais services, sur un Postgres construit par
+`prisma migrate deploy` — la structure exacte de la production. Onze scénarios
+joués sur le code d'alors ont donné l'état des lieux :
+
+| Scénario | Avant |
+|---|---|
+| Réinscription e-mail après archivage | **bloqué** (« Email already in use ») |
+| Apple, identité liée à un compte archivé | **bloqué** (« compte désactivé ») |
+| Apple, même adresse qu'un compte archivé | **bloqué** |
+| Compte avec commandes : archivage puis réinscription | **bloqué** |
+| Recréer une organisation au slug d'une organisation suspendue | **bloqué** |
+| Connexion d'un compte archivé | refus sans dire quoi faire |
+| Suppression d'un compte chargé, puis réinscription | OK |
+| Suppression d'organisation avec commandes | OK (commandes orphelines lisibles) |
+| Slug d'une organisation supprimée | OK |
+| Remise à zéro avec commandes | OK |
+| Membre d'une organisation supprimée | OK |
+
+La suite finale (26 tests) échoue sur **16** d'entre eux avec l'ancien
+comportement — vérifié en remettant l'ancien code — et passe entièrement avec
+le nouveau.
+
+### La règle : archiver n'est pas bannir, et se réinscrire crée un compte NEUF
+
+Un compte archivé garde son historique (ses commandes restent dans la
+comptabilité) mais **rend** son adresse et ses identités Apple/Google au moment
+où la même personne revient : son adresse devient un témoin
+(`archive+<id>@archive.invalid`, domaine réservé RFC 2606), l'original est
+gardé dans `users.archived_email`. Même logique pour le slug d'une organisation
+inactive (`organizations.archived_slug`). Voir
+`src/common/helpers/liberation-archives.ts`.
+
+**Pourquoi un compte neuf, et pas la réactivation de l'ancien.** L'app ne
+vérifie pas les adresses. Réactiver sur simple inscription donnerait
+l'historique, les points et les reçus d'un client à quiconque tape son adresse ;
+et un opérateur archivé retrouverait le poste de son ancien club rien qu'en se
+réinscrivant. Le compte neuf ne voit rien de l'ancien, n'a aucune appartenance.
+
+La libération emporte aussi les sessions et les jetons push de l'ancien compte :
+l'appareil ne reçoit plus les annonces d'un compte fermé, et peut s'enregistrer
+pour le neuf.
+
+**Réactiver depuis le back-office** rend l'adresse si personne ne l'a reprise ;
+sinon c'est refusé, avec la raison — deux comptes ne partagent pas une adresse.
+Une organisation réactivée reprend son slug s'il est libre, et revient quand
+même s'il a été repris (le slug est un identifiant interne, il se renomme).
+
+### Les messages
+
+Les trois pages de connexion trahissaient le serveur : le manager et le
+back-office affichaient « Session expirée » pour tout refus de connexion (un
+401 sur une route SANS session était traité comme une expiration), le poste
+opérateur « mot de passe incorrect » pour tout. Un compte archivé n'apprenait
+donc jamais qu'il pouvait se réinscrire. Le message du serveur passe désormais ;
+seul « Invalid credentials » est traduit.
+
+### Les organisations suspendues d'abord, à l'ouverture
+
+Les tableaux de bord ouvrent la PREMIÈRE appartenance, et la base ne garantit
+aucun ordre : un manager pouvait atterrir sur son ancienne organisation
+suspendue. Le serveur trie maintenant : actives d'abord, plus récentes en tête.
+
+### La démonstration
+
+Jusqu'au 31/08/2026, `demo-checkout` créait de vraies commandes **marquées
+payées** sans aucun paiement (`DEMO-…`). Elles faussaient le chiffre d'affaires
+et la TVA, restaient en attente sur les postes, occupaient des créneaux et
+empêchaient de supprimer les comptes de test.
+
+La **purge** (back-office → Vue d'ensemble, encart visible seulement s'il en
+reste) montre d'abord le détail par organisation, exige la phrase
+`PURGER LA DEMO`, puis efface dans une seule transaction :
+
+- les commandes (lignes, historique, Live Activity en cascade) ;
+- leurs **paiements** — leur lien est `SET NULL`, ils auraient survécu ;
+- leurs **mouvements de points**, sans clé étrangère — le solde est rétabli en
+  annulant chaque mouvement, sans jamais passer sous zéro (des points de démo
+  ont pu être dépensés depuis sur une vraie commande) ;
+- la **charge des créneaux** (`current_load`), une place par commande.
+
+Vérifié dans l'interface sur la base d'essai : chiffre d'affaires 153,50 € →
+133,00 €, soit exactement les 20,50 € de démonstration.
+
+### Au passage
+
+- L'erreur `duplicate key … events_permanent_container_per_venue` des journaux
+  Postgres était inoffensive (absorbée par le serveur) mais passait pour une
+  panne : le contenant est désormais cherché avant d'être créé.
+- Le back-office ne renouvelle pas sa session : il déconnecte au bout de
+  15 minutes. À corriger comme le dashboard manager (phase 33).
+
+### Relancer la suite d'intégration
+
+```
+docker run -d --name breakeat_audit -e POSTGRES_USER=audit -e POSTGRES_PASSWORD=audit -e POSTGRES_DB=audit -p 55432:5432 postgres:16-alpine
+DATABASE_URL=postgresql://audit:audit@localhost:55432/audit npx prisma migrate deploy
+DATABASE_URL_TEST=postgresql://audit:audit@localhost:55432/audit pnpm test:integration
+```
+
+Sans `DATABASE_URL_TEST`, la suite est ignorée : elle ne touche jamais une base
+qu'on ne lui a pas désignée. `scripts/api-essai-local.js` lance l'API compilée
+sur cette même base, services extérieurs neutralisés, pour voir les tableaux de
+bord réagir.

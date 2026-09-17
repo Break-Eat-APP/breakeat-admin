@@ -223,6 +223,13 @@ model User {
   /// passe. Un hachage bidon aurait laisse croire qu'il en existe un, et la
   /// connexion par mot de passe aurait echoue sans jamais dire pourquoi.
   passwordHash String?    @map("password_hash")
+  /// L'adresse d'origine d'un compte ARCHIVÉ dont l'adresse a été libérée.
+  ///
+  /// Se réinscrire après un archivage crée un compte NEUF : l'ancien garde son
+  /// historique (la comptabilité reste juste) mais rend son adresse, remplacée
+  /// par une adresse-témoin. Celle-ci est conservée ici, pour le back-office et
+  /// pour une éventuelle réactivation.
+  archivedEmail String?   @map("archived_email")
   displayName  String     @map("display_name")
   phone        String?
   globalRole   GlobalRole @default(CUSTOMER) @map("global_role")
@@ -293,6 +300,9 @@ model Organization {
   id                   String              @id @default(uuid())
   name                 String
   slug                 String              @unique
+  /// Le slug d'origine d'une organisation inactive dont le slug a été libéré
+  /// pour une organisation neuve. Même logique que `User.archivedEmail`.
+  archivedSlug         String?             @map("archived_slug")
   status               OrgStatus           @default(ACTIVE)
   settings             Json                @default("{}")
   /// PHASE 26 — compte Stripe DU CLUB.

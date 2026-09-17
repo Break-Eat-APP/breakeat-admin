@@ -431,8 +431,15 @@ export async function login(email: string, password: string): Promise<LoginRespo
     );
   }
 
+  // Le serveur dit POURQUOI il refuse : un compte archivé n'est pas un
+  // mauvais mot de passe, et le message lui dit qu'il peut se réinscrire.
   if (res.status === 401) {
-    throw new Error('E-mail ou mot de passe incorrect.');
+    const corps = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(
+      !corps.message || corps.message === 'Invalid credentials'
+        ? 'E-mail ou mot de passe incorrect.'
+        : corps.message,
+    );
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => '');

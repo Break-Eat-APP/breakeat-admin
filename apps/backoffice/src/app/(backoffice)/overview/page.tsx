@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { BRAND } from '@break-eat/brand';
 import { apiGetKpis, formatEuros, type GlobalKpis } from '@/lib/api/backoffice-client';
+import { PurgeDemo } from '@/components/purge-demo';
 
 export default function OverviewPage() {
   const { data, isLoading, isError, error } = useQuery<GlobalKpis>({
@@ -25,6 +26,9 @@ export default function OverviewPage() {
           Indicateurs consolidés de toute la plateforme Break Eat.
         </p>
       </header>
+
+      {/* Au-dessus des chiffres : ce sont eux que la démonstration fausse. */}
+      <PurgeDemo />
 
       {isLoading && <Muted>Chargement des indicateurs…</Muted>}
       {isError && (

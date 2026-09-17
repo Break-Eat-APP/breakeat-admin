@@ -28,15 +28,20 @@ describe('AuthService — connexion Apple / Google', () => {
       userIdentity: {
         findUnique: jest.fn().mockResolvedValue(overrides.identityRow ?? null),
         create: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn(),
       },
       user: {
         findUnique: jest.fn().mockResolvedValue(overrides.userRow ?? null),
         create: jest.fn().mockImplementation(({ data }: { data: Record<string, unknown> }) =>
           Promise.resolve({ id: 'u-neuf', isActive: true, globalRole: 'CUSTOMER', ...data }),
         ),
+        update: jest.fn(),
       },
-      refreshToken: { create: jest.fn().mockResolvedValue({}) },
+      refreshToken: { create: jest.fn().mockResolvedValue({}), deleteMany: jest.fn() },
+      pushToken: { deleteMany: jest.fn() },
       group: { findMany: jest.fn().mockResolvedValue([]) },
+      // La libération d'un compte archivé passe par une transaction.
+      $transaction: jest.fn().mockResolvedValue([]),
     };
     const social = {
       verifier: jest.fn().mockResolvedValue(overrides.identiteVerifiee ?? identite),
@@ -127,12 +132,27 @@ describe('AuthService — connexion Apple / Google', () => {
     });
   });
 
-  it('refuse un compte désactivé', async () => {
-    const { service } = monter({
-      identityRow: { user: { id: 'u-4', email: 'jo@club.fr', isActive: false, passwordHash: null } },
+  // Un compte archivé ne rouvre pas par son identité Apple : il la RELÂCHE, et
+  // la personne repart d'un compte neuf. La libération elle-même (adresse,
+  // identités, sessions) est vérifiée sur base réelle, dans
+  // test/integration/archives.int-spec.ts.
+  it('identité liée à un compte archivé : un compte neuf, jamais l’ancien', async () => {
+    const archive = { id: 'u-4', email: 'jo@club.fr', isActive: false, archivedEmail: null };
+    const { service, prisma } = monter({
+      identityRow: { user: { ...archive, passwordHash: null } },
     });
-    await expect(service.connexionSociale({ provider: 'apple', token: 'jwt' })).rejects.toThrow(
-      UnauthorizedException,
+    // La libération relit le compte archivé par son identifiant ; la recherche
+    // par adresse, elle, ne trouve plus personne une fois l'adresse rendue.
+    prisma.user.findUnique.mockImplementation(({ where }: { where: { id?: string } }) =>
+      Promise.resolve(where.id === 'u-4' ? archive : null),
+    );
+
+    const res = await service.connexionSociale({ provider: 'apple', token: 'jwt' });
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(res.user.id).toBe('u-neuf');
+    expect(prisma.userIdentity.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ userId: 'u-neuf' }) }),
     );
   });
 });

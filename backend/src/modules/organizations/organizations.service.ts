@@ -19,6 +19,7 @@ import {
   MANAGE_ROLES,
   requireOrgAccess,
 } from '../../common/helpers/require-org-access';
+import { libererSlugInactif } from '../../common/helpers/liberation-archives';
 
 export type OrganizationWithMembers = Organization & {
   members: OrganizationMember[];
@@ -309,13 +310,9 @@ export class OrganizationsService {
     creatorId: string,
     dto: CreateOrganizationDto,
   ): Promise<OrganizationWithMembers> {
-    const existing = await this.prisma.organization.findUnique({
-      where: { slug: dto.slug },
-    });
-
-    if (existing) {
-      throw new ConflictException(`Slug "${dto.slug}" is already taken`);
-    }
+    // Même règle qu'au back-office : une organisation inactive rend son slug,
+    // une active le garde.
+    await libererSlugInactif(this.prisma, dto.slug);
 
     const organization = await this.prisma.$transaction(async (tx) => {
       const org = await tx.organization.create({

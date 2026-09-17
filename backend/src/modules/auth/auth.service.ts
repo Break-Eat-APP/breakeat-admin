@@ -11,6 +11,7 @@ import { UsersService } from '../users/users.service';
 import { GroupsService } from '../groups/groups.service';
 import type { SafeUser } from '../users/users.service';
 import { SocialIdentityService, type Fournisseur } from './social-identity.service';
+import { libererCompteArchive } from '../../common/helpers/liberation-archives';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { JwtPayload } from './strategies/jwt.strategy';
@@ -94,8 +95,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Un compte archivé ne se rouvre pas par son ancien mot de passe. Mais le
+    // client doit savoir qu'il peut revenir : l'inscription avec la même
+    // adresse lui ouvre un compte neuf (voir liberation-archives).
     if (!user.isActive) {
-      throw new UnauthorizedException('Ce compte a été désactivé.');
+      throw new UnauthorizedException('Ce compte a été archivé. Vous pouvez vous réinscrire avec la même adresse : un nouveau compte sera créé.');
     }
 
     // Un compte créé par Apple ou Google n'a JAMAIS eu de mot de passe. Le
@@ -158,7 +162,7 @@ export class AuthService {
     this.logger.log(`Connexion ${dto.provider} : demande reçue`);
     const identite = await this.socialIdentity.verifier(dto.provider, dto.token);
 
-    const existante = await this.prisma.userIdentity.findUnique({
+    let existante = await this.prisma.userIdentity.findUnique({
       where: {
         provider_subject: { provider: identite.provider, subject: identite.subject },
       },
@@ -167,11 +171,18 @@ export class AuthService {
 
     let user: SafeUser;
 
+    // Le sujet mène à un compte ARCHIVÉ : la personne revient. Le compte
+    // archivé rend son identité et son adresse, et elle repart d'un compte
+    // neuf — exactement comme par l'inscription e-mail.
+    if (existante && !existante.user.isActive) {
+      await libererCompteArchive(this.prisma, { id: existante.user.id });
+      this.logger.log(
+        `Connexion ${dto.provider} : compte archivé ${existante.user.id} libéré, un compte neuf va être créé`,
+      );
+      existante = null;
+    }
+
     if (existante) {
-      if (!existante.user.isActive) {
-        this.logger.warn(`Connexion ${dto.provider} refusée : compte ${existante.user.id} désactivé`);
-        throw new UnauthorizedException('Ce compte a été désactivé.');
-      }
       user = sansMotDePasse(existante.user);
       this.logger.log(`Connexion ${dto.provider} réussie : compte existant ${user.id}`);
     } else {
@@ -190,12 +201,20 @@ export class AuthService {
         );
       }
 
+      // Un compte archivé qui porte cette adresse la rend d'abord.
+      const libere = await libererCompteArchive(this.prisma, { email: identite.email });
+      if (libere) {
+        this.logger.log(`Connexion ${dto.provider} : adresse libérée par le compte archivé ${libere}`);
+      }
+
       const deja = await this.prisma.user.findUnique({ where: { email: identite.email } });
 
       if (deja) {
+        // Ne peut plus être archivé ici — il vient d'être libéré — sauf archivage
+        // concurrent entre les deux lectures. Refuser reste alors la seule issue.
         if (!deja.isActive) {
-          this.logger.warn(`Connexion ${dto.provider} refusée : compte ${deja.id} désactivé`);
-          throw new UnauthorizedException('Ce compte a été désactivé.');
+          this.logger.warn(`Connexion ${dto.provider} refusée : compte ${deja.id} archivé`);
+          throw new UnauthorizedException('Ce compte a été archivé. Vous pouvez vous réinscrire avec la même adresse : un nouveau compte sera créé.');
         }
         user = sansMotDePasse(deja);
         this.logger.log(`Identité ${identite.provider} rattachée au compte ${user.id}`);

@@ -187,13 +187,33 @@ describe('BackofficeService', () => {
       expect(result.id).toBe('org-1');
     });
 
-    it('rejects a duplicate slug with 409', async () => {
-      prisma.organization.findUnique.mockResolvedValue({ id: 'existing', slug: 'club-x' });
+    it('rejects the slug of an ACTIVE org with 409', async () => {
+      prisma.organization.findUnique.mockResolvedValue({
+        id: 'existing', slug: 'club-x', name: 'Club X', status: 'ACTIVE',
+      });
 
       await expect(
         service.createOrganization({ name: 'Club X', slug: 'club-x' }),
       ).rejects.toBeInstanceOf(ConflictException);
       expect(prisma.organization.create).not.toHaveBeenCalled();
+    });
+
+    // Une organisation suspendue ne doit plus empêcher un club de revenir :
+    // elle rend son slug (voir liberation-archives, et la suite d'intégration).
+    it('frees the slug of a SUSPENDED org, then creates', async () => {
+      prisma.organization.findUnique.mockResolvedValue({
+        id: 'abcdef12-0000', slug: 'club-x', name: 'Ancien', status: 'SUSPENDED',
+      });
+      prisma.organization.update.mockResolvedValue({});
+      prisma.organization.create.mockResolvedValue({ id: 'neuve', slug: 'club-x' });
+
+      await service.createOrganization({ name: 'Club X', slug: 'club-x' });
+
+      expect(prisma.organization.update).toHaveBeenCalledWith({
+        where: { id: 'abcdef12-0000' },
+        data: { slug: 'club-x--archive-abcdef12', archivedSlug: 'club-x' },
+      });
+      expect(prisma.organization.create).toHaveBeenCalled();
     });
   });
 
@@ -206,10 +226,10 @@ describe('BackofficeService', () => {
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it('rejects a slug already taken by another org', async () => {
+    it('rejects a slug already taken by another ACTIVE org', async () => {
       prisma.organization.findUnique
         .mockResolvedValueOnce({ id: 'org-1', slug: 'old-slug' }) // target lookup
-        .mockResolvedValueOnce({ id: 'org-2', slug: 'taken' }); // clash lookup
+        .mockResolvedValueOnce({ id: 'org-2', slug: 'taken', name: 'Autre', status: 'ACTIVE' }); // clash lookup
 
       await expect(
         service.updateOrganization('org-1', { slug: 'taken' }),

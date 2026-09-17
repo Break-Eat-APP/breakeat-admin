@@ -1,5 +1,6 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { libererCompteArchive } from '../../common/helpers/liberation-archives';
 import type { User } from '@prisma/client';
 import * as argon2 from 'argon2';
 
@@ -28,6 +29,10 @@ export class UsersService {
    * Throws ConflictException if email already exists.
    */
   async create(input: CreateUserInput): Promise<SafeUser> {
+    // Un compte ARCHIVÉ qui porte cette adresse la rend : la personne repart
+    // d'un compte neuf. Un compte actif, lui, bloque toujours.
+    await libererCompteArchive(this.prisma, { email: input.email });
+
     const existing = await this.prisma.user.findUnique({
       where: { email: input.email.toLowerCase() },
     });
@@ -95,6 +100,19 @@ export class UsersService {
       },
     });
     if (!user) throw new NotFoundException('User not found');
+
+    // Les organisations ACTIVES d'abord, les plus récentes en tête.
+    //
+    // Les tableaux de bord ouvrent la PREMIÈRE appartenance. Sans ordre, un
+    // manager dont l'ancienne organisation a été suspendue pouvait atterrir
+    // dessus plutôt que sur celle qu'il exploite aujourd'hui — l'ordre rendu par
+    // la base n'étant garanti par rien.
+    user.memberships.sort((a, b) => {
+      const actifA = a.organization.status === 'ACTIVE' ? 0 : 1;
+      const actifB = b.organization.status === 'ACTIVE' ? 0 : 1;
+      return actifA - actifB || b.createdAt.getTime() - a.createdAt.getTime();
+    });
+
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash: _hash, ...safeUser } = user;
     return safeUser;

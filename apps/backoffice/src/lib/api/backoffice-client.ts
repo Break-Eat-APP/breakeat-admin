@@ -86,7 +86,11 @@ async function req<T>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  if (res.status === 401) {
+  // Un 401 sur une route SANS session (la connexion elle-même) n'est pas une
+  // session expirée : c'est un refus, et le serveur dit lequel. Le traiter
+  // comme une expiration affichait « Session expirée » pour un mauvais mot de
+  // passe — et cachait à un compte archivé qu'il pouvait se réinscrire.
+  if (res.status === 401 && !noAuth) {
     clearSession();
     if (typeof window !== 'undefined') window.location.href = '/login';
     throw new Error('Session expirée — veuillez vous reconnecter');
@@ -96,7 +100,9 @@ async function req<T>(
 
   const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok) {
-    const msg = (data['message'] as string | undefined) ?? `HTTP ${res.status}`;
+    const brut = (data['message'] as string | undefined) ?? `HTTP ${res.status}`;
+    // Le seul refus encore rédigé en anglais par le serveur.
+    const msg = brut === 'Invalid credentials' ? 'E-mail ou mot de passe incorrect.' : brut;
     throw new Error(msg);
   }
   return data as T;
@@ -389,6 +395,12 @@ export interface UserMembership {
 export interface BackofficeUserListItem {
   id: string;
   email: string;
+  /**
+   * Compte archivé dont l'adresse a été rendue : la personne s'est réinscrite
+   * (ou peut le faire) avec un compte neuf. La même adresse peut donc
+   * apparaître deux fois — ici, et sur le compte neuf.
+   */
+  adresseLiberee?: boolean;
   displayName: string;
   globalRole: string;
   isActive: boolean;
@@ -538,6 +550,43 @@ export async function apiResetOrgData(
   return req<ResetOrgDataResult>('POST', `/backoffice/organizations/${id}/reset-data`, {
     confirmation,
   });
+}
+
+// ─── Données de démonstration ──────────────────────────────────────────────────
+
+/** Ce qu'une purge de la démonstration effacerait. */
+export interface ApercuDemo {
+  commandes: number;
+  montantCents: number;
+  comptes: number;
+  plusAncienne: string | null;
+  plusRecente: string | null;
+  parOrganisation: Array<{
+    organizationId: string;
+    nom: string;
+    commandes: number;
+    montantCents: number;
+  }>;
+  /** La phrase à recopier pour confirmer. */
+  phraseConfirmation: string;
+}
+
+export interface BilanPurgeDemo {
+  commandes: number;
+  paiements: number;
+  mouvementsPoints: number;
+  soldesCorriges: number;
+  creneaux: number;
+}
+
+/** GET /backoffice/demo — lecture seule. */
+export async function apiApercuDemo(): Promise<ApercuDemo> {
+  return req<ApercuDemo>('GET', '/backoffice/demo');
+}
+
+/** POST /backoffice/demo/purge — irréversible ; la phrase doit être exacte. */
+export async function apiPurgerDemo(confirmation: string): Promise<BilanPurgeDemo> {
+  return req<BilanPurgeDemo>('POST', '/backoffice/demo/purge', { confirmation });
 }
 
 // ─── Formatting helpers ────────────────────────────────────────────────────────

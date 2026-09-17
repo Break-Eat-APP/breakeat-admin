@@ -92,7 +92,7 @@ export default function UsersPage() {
 
   const basculer = (u: BackofficeUserListItem) => {
     const question = u.isActive
-      ? `Archiver ${u.email} ?\n\nSa session s’arrête tout de suite. Le compte et son historique de commandes sont conservés : tu pourras le réactiver.`
+      ? `Archiver ${u.email} ?\n\nSa session s’arrête tout de suite. Le compte et son historique de commandes sont conservés : tu pourras le réactiver.\n\nArchiver n’est pas bannir : la personne pourra se réinscrire avec la même adresse, et repartira d’un compte neuf.`
       : `Réactiver l’accès de ${u.email} ?`;
     if (window.confirm(question)) {
       archiveMut.mutate({ id: u.id, archived: u.isActive });
@@ -184,8 +184,10 @@ export default function UsersPage() {
           {archivesOuverts && (
             <>
               <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 14px', maxWidth: 640, lineHeight: 1.55 }}>
-                Ces comptes ne peuvent plus se connecter, nulle part. Leur historique de commandes
-                est conservé — les réactiver leur rend tout, à l’identique.
+                Ces comptes ne se connectent plus, et leur historique de commandes est conservé.
+                Archiver n’est pas bannir : la personne peut se réinscrire avec la même adresse et
+                repart alors d’un compte neuf — l’ancien rend son adresse (« Adresse rendue »).
+                Un compte réactivé retrouve tout, sauf si son adresse a été reprise entre-temps.
               </p>
               <UserTable
                 users={archives}
@@ -289,6 +291,11 @@ function UserTable({
             {/* Email */}
             <div style={{ flex: 2, fontSize: 13, color: BRAND.inkSoft, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {u.email}
+              {u.adresseLiberee && (
+                <div style={{ fontSize: 11.5, color: BRAND.grey, marginTop: 2 }}>
+                  Adresse rendue — un compte neuf peut l’utiliser
+                </div>
+              )}
             </div>
 
             {/* Rôle */}

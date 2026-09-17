@@ -15,7 +15,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-09-07 (cloche de notifications, inscription rapide Apple)_
+_Dernière mise à jour : 2026-09-17 (comptes archivés et supprimés, purge de la démonstration)_
 
 ## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
@@ -99,6 +99,26 @@ l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
 
 ## ⏭️ REPRISE IMMÉDIATE
 
+000. **Purger la démonstration** — back-office → **Vue d'ensemble**. Un encart
+     rouge liste les commandes `DEMO-…` par organisation (elles sont comptées
+     comme payées alors qu'aucun paiement n'a eu lieu : chiffre d'affaires et
+     TVA faussés). Recopier `PURGER LA DEMO`, puis purger. L'encart disparaît
+     une fois fait. Remplace l'ancien point « Supprimer la commande
+     `DEMO-MTBUTM82` ».
+
+0000. **Le compte `78837af2…`** (celui qu'Apple retrouvait, archivé). Pour le
+      GARDER, le réactiver dans back-office → Utilisateurs → Comptes archivés
+      AVANT de retenter « Continuer avec Apple ». Sinon, la prochaine connexion
+      Apple crée un compte neuf et l'ancien rend son adresse — le réactiver
+      ensuite demandera de supprimer d'abord le compte neuf.
+
+00000. **Le statut d'organisation n'est vérifié nulle part.** « Désactiver » dans
+       le back-office ne fait que changer une étiquette : une organisation
+       suspendue reste visible et commandable. Le faire respecter (découverte,
+       panier, tableaux de bord) est prêt à écrire, mais demande d'abord de
+       vérifier dans back-office → Organisations qu'aucun club en service n'est
+       marqué suspendu — sinon il disparaîtrait de l'app.
+
 00. **`APPLE_CLIENT_IDS` sur Railway** —
     `com.shapper.breakeat,com.shapper.breakeat.preview`.
     Ce n'est pas un secret : c'est le destinataire attendu dans le jeton d'Apple
@@ -178,8 +198,7 @@ l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
    rattaché ne voit rien, et l'écran le dit. **À faire avant d'ouvrir un lieu à
    plusieurs buvettes.**
 
-11. **Supprimer la commande `DEMO-MTBUTM82`** et les autres restes du mode démo,
-    qui traînent encore dans « Mes commandes » de certains comptes.
+11. ~~Supprimer la commande `DEMO-MTBUTM82`~~ → remplacé par la purge (point 000).
 
 12. **Nettoyer les comptes Stripe connectés inutiles.** Il en subsiste plusieurs
     portant le même nom (« Buvette Nord » en double), créés lors d'inscriptions
@@ -333,6 +352,18 @@ L'app Break Eat = **porte d'entrée du click-and-collect Flaix**. Flaix gèrera 
 9. **Restyler `order-tracking.screen.tsx`** — encore en thème sombre.
 10. **Connexions Apple / Google / Facebook** — masquées derrière `SOCIAL_LOGIN_READY`, jamais branchées.
 11. **Comptoirs (`PickupPoint`)** — supprimables uniquement depuis la fiche d'un événement, donc inatteignables sur un lieu permanent.
+
+## 🗃️ Archivés et supprimés — la règle
+
+**Archiver n'est pas bannir.** Un compte archivé ne se connecte plus, mais la
+personne peut se réinscrire avec la même adresse (e-mail, Apple, Google) : elle
+repart d'un compte NEUF, sans l'historique ni les accès de l'ancien. L'ancien
+garde ses commandes (comptabilité) et rend son adresse — le back-office
+l'affiche avec « Adresse rendue ». Même chose pour le slug d'une organisation
+suspendue. Détail et raisons : `brain/ENGINEERING_MANUAL.md`, phase 34.
+
+Suite d'intégration sur vraie base : `pnpm test:integration` (backend), avec
+`DATABASE_URL_TEST` — voir la phase 34 pour monter la base d'essai.
 
 ## 🍏 Ajouter une capability iOS — l'ordre compte
 

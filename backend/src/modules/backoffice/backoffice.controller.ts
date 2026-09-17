@@ -17,6 +17,7 @@ import { UpdateBackofficeOrgDto } from './dto/update-backoffice-org.dto';
 import { SendNotificationDto } from './dto/send-notification.dto';
 import { ScheduleNotificationDto } from './dto/schedule-notification.dto';
 import { ResetOrgDataDto } from './dto/reset-org-data.dto';
+import { PurgeDemoDto } from './dto/purge-demo.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -109,6 +110,24 @@ export class BackofficeController {
   @HttpCode(HttpStatus.OK)
   resetOrgData(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ResetOrgDataDto) {
     return this.backoffice.resetOrgData(id, dto.confirmation);
+  }
+
+  // ─── Données de démonstration ─────────────────────────────────
+
+  /** GET /demo — ce qu'une purge effacerait. Rien n'est modifié. */
+  @Get('demo')
+  apercuDemo() {
+    return this.backoffice.apercuDemo();
+  }
+
+  /**
+   * POST /demo/purge — efface les commandes `DEMO-…` et leurs traces.
+   * La phrase de l'aperçu doit être recopiée : voir PurgeDemoDto.
+   */
+  @Post('demo/purge')
+  @HttpCode(HttpStatus.OK)
+  purgerDemo(@Body() dto: PurgeDemoDto) {
+    return this.backoffice.purgerDemo(dto.confirmation);
   }
 
   // ─── Utilisateurs ─────────────────────────────────────────────

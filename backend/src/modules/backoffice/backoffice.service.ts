@@ -12,6 +12,7 @@ import { PushTokensService } from '../notifications/push-tokens.service';
 import { ScheduledPushService } from '../notifications/scheduled-push.service';
 import { tauxMoyenBps, type TrancheTva } from '../../common/helpers/tva';
 import { ventilationCommandes } from '../../common/helpers/ventilation-commandes';
+import { adresseTemoin, libererSlugInactif } from '../../common/helpers/liberation-archives';
 import type { CreateBackofficeOrgDto } from './dto/create-backoffice-org.dto';
 import type { UpdateBackofficeOrgDto } from './dto/update-backoffice-org.dto';
 import type { SendNotificationDto } from './dto/send-notification.dto';
@@ -155,10 +156,9 @@ export class BackofficeService {
    * invites the real ORG_ADMIN afterwards. Slug must be globally unique.
    */
   async createOrganization(dto: CreateBackofficeOrgDto) {
-    const existing = await this.prisma.organization.findUnique({
-      where: { slug: dto.slug },
-    });
-    if (existing) throw new ConflictException(`Slug "${dto.slug}" is already taken`);
+    // Une organisation suspendue ou archivée rend son slug ; une active le
+    // garde, et le refus le dit en clair.
+    await libererSlugInactif(this.prisma, dto.slug);
 
     const org = await this.prisma.organization.create({
       data: { name: dto.name, slug: dto.slug },
@@ -177,10 +177,7 @@ export class BackofficeService {
     if (!org) throw new NotFoundException('Organization not found');
 
     if (dto.slug && dto.slug !== org.slug) {
-      const clash = await this.prisma.organization.findUnique({
-        where: { slug: dto.slug },
-      });
-      if (clash) throw new ConflictException(`Slug "${dto.slug}" is already taken`);
+      await libererSlugInactif(this.prisma, dto.slug);
     }
 
     const updated = await this.prisma.organization.update({
@@ -207,9 +204,23 @@ export class BackofficeService {
     if (!org) throw new NotFoundException('Organization not found');
 
     const status = active ? OrgStatus.ACTIVE : OrgStatus.SUSPENDED;
+
+    // Une organisation réactivée reprend son slug d'origine s'il est resté
+    // libre. S'il a été repris par un club créé entre-temps, elle garde son
+    // slug-témoin : la réactiver reste possible, et le slug se renomme ensuite.
+    // Bloquer la réactivation pour un identifiant interne serait disproportionné.
+    let slugRepris: { slug: string; archivedSlug: null } | undefined;
+    if (active && org.archivedSlug) {
+      const occupe = await this.prisma.organization.findUnique({
+        where: { slug: org.archivedSlug },
+        select: { id: true },
+      });
+      if (!occupe) slugRepris = { slug: org.archivedSlug, archivedSlug: null };
+    }
+
     const updated = await this.prisma.organization.update({
       where: { id },
-      data: { status },
+      data: { status, ...slugRepris },
     });
 
     this.logger.log(`[backoffice] Organization ${id} status → ${status}`);
@@ -220,11 +231,12 @@ export class BackofficeService {
 
   /** Liste tous les comptes inscrits avec leurs appartenances d'org. */
   async listUsers() {
-    return this.prisma.user.findMany({
+    const comptes = await this.prisma.user.findMany({
       orderBy: { createdAt: 'desc' },
       select: {
         id: true,
         email: true,
+        archivedEmail: true,
         displayName: true,
         globalRole: true,
         isActive: true,
@@ -237,6 +249,15 @@ export class BackofficeService {
         },
       },
     });
+
+    // Un compte libéré porte une adresse-témoin, illisible dans une liste :
+    // on affiche l'adresse d'origine, et on signale qu'elle a été rendue — elle
+    // apparaît alors aussi sur le compte neuf qui l'a reprise.
+    return comptes.map(({ archivedEmail, ...c }) => ({
+      ...c,
+      email: archivedEmail ?? c.email,
+      adresseLiberee: archivedEmail !== null,
+    }));
   }
 
   /**
@@ -256,9 +277,28 @@ export class BackofficeService {
   async setUserActive(id: string, active: boolean, callerId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, email: true, globalRole: true, isActive: true },
+      select: { id: true, email: true, archivedEmail: true, globalRole: true, isActive: true },
     });
     if (!user) throw new NotFoundException('Compte introuvable');
+
+    // Réactiver un compte dont l'adresse a été libérée : il la reprend si
+    // personne ne s'en est servi depuis. Sinon, la personne s'est réinscrite —
+    // son compte actuel est le neuf, et deux comptes ne peuvent pas partager
+    // une adresse.
+    let adresseReprise: { email: string; archivedEmail: null } | undefined;
+    if (active && user.archivedEmail && user.email === adresseTemoin(user.id)) {
+      const occupe = await this.prisma.user.findUnique({
+        where: { email: user.archivedEmail },
+        select: { id: true },
+      });
+      if (occupe) {
+        throw new ConflictException(
+          `L'adresse ${user.archivedEmail} a servi à une nouvelle inscription après l'archivage : ` +
+            'le compte actuel de cette personne est le nouveau. Réactiver l’ancien créerait deux comptes pour une même adresse.',
+        );
+      }
+      adresseReprise = { email: user.archivedEmail, archivedEmail: null };
+    }
 
     if (!active) {
       if (user.id === callerId) {
@@ -284,7 +324,7 @@ export class BackofficeService {
 
     const updated = await this.prisma.user.update({
       where: { id },
-      data: { isActive: active },
+      data: { isActive: active, ...adresseReprise },
       select: { id: true, email: true, displayName: true, globalRole: true, isActive: true },
     });
 
@@ -534,6 +574,151 @@ export class BackofficeService {
    * organisation à moitié vidée, état pire que celui de départ et bien plus
    * difficile à diagnostiquer.
    */
+  // ─── Données de démonstration ────────────────────────────────
+
+  /**
+   * Les commandes de l'ancien passage en caisse de démonstration.
+   *
+   * Jusqu'au 31/08/2026, `demo-checkout` créait de VRAIES commandes, marquées
+   * payées (`PAID`, paiement `SUCCEEDED`) sans qu'aucun centime ne bouge. Elles
+   * ont un numéro `DEMO-…` et faussent tout ce qui les compte : chiffre
+   * d'affaires et TVA de la comptabilité, « Mes commandes » des comptes de
+   * test, postes opérateurs où elles attendent encore, créneaux qu'elles
+   * occupent — et elles empêchent de supprimer un compte de test.
+   */
+  private static readonly PREFIXE_DEMO = 'DEMO-';
+  static readonly PHRASE_PURGE_DEMO = 'PURGER LA DEMO';
+
+  /** Ce qu'une purge effacerait — à montrer AVANT de la proposer. */
+  async apercuDemo() {
+    const commandes = await this.prisma.order.findMany({
+      where: { publicOrderNumber: { startsWith: BackofficeService.PREFIXE_DEMO } },
+      select: { organizationId: true, userId: true, totalCents: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const orgIds = [...new Set(commandes.map((c) => c.organizationId))];
+    const orgs = await this.prisma.organization.findMany({
+      where: { id: { in: orgIds } },
+      select: { id: true, name: true },
+    });
+    const nomDe = new Map(orgs.map((o) => [o.id, o.name]));
+
+    const parOrganisation = orgIds.map((id) => {
+      const lot = commandes.filter((c) => c.organizationId === id);
+      return {
+        organizationId: id,
+        // Une organisation supprimée depuis laisse des commandes orphelines.
+        nom: nomDe.get(id) ?? '(organisation supprimée)',
+        commandes: lot.length,
+        montantCents: lot.reduce((t, c) => t + c.totalCents, 0),
+      };
+    });
+
+    return {
+      commandes: commandes.length,
+      montantCents: commandes.reduce((t, c) => t + c.totalCents, 0),
+      comptes: new Set(commandes.map((c) => c.userId)).size,
+      plusAncienne: commandes[0]?.createdAt ?? null,
+      plusRecente: commandes[commandes.length - 1]?.createdAt ?? null,
+      parOrganisation,
+      phraseConfirmation: BackofficeService.PHRASE_PURGE_DEMO,
+    };
+  }
+
+  /**
+   * Efface les commandes de démonstration, et tout ce qu'elles ont modifié.
+   *
+   * Supprimer la ligne ne suffit pas : trois traces lui survivraient.
+   *  - les PAIEMENTS : leur lien est `SET NULL`, ils resteraient comptés sans
+   *    commande ;
+   *  - les MOUVEMENTS DE POINTS : sans clé étrangère, ils resteraient, et le
+   *    solde du client aurait été débité ou crédité pour rien — on le rétablit ;
+   *  - la CHARGE DES CRÉNEAUX : chaque commande y occupait une place.
+   * Lignes, historique et Live Activity partent en cascade avec la commande.
+   *
+   * Une seule transaction : une purge à moitié faite laisserait des soldes
+   * corrigés pour des commandes toujours présentes.
+   */
+  async purgerDemo(confirmation: string) {
+    if (confirmation.trim() !== BackofficeService.PHRASE_PURGE_DEMO) {
+      throw new BadRequestException(
+        `Confirmation incorrecte. Recopiez exactement : « ${BackofficeService.PHRASE_PURGE_DEMO} ».`,
+      );
+    }
+
+    const bilan = await this.prisma.$transaction(async (tx) => {
+      const demo = await tx.order.findMany({
+        where: { publicOrderNumber: { startsWith: BackofficeService.PREFIXE_DEMO } },
+        select: { id: true, slotId: true },
+      });
+      const ids = demo.map((c) => c.id);
+      if (ids.length === 0) {
+        return { commandes: 0, paiements: 0, mouvementsPoints: 0, soldesCorriges: 0, creneaux: 0 };
+      }
+
+      // Les points : on annule l'effet de chaque mouvement sur le solde. Un
+      // mouvement porte son signe (gain positif, dépense négative) ; l'annuler
+      // revient à le soustraire. Le solde ne descend jamais sous zéro — des
+      // points gagnés en démo ont pu être dépensés depuis sur une vraie commande.
+      const mouvements = await tx.loyaltyTransaction.findMany({
+        where: { orderId: { in: ids } },
+        select: { accountId: true, points: true },
+      });
+      const parCompte = new Map<string, number>();
+      for (const m of mouvements) {
+        parCompte.set(m.accountId, (parCompte.get(m.accountId) ?? 0) + m.points);
+      }
+      for (const [accountId, effet] of parCompte) {
+        const compte = await tx.loyaltyAccount.findUnique({
+          where: { id: accountId },
+          select: { balance: true },
+        });
+        if (!compte) continue;
+        await tx.loyaltyAccount.update({
+          where: { id: accountId },
+          data: { balance: Math.max(0, compte.balance - effet) },
+        });
+      }
+      await tx.loyaltyTransaction.deleteMany({ where: { orderId: { in: ids } } });
+
+      // Les créneaux : une place rendue par commande, sans passer sous zéro.
+      const parCreneau = new Map<string, number>();
+      for (const c of demo) {
+        if (c.slotId) parCreneau.set(c.slotId, (parCreneau.get(c.slotId) ?? 0) + 1);
+      }
+      for (const [slotId, places] of parCreneau) {
+        const creneau = await tx.slot.findUnique({
+          where: { id: slotId },
+          select: { currentLoad: true },
+        });
+        if (!creneau) continue;
+        await tx.slot.update({
+          where: { id: slotId },
+          data: { currentLoad: Math.max(0, creneau.currentLoad - places) },
+        });
+      }
+
+      const paiements = (await tx.payment.deleteMany({ where: { orderId: { in: ids } } })).count;
+      const commandes = (await tx.order.deleteMany({ where: { id: { in: ids } } })).count;
+
+      return {
+        commandes,
+        paiements,
+        mouvementsPoints: mouvements.length,
+        soldesCorriges: parCompte.size,
+        creneaux: parCreneau.size,
+      };
+    });
+
+    this.logger.warn(
+      `[backoffice] Purge démo : ${bilan.commandes} commande(s), ${bilan.paiements} paiement(s), ` +
+        `${bilan.mouvementsPoints} mouvement(s) de points sur ${bilan.soldesCorriges} solde(s), ` +
+        `${bilan.creneaux} créneau(x) libéré(s).`,
+    );
+    return bilan;
+  }
+
   async resetOrgData(organizationId: string, confirmation: string) {
     const org = await this.prisma.organization.findUnique({
       where: { id: organizationId },

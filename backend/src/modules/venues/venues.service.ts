@@ -82,6 +82,16 @@ export class VenuesService {
   private async ensurePermanentContainer(venue: Venue): Promise<void> {
     if (venue.operatingMode !== VenueOperatingMode.PERMANENT) return;
 
+    // Regarder avant d'écrire. Laisser l'index unique refuser était correct —
+    // l'erreur était absorbée plus bas — mais Postgres la journalisait quand
+    // même en ERROR, à chaque réglage d'un lieu déjà permanent. Ces lignes
+    // passaient pour une panne dans les journaux de la base.
+    const existant = await this.prisma.event.findFirst({
+      where: { venueId: venue.id, isPermanentContainer: true },
+      select: { id: true },
+    });
+    if (existant) return;
+
     try {
       await this.prisma.event.create({
         data: {

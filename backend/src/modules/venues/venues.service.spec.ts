@@ -15,7 +15,7 @@ describe('VenuesService — mode permanent', () => {
   let service: VenuesService;
   let prisma: {
     venue: { create: jest.Mock; update: jest.Mock; findFirst: jest.Mock };
-    event: { create: jest.Mock };
+    event: { create: jest.Mock; findFirst: jest.Mock };
     organizationMember: { findUnique: jest.Mock };
     user: { findUnique: jest.Mock };
   };
@@ -38,7 +38,11 @@ describe('VenuesService — mode permanent', () => {
   beforeEach(async () => {
     prisma = {
       venue: { create: jest.fn(), update: jest.fn(), findFirst: jest.fn() },
-      event: { create: jest.fn().mockResolvedValue({ id: 'evt-1' }) },
+      // Aucun contenant par défaut : chaque test qui en veut un le déclare.
+      event: {
+        create: jest.fn().mockResolvedValue({ id: 'evt-1' }),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
       // requireOrgAccess : l'appelant est ORG_ADMIN dans tous les cas testés.
       organizationMember: {
         findUnique: jest.fn().mockResolvedValue({
@@ -114,7 +118,19 @@ describe('VenuesService — mode permanent', () => {
       expect(prisma.event.create).not.toHaveBeenCalled();
     });
 
-    it('reste silencieux si le contenant existe déjà', async () => {
+    it('n’essaie même pas d’écrire quand le contenant existe déjà', async () => {
+      // Laisser l'index refuser était juste, mais Postgres journalisait le refus
+      // en ERROR à chaque réglage du lieu : ces lignes passaient pour une panne.
+      prisma.venue.findFirst.mockResolvedValue(mockVenue(VenueOperatingMode.PERMANENT));
+      prisma.venue.update.mockResolvedValue(mockVenue(VenueOperatingMode.PERMANENT));
+      prisma.event.findFirst.mockResolvedValue({ id: 'contenant' });
+
+      await service.update(ORG_ID, VENUE_ID, USER_ID, { name: 'Le Comptoir rénové' });
+
+      expect(prisma.event.create).not.toHaveBeenCalled();
+    });
+
+    it('reste silencieux si une requête concurrente a créé le contenant', async () => {
       // P2002 = l'index unique partiel a joué. Deux enregistrements de suite,
       // ou deux requêtes concurrentes : le résultat voulu est le même, un seul
       // contenant. L'utilisateur ne doit voir aucune erreur.

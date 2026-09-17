@@ -191,7 +191,11 @@ async function req<T>(
     );
   }
 
-  if (res.status === 401) {
+  // Un 401 sur une route SANS session (la connexion elle-même) n'est pas une
+  // session expirée : c'est un refus, et le serveur dit lequel. Le traiter
+  // comme une expiration affichait « Session expirée » pour un mauvais mot de
+  // passe — et cachait à un compte archivé qu'il pouvait se réinscrire.
+  if (res.status === 401 && !noAuth) {
     clearSession();
     if (typeof window !== 'undefined') window.location.href = '/login';
     throw new Error('Session expirée — veuillez vous reconnecter');
@@ -201,7 +205,9 @@ async function req<T>(
 
   const data = await res.json().catch(() => ({})) as Record<string, unknown>;
   if (!res.ok) {
-    const msg = (data['message'] as string | undefined) ?? `HTTP ${res.status}`;
+    const brut = (data['message'] as string | undefined) ?? `HTTP ${res.status}`;
+    // Le seul refus encore rédigé en anglais par le serveur.
+    const msg = brut === 'Invalid credentials' ? 'E-mail ou mot de passe incorrect.' : brut;
     throw new Error(msg);
   }
   return data as T;
