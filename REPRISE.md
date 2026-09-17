@@ -53,8 +53,11 @@ annotées INERTES.
 **Chaque opérateur tient UNE buvette**, rattachée dans le back-office → Équipe.
 Le poste ne permet plus d'en changer, et un compte non rattaché ne voit rien.
 
-**La build TestFlight est la 12.** La 13 apporte la cloche de notifications et
-l'inscription par Apple ; rien de tout cela n'est sur le téléphone avant elle.
+**La build TestFlight est la 15** (17/09/2026) : produits manquants dans
+« Mes commandes » et dans le widget, ouverture de « Mes commandes » au toucher
+de la notification, correction de la déconnexion au retour de Stripe. La 14
+avait apporté la cloche de notifications et l'inscription par Apple ; la 13 a
+été refusée par Xcode (capability Sign in with Apple absente du profil).
 
 **Les notifications ont un destinataire, enfin.** `expo-notifications` n'était
 pas installé et `apiRegisterPushToken` n'avait aucun appelant : les campagnes
@@ -361,7 +364,7 @@ Le poste (bouton « Manquant », bandeau « Hors carte »), le dashboard manager
 Côté client :
 - **Live Activity** : le libellé « Produit manquant · passez au comptoir » et
   l'alerte qui allume l'écran fonctionnent AVEC la build actuelle ;
-- **build 15 nécessaire** pour : le détail rouge dans le widget et l'îlot, le
+- **build 15 (livrée le 17/09)** pour : le détail rouge dans le widget et l'îlot, le
   bandeau dans « Mes commandes », l'ouverture de « Mes commandes » au toucher
   de la notification — et, déjà en attente, la correction de la déconnexion au
   retour de Stripe (phase 33).
