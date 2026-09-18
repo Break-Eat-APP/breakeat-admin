@@ -498,6 +498,37 @@ nouvel identifiant part vierge, donc aucune révocation ; et la limite de deux
 certificats se compte par identifiant, donc elle cesse de serrer. Côté code,
 c'est une ligne dans `eas.json`.
 
+### La marche à suivre, dans l'ordre
+
+1. **Apple** → Identifiers → *Merchant IDs* → « + » → `merchant.com.breakeat.app`.
+2. **Stripe, en mode TEST** → Paramètres → Moyens de paiement → Apple Pay →
+   ajouter une application iOS, en donnant CE nouvel identifiant. Stripe rend une
+   demande de certificat (`.certSigningRequest`).
+3. **Apple** → le nouvel identifiant → *Apple Pay Payment Processing Certificate*
+   → Create Certificate → téléverser la demande → récupérer le `.cer`.
+4. **Stripe** → téléverser le `.cer` → **activer**. Cette fois l'avertissement de
+   révocation ne porte sur rien : ce nouvel identifiant n'a aucun autre
+   certificat.
+5. **Apple** → App IDs → `com.shapper.breakeat` → capacité *Apple Pay Payment
+   Processing* → cocher le NOUVEL identifiant (garder l'ancien coché ne gêne pas).
+6. Reposer `APPLE_MERCHANT_ID` dans `eas.json` (une ligne), puis lancer la build
+   **sans `--non-interactive`** pour qu'EAS régénère le profil.
+7. Refaire 2→4 en mode **production** le jour du passage en réel.
+
+### Et le certificat créé le 18/09 sur l'identifiant partagé ?
+
+Il ne sert à rien : il n'est pas activé chez Stripe, donc aucun paiement ne s'y
+réfère. Le révoquer **remet l'identifiant partagé exactement dans son état
+d'avant**, et lève la seule incertitude restante (voir ci-dessous). À faire une
+fois le nouvel identifiant en place, pas avant — rien ne presse.
+
+**L'incertitude, nommée :** quand un identifiant marchand porte DEUX certificats
+actifs, lequel Apple utilise-t-il pour chiffrer ? Si c'était le plus récent, le
+processeur de l'ancienne application ne saurait pas le déchiffrer. Le contrôle
+qui tranche, et qui coûte deux minutes : **l'application publiée propose-t-elle
+Apple Pay ?** Si non, la question tombe. Si oui, vérifier qu'un paiement Apple
+Pay est passé chez son processeur depuis le 18/09.
+
 La chaîne technique, elle, est vérifiée : `expo config` confirme que le plugin
 reçoit l'identifiant, que le droit iOS `com.apple.developer.in-app-payments` le
 porte (c'est lui que le profil de provisionnement doit couvrir), et que `extra`
