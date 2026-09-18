@@ -71,6 +71,32 @@ clients ; **Facebook ne le sera pas** — son jeton ne certifie pas l'adresse, e
 rattacher une inscription rapide à un compte existant sur une adresse non
 certifiée donnerait le compte d'un client à qui saurait en déclarer l'adresse.
 
+## 🔐 SÉCURITÉ — fait le 18/09, et ce qui reste
+
+**Fait et vérifié en production** : limitation de débit (deux compteurs — large
+par IP, serré par ADRESSE E-MAIL sur l'authentification, parce qu'un stade
+partage une IP), en-têtes `helmet`, `trust proxy`, Next.js 15.5.25 (deux failles
+critiques corrigées). Détail : `ENGINEERING_MANUAL.md`, phase 42.
+
+**Déjà en place avant cet audit**, et qui n'a pas eu besoin d'être touché :
+argon2, jetons de renouvellement hachés en base avec rotation, validation
+stricte des entrées, erreurs muettes en production avec référence, CORS fermé,
+webhooks signés, aucun secret dans le code, aucun téléversement de fichier.
+
+**À FAIRE, demandé et mis de côté le 18/09 :**
+
+1. **Verrouillage temporaire après plusieurs échecs de connexion.** La
+   limitation de débit freine déjà (8 essais par quart d'heure et par adresse) ;
+   un verrouillage explicite, avec un message qui le dit au client, va plus loin.
+2. **Confirmation d'adresse e-mail.** Aujourd'hui, n'importe qui peut créer un
+   compte avec l'adresse de quelqu'un d'autre. Ça compte particulièrement ici :
+   la règle de réinscription après archivage repose sur l'adresse. C'est le plus
+   gros des deux — il touche le parcours d'inscription.
+
+**À vérifier par toi, et non par le code : les sauvegardes Railway.** Tout le
+reste protège d'une intrusion ; celle-là protège d'une perte, qui est
+irréversible.
+
 ## 🚀 QUI DÉPLOIE QUOI — vérifié le 18/09/2026
 
 Trois chemins différents, et le confondre fait chercher une panne là où il n'y
@@ -110,6 +136,22 @@ réinstallation compte double, et rien n'empêcherait de fabriquer de fausses
 visites : ce sont des ordres de grandeur d'audience, pas des chiffres certifiés
 comme le chiffre d'affaires. La page le dit sous les compteurs — un chiffre dont
 on tait les limites finit cité comme une preuve.
+
+**Le taux de conversion ne porte que sur les visiteurs IDENTIFIÉS** (corrigé le
+18/09) : parmi ceux qui étaient connectés en regardant, combien ont commandé.
+Des comptes au numérateur ET au dénominateur. Le rapport « acheteurs ÷ visiteurs
+uniques » divisait des comptes par des appareils — un nombre qu'on ne savait pas
+lire, et qui paraissait plus faible qu'il n'était.
+
+**Le réseau n'entre pas dans la mesure.** La clé d'installation vit sur le
+téléphone : wifi du stade, 4G ou 5G ne changent rien au comptage des visiteurs.
+L'adresse IP ne sert qu'à la limitation de débit, jamais à l'audience.
+
+**Chaque lieu compte à part.** La visite comme la commande portent leur lieu,
+déduit par le serveur. Un client qui commande au Vélodrome puis dans une autre
+arène est compté une fois dans chacun ; il apparaît dans le fichier du club avec
+les deux lieux dans sa colonne « lieux fréquentés » — et si les deux arènes sont
+deux clubs distincts, chacun ne voit que la sienne.
 
 **Le téléphone est vide pour presque tout le monde** : le champ existe en base,
 mais aucun écran de l'application ne le demande. La colonne se remplira si l'on

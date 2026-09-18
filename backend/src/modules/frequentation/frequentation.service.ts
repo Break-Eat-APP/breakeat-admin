@@ -188,7 +188,18 @@ export class FrequentationService {
 
     const visiteurs = new Set(visites.map((v) => v.visitorKey));
     const connectes = new Set(visites.filter((v) => v.userId).map((v) => v.userId as string));
-    const acheteurs = commandes.length;
+    const acheteurs = new Set(commandes.map((c) => c.userId));
+
+    // Ceux qui ont REGARDÉ puis COMMANDÉ, sur la même période et le même
+    // périmètre. C'est cette intersection qui donne un taux honnête : le
+    // numérateur et le dénominateur comptent alors la même chose — des comptes.
+    //
+    // Le rapport « acheteurs / visiteurs uniques » serait trompeur : il
+    // diviserait des COMPTES par des APPAREILS. Un client qui regarde sur son
+    // téléphone et commande depuis le même compte compterait une fois en haut
+    // et une fois en bas, mais un visiteur non connecté ne peut jamais entrer
+    // au numérateur — le taux paraîtrait donc plus faible qu'il n'est.
+    const connectesAyantCommande = [...connectes].filter((c) => acheteurs.has(c)).length;
 
     // Les noms de lieux, pour que le tableau se lise sans aller les chercher.
     const lieuxIds = [...new Set(visites.map((v) => v.venueId).filter((v): v is string => !!v))];
@@ -205,10 +216,13 @@ export class FrequentationService {
       visiteursUniques: visiteurs.size,
       visites: visites.reduce((total, v) => total + v.hits, 0),
       visiteursConnectes: connectes.size,
-      clientsAyantCommande: acheteurs,
-      // Part des visiteurs qui ont fini par commander. Nulle quand personne
-      // n'est venu : afficher 0 % serait un jugement, pas une mesure.
-      tauxConversion: visiteurs.size > 0 ? Math.round((acheteurs / visiteurs.size) * 1000) / 10 : null,
+      clientsAyantCommande: acheteurs.size,
+      connectesAyantCommande,
+      // Parmi les visiteurs IDENTIFIÉS, la part qui a commandé. Nulle quand
+      // personne d'identifié n'est venu : afficher 0 % serait un jugement, pas
+      // une mesure.
+      tauxConversion:
+        connectes.size > 0 ? Math.round((connectesAyantCommande / connectes.size) * 1000) / 10 : null,
       parJour: this.parJour(visites),
       parLieu: this.parLieu(visites, noms),
     };
@@ -281,7 +295,16 @@ export interface AudienceClub {
   visites: number;
   visiteursConnectes: number;
   clientsAyantCommande: number;
-  /** En pourcentage, une décimale. `null` quand il n'y a eu aucun visiteur. */
+  /** Visiteurs identifiés qui ont AUSSI commandé — le numérateur du taux. */
+  connectesAyantCommande: number;
+  /**
+   * Part des visiteurs IDENTIFIÉS qui ont commandé, en pourcentage, une
+   * décimale. `null` quand aucun visiteur identifié n'est venu.
+   *
+   * Calculé sur les seuls visiteurs connectés, et c'est délibéré : le
+   * numérateur et le dénominateur comptent alors la même chose. Rapporter des
+   * comptes à des appareils donnerait un nombre qu'on ne saurait pas lire.
+   */
   tauxConversion: number | null;
   parJour: TrancheAudience[];
   parLieu: AudienceLieu[];

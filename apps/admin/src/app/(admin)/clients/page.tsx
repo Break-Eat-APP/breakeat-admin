@@ -267,14 +267,24 @@ export default function ClientsPage() {
           icone={TrendingUp}
           libelle="Taux de conversion"
           valeur={audience?.tauxConversion !== null && audience ? `${audience.tauxConversion} %` : '—'}
-          precision="visiteurs qui commandent"
+          precision={
+            audience && audience.visiteursConnectes > 0
+              ? `${INT.format(audience.connectesAyantCommande)} sur ${INT.format(
+                  audience.visiteursConnectes,
+                )} visiteurs identifiés`
+              : 'parmi les visiteurs identifiés'
+          }
         />
       </section>
 
-      <p style={{ fontSize: 11.5, color: BRAND.inkSoft, margin: 0 }}>
-        La fréquentation compte des APPAREILS, pas des personnes : un client qui réinstalle
-        l&apos;application compte deux fois. Ce sont des ordres de grandeur d&apos;audience — le chiffre
-        d&apos;affaires, lui, reste exact.
+      <p style={{ fontSize: 11.5, color: BRAND.inkSoft, margin: 0, lineHeight: 1.6 }}>
+        <strong>Visiteurs uniques</strong> compte des APPAREILS, pas des personnes : un client qui
+        réinstalle l&apos;application compte deux fois. Ce sont des ordres de grandeur
+        d&apos;audience — le chiffre d&apos;affaires, lui, reste exact.
+        <br />
+        Le <strong>taux de conversion</strong> ne porte que sur les visiteurs <em>identifiés</em>,
+        les seuls qu&apos;on puisse relier à une commande : combien, parmi ceux qui étaient
+        connectés en regardant, ont fini par commander.
       </p>
 
       {/* ─── Audience par lieu ───────────────────────────────── */}

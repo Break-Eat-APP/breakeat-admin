@@ -120,16 +120,53 @@ describe('FrequentationService — lire l’audience', () => {
     expect(audience.visites).toBe(6);
   });
 
-  it('donne le taux de conversion, et rien quand personne n’est venu', async () => {
-    const avecMonde = monter(
-      [visite('a', '2026-09-18T18:00:00Z'), visite('b', '2026-09-18T18:00:00Z')],
-      [{ userId: 'u1' }],
-    );
-    expect((await avecMonde.pourOrganisation(ORG, 'moi')).tauxConversion).toBe(50);
+  describe('le taux de conversion', () => {
+    it('se calcule sur les visiteurs IDENTIFIÉS, des comptes des deux côtés', async () => {
+      // Quatre visiteurs identifiés, deux d'entre eux ont commandé : 50 %.
+      // Le visiteur anonyme (« e ») ne compte NI en haut NI en bas — il ne
+      // pourrait jamais entrer au numérateur, l'inclure au dénominateur
+      // écraserait le taux sans rien mesurer.
+      const service = monter(
+        [
+          visite('a', '2026-09-18T18:00:00Z', 1, 'u1'),
+          visite('b', '2026-09-18T18:00:00Z', 1, 'u2'),
+          visite('c', '2026-09-18T18:00:00Z', 1, 'u3'),
+          visite('d', '2026-09-18T18:00:00Z', 1, 'u4'),
+          visite('e', '2026-09-18T18:00:00Z', 1, null),
+        ],
+        [{ userId: 'u1' }, { userId: 'u2' }],
+      );
 
-    // Aucun visiteur : afficher « 0 % » serait un jugement, pas une mesure.
-    const desert = monter([], []);
-    expect((await desert.pourOrganisation(ORG, 'moi')).tauxConversion).toBeNull();
+      const audience = await service.pourOrganisation(ORG, 'moi');
+      expect(audience.visiteursUniques).toBe(5);
+      expect(audience.visiteursConnectes).toBe(4);
+      expect(audience.connectesAyantCommande).toBe(2);
+      expect(audience.tauxConversion).toBe(50);
+    });
+
+    it('ne compte pas un acheteur qui n’a pas été vu', async () => {
+      // Commande passée avant que la mesure n'existe, ou visite non
+      // enregistrée : il compte comme CLIENT, jamais comme converti. Sans
+      // cette règle, le taux pourrait dépasser 100 %.
+      const service = monter(
+        [visite('a', '2026-09-18T18:00:00Z', 1, 'u1')],
+        [{ userId: 'u1' }, { userId: 'inconnu-au-bataillon' }],
+      );
+
+      const audience = await service.pourOrganisation(ORG, 'moi');
+      expect(audience.clientsAyantCommande).toBe(2);
+      expect(audience.connectesAyantCommande).toBe(1);
+      expect(audience.tauxConversion).toBe(100);
+    });
+
+    it('ne dit rien quand aucun visiteur identifié n’est venu', async () => {
+      // Afficher « 0 % » serait un jugement, pas une mesure.
+      const anonymesSeulement = monter([visite('a', '2026-09-18T18:00:00Z')], []);
+      expect((await anonymesSeulement.pourOrganisation(ORG, 'moi')).tauxConversion).toBeNull();
+
+      const desert = monter([], []);
+      expect((await desert.pourOrganisation(ORG, 'moi')).tauxConversion).toBeNull();
+    });
   });
 
   it('distingue les visiteurs connectés des autres', async () => {

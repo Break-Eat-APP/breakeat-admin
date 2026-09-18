@@ -1533,6 +1533,9 @@ export interface AudienceClub {
   visites: number;
   visiteursConnectes: number;
   clientsAyantCommande: number;
+  /** Visiteurs identifiés qui ont AUSSI commandé — le numérateur du taux. */
+  connectesAyantCommande: number;
+  /** Part des visiteurs IDENTIFIÉS qui ont commandé. `null` s'il n'y en a eu aucun. */
   tauxConversion: number | null;
   parJour: Array<{ jour: string; visiteursUniques: number; visites: number }>;
   parLieu: AudienceLieu[];
