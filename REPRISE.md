@@ -515,6 +515,22 @@ c'est une ligne dans `eas.json`.
    **sans `--non-interactive`** pour qu'EAS régénère le profil.
 7. Refaire 2→4 en mode **production** le jour du passage en réel.
 
+### ⛔ Ne PAS supprimer `merchant.com.shapper.breakeat`
+
+L'identifiant marchand n'a PAS été créé le 18/09 : il existait déjà, créé du
+temps de l'application précédente. Ce qui a été créé ce jour-là, c'est un
+CERTIFICAT de plus, posé dessus.
+
+Supprimer l'identifiant reviendrait donc à supprimer celui dont se sert
+l'application publiée, en emportant ses deux certificats. Révoquer un certificat
+se rattrape en en recréant un ; supprimer l'identifiant, non.
+
+| | Action | Effet |
+|---|---|---|
+| ❌ | Supprimer `merchant.com.shapper.breakeat` | Casse Apple Pay dans l'app publiée |
+| ✅ | Révoquer le certificat du 18/09 | Retour à l'état d'avant, rien ne l'utilise |
+| ✅ | Créer `merchant.com.breakeat.app` | Repart de zéro pour la nouvelle app |
+
 ### Et le certificat créé le 18/09 sur l'identifiant partagé ?
 
 Il ne sert à rien : il n'est pas activé chez Stripe, donc aucun paiement ne s'y
