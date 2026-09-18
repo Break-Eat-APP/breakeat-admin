@@ -94,3 +94,9 @@ apps/mobile/.expo
 # ici creerait deux fichiers pouvant diverger, exactement ce que le montage
 # cherche a eviter.
 apps/mobile/modules/live-activity/ios/BreakEatOrderAttributes.swift
+
+# Sauvegardes de base de données — JAMAIS dans le dépôt.
+# Un fichier .dump contient l'intégralité des comptes clients, des commandes et
+# de la comptabilité. Le pousser sur GitHub reviendrait à publier la base.
+sauvegardes/
+*.dump

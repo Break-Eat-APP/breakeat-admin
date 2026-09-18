@@ -93,9 +93,44 @@ webhooks signés, aucun secret dans le code, aucun téléversement de fichier.
    la règle de réinscription après archivage repose sur l'adresse. C'est le plus
    gros des deux — il touche le parcours d'inscription.
 
-**À vérifier par toi, et non par le code : les sauvegardes Railway.** Tout le
-reste protège d'une intrusion ; celle-là protège d'une perte, qui est
+### ⛔ SAUVEGARDES — constaté le 18/09/2026 : il n'y en a AUCUNE d'automatique
+
+Railway → Postgres → Backups affiche **« No backup schedule »**, et la mention
+« Backups and point-in-time recovery are only available for customers on the Pro
+plan ». La seule copie existante, « Pre-Security-Patch Backup », datait de
+**27 jours** — prise par Railway pour SA maintenance, pas pour nous, et rien ne
+garantit qu'elle reste.
+
+**Traduit en clair : si la base est perdue aujourd'hui, c'est un mois de
+commandes, de comptes et de comptabilité qui disparaît.** Tout le reste de la
+sécurité protège d'une intrusion ; ceci protège d'une perte, qui est
 irréversible.
+
+**Le filet posé en attendant :** `backend/scripts/sauvegarde.js`. Il exporte la
+base entière dans un fichier, passe par Docker quand `pg_dump` n'est pas
+installé, refuse un fichier vide, et rappelle où ranger le résultat.
+
+```
+$env:DATABASE_URL = "postgresql://..."   # Railway → Postgres → Variables
+node scripts/sauvegarde.js
+```
+
+**Vérifié le 18/09, cycle complet** : 146 commandes sauvegardées, restaurées
+dans une base vide, 146 commandes retrouvées. Une sauvegarde jamais restaurée
+n'est pas une sauvegarde.
+
+**Les deux vraies sorties**, à décider :
+
+1. **Railway Pro** — sauvegardes programmées ET récupération à un instant
+   précis (PITR), c'est-à-dire revenir à la minute d'avant une fausse
+   manœuvre. C'est ce que je recommande pour des données qui portent de
+   l'argent : un export nocturne perd jusqu'à 24 heures, PITR n'en perd aucune.
+2. **Un export automatique nocturne** que j'écris, vers un stockage séparé. Moins
+   cher, mais c'est nous qui le tenons — et il faut l'essayer régulièrement.
+
+⚠️ Un fichier `.dump` contient TOUT : comptes, commandes, comptabilité. Il ne va
+ni dans le dépôt (le `.gitignore` le refuse désormais) ni dans un envoi. Il se
+range ailleurs que sur la machine qu'il protège.
 
 ## 🚀 QUI DÉPLOIE QUOI — vérifié le 18/09/2026
 
