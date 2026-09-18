@@ -15,7 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Download, RefreshCw, Users, Eye, ShoppingBag, TrendingUp } from 'lucide-react';
+import { Download, RefreshCw, Users, Eye, ShoppingBag, TrendingUp, Sparkles } from 'lucide-react';
 import {
   apiGetClients,
   apiGetFrequentation,
@@ -259,6 +259,12 @@ export default function ClientsPage() {
           valeur={audience ? INT.format(audience.visiteursConnectes) : '—'}
         />
         <Chiffre
+          icone={Sparkles}
+          libelle="Nouveaux visiteurs"
+          valeur={audience ? INT.format(audience.nouveauxVisiteurs) : '—'}
+          precision="ont découvert l'app ici"
+        />
+        <Chiffre
           icone={ShoppingBag}
           libelle="Ont commandé"
           valeur={audience ? INT.format(audience.clientsAyantCommande) : '—'}
@@ -285,6 +291,11 @@ export default function ClientsPage() {
         Le <strong>taux de conversion</strong> ne porte que sur les visiteurs <em>identifiés</em>,
         les seuls qu&apos;on puisse relier à une commande : combien, parmi ceux qui étaient
         connectés en regardant, ont fini par commander.
+        <br />
+        <strong>Nouveaux visiteurs</strong> = ceux dont la toute première ouverture de
+        l&apos;application a eu lieu chez vous. C&apos;est la mesure honnête de « combien nous ont
+        découverts ici » : aucune boutique d&apos;applications ne dit où un téléchargement a eu
+        lieu — et télécharger sans jamais ouvrir n&apos;apporte rien.
       </p>
 
       {/* ─── Audience par lieu ───────────────────────────────── */}
@@ -298,6 +309,7 @@ export default function ClientsPage() {
               <tr style={{ color: BRAND.inkSoft, textAlign: 'left', fontSize: 12 }}>
                 <th style={{ padding: '6px 0' }}>Lieu</th>
                 <th style={{ padding: '6px 0', textAlign: 'right' }}>Visiteurs</th>
+                <th style={{ padding: '6px 0', textAlign: 'right' }}>Nouveaux</th>
                 <th style={{ padding: '6px 0', textAlign: 'right' }}>Passages</th>
               </tr>
             </thead>
@@ -306,6 +318,9 @@ export default function ClientsPage() {
                 <tr key={l.venueId} style={{ borderTop: `1px solid ${BRAND.border}` }}>
                   <td style={{ padding: '8px 0', color: BRAND.ink }}>{l.nom}</td>
                   <td style={{ padding: '8px 0', textAlign: 'right' }}>{INT.format(l.visiteursUniques)}</td>
+                  <td style={{ padding: '8px 0', textAlign: 'right', color: BRAND.orange, fontWeight: 600 }}>
+                    {INT.format(l.nouveauxVisiteurs)}
+                  </td>
                   <td style={{ padding: '8px 0', textAlign: 'right', color: BRAND.inkSoft }}>
                     {INT.format(l.visites)}
                   </td>

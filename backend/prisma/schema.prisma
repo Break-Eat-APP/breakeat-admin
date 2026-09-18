@@ -230,7 +230,14 @@ model User {
   /// par une adresse-témoin. Celle-ci est conservée ici, pour le back-office et
   /// pour une éventuelle réactivation.
   archivedEmail String?   @map("archived_email")
+  /// Ce qu'on affiche : calculé depuis prénom + nom quand ils existent, sinon
+  /// ce que le client (ou Apple) a fourni. Un seul endroit décide.
   displayName  String     @map("display_name")
+  /// Prénom et nom SÉPARÉS — ce qu'un club attend dans son fichier client.
+  /// Nuls pour les comptes antérieurs et pour ceux créés par Apple ou Google,
+  /// qui ne les transmettent pas toujours.
+  firstName    String?    @map("first_name")
+  lastName     String?    @map("last_name")
   phone        String?
   globalRole   GlobalRole @default(CUSTOMER) @map("global_role")
   isActive     Boolean    @default(true) @map("is_active")

@@ -7,8 +7,32 @@ import * as argon2 from 'argon2';
 export interface CreateUserInput {
   email: string;
   password: string;
-  displayName: string;
+  /** Recomposé depuis prénom + nom quand ils sont fournis. */
+  displayName?: string;
+  firstName?: string;
+  lastName?: string;
   phone?: string;
+}
+
+/**
+ * Ce qu'on affiche, décidé à UN seul endroit.
+ *
+ * Prénom et nom quand on les a, sinon ce que le client a saisi, sinon le début
+ * de son adresse — plutôt qu'une carte de commande signée « undefined ».
+ */
+export function nomAffiche(input: {
+  firstName?: string | null;
+  lastName?: string | null;
+  displayName?: string | null;
+  email: string;
+}): string {
+  const compose = [input.firstName, input.lastName]
+    .map((p) => p?.trim())
+    .filter((p): p is string => Boolean(p))
+    .join(' ');
+  if (compose) return compose;
+  if (input.displayName?.trim()) return input.displayName.trim();
+  return input.email.split('@')[0];
 }
 
 export type SafeUser = Omit<User, 'passwordHash'>;
@@ -47,8 +71,10 @@ export class UsersService {
       data: {
         email: input.email.toLowerCase(),
         passwordHash,
-        displayName: input.displayName,
-        phone: input.phone,
+        displayName: nomAffiche(input),
+        firstName: input.firstName?.trim() || null,
+        lastName: input.lastName?.trim() || null,
+        phone: input.phone?.trim() || null,
       },
     });
 

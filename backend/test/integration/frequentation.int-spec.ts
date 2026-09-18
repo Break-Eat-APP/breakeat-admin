@@ -88,6 +88,53 @@ decrire('fréquentation et fichier client (base réelle)', () => {
     expect(audience.parLieu[0].nom).toBe('Lieu supprimé');
   });
 
+  it('un NOUVEAU visiteur est celui qui découvre l’app ICI', async () => {
+    // `DISTINCT ON` est une particularité PostgreSQL : seule une vraie base
+    // peut dire si la requête rend bien la toute première ligne de chaque
+    // appareil. Une doublure répondrait ce qu'on lui aurait soufflé.
+    const club = await creerOrganisationComplete(s.prisma, unique('club'), sa);
+    const ailleurs = await creerOrganisationComplete(s.prisma, unique('ailleurs'), sa);
+
+    const neuf = unique('neuf');
+    const habitue = unique('habitue');
+
+    // Celui-ci découvre Break Eat chez notre club.
+    await frequentation.signaler({ visitorKey: neuf, kind: 'VENUE_VIEW', venueId: club.venue.id });
+
+    // Celui-là connaissait déjà l'app par un AUTRE lieu, puis vient chez nous :
+    // ce n'est pas une découverte pour ce club.
+    await frequentation.signaler({
+      visitorKey: habitue,
+      kind: 'VENUE_VIEW',
+      venueId: ailleurs.venue.id,
+    });
+    await frequentation.signaler({ visitorKey: habitue, kind: 'VENUE_VIEW', venueId: club.venue.id });
+
+    const audience = await frequentation.pourOrganisation(club.org.id, sa);
+    const chezNous = audience.parLieu.find((l) => l.venueId === club.venue.id);
+
+    expect(chezNous?.visiteursUniques).toBe(2);
+    expect(chezNous?.nouveauxVisiteurs).toBe(1);
+  });
+
+  it('une période récente ne compte pas une découverte ancienne', async () => {
+    const club = await creerOrganisationComplete(s.prisma, unique('club'), sa);
+    const ancien = unique('ancien');
+    await frequentation.signaler({ visitorKey: ancien, kind: 'VENUE_VIEW', venueId: club.venue.id });
+
+    // On recule sa découverte d'un an : il revient aujourd'hui, mais il n'a
+    // rien découvert cette semaine.
+    await s.prisma.frequentation.updateMany({
+      where: { visitorKey: ancien },
+      data: { windowStart: new Date(Date.now() - 365 * 86400e3) },
+    });
+    await frequentation.signaler({ visitorKey: ancien, kind: 'MENU_VIEW', venueId: club.venue.id });
+
+    const recent = new Date(Date.now() - 7 * 86400e3);
+    const audience = await frequentation.pourOrganisation(club.org.id, sa, { du: recent });
+    expect(audience.nouveauxVisiteurs).toBe(0);
+  });
+
   it('le fichier client d’un club ne contient QUE ses clients', async () => {
     const mien = await creerOrganisationComplete(s.prisma, unique('mien'), sa);
     const autre = await creerOrganisationComplete(s.prisma, unique('autre'), sa);

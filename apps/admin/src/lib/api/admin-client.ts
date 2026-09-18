@@ -1526,6 +1526,8 @@ export interface AudienceLieu {
   nom: string;
   visiteursUniques: number;
   visites: number;
+  /** Appareils dont la toute PREMIÈRE ouverture de l'app a eu lieu ici. */
+  nouveauxVisiteurs: number;
 }
 
 export interface AudienceClub {
@@ -1533,6 +1535,8 @@ export interface AudienceClub {
   visites: number;
   visiteursConnectes: number;
   clientsAyantCommande: number;
+  /** Appareils qui ont découvert Break Eat pendant la période, tous lieux confondus. */
+  nouveauxVisiteurs: number;
   /** Visiteurs identifiés qui ont AUSSI commandé — le numérateur du taux. */
   connectesAyantCommande: number;
   /** Part des visiteurs IDENTIFIÉS qui ont commandé. `null` s'il n'y en a eu aucun. */

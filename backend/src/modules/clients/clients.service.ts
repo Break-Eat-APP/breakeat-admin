@@ -77,7 +77,15 @@ export class ClientsService {
     const [comptes, lieux, preferes] = await Promise.all([
       this.prisma.user.findMany({
         where: { id: { in: ids } },
-        select: { id: true, displayName: true, email: true, phone: true, createdAt: true },
+        select: {
+          id: true,
+          displayName: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          createdAt: true,
+        },
       }),
       this.lieuxFrequentes(where),
       this.produitsPreferes(where),
@@ -91,6 +99,11 @@ export class ClientsService {
         const totalCents = g._sum.totalCents ?? 0;
         return {
           userId: g.userId,
+          // Prénom et nom séparés depuis le 19/09. Vides pour les comptes
+          // antérieurs et pour ceux créés par Apple, qui ne les fournit pas
+          // toujours : le nom affiché reste alors la seule chose qu'on ait.
+          prenom: compte?.firstName ?? null,
+          nomDeFamille: compte?.lastName ?? null,
           nom: compte?.displayName ?? 'Compte supprimé',
           email: compte?.email ?? '',
           telephone: compte?.phone ?? null,
@@ -179,7 +192,9 @@ export class ClientsService {
 
     const csv = versCsv(
       [
+        'Prénom',
         'Nom',
+        'Nom affiché',
         'E-mail',
         'Téléphone',
         'Commandes',
@@ -191,6 +206,8 @@ export class ClientsService {
         'Produit préféré',
       ],
       clients.map((c) => [
+        c.prenom,
+        c.nomDeFamille,
         c.nom,
         c.email,
         c.telephone,
@@ -228,6 +245,10 @@ export interface FiltreClients {
 /** Une ligne du fichier client. */
 export interface FicheClient {
   userId: string;
+  /** Renseignés depuis le 19/09 ; nuls pour les comptes antérieurs. */
+  prenom: string | null;
+  nomDeFamille: string | null;
+  /** Ce qu'on affiche : prénom + nom quand on les a, sinon ce qui a été saisi. */
   nom: string;
   email: string;
   telephone: string | null;

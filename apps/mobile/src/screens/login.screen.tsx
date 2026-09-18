@@ -78,7 +78,9 @@ export function LoginScreen({ navigation, route }: Props) {
   );
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [displayName, setDisplayName] = useState('');
+  const [prenom, setPrenom] = useState('');
+  const [nom, setNom] = useState('');
+  const [telephone, setTelephone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -137,8 +139,17 @@ export function LoginScreen({ navigation, route }: Props) {
       showAlert('Mot de passe trop court', 'Le mot de passe doit contenir au moins 8 caractères.');
       return;
     }
-    if (mode === 'register' && displayName.trim().length < 2) {
-      showAlert('Champ requis', 'Indiquez un nom (au moins 2 caractères).');
+    if (mode === 'register' && (prenom.trim().length < 2 || nom.trim().length < 2)) {
+      showAlert('Champs requis', 'Indiquez votre prénom et votre nom.');
+      return;
+    }
+    // Le téléphone est demandé, et vérifié dans sa FORME seulement.
+    //
+    // Le comptoir s'en sert pour joindre un client qui ne vient pas chercher sa
+    // commande. On refuse une saisie manifestement fausse, sans prétendre
+    // l'avoir vérifiée : seul un code envoyé par SMS le prouverait.
+    if (mode === 'register' && !/^\+?[\d\s\-().]{9,20}$/.test(telephone.trim())) {
+      showAlert('Numéro à vérifier', 'Indiquez un numéro de téléphone valide.');
       return;
     }
     // L'acceptation des conditions ne se déduit PAS d'un clic sur « S'inscrire ».
@@ -159,7 +170,13 @@ export function LoginScreen({ navigation, route }: Props) {
       const res =
         mode === 'login'
           ? await apiLogin(email.trim(), password)
-          : await apiRegister(email.trim(), password, displayName.trim());
+          : await apiRegister({
+              email: email.trim(),
+              password,
+              firstName: prenom.trim(),
+              lastName: nom.trim(),
+              phone: telephone.trim(),
+            });
       await setAuth(res.accessToken, res.user, res.refreshToken);
       if (mode === 'register') {
         // Confort, pas prérequis : localisation et notifications sont demandées
@@ -302,14 +319,26 @@ export function LoginScreen({ navigation, route }: Props) {
 
         {/* Champs */}
         {mode === 'register' && (
-          <TextInput
-            style={styles.input}
-            placeholder="Nom ou pseudo*"
-            placeholderTextColor={THEME.grey}
-            value={displayName}
-            onChangeText={setDisplayName}
-            autoCapitalize="words"
-          />
+          <>
+            <TextInput
+              style={styles.input}
+              placeholder="Prénom*"
+              placeholderTextColor={THEME.grey}
+              value={prenom}
+              onChangeText={setPrenom}
+              autoCapitalize="words"
+              textContentType="givenName"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Nom*"
+              placeholderTextColor={THEME.grey}
+              value={nom}
+              onChangeText={setNom}
+              autoCapitalize="words"
+              textContentType="familyName"
+            />
+          </>
         )}
 
         <TextInput
@@ -322,6 +351,20 @@ export function LoginScreen({ navigation, route }: Props) {
           autoCapitalize="none"
           autoComplete="email"
         />
+
+        {mode === 'register' && (
+          <TextInput
+            style={styles.input}
+            placeholder="Téléphone*"
+            placeholderTextColor={THEME.grey}
+            value={telephone}
+            onChangeText={setTelephone}
+            keyboardType="phone-pad"
+            autoComplete="tel"
+            textContentType="telephoneNumber"
+          />
+        )}
+
         <View style={styles.passwordRow}>
           <TextInput
             style={styles.passwordInput}

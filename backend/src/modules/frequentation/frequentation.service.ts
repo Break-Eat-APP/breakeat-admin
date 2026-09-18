@@ -201,6 +201,14 @@ export class FrequentationService {
     // au numérateur — le taux paraîtrait donc plus faible qu'il n'est.
     const connectesAyantCommande = [...connectes].filter((c) => acheteurs.has(c)).length;
 
+    // La toute première ouverture de chaque appareil : ce qui distingue une
+    // découverte d'un habitué.
+    const decouvertes = await this.premieresOuvertures([...visiteurs]);
+    const nouveaux = [...visiteurs].filter((cle) => {
+      const premiere = decouvertes.get(cle);
+      return premiere !== undefined && (!filtre.du || premiere.quand >= filtre.du);
+    }).length;
+
     // Les noms de lieux, pour que le tableau se lise sans aller les chercher.
     const lieuxIds = [...new Set(visites.map((v) => v.venueId).filter((v): v is string => !!v))];
     const noms = new Map(
@@ -223,9 +231,42 @@ export class FrequentationService {
       // une mesure.
       tauxConversion:
         connectes.size > 0 ? Math.round((connectesAyantCommande / connectes.size) * 1000) / 10 : null,
+      nouveauxVisiteurs: nouveaux,
       parJour: this.parJour(visites),
-      parLieu: this.parLieu(visites, noms),
+      parLieu: this.parLieu(visites, noms, decouvertes, filtre.du),
     };
+  }
+
+  /**
+   * Où et quand chaque appareil a ouvert l'application POUR LA PREMIÈRE FOIS.
+   *
+   * C'est ce qui remplace, honnêtement, le « nombre de téléchargements par
+   * lieu » — qu'aucune boutique d'applications ne fournit : un téléchargement
+   * se passe avant que l'app ne s'ouvre, et Apple ne dit ni où ni par qui.
+   *
+   * Ce chiffre-ci vaut mieux, d'ailleurs : quelqu'un qui télécharge et n'ouvre
+   * jamais n'apporte rien à un club.
+   *
+   * `DISTINCT ON` est une particularité PostgreSQL, et c'est elle qui rend la
+   * chose possible en UNE requête : pour chaque appareil, la ligne la plus
+   * ancienne, avec le lieu où elle a eu lieu.
+   */
+  private async premieresOuvertures(
+    cles: string[],
+  ): Promise<Map<string, { venueId: string | null; quand: Date }>> {
+    if (cles.length === 0) return new Map();
+
+    const lignes = await this.prisma.$queryRaw<
+      Array<{ visitor_key: string; venue_id: string | null; window_start: Date }>
+    >`
+      SELECT DISTINCT ON ("visitor_key") "visitor_key", "venue_id", "window_start"
+      FROM "frequentation"
+      WHERE "visitor_key" IN (${Prisma.join(cles)})
+      ORDER BY "visitor_key", "window_start" ASC
+    `;
+    return new Map(
+      lignes.map((l) => [l.visitor_key, { venueId: l.venue_id, quand: l.window_start }]),
+    );
   }
 
   private parJour(visites: LigneVisite[]): TrancheAudience[] {
@@ -242,13 +283,31 @@ export class FrequentationService {
       .sort((a, b) => a.jour.localeCompare(b.jour));
   }
 
-  private parLieu(visites: LigneVisite[], noms: Map<string, string>): AudienceLieu[] {
-    const lieux = new Map<string, { visiteurs: Set<string>; visites: number }>();
+  private parLieu(
+    visites: LigneVisite[],
+    noms: Map<string, string>,
+    decouvertes: Map<string, { venueId: string | null; quand: Date }>,
+    depuis?: Date,
+  ): AudienceLieu[] {
+    const lieux = new Map<string, { visiteurs: Set<string>; visites: number; neufs: Set<string> }>();
     for (const v of visites) {
       if (!v.venueId) continue;
-      const ligne = lieux.get(v.venueId) ?? { visiteurs: new Set<string>(), visites: 0 };
+      const ligne = lieux.get(v.venueId) ?? {
+        visiteurs: new Set<string>(),
+        visites: 0,
+        neufs: new Set<string>(),
+      };
       ligne.visiteurs.add(v.visitorKey);
       ligne.visites += v.hits;
+
+      // Un NOUVEAU visiteur de ce lieu : celui dont la toute première ouverture
+      // de l'application, jamais, a eu lieu ICI — et dans la période lue. Un
+      // client qui connaissait déjà Break Eat par un autre stade ne compte pas
+      // comme une découverte pour ce club.
+      const premiere = decouvertes.get(v.visitorKey);
+      if (premiere && premiere.venueId === v.venueId && (!depuis || premiere.quand >= depuis)) {
+        ligne.neufs.add(v.visitorKey);
+      }
       lieux.set(v.venueId, ligne);
     }
     return [...lieux.entries()]
@@ -257,6 +316,7 @@ export class FrequentationService {
         nom: noms.get(venueId) ?? 'Lieu supprimé',
         visiteursUniques: l.visiteurs.size,
         visites: l.visites,
+        nouveauxVisiteurs: l.neufs.size,
       }))
       .sort((a, b) => b.visiteursUniques - a.visiteursUniques);
   }
@@ -288,6 +348,8 @@ export interface AudienceLieu {
   nom: string;
   visiteursUniques: number;
   visites: number;
+  /** Appareils dont la toute PREMIÈRE ouverture de l'app a eu lieu ici. */
+  nouveauxVisiteurs: number;
 }
 
 export interface AudienceClub {
@@ -295,6 +357,13 @@ export interface AudienceClub {
   visites: number;
   visiteursConnectes: number;
   clientsAyantCommande: number;
+  /**
+   * Appareils qui ont découvert Break Eat pendant la période lue, tous lieux
+   * confondus. Ce que ne dit AUCUNE boutique d'applications : un
+   * téléchargement se passe avant la première ouverture, et personne ne sait
+   * où. Celui-ci vaut mieux — télécharger sans jamais ouvrir n'apporte rien.
+   */
+  nouveauxVisiteurs: number;
   /** Visiteurs identifiés qui ont AUSSI commandé — le numérateur du taux. */
   connectesAyantCommande: number;
   /**

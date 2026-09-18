@@ -389,10 +389,23 @@ export const apiLogin = (email: string, password: string) =>
     body: JSON.stringify({ email, password }),
   });
 
-export const apiRegister = (email: string, password: string, displayName: string) =>
+/**
+ * Inscription par formulaire.
+ *
+ * Prénom et nom sont envoyés SÉPARÉMENT : c'est ce qu'un club attend dans son
+ * fichier client, et découper un champ unique n'est jamais fiable —
+ * « Jean-Pierre De La Tour » n'obéit à aucune règle.
+ */
+export const apiRegister = (identite: {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  phone?: string;
+}) =>
   req<LoginResponse>('/auth/register', {
     method: 'POST',
-    body: JSON.stringify({ email, password, displayName }),
+    body: JSON.stringify(identite),
   });
 
 /** Apple, Google — ceux que le serveur sait réellement vérifier. */

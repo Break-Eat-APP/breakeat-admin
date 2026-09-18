@@ -47,8 +47,24 @@ describe('ClientsService', () => {
         // requireOrgAccess relit le rôle en base : SUPER_ADMIN passe partout.
         findUnique: jest.fn().mockResolvedValue({ globalRole: 'SUPER_ADMIN' }),
         findMany: jest.fn().mockResolvedValue([
-          { id: JO, displayName: 'Jo Bricole', email: 'jo@exemple.fr', phone: '0600000000' },
-          { id: ANA, displayName: 'Ana', email: 'ana@exemple.fr', phone: null },
+          {
+            id: JO,
+            displayName: 'Jo Bricole',
+            firstName: 'Jo',
+            lastName: 'Bricole',
+            email: 'jo@exemple.fr',
+            phone: '0600000000',
+          },
+          // Ana s'est inscrite AVANT que prénom et nom soient demandés — ou par
+          // Apple, qui ne les fournit pas toujours.
+          {
+            id: ANA,
+            displayName: 'Ana',
+            firstName: null,
+            lastName: null,
+            email: 'ana@exemple.fr',
+            phone: null,
+          },
         ]),
       },
       order: { groupBy },
@@ -70,6 +86,8 @@ describe('ClientsService', () => {
     const [premier] = await service.lister(ORG, MOI);
 
     expect(premier).toMatchObject({
+      prenom: 'Jo',
+      nomDeFamille: 'Bricole',
       nom: 'Jo Bricole',
       email: 'jo@exemple.fr',
       telephone: '0600000000',
@@ -148,8 +166,8 @@ describe('ClientsService', () => {
 
       expect(lignes).toBe(2);
       expect(nomFichier).toMatch(/^clients-\d{4}-\d{2}-\d{2}\.csv$/);
-      expect(csv).toContain('Nom;E-mail;Téléphone');
-      expect(csv).toContain('Jo Bricole;jo@exemple.fr;0600000000;3;30,00;10,00');
+      expect(csv).toContain('Prénom;Nom;Nom affiché;E-mail;Téléphone');
+      expect(csv).toContain('Jo;Bricole;Jo Bricole;jo@exemple.fr;0600000000;3;30,00;10,00');
       expect(csv).toContain('Vélodrome');
       expect(csv).toContain('Bière');
     });
@@ -159,7 +177,9 @@ describe('ClientsService', () => {
       // pour la quasi-totalité des clients, et ce vide doit rester propre.
       const { service } = monter();
       const { csv } = await service.exporterCsv(ORG, MOI);
-      expect(csv).toContain('Ana;ana@exemple.fr;;1;7,00');
+      // Prénom et nom vides, nom affiché conservé : un compte ancien reste
+      // exploitable, il n'est simplement pas aussi complet.
+      expect(csv).toContain(';;Ana;ana@exemple.fr;;1;7,00');
     });
   });
 });

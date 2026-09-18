@@ -84,12 +84,16 @@ describe('FrequentationService — lire l’audience', () => {
   const ORG = 'cccccccc-3333-4333-8333-333333333333';
   const LIEU = 'aaaaaaaa-1111-4111-8111-111111111111';
 
-  function monter(visites: unknown[], commandes: unknown[]) {
+  function monter(visites: unknown[], commandes: unknown[], premieres: unknown[] = []) {
     const prisma = {
       user: { findUnique: jest.fn().mockResolvedValue({ globalRole: 'SUPER_ADMIN' }) },
       frequentation: { findMany: jest.fn().mockResolvedValue(visites) },
       order: { groupBy: jest.fn().mockResolvedValue(commandes) },
       venue: { findMany: jest.fn().mockResolvedValue([{ id: LIEU, name: 'Vélodrome' }]) },
+      // La toute première ouverture de chaque appareil : une requête SQL, dont
+      // le VRAI comportement est vérifié sur base réelle
+      // (`frequentation.int-spec.ts`). Ici, seul le reste du calcul est en jeu.
+      $queryRaw: jest.fn().mockResolvedValue(premieres),
     } as unknown as PrismaService;
     return new FrequentationService(prisma);
   }

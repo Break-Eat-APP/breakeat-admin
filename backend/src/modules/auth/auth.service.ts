@@ -71,6 +71,8 @@ export class AuthService {
       email: dto.email,
       password: dto.password,
       displayName: dto.displayName,
+      firstName: dto.firstName,
+      lastName: dto.lastName,
       phone: dto.phone,
     });
 
