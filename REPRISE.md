@@ -416,42 +416,53 @@ Le code est prêt : il s'allume dès que `APPLE_MERCHANT_ID` existe, et reste
 silencieux sans lui. Ce qui manque ne peut se faire que depuis les comptes
 Apple et Stripe.
 
-**1. Créer l'identifiant marchand** (portail Apple → Certificates, Identifiers
-& Profiles → Identifiers → liste déroulante en haut à droite : *Merchant IDs* →
-« + »).
-- Description : `Break Eat`
-- Identifiant : `merchant.com.shapper.breakeat`
+**1. ✅ FAIT** — `merchant.com.shapper.breakeat` existe déjà, créé du temps de
+l'application précédente, avec un certificat *Apple Pay Payment Processing*
+valable jusqu'au **02/10/2027**. À renouveler avant cette date : un certificat
+expiré n'affiche aucune erreur, Apple Pay disparaît simplement de la feuille.
+
+`APPLE_MERCHANT_ID` est posé dans `eas.json`, profils `beta` et `production`
+(tous deux sur le bundle `com.shapper.breakeat`). PAS sur `preview`, qui porte
+un autre App ID (`…breakeat.preview`) : la capacité devrait y être activée
+séparément.
 
 **2. Autoriser l'app à s'en servir** (Identifiers → App IDs →
 `com.shapper.breakeat` → capacité **Apple Pay Payment Processing** → cocher
-l'identifiant marchand → Save).
+l'identifiant marchand → Save). EAS sait aussi le faire tout seul pendant une
+build **interactive** : il lit les droits demandés et synchronise la capacité.
 
 ⚠️ Comme pour « Sign In with Apple » en septembre : cocher une capacité rend le
 profil de provisionnement périmé. La build suivante doit être lancée **sans
 `--non-interactive`**, sinon EAS ne peut pas en régénérer un et la build est
 refusée par Xcode.
 
-**3. Le certificat de traitement, côté Stripe** (Stripe → Paramètres → Moyens de
-paiement → Apple Pay → ajouter une application iOS). La mécanique, quels que
-soient les libellés du tableau de bord du moment :
-- Stripe fournit une **demande de certificat** (fichier `.certSigningRequest`) ;
-- on la téléverse dans Apple, sur le Merchant ID créé à l'étape 1 (*Apple Pay
-  Payment Processing Certificate* → Create Certificate) ;
-- Apple rend un `.cer`, qu'on redonne à Stripe.
+**3. Le certificat de traitement — à VÉRIFIER, pas à refaire aveuglément.**
 
-À refaire **dans chaque mode** : les clés de test et de production sont deux
-comptes distincts aux yeux de Stripe.
+Le certificat existant date de l'application précédente. Ce qui compte n'est pas
+qu'il existe, mais **qui détient sa clé privée** : elle appartient à celui qui a
+produit la demande de certificat. Si ce n'était pas ce compte Stripe, Stripe ne
+peut pas déchiffrer les jetons Apple Pay, et le paiement échoue au dernier
+instant — après que le client a posé son doigt.
 
-**4. Poser la variable** — dans `apps/mobile/eas.json`, profil `beta` (et
-`preview` si les essais passent par là), à côté de `EXPO_PUBLIC_API_URL` :
+La vérification : Stripe → Paramètres → Moyens de paiement → **Apple Pay**.
+`merchant.com.shapper.breakeat` doit y figurer comme application iOS.
 
-```json
-"APPLE_MERCHANT_ID": "merchant.com.shapper.breakeat"
-```
+- **S'il y figure** : rien à faire.
+- **Sinon** : ajouter l'application iOS. Stripe fournit une demande de
+  certificat (`.certSigningRequest`), on la téléverse dans Apple sur ce Merchant
+  ID (*Apple Pay Payment Processing Certificate* → Create Certificate), Apple
+  rend un `.cer` qu'on redonne à Stripe. Un identifiant marchand accepte **deux**
+  certificats : en ajouter un ne casse pas celui de l'ancienne application.
 
-Volontairement PAS posée à l'avance : déclarer un identifiant marchand qui
-n'existe pas encore ferait échouer la signature de la build. L'étape 1 d'abord,
-cette ligne ensuite.
+À vérifier **dans chaque mode** : test et production sont deux comptes distincts
+aux yeux de Stripe.
+
+**4. ✅ FAIT** — `APPLE_MERCHANT_ID` est dans `eas.json`. La chaîne complète a
+été vérifiée sans build, par `expo config --type introspect` : le plugin reçoit
+l'identifiant, le droit iOS `com.apple.developer.in-app-payments` le porte
+(c'est lui que le profil de provisionnement doit couvrir), et `extra` le rend
+lisible à l'exécution — sans quoi la feuille ne proposerait pas Apple Pay même
+avec les droits en règle.
 
 ## 🗃️ Archivés et supprimés — la règle
 

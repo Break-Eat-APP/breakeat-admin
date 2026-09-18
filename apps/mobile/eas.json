@@ -35,7 +35,8 @@
       },
       "env": {
         "APP_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1",
+        "APPLE_MERCHANT_ID": "merchant.com.shapper.breakeat"
       },
       "autoIncrement": true,
       "node": "22.14.0",
@@ -65,7 +66,8 @@
       },
       "env": {
         "APP_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1",
+        "APPLE_MERCHANT_ID": "merchant.com.shapper.breakeat"
       },
       "autoIncrement": true,
       "node": "22.14.0",
