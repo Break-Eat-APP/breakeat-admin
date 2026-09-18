@@ -25,6 +25,9 @@ import { FeatureFlagsModule } from './modules/feature-flags/feature-flags.module
 import { AppSettingsModule } from './modules/app-settings/app-settings.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { BackofficeModule } from './modules/backoffice/backoffice.module';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { COMPTEURS } from './common/securite/limitation';
+import { APP_GUARD } from '@nestjs/core';
 import { StatsModule } from './modules/stats/stats.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { FrequentationModule } from './modules/frequentation/frequentation.module';
@@ -79,6 +82,10 @@ import appConfig from './config/app.config';
     BackofficeModule,
     // Phase 11 — Operator dashboard (configurable screens)
     // Phase 15 — Manager dashboard (org/event analytics)
+    // Limitation de débit : deux compteurs, décrits et justifiés dans
+    // `common/securite/limitation.ts`. Un large par IP, un serré par adresse
+    // e-mail sur l'authentification — parce qu'un stade entier partage une IP.
+    ThrottlerModule.forRoot(COMPTEURS),
     StatsModule,
     ClientsModule,
     FrequentationModule,
@@ -88,5 +95,10 @@ import appConfig from './config/app.config';
     LiveActivityModule,
     BootstrapModule,
   ],
+  // La limitation de débit s'applique à TOUTES les routes, sauf celles qui
+  // portent `@SkipThrottle()` — les webhooks (Stripe réessaie, et l'étrangler
+  // ferait perdre des commandes déjà payées) et le contrôle de santé, que
+  // Railway interroge en continu.
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

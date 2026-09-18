@@ -1,4 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
+import { AUCUNE_LIMITE } from '../common/securite/limitation';
 
 export interface HealthResponse {
   status: 'ok';
@@ -33,6 +35,9 @@ export interface HealthResponse {
  * Must respond in < 50ms.
  * Route: GET /health  (outside the /api/v1 prefix — see main.ts excludeGlobalPrefix)
  */
+// Railway interroge cette route en continu pour savoir si le conteneur est
+// vivant : l'étrangler ferait déclarer l'API en panne alors qu'elle va bien.
+@SkipThrottle(AUCUNE_LIMITE)
 @Controller('health')
 export class HealthController {
   @Get()

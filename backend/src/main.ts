@@ -2,6 +2,8 @@ import './instrument'; // Sentry must be imported first
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, type LoggerService } from '@nestjs/common';
 import { json, raw } from 'express';
+import helmet from 'helmet';
+import { optionsHelmet } from './common/securite/entetes';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
@@ -21,6 +23,19 @@ async function bootstrap(): Promise<void> {
 
   // Re-use the same logger instance for post-bootstrap messages.
   const logger = appLogger;
+
+  // ─── Derrière un proxy : lire la VRAIE adresse du client ───
+  //
+  // Railway place l'API derrière son routeur. Sans ce réglage, Express voit
+  // l'adresse du proxy pour TOUT LE MONDE : la limitation de débit compterait
+  // alors les requêtes de tous les clients dans un seul compteur, et le premier
+  // client un peu actif bloquerait tous les autres. C'est la faute classique,
+  // et elle transforme une protection en panne.
+  app.set('trust proxy', 1);
+
+  // En-têtes de sécurité — la politique est écrite et commentée dans
+  // `common/securite/entetes.ts`, et tenue par des tests.
+  app.use(helmet(optionsHelmet));
 
   // Stripe webhook MUST receive raw bytes for signature verification.
   // Must be registered BEFORE the generic JSON parser.

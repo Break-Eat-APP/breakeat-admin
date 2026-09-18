@@ -5440,3 +5440,68 @@ e-mail vers des particuliers demande un accord préalable, et commander à un
 stand n'est pas un accord. Le jour où ce sujet reviendra, il faudra une case
 d'accord horodatée, un export qui la respecte, et un moyen de se désinscrire
 dans chaque message.
+
+---
+
+## Phase 42 — Trois verrous de sécurité (18/09/2026)
+
+Audit du code contre une liste de contrôle courante, puis correction des trois
+manques les plus rentables. Le reste était déjà en place : argon2, jetons de
+renouvellement HACHÉS en base avec rotation, validation stricte des entrées
+(tout champ non déclaré est rejeté), erreurs muettes en production avec
+référence de corrélation, CORS fermé, webhooks signés, aucun secret dans le
+code, aucun téléversement de fichier — donc pas de surface d'attaque associée.
+
+### 1. La limitation de débit, et pourquoi elle ne peut PAS compter par IP
+
+Nos clients commandent depuis un stade : des centaines de téléphones derrière le
+même wifi, donc la même adresse IP publique. Une limite serrée par IP aurait
+bloqué une buvette entière au coup d'envoi — la protection serait devenue la
+panne.
+
+Deux compteurs, donc : un LARGE par IP (600/minute, qui n'attrape qu'un script)
+et un SERRÉ par ADRESSE E-MAIL (8 par quart d'heure), qui ne s'applique qu'aux
+routes d'authentification portant une adresse. Un attaquant qui change d'IP à
+chaque essai reste bloqué ; un stade entier qui se connecte ne l'est jamais.
+
+**Deux pièges rencontrés, tous deux trouvés par l'essai et non par la lecture :**
+
+- une première version posait la limite serrée par décorateur. Le garde GLOBAL
+  lisait le même décorateur et l'appliquait PAR IP : l'essai a montré un
+  « voisin » de la même adresse bloqué du premier coup. C'est exactement la
+  panne qu'on voulait éviter, et elle serait passée en production sans cet
+  essai ;
+- `@SkipThrottle()` sans argument ne vise qu'un compteur nommé `default`. Nos
+  compteurs s'appellent `ip` et `adresse` : les routes qu'on croyait exemptées —
+  les webhooks Stripe, le contrôle de santé — ne l'auraient pas été. Les deux
+  noms sont désormais écrits explicitement, dans une constante partagée.
+
+Le ciblage vit dans la CONFIGURATION du compteur, pas dans des décorateurs
+posés route par route : une nouvelle route d'authentification sera protégée sans
+que personne ait à y penser.
+
+### 2. Les en-têtes de sécurité
+
+`helmet`, avec une politique de contenu écrite à la main. Le défaut aurait
+bloqué les deux pages HTML servies par l'API — le reçu et le retour de paiement
+— qui portent leurs styles et leur script EN LIGNE. La seconde est sur le chemin
+de l'argent : un client qui vient de payer y passe.
+
+La politique n'autorise rien par défaut et ne s'ouvre que sur ces deux points,
+commentés. Elle est tenue par des tests qui exécutent le vrai `helmet` et
+vérifient l'en-tête RÉELLEMENT posé — pas l'objet de configuration. Ces tests
+gardent les deux côtés : qu'on ne la relâche pas, et qu'on ne la resserre pas
+par réflexe en cassant le paiement.
+
+### 3. `trust proxy`
+
+Railway place l'API derrière son routeur. Sans ce réglage, Express voit
+l'adresse du proxy pour tout le monde : les deux compteurs auraient partagé un
+seul seau, et le premier client actif aurait bloqué tous les autres. C'est la
+faute classique de la limitation de débit, et elle ne se voit qu'en production.
+
+### 4. Next.js
+
+15.5.18 → 15.5.25. Deux avis CRITIQUES corrigés en 15.5.24 ; montée corrective
+dans la même version mineure. Il ne reste aucun avis critique dans l'arbre de
+production, ni aucun avis sur Next.

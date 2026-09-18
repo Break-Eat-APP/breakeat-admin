@@ -42,6 +42,9 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
       { href: '/accounting', icon: Receipt, label: 'Comptabilité' },
+      // Avec le tableau de bord et la comptabilité : c'est du PILOTAGE. Le
+      // club y lit son audience et sa clientèle, pas une configuration.
+      { href: '/clients', icon: Contact, label: 'Mes clients' },
     ],
   },
   {
@@ -78,7 +81,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/team', icon: Users, label: 'Équipe' },
       { href: '/groups', icon: Tags, label: 'Groupes de clients' },
-      { href: '/clients', icon: Contact, label: 'Mes clients' },
     ],
   },
   {

@@ -26,6 +26,12 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   /** POST /auth/register */
+  /**
+   * Limitée à huit tentatives par quart d'heure, comptées PAR ADRESSE E-MAIL —
+   * voir `common/securite/limitation.ts`. Rien à décorer ici : le compteur
+   * reconnaît lui-même les routes d'authentification, ce qui évite qu'on
+   * oublie un jour le décorateur sur une nouvelle route.
+   */
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   register(@Body() dto: RegisterDto) {
@@ -33,6 +39,12 @@ export class AuthController {
   }
 
   /** POST /auth/login */
+  /**
+   * Limitée à huit tentatives par quart d'heure, comptées PAR ADRESSE E-MAIL —
+   * voir `common/securite/limitation.ts`. Rien à décorer ici : le compteur
+   * reconnaît lui-même les routes d'authentification, ce qui évite qu'on
+   * oublie un jour le décorateur sur une nouvelle route.
+   */
   @Post('login')
   @HttpCode(HttpStatus.OK)
   login(@Body() dto: LoginDto) {

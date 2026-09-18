@@ -1,3 +1,5 @@
+import { SkipThrottle } from '@nestjs/throttler';
+import { AUCUNE_LIMITE } from '../../common/securite/limitation';
 import {
   BadRequestException,
   Controller,
@@ -24,6 +26,10 @@ import { StripeWebhooksService } from './stripe-webhooks.service';
  * - JwtAuthGuard MUST NOT be applied here — Stripe doesn't carry our JWT.
  *   Authentication is done via signature verification.
  */
+// Stripe réessaie un webhook refusé, mais pas indéfiniment : l'étrangler
+// reviendrait à perdre des commandes DÉJÀ PAYÉES. La signature protège déjà
+// cette route mieux qu'un compteur ne le ferait.
+@SkipThrottle(AUCUNE_LIMITE)
 @Controller('webhooks/stripe')
 export class StripeWebhooksController {
   private readonly logger = new Logger(StripeWebhooksController.name);
