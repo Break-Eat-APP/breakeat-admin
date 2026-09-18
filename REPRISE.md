@@ -71,6 +71,27 @@ clients ; **Facebook ne le sera pas** — son jeton ne certifie pas l'adresse, e
 rattacher une inscription rapide à un compte existant sur une adresse non
 certifiée donnerait le compte d'un client à qui saurait en déclarer l'adresse.
 
+## 🚀 QUI DÉPLOIE QUOI — vérifié le 18/09/2026
+
+Trois chemins différents, et le confondre fait chercher une panne là où il n'y
+en a pas. Un déploiement « manquant » est le plus souvent un déploiement qui
+passe par un autre tuyau, ou qui n'est pas encore arrivé.
+
+| Surface | Chemin | Déclencheur |
+|---|---|---|
+| API | Railway | `watchPatterns` : `backend/**` et les dépendances |
+| Tableau de bord manager | GitHub Actions `deploy-frontends.yml` | `apps/admin/**` |
+| Poste opérateur | GitHub Actions, second job du même fichier | `apps/operator/**` |
+| **Back-office** | **intégration Git de Vercel** — PAS de workflow | tout commit sur `main` |
+| App iPhone | rien d'automatique | une build EAS, à lancer à la main |
+
+Compter en minutes, pas en secondes : le 18/09, la page « Mes clients » a mis
+plusieurs minutes à apparaître après le push, et la couleur est arrivée sur les
+quatre surfaces à des instants différents. **Avant de conclure à une panne, on
+vérifie ce qui est SERVI** : `/health` donne le commit de l'API, et pour un
+dashboard on cherche une chaîne distinctive dans le `.js` servi — c'est ainsi
+qu'on a su que la page était déployée mais pas encore la couleur.
+
 ## 📊 DONNÉES CLUB — « Mes clients » (18/09/2026)
 
 Le tableau de bord manager porte une page **Mes clients** : le club y lit son
