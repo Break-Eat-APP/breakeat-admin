@@ -25,9 +25,12 @@ petit — elle est unique à vie, là où le numéro du jour recommence chaque m
 l'adresse du client à qui il est délivré : un ticket anonyme ne se fait pas
 rembourser.
 
-**Le bouton d'arrivée** de « Mes commandes » parle enfin comme le reste de
-l'app : « Clique ici pour nous avertir lorsque tu es devant le point de
-retrait ».
+**Le bouton d'arrivée** demande au lieu de déclarer. Dans « Mes commandes » :
+« Clique ici pour nous avertir lorsque tu es devant le point de retrait ». Sur
+l'écran verrouillé et dans l'îlot dynamique, où la place est comptée : « Clique
+ici pour nous avertir que tu es là ». Le libellé de la carte est écrit à un seul
+endroit, et tient sur une ligne quoi qu'il arrive — un bouton à deux lignes
+ferait déborder la Live Activity, qu'iOS coupe alors sans prévenir.
 
 `+ backend/src/modules/orders/recu.service.spec.ts` (5 tests)
 `~ cart.service (commandeDuPanier rend dailyNumber), recu.service`

@@ -44,7 +44,7 @@ private func statusSymbol(for state: BreakEatOrderAttributes.ContentState) -> St
 
 // MARK: - Liens de retour vers l'app
 
-/// « Je suis arrivé » depuis l'écran verrouillé.
+/// Le signalement d'arrivée, depuis l'écran verrouillé.
 ///
 /// Pourquoi un `Link` et non un bouton interactif (`Button(intent:)`) : un
 /// bouton d'intention s'exécute HORS de l'app, sans accès à sa session. Il
@@ -54,6 +54,16 @@ private func statusSymbol(for state: BreakEatOrderAttributes.ContentState) -> St
 private func arrivalURL(orderId: String) -> URL? {
   URL(string: "breakeat://order/\(orderId)/arrived")
 }
+
+/// Le libellé du bouton d'arrivée, écrit à UN seul endroit.
+///
+/// L'écran verrouillé et l'îlot dynamique l'affichent tous les deux : deux
+/// formulations pour le même geste se remarqueraient aussitôt.
+///
+/// Il dit ce qu'il attend du client plutôt que ce qu'il déclare à sa place :
+/// « Je suis arrivé » se lit comme un constat, et laisse croire que le stand
+/// est déjà prévenu.
+private let LIBELLE_ARRIVEE = "Clique ici pour nous avertir que tu es là"
 
 /// Ouvre le suivi de la commande (appui sur la carte elle-même).
 private func orderURL(orderId: String) -> URL? {
@@ -202,20 +212,29 @@ private struct ProgressTrack: View {
   }
 }
 
-/// « Je suis arrivé » — pleine largeur, vert, impossible à manquer.
+/// Le bouton d'arrivée — pleine largeur, vert, impossible à manquer.
 private struct ArrivalButton: View {
   let orderId: String
 
   var body: some View {
     if let url = arrivalURL(orderId: orderId) {
       Link(destination: url) {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
           Image(systemName: "figure.wave")
-            .font(.system(size: 14, weight: .bold))
-          Text("Je suis arrivé")
-            .font(.system(size: 15, weight: .bold))
+            .font(.system(size: 13, weight: .bold))
+          // Une seule ligne, quitte à rétrécir un peu : la carte est déjà
+          // haute, et un bouton qui passe à deux lignes la fait déborder —
+          // iOS coupe alors le bas de la Live Activity sans prévenir.
+          Text(LIBELLE_ARRIVEE)
+            .font(.system(size: 13, weight: .bold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
         }
         .foregroundStyle(.white)
+        // La marge est POSÉE AVANT la largeur pleine : c'est ce qui la rend
+        // utile. Le texte calcule alors son rétrécissement sur la largeur
+        // moins ces marges, au lieu de venir toucher les bords de la pastille.
+        .padding(.horizontal, 12)
         .frame(maxWidth: .infinity)
         .padding(.vertical, 11)
         .background(
@@ -446,9 +465,12 @@ struct BreakEatLiveActivity: Widget {
                 }
                 if let url = arrivalURL(orderId: context.attributes.orderId) {
                   Link(destination: url) {
-                    Text("Je suis arrivé")
-                      .font(.system(size: 15, weight: .bold))
+                    Text(LIBELLE_ARRIVEE)
+                      .font(.system(size: 13, weight: .bold))
+                      .lineLimit(1)
+                      .minimumScaleFactor(0.8)
                       .foregroundStyle(.white)
+                      .padding(.horizontal, 12)
                       .frame(maxWidth: .infinity)
                       .padding(.vertical, 9)
                       .background(Capsule().fill(Brand.green))
