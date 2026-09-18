@@ -288,8 +288,18 @@ export interface BackendCart {
 
 export interface CheckoutResponse {
   cartId: string;
+  /**
+   * `natif` : l'app ouvre SA PROPRE feuille de paiement, sans navigateur.
+   * `web` : la page hebergee par Stripe — chemin du navigateur, et repli du
+   * telephone quand le serveur n'a pas de cle publiable.
+   */
+  mode: 'natif' | 'web';
+  /** Laissez-passer de l'intention : il n'ouvre QUE ce paiement-la. */
+  clientSecret?: string;
+  /** Cle publiable (`pk_…`), servie par le serveur pour suivre son mode. */
+  publishableKey?: string;
   /** Page de paiement hebergee par Stripe — l'app l'ouvre, c'est tout. */
-  checkoutUrl: string;
+  checkoutUrl?: string;
   amountCents: number;
   currency: string;
   status: string;

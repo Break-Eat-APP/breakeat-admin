@@ -5,6 +5,39 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.67.0] — 2026-09-18 — Le paiement entre DANS l'application
+
+La 0.66 avait rendu le retour automatique, mais laissait la page web : le client
+voyait toujours `checkout.stripe.com` s'ouvrir, et sortait donc bien de
+l'application. Une page hébergée dans une feuille Safari reste une page
+hébergée.
+
+La feuille de paiement du SDK Stripe s'ouvre maintenant PAR-DESSUS l'écran, comme
+un sélecteur de photos. Pas de navigateur, pas d'adresse, pas de retour à
+négocier. Aucun numéro de carte ne traverse notre code — pas davantage qu'avant.
+
+Côté serveur, une `PaymentIntent` remplace la `Checkout Session` sur téléphone.
+**Le webhook ne bouge pas d'une ligne** : il écoutait déjà
+`payment_intent.succeeded` et lisait `metadata.cartId`. C'est ce qui a rendu la
+bascule sûre.
+
+Le navigateur garde la page hébergée — il n'a pas de feuille native. Metro
+choisit seul entre `paiement.ts` et `paiement.native.ts` ; l'export web ne
+contient aucune trace du SDK natif (vérifié sur le bundle).
+
+⚠️ **À poser sur Railway : `STRIPE_PUBLISHABLE_KEY`** (`pk_test_…` / `pk_live_…`).
+Sans elle, l'app retombe sur la page hébergée — le serveur le dit dans ses
+journaux, et le contrôle de démarrage la réclame comme les autres.
+
+Apple Pay attend un identifiant marchand Apple (`APPLE_MERCHANT_ID`) : le code
+s'allume dès qu'il est posé. En attendant, la carte fonctionne, dans l'app.
+
+`+ apps/mobile/src/lib/paiement.ts` (web) `+ paiement.native.ts` (téléphone)
+`+ @stripe/stripe-react-native` + son plugin Expo
+`~ stripe.service (createPaymentIntent, reprendreIntention), cart.service (bascule + figerEtEngager), main.ts`
+
+---
+
 ## [0.66.0] — 2026-09-18 — Payer sans sortir de l'app, et un reçu qui vaut justificatif
 
 **Le retour du paiement.** La page de Stripe s'ouvrait déjà dans une feuille

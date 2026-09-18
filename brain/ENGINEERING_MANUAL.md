@@ -5250,3 +5250,64 @@ ne porte toujours ni domicile ni moyen de paiement.
 
 Un compte supprimé ne bloque pas le document : la ligne disparaît, le reçu reste
 lisible. Le justificatif d'un achat déjà payé survit à son acheteur.
+
+---
+
+## Phase 39 — Payer dans l'app, pour de bon (18/09/2026)
+
+La phase 38 avait rendu le retour automatique. Elle n'avait pas retiré la page
+web : le client voyait toujours une adresse `checkout.stripe.com` s'ouvrir, et
+disait — à juste titre — qu'il sortait de l'application. Une page hébergée dans
+une feuille Safari reste une page hébergée.
+
+### Ce qui remplace la page
+
+La feuille de paiement du SDK Stripe, qui s'ouvre PAR-DESSUS l'écran comme un
+sélecteur de photos. Pas de navigateur, pas d'adresse, pas de retour à
+négocier : le client voit Break Eat derrière, et l'app reprend la main à la
+seconde où il a payé. Aucun numéro de carte ne traverse notre code — pas
+davantage qu'avant : la feuille appartient au SDK, et ne rend qu'un oui ou un
+non.
+
+Côté serveur, c'est une simple `PaymentIntent` au lieu d'une `Checkout Session`.
+**Le webhook ne change pas d'une ligne** : il écoutait déjà
+`payment_intent.succeeded` et lisait `metadata.cartId`. C'est ce qui a rendu
+cette bascule sûre — les deux chemins font naître la commande exactement de la
+même façon, et `figerEtEngager` leur fait laisser le panier dans le même état.
+
+### Ce qui reste de l'ancien chemin, et pourquoi
+
+Le navigateur n'a pas de feuille native : l'app web garde donc la page hébergée.
+Metro choisit tout seul, par `paiement.ts` (web) et `paiement.native.ts`
+(téléphone) — le bundle web ne contient aucune trace du SDK natif, ce qui a été
+vérifié sur l'export.
+
+Le téléphone garde le même repli dans UN cas : quand le serveur n'a pas de clé
+publiable. Un paiement impossible serait pire qu'un paiement qui sort de l'app.
+Le serveur le dit dans ses journaux, et le contrôle de démarrage réclame
+désormais `STRIPE_PUBLISHABLE_KEY` comme les autres.
+
+### La clé publiable vient du SERVEUR
+
+Elle est publique par construction — elle ne peut qu'ouvrir un paiement, jamais
+le lire ni le modifier. La servir par l'API plutôt que la geler dans la build a
+une conséquence pratique : passer du mode test au mode production ne demande pas
+de relivrer l'application.
+
+### Reprendre une intention plutôt qu'en ouvrir une seconde
+
+La clé d'idempotence ne suffisait pas : le montant peut changer entre deux
+passages sur l'écran de paiement (points de fidélité), et Stripe refuse alors
+une clé déjà vue avec des paramètres différents. `reprendreIntention` relit
+l'intention du panier, la remet au bon montant si elle est encore réglable, et
+ne rend `null` que si elle est payée, annulée ou en cours — auquel cas une
+neuve s'ouvre.
+
+### Apple Pay
+
+Il passait par la page hébergée, qui le proposait d'elle-même. La feuille
+native le demande explicitement : un identifiant marchand Apple, qui se crée
+dans le portail développeur et ne peut pas être inventé ici — en déclarer un qui
+n'existe pas ferait échouer la signature de la build. Le code est écrit pour
+s'allumer dès que `APPLE_MERCHANT_ID` est posé, et reste silencieux sans lui.
+En attendant, la carte fonctionne, dans l'app.

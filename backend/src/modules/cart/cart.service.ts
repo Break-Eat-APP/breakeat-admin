@@ -83,10 +83,31 @@ export interface CartWithTotals {
 export interface CheckoutResponse {
   cartId: string;
   /**
+   * Comment le client va payer.
+   *
+   * `natif` : l'app ouvre SA PROPRE feuille de paiement, sans navigateur et
+   * sans sortir de l'application. C'est le chemin du téléphone.
+   *
+   * `web` : la page hébergée par Stripe. C'est le chemin du navigateur, où il
+   * n'y a pas de feuille native — et le repli du téléphone quand le serveur
+   * n'a pas de clé publiable.
+   */
+  mode: 'natif' | 'web';
+  /**
+   * Le laissez-passer de l'intention de paiement, pour la feuille native.
+   *
+   * Il n'ouvre QUE ce paiement-là : il ne permet ni de le lire, ni d'en créer
+   * un autre, ni de toucher au compte. C'est pour cela qu'il peut voyager
+   * jusqu'au téléphone.
+   */
+  clientSecret?: string;
+  /** Clé publiable (`pk_…`) — l'app en a besoin pour parler à Stripe. */
+  publishableKey?: string;
+  /**
    * Page de paiement hébergée par Stripe. L'app l'ouvre, le client paie, le
    * webhook crée la commande. Aucun numéro de carte ne passe par notre code.
    */
-  checkoutUrl: string;
+  checkoutUrl?: string;
   amountCents: number;
   currency: string;
   status: CartStatus;
@@ -468,6 +489,57 @@ export class CartService {
             annule: `${this.apiUrl()}/paiement/retour?panier=${cart.id}&cible=app&etat=annule`,
           }
         : { ok: `${site}/commandes?paye=1`, annule: `${site}/panier?annule=1` };
+
+    const metadata = {
+      cartId: cart.id,
+      userId: cart.userId,
+      eventId: cart.eventId,
+      supplierId: cart.supplierId,
+      pickupPointId: cart.pickupPointId ?? '',
+    };
+
+    // ─── Le chemin du TÉLÉPHONE : aucune sortie de l'application ───
+    //
+    // Pas de page, pas de navigateur, pas de retour à négocier : l'app ouvre sa
+    // propre feuille de paiement avec ce laissez-passer. Le webhook, lui, ne
+    // voit aucune différence — c'est le même `payment_intent.succeeded` et la
+    // même `metadata.cartId` qui font naître la commande.
+    const clePubliable = this.config.get<string>('app.stripe.publishableKey') ?? '';
+    if (plateforme === 'native' && clePubliable) {
+      const intention = await this.stripe.createPaymentIntent({
+        amountCents: view.totalCents,
+        currency: view.currency,
+        destinationAccountId: encaisseur.accountId,
+        idempotencyKey: `cart_${cart.id}`,
+        metadata,
+        existingIntentId: cart.paymentIntentId,
+      });
+
+      await this.figerEtEngager(cart.id, frozenPrices, intention.id);
+      this.logger.log(`Checkout: cart=${cart.id} → feuille native, ${view.totalCents}¢`);
+
+      return {
+        cartId: cart.id,
+        mode: 'natif',
+        clientSecret: intention.client_secret ?? '',
+        publishableKey: clePubliable,
+        amountCents: view.totalCents,
+        currency: view.currency,
+        status: CartStatus.CHECKOUT_PENDING,
+      };
+    }
+
+    if (plateforme === 'native') {
+      // Repli explicite, et dit dans le journal : sans clé publiable, la
+      // feuille native ne peut pas s'ouvrir. Mieux vaut une page hébergée qu'un
+      // paiement impossible — mais il faut pouvoir le lire ici, sinon le
+      // symptôme (« je sors de l'app ») n'a aucune explication visible.
+      this.logger.warn(
+        'STRIPE_PUBLISHABLE_KEY absente : paiement par page hébergée, ' +
+          'le client sortira de l’application le temps du règlement.',
+      );
+    }
+
     const session = await this.stripe.createHostedCheckout({
       amountCents: view.totalCents,
       currency: view.currency,
@@ -477,13 +549,7 @@ export class CartService {
       successUrl: retour.ok,
       cancelUrl: retour.annule,
       idempotencyKey: `cart_${cart.id}`,
-      metadata: {
-        cartId: cart.id,
-        userId: cart.userId,
-        eventId: cart.eventId,
-        supplierId: cart.supplierId,
-        pickupPointId: cart.pickupPointId ?? '',
-      },
+      metadata,
     });
     const intent = {
       id:
@@ -495,40 +561,52 @@ export class CartService {
       url: session.url ?? '',
     };
 
-    // ─── Freeze prices + transition, atomically ────────────────
-    // Snapshot write and status flip happen in ONE transaction. After this
-    // commit the cart is CHECKOUT_PENDING and its total is FROZEN: the future
-    // Order.totalCents derives from these snapshots, guaranteeing consistency
-    // even if Product.price changes between checkout and webhook delivery.
-    // Because the snapshot and the status are written together, a cart can
-    // never be OPEN-with-snapshot, and computeView() only trusts snapshots
-    // once the cart has left OPEN (defensive guard below).
-    await this.prisma.$transaction([
-      ...frozenPrices.map((fp) =>
-        this.prisma.cartItem.update({
-          where: { id: fp.id },
-          data: { priceSnapshotCents: fp.priceSnapshotCents },
-        }),
-      ),
-      this.prisma.cart.update({
-        where: { id: cart.id },
-        data: {
-          status: CartStatus.CHECKOUT_PENDING,
-          paymentIntentId: intent.id,
-        },
-      }),
-    ]);
+    await this.figerEtEngager(cart.id, frozenPrices, intent.id);
 
     this.logger.log(`Checkout: cart=${cart.id} → page Stripe, ${intent.amount}¢`);
 
     return {
       cartId: cart.id,
+      mode: 'web',
       /** Adresse de la page de paiement Stripe — l'app l'ouvre, c'est tout. */
       checkoutUrl: intent.url,
       amountCents: intent.amount,
       currency: intent.currency,
       status: CartStatus.CHECKOUT_PENDING,
     };
+  }
+
+  /**
+   * Fige les prix et engage le panier — en UNE transaction.
+   *
+   * L'empreinte des prix et le changement d'état s'écrivent ensemble. Après ce
+   * commit, le panier est CHECKOUT_PENDING et son total est FIGÉ : le total de
+   * la future commande en découle, même si un produit change de prix entre le
+   * paiement et l'arrivée du webhook. Écrits ensemble, un panier ne peut jamais
+   * être OPEN-avec-empreinte, et `computeView()` ne fait confiance aux
+   * empreintes qu'une fois le panier sorti de OPEN.
+   *
+   * Partagé par les deux chemins de paiement : la feuille native et la page
+   * hébergée doivent laisser le panier dans le MÊME état, sans quoi la commande
+   * naîtrait différemment selon l'appareil du client.
+   */
+  private async figerEtEngager(
+    cartId: string,
+    prixFiges: { id: string; priceSnapshotCents: number }[],
+    paymentIntentId: string,
+  ): Promise<void> {
+    await this.prisma.$transaction([
+      ...prixFiges.map((fp) =>
+        this.prisma.cartItem.update({
+          where: { id: fp.id },
+          data: { priceSnapshotCents: fp.priceSnapshotCents },
+        }),
+      ),
+      this.prisma.cart.update({
+        where: { id: cartId },
+        data: { status: CartStatus.CHECKOUT_PENDING, paymentIntentId },
+      }),
+    ]);
   }
 
   /**

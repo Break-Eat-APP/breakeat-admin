@@ -166,6 +166,25 @@ module.exports = {
         enableCodeScanner: true,
       },
     ],
+    [
+      // Le paiement DANS l'application : une feuille native, pas une page web.
+      //
+      // La page hebergee par Stripe obligeait a sortir de l'app le temps du
+      // reglement, puis a y revenir par un rebond que le systeme n'honore pas
+      // toujours. Ici il n'y a rien a ouvrir et rien a quitter.
+      //
+      // `merchantIdentifier` est ce qui allume Apple Pay. Il n'est pose que
+      // s'il est fourni : l'identifiant marchand se cree dans le portail Apple
+      // et ne peut pas etre invente ici — en declarer un qui n'existe pas
+      // ferait echouer la signature de la build.
+      '@stripe/stripe-react-native',
+      {
+        ...(process.env.APPLE_MERCHANT_ID
+          ? { merchantIdentifier: process.env.APPLE_MERCHANT_ID }
+          : {}),
+        enableGooglePay: true,
+      },
+    ],
   ],
   extra: {
     eas: {

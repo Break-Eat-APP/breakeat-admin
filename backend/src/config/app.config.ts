@@ -47,6 +47,18 @@ export default registerAs('app', () => ({
 
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY ?? '',
+    /**
+     * La clé PUBLIABLE (`pk_test_…` / `pk_live_…`), servie à l'application.
+     *
+     * Elle est publique par construction — elle ne peut qu'ouvrir un paiement,
+     * jamais le lire ni le modifier. Elle est servie par l'API plutôt que gelée
+     * dans la build : elle suit ainsi le mode du serveur, et passer de test à
+     * production ne demande pas de relivrer l'app.
+     *
+     * Absente, la feuille de paiement native ne peut pas s'ouvrir : le serveur
+     * renvoie alors l'ancienne page hébergée, qui marche sans elle.
+     */
+    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY ?? '',
     webhookSecret: process.env.STRIPE_WEBHOOK_SECRET ?? '',
     apiVersion: process.env.STRIPE_API_VERSION ?? '2024-12-18.acacia',
     /**

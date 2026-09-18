@@ -101,6 +101,9 @@ async function bootstrap(): Promise<void> {
  *   • `PUBLIC_API_URL` absent ⇒ Stripe rappelle `localhost` au retour du
  *     paiement : l'app native ne revient jamais au premier plan, et le client
  *     reste sur la page de Stripe sans savoir si sa commande existe ;
+ *   • `STRIPE_PUBLISHABLE_KEY` absente ⇒ l'app ne peut pas ouvrir sa feuille de
+ *     paiement : le client repart sur la page hébergée, et sort de
+ *     l'application le temps de régler ;
  *   • `STRIPE_*` absent ⇒ plus aucun encaissement, donc plus aucune commande.
  *
  * Aucune de ces pannes ne se signale d'elle-même. Ce rapport les rend visibles
@@ -119,6 +122,7 @@ function verifierConfigurationProduction(logger: LoggerService): void {
     ['PUBLIC_WEB_URL', process.env.PUBLIC_WEB_URL],
     ['PUBLIC_API_URL', process.env.PUBLIC_API_URL],
     ['STRIPE_SECRET_KEY', process.env.STRIPE_SECRET_KEY],
+    ['STRIPE_PUBLISHABLE_KEY', process.env.STRIPE_PUBLISHABLE_KEY],
     ['STRIPE_WEBHOOK_SECRET', process.env.STRIPE_WEBHOOK_SECRET],
     ['STRIPE_CONNECT_RETURN_URL', process.env.STRIPE_CONNECT_RETURN_URL],
     ['STRIPE_CONNECT_REFRESH_URL', process.env.STRIPE_CONNECT_REFRESH_URL],

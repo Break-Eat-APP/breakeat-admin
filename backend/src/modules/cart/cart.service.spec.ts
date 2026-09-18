@@ -150,13 +150,23 @@ describe('CartService', () => {
           provide: StripeService,
           useValue: {
             createHostedCheckout: jest.fn(),
+            createPaymentIntent: jest.fn().mockResolvedValue({
+              id: 'pi_natif',
+              client_secret: 'pi_natif_secret_xyz',
+            }),
             retrievePaymentIntent: jest.fn(),
           },
         },
         {
-          // L'adresse de retour apres paiement — une valeur suffit ici.
+          // La clé publiable décide du chemin de paiement : avec elle, l'app
+          // ouvre sa propre feuille ; sans elle, on retombe sur la page
+          // hébergée. Les tests ci-dessous jouent les deux cas, donc le mock
+          // doit distinguer les clés au lieu de tout confondre.
           provide: ConfigService,
-          useValue: { get: () => 'https://app.breakeat.test' },
+          useValue: {
+            get: (cle: string) =>
+              cle === 'app.stripe.publishableKey' ? 'pk_test_123' : 'https://app.breakeat.test',
+          },
         },
         {
           provide: GroupsService,
@@ -461,7 +471,53 @@ describe('CartService', () => {
       expect(args.cancelUrl).toContain('/panier?annule=1');
     });
 
-    it('renvoie le client NATIF sur le pont, seul capable de rejoindre l’app', async () => {
+    it('paie EN NATIF sur telephone : aucune page, aucune sortie de l’app', async () => {
+      // L'exigence tenue ici : sur telephone, le client ne sort pas de
+      // l'application pour payer. Pas d'adresse a ouvrir, donc pas de
+      // navigateur, donc pas de retour a negocier.
+      setupValidCheckout();
+      const stripe = (
+        service as unknown as {
+          stripe: { createPaymentIntent: jest.Mock; createHostedCheckout: jest.Mock };
+        }
+      ).stripe;
+
+      const reponse = await service.checkout(CART_ID, USER_ID, 'native');
+
+      expect(reponse.mode).toBe('natif');
+      expect(reponse.clientSecret).toBe('pi_natif_secret_xyz');
+      expect(reponse.publishableKey).toBe('pk_test_123');
+      expect(reponse.checkoutUrl).toBeUndefined();
+      expect(stripe.createHostedCheckout).not.toHaveBeenCalled();
+
+      // Ce que le webhook lira pour faire naitre la commande. Sans `cartId`
+      // dans les metadonnees, l'argent serait encaisse et rien n'arriverait en
+      // cuisine — c'est le fil le plus fragile des deux chemins.
+      expect(stripe.createPaymentIntent.mock.calls[0][0].metadata.cartId).toBe(CART_ID);
+    });
+
+    it('engage le panier de la meme facon par les deux chemins', async () => {
+      // Le panier doit finir CHECKOUT_PENDING avec son intention, sinon la
+      // commande naitrait differemment selon l'appareil du client.
+      setupValidCheckout();
+
+      await service.checkout(CART_ID, USER_ID, 'native');
+
+      const ecritures = (prisma.$transaction as jest.Mock).mock.calls[0][0];
+      expect(prisma.cart.update).toHaveBeenCalledWith({
+        where: { id: CART_ID },
+        data: { status: CartStatus.CHECKOUT_PENDING, paymentIntentId: 'pi_natif' },
+      });
+      expect(ecritures.length).toBeGreaterThan(0);
+    });
+
+    it('sans cle publiable, retombe sur la page hebergee plutot que d’echouer', async () => {
+      // Un paiement impossible serait pire qu'un paiement qui sort de l'app :
+      // le repli garde le service debout le temps que la cle soit posee.
+      const config = (service as unknown as { config: { get: jest.Mock } }).config;
+      jest.spyOn(config, 'get').mockImplementation((cle: string) =>
+        cle === 'app.stripe.publishableKey' ? '' : 'https://app.breakeat.test',
+      );
       setupValidCheckout();
       const stripe = (service as unknown as { stripe: { createHostedCheckout: jest.Mock } }).stripe;
       stripe.createHostedCheckout.mockResolvedValue({
@@ -470,11 +526,12 @@ describe('CartService', () => {
         payment_intent: 'pi_test',
       });
 
-      await service.checkout(CART_ID, USER_ID, 'native');
+      const reponse = await service.checkout(CART_ID, USER_ID, 'native');
 
-      const args = stripe.createHostedCheckout.mock.calls[0][0];
+      expect(reponse.mode).toBe('web');
       // Stripe refuse un schema personnalise : le rebond vers `breakeat://` se
       // fait donc par une page a nous.
+      const args = stripe.createHostedCheckout.mock.calls[0][0];
       expect(args.successUrl).toContain('/paiement/retour');
       expect(args.successUrl).toContain('cible=app');
       expect(args.cancelUrl).toContain('etat=annule');

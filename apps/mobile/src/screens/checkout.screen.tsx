@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { THEME } from '@lib/theme';
 import {
   ActivityIndicator,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -29,6 +28,7 @@ import { useAuthStore } from '@store/auth.store';
 import { PageHeader } from '@components/page-header';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { showAlert } from '@lib/alert';
+import { payer } from '@lib/paiement';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Checkout'>;
 
@@ -42,61 +42,30 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Checkout'>;
 const MIN_PAYABLE_CENTS = 50;
 
 /**
- * Affiche la page de paiement dans l'application.
+ * Attend que le webhook Stripe ait cree la commande.
  *
- * Sur le web il n'y a pas de navigateur a ouvrir : on remplace la page en
- * cours. Stripe y renverra ensuite vers le site, pas vers `breakeat://`.
+ * La commande ne naît jamais dans l'app : elle naît du webhook, une fois
+ * l'argent encaisse. Apres la feuille native, c'est la seule chose qui reste a
+ * attendre — quelques centaines de millisecondes le plus souvent.
+ *
+ * `pageFermee` ne sert qu'au repli par page hebergee, ou le reglement se joue
+ * hors de notre vue : le sondage tourne alors PENDANT que la page est ouverte,
+ * et c'est lui qui la referme des que la commande existe. Sans cela, l'app
+ * attendait la fermeture, et cette fermeture dependait d'un rebond
+ * `breakeat://` qu'iOS ignore quand il n'est pas declenche par un appui.
+ *
+ * Deux echeances : cinq minutes tant que la page est ouverte (le client saisit
+ * sa carte), trente secondes une fois refermee — au-dela, ce n'est plus un
+ * delai de traitement, et mieux vaut le dire que laisser tourner un sablier.
  */
-async function ouvrirPaiement(url: string): Promise<void> {
-  if (Platform.OS === 'web') {
-    const g = globalThis as { location?: { assign?: (u: string) => void } };
-    g.location?.assign?.(url);
-    // La page va etre remplacee : plus rien ne s'executera apres.
-    await new Promise<void>((r) => setTimeout(r, 3_000));
-    return;
-  }
-  await WebBrowser.openBrowserAsync(url, {
-    // Aux couleurs de l'app : le client doit sentir qu'il n'a pas quitte
-    // Break Eat pour un site inconnu au moment de donner sa carte.
-    toolbarColor: THEME.bg,
-    controlsColor: THEME.orange,
-    dismissButtonStyle: 'cancel',
-  });
-}
-
-/**
- * Attend que le webhook Stripe ait cree la commande — PENDANT que la page de
- * paiement est encore ouverte.
- *
- * C'est tout l'interet : la commande ne naît pas du retour du navigateur, elle
- * naît du webhook. L'app n'a donc aucune raison d'attendre que la feuille se
- * referme pour savoir que c'est paye. Auparavant, le sondage ne demarrait
- * qu'apres fermeture, et cette fermeture dependait d'un rebond `breakeat://`
- * lance en JavaScript depuis la page de retour — qu'iOS bloque quand il n'est
- * pas declenche par un appui. Le client payait, restait devant une page web
- * « Paiement accepte », et devait revenir a la main : il avait le sentiment
- * d'avoir quitte l'application, parce que c'etait le cas.
- *
- * Desormais, des que la commande existe, l'app referme la feuille elle-meme.
- *
- * Deux echeances : tant que la page est ouverte, le client est peut-etre en
- * train de saisir sa carte, et cinq minutes ne sont pas de trop. Une fois la
- * page refermee, vingt secondes suffisent — au-dela, ce n'est plus un delai de
- * traitement, et mieux vaut le dire que laisser tourner un sablier.
- */
-async function attendreLaCommande(
-  cartId: string,
-  pageFermee: Promise<void>,
-  abandonner: () => boolean,
-) {
+async function attendreLaCommande(cartId: string, pageFermee: Promise<void>) {
   const DEBUT = Date.now();
   let finDeLattente = DEBUT + 5 * 60_000;
   void pageFermee.then(() => {
-    finDeLattente = Math.min(finDeLattente, Date.now() + 20_000);
+    finDeLattente = Math.min(finDeLattente, Date.now() + 30_000);
   });
 
   while (Date.now() < finDeLattente) {
-    if (abandonner()) return null;
     try {
       const reponse = await apiCommandeDuPanier(cartId);
       if (reponse.pret && reponse.order) {
@@ -228,32 +197,33 @@ export function CheckoutScreen({ navigation }: Props) {
         await apiSetCartPoints(cart.id, pointsToUse);
       }
 
-      // 3. Paiement REEL, sur une page hebergee par Stripe.
+      // 3. Le paiement — DANS l'application.
       setStep('Ouverture du paiement…');
-      const { checkoutUrl } = await apiCheckout(cart.id);
+      const paiement = await apiCheckout(cart.id);
 
-      // 4. Le reglement se fait SANS quitter l'application.
+      // 4. La feuille de paiement de Stripe s'ouvre PAR-DESSUS cet ecran.
       //
-      // `openBrowserAsync` presente la page de Stripe dans une feuille Safari
-      // integree : le client reste dans Break Eat, voit notre en-tete, et le
-      // retour se fait tout seul. `Linking.openURL` le catapultait dans Safari,
-      // d'ou rien ne le ramenait — il payait, puis restait bloque sur une page
-      // web en croyant que sa commande n'existait pas.
+      // Aucun navigateur, aucune adresse, aucun retour a negocier : le client
+      // voit Break Eat derriere, et l'app reprend la main des qu'il a paye.
+      // Aucun numero de carte ne traverse notre code : la feuille appartient au
+      // SDK de Stripe et ne nous rend qu'un oui ou un non.
       //
-      // La page reste HEBERGEE par Stripe : aucun numero de carte ne transite
-      // par notre code, et Apple Pay continue de fonctionner.
-      //
-      // On n'attend PAS que la feuille se referme : le sondage ci-dessous part
-      // tout de suite, en parallele, et c'est lui qui la refermera.
-      //
-      // Une ouverture qui echoue doit se dire tout de suite, et non au bout
-      // d'une attente : sans page de paiement, aucune commande ne peut naitre.
-      // `openBrowserAsync` refuse par exemple d'ouvrir une seconde feuille
-      // quand une premiere l'est deja — un double appui suffit.
-      const ouverture: { echec?: Error } = {};
-      const pageFermee = ouvrirPaiement(checkoutUrl).catch((e: unknown) => {
-        ouverture.echec = e instanceof Error ? e : new Error(String(e));
+      // Le repli par page hebergee ne vit plus que pour le navigateur — et pour
+      // le cas ou le serveur n'a pas de cle publiable. C'est `@lib/paiement`
+      // qui choisit, selon la plateforme.
+      const reglement = await payer({
+        mode: paiement.mode,
+        clientSecret: paiement.clientSecret,
+        publishableKey: paiement.publishableKey,
+        checkoutUrl: paiement.checkoutUrl,
+        libelle: 'Break Eat',
       });
+
+      if (reglement.issue === 'annule') {
+        // Renoncer n'est pas une panne. Le panier est intact, on ne l'efface
+        // pas, et rien ne doit s'afficher en rouge.
+        return;
+      }
 
       // 5. Attendre que la commande NAISSE.
       //
@@ -263,12 +233,7 @@ export function CheckoutScreen({ navigation }: Props) {
       // — mais il n'est pas nul, et afficher « aucune commande » pendant ce
       // temps-la ferait croire a un echec.
       setStep('Confirmation du paiement…');
-      const commande = await attendreLaCommande(
-        cart.id,
-        pageFermee,
-        () => ouverture.echec !== undefined,
-      );
-      if (ouverture.echec) throw ouverture.echec;
+      const commande = await attendreLaCommande(cart.id, reglement.pageFermee);
 
       if (!commande) {
         // Paiement peut-etre annule, peut-etre juste lent. On ne vide donc PAS

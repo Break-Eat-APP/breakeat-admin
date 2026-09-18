@@ -384,6 +384,29 @@ démarrage de la Live Activity, et le nouveau libellé du bouton d'arrivée.
 Côté serveur — donc actifs dès le déploiement, sans build : le numéro du jour
 rendu à l'app et le reçu (numéro du jour + référence + adresse du client).
 
+Et surtout la **phase 39** : le paiement ne passe plus par une page web du tout.
+La feuille de paiement de Stripe s'ouvre DANS l'application. C'est la build 16
+qui l'apporte — le serveur, lui, sait déjà ouvrir les deux chemins.
+
+### ⚠️ Avant la build 16 : une variable à poser sur Railway
+
+**`STRIPE_PUBLISHABLE_KEY`** — la clé PUBLIABLE (`pk_test_…` en test,
+`pk_live_…` en production), à prendre dans le tableau de bord Stripe, à côté de
+la clé secrète. Elle est publique par construction : elle ne peut qu'ouvrir un
+paiement, jamais le lire ni le modifier.
+
+Sans elle, l'app retombe sur la page hébergée — donc sort de l'application au
+moment de payer. Deux façons de le voir : le journal de démarrage liste la
+variable dans « Variables absentes », et chaque paiement écrit
+« STRIPE_PUBLISHABLE_KEY absente ».
+
+**Apple Pay** attend, lui, un identifiant marchand créé dans le portail Apple
+(Certificates, Identifiers & Profiles → Merchant IDs, par exemple
+`merchant.com.shapper.breakeat`), la capacité Apple Pay cochée sur l'App ID,
+puis `APPLE_MERCHANT_ID` dans le profil `beta` de `eas.json`. Le code s'allume
+tout seul dès qu'il est posé ; sans lui, le paiement par carte fonctionne, dans
+l'app.
+
 ## 🗃️ Archivés et supprimés — la règle
 
 **Archiver n'est pas bannir.** Un compte archivé ne se connecte plus, mais la

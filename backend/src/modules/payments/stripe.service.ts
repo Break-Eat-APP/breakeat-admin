@@ -261,38 +261,6 @@ export class StripeService implements OnModuleInit {
   // ─── PaymentIntents ──────────────────────────────────────────
 
   /**
-   * Creates a PaymentIntent with the supplier's Connect account as destination.
-   * La commission n'est jointe que si elle est configurée (zéro par défaut).
-   *
-   * @param amountCents total amount in cents (already includes everything)
-   * @param destinationAccountId the supplier's connected account
-   * @param idempotencyKey the cart id — guarantees no duplicate PaymentIntent
-   */
-  async createPaymentIntent(params: {
-    amountCents: number;
-    currency: string;
-    destinationAccountId: string;
-    idempotencyKey: string;
-    metadata?: Record<string, string>;
-  }): Promise<Stripe.PaymentIntent> {
-    const applicationFeeAmount = Math.floor((params.amountCents * this.platformFeeBps) / 10_000);
-
-    return this.appeler('creation du paiement', () =>
-      this.stripe.paymentIntents.create(
-        {
-          amount: params.amountCents,
-          currency: params.currency,
-          ...(applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {}),
-          transfer_data: { destination: params.destinationAccountId },
-          metadata: params.metadata,
-          automatic_payment_methods: { enabled: true },
-        },
-        { idempotencyKey: params.idempotencyKey },
-      ),
-    );
-  }
-
-  /**
    * Page de paiement HÉBERGÉE par Stripe, en AUTORISATION SEULE.
    *
    * Deux propriétés en font le cœur de « l'ardoise » :
@@ -363,6 +331,100 @@ export class StripeService implements OnModuleInit {
         { idempotencyKey: params.idempotencyKey },
       ),
     );
+  }
+
+  /**
+   * Le paiement SANS page web : une intention que l'application règle
+   * elle-même, dans sa propre feuille.
+   *
+   * La page hébergée (`createHostedCheckout`) reste le chemin du navigateur,
+   * où il n'y a pas de feuille native à ouvrir. Sur téléphone, elle imposait de
+   * sortir de l'app le temps du règlement, puis d'y revenir par un rebond que
+   * le système n'honore pas toujours. Ici il n'y a rien à ouvrir et rien à
+   * quitter : le client reste dans Break Eat du début à la fin.
+   *
+   * Tout le reste est identique — même destination, même commission, mêmes
+   * métadonnées. C'est capital : la commande naît de `payment_intent.succeeded`
+   * et de `metadata.cartId`, et ce webhook ne fait aucune différence entre les
+   * deux chemins.
+   *
+   * `payment_method_types: ['card']` plutôt que le choix automatique : Apple Pay
+   * et Google Pay passent par `card`, et un moyen de paiement différé (SEPA,
+   * virement) livrerait une commande avant d'être encaissé.
+   */
+  async createPaymentIntent(params: {
+    amountCents: number;
+    currency: string;
+    destinationAccountId: string;
+    idempotencyKey: string;
+    metadata?: Record<string, string>;
+    /** Intention déjà ouverte pour ce panier, à réutiliser si elle le permet. */
+    existingIntentId?: string | null;
+  }): Promise<Stripe.PaymentIntent> {
+    const applicationFeeAmount = Math.floor((params.amountCents * this.platformFeeBps) / 10_000);
+    const commission =
+      applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {};
+
+    // Le client revient sur l'écran de paiement : il doit retrouver LA MÊME
+    // intention, pas une seconde. La clé d'idempotence n'y suffit pas — le
+    // montant a pu changer entre-temps (points de fidélité), et Stripe refuse
+    // alors la clé déjà vue avec des paramètres différents.
+    if (params.existingIntentId) {
+      const reprise = await this.reprendreIntention(
+        params.existingIntentId,
+        params.amountCents,
+        applicationFeeAmount,
+      );
+      if (reprise) return reprise;
+    }
+
+    return this.appeler('ouverture du paiement', () =>
+      this.stripe.paymentIntents.create(
+        {
+          amount: params.amountCents,
+          currency: params.currency,
+          payment_method_types: ['card'],
+          capture_method: 'automatic',
+          ...commission,
+          transfer_data: { destination: params.destinationAccountId },
+          metadata: params.metadata,
+        },
+        { idempotencyKey: params.idempotencyKey },
+      ),
+    );
+  }
+
+  /**
+   * Une intention encore réglable, remise au bon montant — ou `null`.
+   *
+   * `null` couvre les intentions déjà payées, annulées ou en cours de
+   * traitement : on n'y touche pas, et l'appelant en ouvre une neuve.
+   */
+  private async reprendreIntention(
+    intentId: string,
+    amountCents: number,
+    applicationFeeAmount: number,
+  ): Promise<Stripe.PaymentIntent | null> {
+    const REGLABLES = ['requires_payment_method', 'requires_confirmation', 'requires_action'];
+    try {
+      const intent = await this.stripe.paymentIntents.retrieve(intentId);
+      if (!REGLABLES.includes(intent.status)) return null;
+      if (intent.amount === amountCents) return intent;
+
+      return await this.stripe.paymentIntents.update(intentId, {
+        amount: amountCents,
+        ...(applicationFeeAmount > 0 ? { application_fee_amount: applicationFeeAmount } : {}),
+      });
+    } catch (e: unknown) {
+      // Intention introuvable (clé Stripe changée, environnement différent) :
+      // ce n'est pas une panne, c'est une raison d'en ouvrir une neuve.
+      this.logger.warn(
+        `Intention ${intentId} inutilisable, une nouvelle sera ouverte : ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+      return null;
+    }
   }
 
   /**
