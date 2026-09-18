@@ -538,12 +538,22 @@ réfère. Le révoquer **remet l'identifiant partagé exactement dans son état
 d'avant**, et lève la seule incertitude restante (voir ci-dessous). À faire une
 fois le nouvel identifiant en place, pas avant — rien ne presse.
 
-**L'incertitude, nommée :** quand un identifiant marchand porte DEUX certificats
-actifs, lequel Apple utilise-t-il pour chiffrer ? Si c'était le plus récent, le
-processeur de l'ancienne application ne saurait pas le déchiffrer. Le contrôle
-qui tranche, et qui coûte deux minutes : **l'application publiée propose-t-elle
-Apple Pay ?** Si non, la question tombe. Si oui, vérifier qu'un paiement Apple
-Pay est passé chez son processeur depuis le 18/09.
+**Incertitude levée le 18/09 par le portail Apple lui-même.** La page du
+certificat porte trois boutons : *Activate*, *Revoke*, *Download*. L'activation
+est donc un **acte explicite**, et Apple prévient qu'activer révoque le ou les
+certificats précédents.
+
+Deux conséquences, et elles règlent la question posée plus haut :
+
+- le certificat du 18/09 **n'est pas activé** : c'est toujours l'ancien
+  (Bruno Doucende, exp. 02/10/2027) qui chiffre les paiements de cet identifiant.
+  **L'application publiée n'a donc rien subi.** Le seul fait de créer un
+  certificat ne change rien — c'est l'activation qui bascule ;
+- et c'est bien l'activation qui casserait l'ancienne application, puisqu'elle
+  révoquerait son certificat. D'où l'identifiant marchand séparé : sur un
+  identifiant neuf, activer ne révoque rien.
+
+⛔ **Ne pas appuyer sur *Activate*** sur `merchant.com.shapper.breakeat`.
 
 La chaîne technique, elle, est vérifiée : `expo config` confirme que le plugin
 reçoit l'identifiant, que le droit iOS `com.apple.developer.in-app-payments` le
