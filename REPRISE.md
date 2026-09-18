@@ -16,7 +16,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-09-17 (produits manquants, bouton HS ; comptes archivés, purge de la démonstration)_
+_Dernière mise à jour : 2026-09-18 (statut d'organisation respecté ; paiement DANS l'app, Apple Pay câblé ; reçu et numéro du jour)_
 
 ## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
