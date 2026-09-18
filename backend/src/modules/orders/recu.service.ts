@@ -111,7 +111,7 @@ export class RecuService {
            margin-top: 12px; font-weight: 800; font-size: 18px; }
   .quand { color: #9a918b; font-size: 12.5px; margin-top: 20px; line-height: 1.6; }
   .imprimer { display: block; width: 100%; margin: 22px auto 0; max-width: 420px;
-              background: #FC4002; color: #fff; border: 0; border-radius: 999px;
+              background: #FD4000; color: #fff; border: 0; border-radius: 999px;
               padding: 15px; font-size: 16px; font-weight: 700; cursor: pointer;
               font-family: inherit; }
   @media print {

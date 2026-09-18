@@ -5,6 +5,23 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.68.1] — 2026-09-18 — L'orange vif devient #FD4000
+
+Sur les cinq surfaces à la fois : application, Live Activity, poste opérateur,
+back-office, tableau de bord manager, et les deux pages servies par l'API (le
+reçu et le retour de paiement).
+
+La même couleur s'écrivait de trois façons — `#FC4002`, `rgba(252, 64, 2, …)`
+pour les ombres et les voiles, et des fractions dans le Swift de la Live
+Activity. N'en traiter qu'une aurait laissé deux nuances côte à côte.
+
+Non touchés : `orangeDark` et `orangeSoft`, qui sont des nuances distinctes et
+non l'orange vif ; les journaux (ce fichier compris), qui racontent ce qui était
+vrai à leur date ; et `phases de DEV/`, générateurs historiques qu'aucun build
+n'exécute.
+
+---
+
 ## [0.68.0] — 2026-09-18 — Chaque club lit ses données lui-même
 
 **« Mes clients »**, nouvelle page du tableau de bord. Le club choisit son lieu

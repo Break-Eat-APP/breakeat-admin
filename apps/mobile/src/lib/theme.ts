@@ -12,10 +12,10 @@ import { Platform, type ViewStyle } from 'react-native';
 
 export const THEME = {
   // Accent orange
-  orange: '#FC4002',
+  orange: '#FD4000',
   orangeDark: '#DA3702',
   orangeSoft: '#FDB9A3',
-  orangeTint: 'rgba(252, 64, 2, 0.08)',
+  orangeTint: 'rgba(253, 64, 0, 0.08)',
 
   // Neutres chauds
   ink: '#241f1d', // texte principal (anthracite chaud)

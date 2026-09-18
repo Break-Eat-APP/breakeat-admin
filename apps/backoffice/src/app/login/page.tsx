@@ -136,7 +136,7 @@ export default function LoginPage() {
             }}
             onFocus={(e) => {
               e.target.style.borderColor = ORANGE;
-              e.target.style.boxShadow = '0 0 0 3px rgba(252, 64, 2, 0.13)';
+              e.target.style.boxShadow = '0 0 0 3px rgba(253, 64, 0, 0.13)';
             }}
             onBlur={(e) => {
               e.target.style.borderColor = BORDER;
@@ -167,7 +167,7 @@ export default function LoginPage() {
             }}
             onFocus={(e) => {
               e.target.style.borderColor = ORANGE;
-              e.target.style.boxShadow = '0 0 0 3px rgba(252, 64, 2, 0.13)';
+              e.target.style.boxShadow = '0 0 0 3px rgba(253, 64, 0, 0.13)';
             }}
             onBlur={(e) => {
               e.target.style.borderColor = BORDER;

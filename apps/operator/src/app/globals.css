@@ -1,5 +1,5 @@
 /* Refonte v3 — Break Eat operator ("chaleureux premium").
-   Brand: warm off-white canvas (#fcfaf8), vivid orange accents (#FC4002).
+   Brand: warm off-white canvas (#fcfaf8), vivid orange accents (#FD4000).
    Font: Inter partout. Design tokens live in @break-eat/brand (BRAND). */
 *, *::before, *::after { box-sizing: border-box; }
 
@@ -21,8 +21,8 @@ input::placeholder { color: #b8ada6; }
    `prefers-reduced-motion` : on garde un halo fixe (l'info reste visible sans
    animation) pour les personnes sensibles au mouvement. */
 @keyframes breakeat-arrived-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(252, 64, 2, 0.55); }
-  50%      { box-shadow: 0 0 0 7px rgba(252, 64, 2, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(253, 64, 0, 0.55); }
+  50%      { box-shadow: 0 0 0 7px rgba(253, 64, 0, 0); }
 }
 
 .breakeat-arrived {
@@ -32,6 +32,6 @@ input::placeholder { color: #b8ada6; }
 @media (prefers-reduced-motion: reduce) {
   .breakeat-arrived {
     animation: none;
-    box-shadow: 0 0 0 3px rgba(252, 64, 2, 0.45);
+    box-shadow: 0 0 0 3px rgba(253, 64, 0, 0.45);
   }
 }

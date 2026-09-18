@@ -122,7 +122,7 @@ export function OrderCard({
             display: 'flex',
             alignItems: 'center',
             gap: 6,
-            background: 'rgba(252, 64, 2, 0.10)',
+            background: 'rgba(253, 64, 0, 0.10)',
             color: BRAND.orangeDark,
             border: `1px solid ${BRAND.orange}`,
             borderRadius: 8,

@@ -19,12 +19,12 @@ export type StatusVariant =
  * Single source of truth for OrderStatus colors / labels across the operator
  * board (StatusBadge, OrderCard, DashboardColumn all import from here).
  *
- * Refonte v2 palette — brand-coherent. PAID = brand orange (#FC4002) because a
+ * Refonte v2 palette — brand-coherent. PAID = brand orange (#FD4000) because a
  * new order IS the primary attention state; the other statuses keep a refined,
  * muted semantic code so operators can triage at a glance (standard for a KDS).
  */
 export const STATUS_COLORS: Record<StatusVariant, string> = {
-  PAID:      '#FC4002', // brand orange — nouvelle commande, à traiter
+  PAID:      '#FD4000', // brand orange — nouvelle commande, à traiter
   ACCEPTED:  '#2563EB', // bleu — acceptée
   PREPARING: '#7C3AED', // violet — en préparation
   READY:     '#059669', // vert — prête au retrait

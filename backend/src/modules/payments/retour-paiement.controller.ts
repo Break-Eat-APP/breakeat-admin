@@ -62,7 +62,7 @@ export class RetourPaiementController {
   .c{max-width:340px}
   h1{font-size:21px;margin:0 0 8px;font-weight:700}
   p{font-size:15px;line-height:1.5;color:#6b625c;margin:0 0 24px}
-  a{display:inline-block;background:#FC4002;color:#fff;text-decoration:none;
+  a{display:inline-block;background:#FD4000;color:#fff;text-decoration:none;
     border-radius:10px;padding:14px 26px;font-size:16px;font-weight:700}
 </style>
 </head>

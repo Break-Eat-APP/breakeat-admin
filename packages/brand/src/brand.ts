@@ -7,7 +7,7 @@
 // BRAND. No screen-by-screen hunting required.
 //
 // Authoritative direction (07/06/2026 — remplace "Fredoka partout / blanc pur") :
-//   • Orange       = #FC4002  (vivid — accents & CTAs, employé avec parcimonie)
+//   • Orange       = #FD4000  (vivid — accents & CTAs, employé avec parcimonie)
 //   • Police       = Inter (UI pro, lisible) — chaque app câble --font-sans
 //                    dans son app/layout.tsx. Fini Fredoka (jugée trop "enfant").
 //   • Direction    = "chaleureux premium" : canevas blanc cassé chaud,
@@ -18,10 +18,10 @@
 
 export const BRAND = {
   // Core orange
-  orange: '#FC4002', // primary / accents / CTAs
+  orange: '#FD4000', // primary / accents / CTAs
   orangeDark: '#DA3702', // hover & pressed states
   orangeSoft: '#FDB9A3', // disabled buttons / soft fills
-  orangeTint: 'rgba(252, 64, 2, 0.08)', // faint background wash (use sparingly)
+  orangeTint: 'rgba(253, 64, 0, 0.08)', // faint background wash (use sparingly)
 
   // Neutrals (warm) — "chaleureux premium"
   //
@@ -44,7 +44,7 @@ export const BRAND = {
   // reconnaît d'abord à ses plans — ce qui est posé sur quoi.
   shadowCard: '0 1px 2px rgba(36, 31, 29, 0.05), 0 4px 16px rgba(36, 31, 29, 0.07)',
   shadowSoft: '0 2px 4px rgba(36, 31, 29, 0.05), 0 14px 36px rgba(36, 31, 29, 0.10)',
-  shadowButton: '0 6px 18px rgba(252, 64, 2, 0.26)', // CTA orange — lueur de marque
+  shadowButton: '0 6px 18px rgba(253, 64, 0, 0.26)', // CTA orange — lueur de marque
 
   // Couleurs d'ÉTAT. Séparées de l'accent : l'orange dit « la marque », le vert
   // et le rouge disent « ce qui se passe ». Les confondre rend un tableau de
@@ -70,7 +70,7 @@ export const BRAND = {
    * plutôt que de document.
    */
   sectionTitle: {
-    color: '#FC4002',
+    color: '#FD4000',
     fontFamily: 'var(--font-display), var(--font-sans), sans-serif',
     fontSize: 12,
     fontWeight: 700,

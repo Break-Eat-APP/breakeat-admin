@@ -338,7 +338,7 @@ export function CheckoutScreen({ navigation }: Props) {
                 <Switch
                   value={usePoints}
                   onValueChange={setUsePoints}
-                  trackColor={{ false: THEME.bgSubtle, true: '#FC4002' }}
+                  trackColor={{ false: THEME.bgSubtle, true: '#FD4000' }}
                   thumbColor="#fff"
                 />
               </View>
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
   loyaltyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8 },
   loyaltyLabel: { color: THEME.ink, fontSize: 14, fontWeight: '600' },
   loyaltyHint: { color: THEME.inkSoft, fontSize: 12.5, marginTop: 2, lineHeight: 17 },
-  loyaltyEarn: { color: '#FC4002', fontSize: 12.5, marginTop: 8, fontWeight: '600' },
+  loyaltyEarn: { color: '#FD4000', fontSize: 12.5, marginTop: 8, fontWeight: '600' },
   totalLabel: { color: THEME.ink, fontSize: 16, fontWeight: '700' },
   totalValue: { color: THEME.orange, fontSize: 22, fontWeight: '800' },
 

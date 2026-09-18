@@ -8,7 +8,7 @@ import WidgetKit
 /// Redéclarées ici car l'extension est un binaire séparé : elle ne partage ni
 /// le bundle JavaScript ni les assets de l'application.
 private enum Brand {
-  static let orange = Color(red: 0.988, green: 0.251, blue: 0.008) // #FC4002
+  static let orange = Color(red: 0.992, green: 0.251, blue: 0.000) // #FD4000
   static let green = Color(red: 0.086, green: 0.639, blue: 0.290)  // #16A34A
   static let ink = Color(red: 0.141, green: 0.122, blue: 0.114)    // #241F1D
   static let inkSoft = Color(red: 0.420, green: 0.392, blue: 0.376) // #6B6460

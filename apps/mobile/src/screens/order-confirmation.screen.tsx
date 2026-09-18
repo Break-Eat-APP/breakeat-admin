@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
 
   actions: { width: '100%', gap: 12 },
   planBtn: {
-    backgroundColor: '#FC4002',
+    backgroundColor: '#FD4000',
     paddingVertical: 16,
     borderRadius: 14,
     flexDirection: 'row',

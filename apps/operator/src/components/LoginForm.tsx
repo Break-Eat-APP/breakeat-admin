@@ -5,7 +5,7 @@ import { BRAND, BreakEatLogo } from '@break-eat/brand';
 import { login } from '@/lib/api/orders-client';
 
 /**
- * Shared operator login form (refonte v2 — blanc / orange #FC4002).
+ * Shared operator login form (refonte v2 — blanc / orange #FD4000).
  *
  * Single source for the operator login UI — used by both the home page
  * (event selector) and the per-event dashboard, so the two surfaces never
@@ -100,7 +100,7 @@ export function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
           }}
           onFocus={(e) => {
             e.target.style.borderColor = BRAND.orange;
-            e.target.style.boxShadow = '0 0 0 3px rgba(252, 64, 2, 0.13)';
+            e.target.style.boxShadow = '0 0 0 3px rgba(253, 64, 0, 0.13)';
           }}
           onBlur={(e) => {
             e.target.style.borderColor = BRAND.border;
@@ -127,7 +127,7 @@ export function LoginForm({ onLogin }: { onLogin: (token: string) => void }) {
           }}
           onFocus={(e) => {
             e.target.style.borderColor = BRAND.orange;
-            e.target.style.boxShadow = '0 0 0 3px rgba(252, 64, 2, 0.13)';
+            e.target.style.boxShadow = '0 0 0 3px rgba(253, 64, 0, 0.13)';
           }}
           onBlur={(e) => {
             e.target.style.borderColor = BRAND.border;

@@ -319,11 +319,11 @@ export default function OrganizationDetailPage({
                   )}
                 </div>
               </Field>
-              <Field label="Couleur principale (hex, ex : #FC4002)">
+              <Field label="Couleur principale (hex, ex : #FD4000)">
                 <input
                   value={primaryColor}
                   onChange={(e) => setPrimaryColor(e.target.value)}
-                  placeholder="#FC4002"
+                  placeholder="#FD4000"
                   style={inputStyle}
                 />
               </Field>
