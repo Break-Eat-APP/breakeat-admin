@@ -416,10 +416,23 @@ Le code est prêt : il s'allume dès que `APPLE_MERCHANT_ID` existe, et reste
 silencieux sans lui. Ce qui manque ne peut se faire que depuis les comptes
 Apple et Stripe.
 
-**1. ✅ FAIT** — `merchant.com.shapper.breakeat` existe déjà, créé du temps de
-l'application précédente, avec un certificat *Apple Pay Payment Processing*
-valable jusqu'au **02/10/2027**. À renouveler avant cette date : un certificat
-expiré n'affiche aucune erreur, Apple Pay disparaît simplement de la feuille.
+**1. ✅ FAIT** — `merchant.com.shapper.breakeat` existe, créé du temps de
+l'application précédente. Il porte maintenant **deux** certificats *Apple Pay
+Payment Processing* :
+
+| Certificat | Émis | Expire | Pour |
+|---|---|---|---|
+| ancien (Synertic) | — | 02/10/2027 | l'application précédente |
+| nouveau (Notta LLC) | 18/09/2026 | **17/10/2028** | Break Eat + Stripe |
+
+⚠️ **Deux est le maximum** qu'Apple autorise par identifiant marchand. Si un
+troisième devenait nécessaire — par exemple un certificat distinct pour le mode
+production de Stripe — il faudrait en révoquer un. **Ne pas révoquer l'ancien
+sans vérifier** : l'application publiée sur le store (1.0.10) peut encore s'en
+servir, et Apple Pay y tomberait en panne sans le moindre message.
+
+Un certificat expiré n'affiche aucune erreur non plus : Apple Pay disparaît
+simplement de la feuille. D'où les dates ci-dessus.
 
 `APPLE_MERCHANT_ID` est posé dans `eas.json`, profils `beta` et `production`
 (tous deux sur le bundle `com.shapper.breakeat`). PAS sur `preview`, qui porte
@@ -451,8 +464,13 @@ La vérification : Stripe → Paramètres → Moyens de paiement → **Apple Pay
 - **Sinon** : ajouter l'application iOS. Stripe fournit une demande de
   certificat (`.certSigningRequest`), on la téléverse dans Apple sur ce Merchant
   ID (*Apple Pay Payment Processing Certificate* → Create Certificate), Apple
-  rend un `.cer` qu'on redonne à Stripe. Un identifiant marchand accepte **deux**
-  certificats : en ajouter un ne casse pas celui de l'ancienne application.
+  rend un `.cer` qu'on redonne à Stripe.
+
+**Fait le 18/09/2026** : le certificat a été produit sous l'équipe `2A5L298Q4C`
+(Notta LLC), au nom de `merchant.com.shapper.breakeat` — les deux correspondent
+à `eas.json`. Il ne reste qu'à le **remettre à Stripe**, sur l'écran même qui a
+fourni la demande : un certificat qui reste dans le dossier Téléchargements ne
+sert à rien, et Apple Pay échouerait après que le client a posé son doigt.
 
 À vérifier **dans chaque mode** : test et production sont deux comptes distincts
 aux yeux de Stripe.
