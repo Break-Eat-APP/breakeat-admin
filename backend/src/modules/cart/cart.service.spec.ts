@@ -10,8 +10,7 @@ import {
   EventStatus,
   ProductStatus,
   SlotStatus,
-  StripeAccountStatus,
-} from '@prisma/client';
+  StripeAccountStatus, OrgStatus } from '@prisma/client';
 import { CartService } from './cart.service';
 import { SlotsService } from '../slots/slots.service';
 import { PrismaService } from '../../database/prisma.service';
@@ -129,6 +128,9 @@ describe('CartService', () => {
             slot: { findUnique: jest.fn() },
             organization: {
               findUnique: jest.fn().mockResolvedValue({
+                // `status` : un club SUSPENDU ne prend plus de commande (le
+                // statut n'était lu nulle part avant le 18/09/2026).
+                status: OrgStatus.ACTIVE,
                 stripeAccountId: 'acct_club',
                 stripeAccountStatus: StripeAccountStatus.ACTIVE,
               }),
@@ -267,6 +269,17 @@ describe('CartService', () => {
       await expect(
         service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID }),
       ).rejects.toThrow(/fermée/);
+    });
+
+    it('refuse un club SUSPENDU, et le dit au client sans parler de suspension', async () => {
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
+      (prisma.organization.findUnique as jest.Mock).mockResolvedValue({
+        status: OrgStatus.SUSPENDED,
+      });
+
+      await expect(
+        service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID }),
+      ).rejects.toThrow(/ne prend pas de commande/);
     });
 
     it('choisit le comptoir de la buvette quand le client n’en désigne aucun', async () => {

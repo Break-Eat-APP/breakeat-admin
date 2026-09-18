@@ -203,6 +203,9 @@ export default function DashboardPage() {
       try {
         const moi = await fetchMeWithMemberships(token);
         if (annule) return;
+        // Club suspendu : plus aucune nouvelle commande n'arrivera. Le dire,
+        // sinon le comptoir attend devant un écran vide sans savoir pourquoi.
+        setClubSuspendu(moi.memberships.some((m) => m.organization.status !== 'ACTIVE'));
         const epingle = moi.memberships.find((m) => m.supplierId);
         if (epingle?.supplierId) {
           setSupplierId(epingle.supplierId);
@@ -310,6 +313,7 @@ export default function DashboardPage() {
   // Chaque signalement de produit manquant peut en passer un en HS : le
   // bandeau « Hors carte » se relit aussitôt.
   const [versionHs, setVersionHs] = useState(0);
+  const [clubSuspendu, setClubSuspendu] = useState(false);
 
   // Récap produits — masqué par défaut, ouvert à la demande pendant le service.
   const [recapOpen, setRecapOpen] = useState(false);
@@ -565,6 +569,22 @@ export default function DashboardPage() {
           Placés juste sous l’en-tête : c’est le premier réglage qu’on
           touche en prenant son poste, avant même de regarder la file. */}
       {token && <SlotBar eventId={eventId} token={token} supplierId={supplierId} />}
+
+      {clubSuspendu && (
+        <div
+          style={{
+            background: '#fef2f2',
+            borderBottom: '1px solid rgba(185, 28, 28, 0.25)',
+            color: '#7f1d1d',
+            padding: '8px 16px',
+            fontSize: 12.5,
+            fontFamily: BRAND.font,
+          }}
+        >
+          <strong>Club suspendu</strong> — aucune nouvelle commande n’arrivera. Les commandes
+          déjà payées restent à préparer et à remettre.
+        </div>
+      )}
 
       {/* Les produits retirés de la carte, à remettre en vente d'un geste. */}
       {token && (

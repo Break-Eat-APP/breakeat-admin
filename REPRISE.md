@@ -116,12 +116,11 @@ l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
       Apple crée un compte neuf et l'ancien rend son adresse — le réactiver
       ensuite demandera de supprimer d'abord le compte neuf.
 
-00000. **Le statut d'organisation n'est vérifié nulle part.** « Désactiver » dans
-       le back-office ne fait que changer une étiquette : une organisation
-       suspendue reste visible et commandable. Le faire respecter (découverte,
-       panier, tableaux de bord) est prêt à écrire, mais demande d'abord de
-       vérifier dans back-office → Organisations qu'aucun club en service n'est
-       marqué suspendu — sinon il disparaîtrait de l'app.
+00000. ✅ **FAIT le 18/09/2026** — le statut d'organisation est désormais
+       respecté : un club suspendu disparaît de la recherche, son événement
+       devient introuvable, et ni panier ni paiement ne passent. Ses écrans
+       d'équipe restent ouverts (les commandes payées doivent être servies),
+       avec un bandeau qui l'explique. Voir `ENGINEERING_MANUAL.md`, phase 37.
 
 00. **`APPLE_CLIENT_IDS` sur Railway** —
     `com.shapper.breakeat,com.shapper.breakeat.preview`.

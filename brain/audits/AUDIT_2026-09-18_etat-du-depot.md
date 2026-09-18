@@ -55,8 +55,8 @@ réserves sont écrites en commentaires explicites ou dans `ENGINEERING_MANUAL.m
 
 | Suite | Nombre | Commande |
 |---|---|---|
-| Unitaires backend | **543** (44 fichiers) | `pnpm --filter @break-eat/backend test` |
-| Intégration, base réelle | **37** (2 fichiers) | `pnpm test:integration` + `DATABASE_URL_TEST` |
+| Unitaires backend | **544** (44 fichiers) | `pnpm --filter @break-eat/backend test` |
+| Intégration, base réelle | **44** (3 fichiers) | `pnpm test:integration` + `DATABASE_URL_TEST` |
 | Applications (mobile, web) | **0** | — |
 
 Les tests d'intégration tournent sur un Postgres construit par
@@ -84,11 +84,9 @@ Turbo. Deux autres workflows : déploiement Vercel, build EAS de prévisualisati
 
 ### À traiter bientôt
 
-1. **Le statut d'une organisation n'est vérifié nulle part.** « Désactiver » dans
-   le back-office ne change qu'une étiquette : une organisation suspendue reste
-   visible dans l'app et commandable. Le correctif est prêt à écrire, mais
-   demande d'abord de vérifier qu'aucun club en service n'est marqué suspendu —
-   sinon il disparaîtrait de l'application.
+1. ~~Le statut d'une organisation n'est vérifié nulle part.~~ **Corrigé le
+   18/09**, après vérification qu'aucun club en service n'était suspendu
+   (phase 37). Reste ci-dessous par ordre d'urgence.
 2. **Le back-office ne renouvelle pas sa session** : il déconnecte au bout de
    15 minutes. Le dashboard manager, le poste et l'app ont été corrigés le 16/09
    (une seule demande de renouvellement à la fois) ; le back-office, lui, n'a
@@ -98,9 +96,9 @@ Turbo. Deux autres workflows : déploiement Vercel, build EAS de prévisualisati
 
 ### À surveiller
 
-4. **Les commandes de démonstration** (`DEMO-…`) restent en base tant que la
-   purge n'a pas été lancée depuis le back-office : elles comptent comme payées
-   et gonflent le chiffre d'affaires et la TVA.
+4. ~~Les commandes de démonstration~~ **purgées le 18/09** depuis le back-office.
+   L'encart ne réapparaîtra que si de nouvelles commandes `DEMO-` surgissaient —
+   ce que plus aucun code ne crée.
 5. **`schema.prisma` diverge du SQL des migrations** par endroits (un `Restrict`
    annoncé au schéma est un `SET NULL` en base). La base fait foi ; le schéma
    sert de vue d'ensemble. À aligner un jour, migration par migration.
@@ -152,10 +150,12 @@ gênent aucun build — mais ils ne sont plus tenus à jour.
 
 ## 7. En attente d'une décision ou d'une action
 
-1. **Build 16** — non lancée. Elle apporterait sur le téléphone : la Live
-   Activity réordonnée (plus de bouton vert coupé, plus de « Retrait prévu à
-   00:00 », numéro de commande à la place de l'heure) et le bandeau « produit
-   manquant » dans l'écran **Suivi**. Tout le reste est déjà actif côté serveur.
-2. **Purger la démonstration** — back-office → Vue d'ensemble. Irréversible.
-3. **Vérifier les statuts d'organisation** — back-office → Organisations, avant
-   de faire respecter le statut (point 1 de la dette).
+1. **Build 16** — non lancée, seul point encore ouvert. Elle apporterait sur le
+   téléphone : la Live Activity réordonnée (plus de bouton vert coupé, plus de
+   « Retrait prévu à 00:00 », numéro de commande à la place de l'heure) et le
+   bandeau « produit manquant » dans l'écran **Suivi**. Tout le reste est déjà
+   actif côté serveur.
+
+Faits dans la même journée : la purge de la démonstration (back-office) et la
+vérification des statuts d'organisation, qui a permis de faire respecter ce
+statut (phase 37).

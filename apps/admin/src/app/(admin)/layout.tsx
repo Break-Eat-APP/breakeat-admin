@@ -24,6 +24,7 @@ import {
   getOrgName,
   getStoredUser,
   clearSession,
+  apiMeWithMemberships,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 import { BreakEatLogo } from '@/components/brand/BreakEatLogo';
@@ -102,6 +103,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [ready, setReady] = useState(false);
   const [orgName, setOrgName] = useState('');
   const [userName, setUserName] = useState('');
+  // Une organisation suspendue n'apparaît plus dans l'app et ne prend plus de
+  // commande. Sans ce bandeau, le club constaterait un silence sans le
+  // comprendre — et chercherait la panne du mauvais côté.
+  const [suspendue, setSuspendue] = useState(false);
 
   useEffect(() => {
     const token = getToken();
@@ -113,6 +118,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const user = getStoredUser();
     if (user) setUserName(user.displayName ?? user.email);
     setReady(true);
+
+    const orgId = getOrgId();
+    if (!orgId) return;
+    apiMeWithMemberships()
+      .then((moi) => {
+        const mienne = moi.memberships.find((m) => m.organizationId === orgId);
+        setSuspendue(Boolean(mienne) && mienne?.organization.status !== 'ACTIVE');
+      })
+      .catch(() => {
+        // Information secondaire : son absence ne doit pas empêcher de
+        // travailler.
+      });
   }, [router]);
 
   function handleLogout() {
@@ -337,7 +354,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* ─── Main content ─────────────────────────────────────────────────── */}
-      <main style={{ flex: 1, overflowY: 'auto', minWidth: 0, background: BRAND.bg }}>{children}</main>
+      <main style={{ flex: 1, overflowY: 'auto', minWidth: 0, background: BRAND.bg }}>
+        {suspendue && (
+          <div
+            style={{
+              background: '#fef2f2',
+              border: '1px solid rgba(185, 28, 28, 0.25)',
+              borderLeft: '4px solid #b91c1c',
+              borderRadius: 12,
+              padding: '12px 16px',
+              margin: '16px 24px 0',
+              color: '#7f1d1d',
+              fontSize: 13.5,
+              lineHeight: 1.5,
+            }}
+          >
+            <strong>Organisation suspendue.</strong> Votre lieu n’apparaît plus dans
+            l’application et n’accepte plus de commande. Vos écrans restent ouverts : les
+            commandes déjà payées se préparent et se remettent normalement.
+          </div>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

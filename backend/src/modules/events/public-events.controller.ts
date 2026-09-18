@@ -14,6 +14,7 @@ import { SlotTemplatesService } from '../slots/slot-templates.service';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
+import { OrgStatus } from '@prisma/client';
 
 /**
  * PublicEventsController — read-only endpoints for mobile customers.
@@ -48,6 +49,17 @@ export class PublicEventsController {
   private async assertAccessible(eventId: string, user?: JwtPayload): Promise<void> {
     const allowed = await this.groupsService.canAccessEvent(eventId, user?.sub ?? null);
     if (!allowed) throw new NotFoundException('Event not found');
+
+    // Club suspendu : l'événement devient introuvable, comme pour un événement
+    // privé auquel on n'est pas invité. On ne dit pas « suspendu » : l'état d'un
+    // compte client ne regarde pas le public.
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { organization: { select: { status: true } } },
+    });
+    if (event?.organization.status !== OrgStatus.ACTIVE) {
+      throw new NotFoundException('Event not found');
+    }
   }
 
   /**

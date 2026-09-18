@@ -5,6 +5,29 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.65.0] — 2026-09-18 — Suspendre un club suspend vraiment
+
+`OrgStatus` existait, le back-office savait le changer, et **aucune ligne ne le
+lisait** : un club suspendu restait visible dans l'application, sa carte
+s'ouvrait, ses commandes partaient.
+
+Désormais, la suspension ferme quatre portes côté client — la découverte,
+l'événement et sa carte (404, comme un événement privé : l'état du compte d'un
+club ne regarde pas le public), la création de panier, et le paiement, vérifié
+une seconde fois pour qu'un panier ouvert avant la suspension ne se règle pas
+après.
+
+Elle ne ferme pas les écrans de l'équipe : les commandes **déjà payées** doivent
+pouvoir être préparées et remises. Les deux tableaux portent un bandeau, sinon
+l'équipe constaterait un silence sans le comprendre.
+
+`+ backend/src/common/helpers/organisation-ouverte.ts`
+`+ backend/test/integration/statut-organisation.int-spec.ts` (7 tests, dont 4
+échouent sur le code d'avant)
+`~ public-venues, public-events, cart (création + paiement), layouts manager et poste`
+
+---
+
 ## [0.64.0] — 2026-09-17 — Produits manquants
 
 Un produit affiché disponible peut ne plus l'être au comptoir : erreur de

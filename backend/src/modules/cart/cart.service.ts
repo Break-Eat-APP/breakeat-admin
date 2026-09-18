@@ -27,6 +27,7 @@ import type { CreateCartDto } from './dto/create-cart.dto';
 import type { UpdateCartDto } from './dto/update-cart.dto';
 import type { AddCartItemDto } from './dto/add-cart-item.dto';
 import type { UpdateCartItemDto } from './dto/update-cart-item.dto';
+import { assertOrganisationOuverte } from '../../common/helpers/organisation-ouverte';
 
 /** Cart TTL — 30 minutes from creation. */
 const CART_TTL_MS = 30 * 60 * 1000;
@@ -131,6 +132,10 @@ export class CartService {
     if (event.status !== EventStatus.ACTIVE) {
       throw new BadRequestException('Event is not active — cannot create cart');
     }
+
+    // Club suspendu : aucune commande ne part. Vérifié ici et au paiement — un
+    // panier ouvert avant la suspension ne doit pas pouvoir être réglé après.
+    await assertOrganisationOuverte(this.prisma, event.organizationId);
 
     // Supplier must be attached to this event via the EventSupplier junction.
     const eventSupplier = await this.prisma.eventSupplier.findFirst({
@@ -368,6 +373,7 @@ export class CartService {
     // Phase 14.4 — re-verify PRIVATE-event access (membership may have been
     // revoked between cart creation and checkout).
     await this.assertEventStillAccessible(cart.eventId, userId);
+    await this.assertOrganisationEncoreOuverte(cart.eventId);
 
     // Re-entrée : un client qui revient sur l'écran de paiement doit retrouver
     // LA MÊME page, pas une seconde. La clé d'idempotence `cart_<id>` s'en
@@ -801,6 +807,15 @@ export class CartService {
    * Phase 14.4 — throws 403 if the cart owner no longer has access to a PRIVATE
    * event (e.g. removed from the gating group). PUBLIC events always pass.
    */
+  /** Le club a pu être suspendu entre la création du panier et le paiement. */
+  private async assertOrganisationEncoreOuverte(eventId: string): Promise<void> {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { organizationId: true },
+    });
+    if (event) await assertOrganisationOuverte(this.prisma, event.organizationId);
+  }
+
   private async assertEventStillAccessible(eventId: string, userId: string): Promise<void> {
     if (!(await this.groups.canAccessEvent(eventId, userId))) {
       throw new ForbiddenException('You no longer have access to this private event');

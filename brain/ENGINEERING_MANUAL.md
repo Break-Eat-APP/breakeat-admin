@@ -5148,3 +5148,50 @@ Premier essai sur iPhone (build 15), trois défauts :
 
 Le libellé serveur passe de « Produit manquant · passez au comptoir » (tronqué
 sur une ligne) à « Produit manquant » ; la consigne a sa propre ligne.
+
+
+---
+
+## Phase 37 — Suspendre un club suspend vraiment (18/09/2026)
+
+`OrgStatus` existait depuis les origines, et le back-office savait le changer.
+Mais **aucune ligne de code ne le lisait** : un club « suspendu » restait visible
+dans l'application, sa carte s'ouvrait, ses commandes partaient. Le bouton
+« Désactiver » ne changeait qu'une étiquette.
+
+### Ce que la suspension ferme
+
+Quatre portes, côté client :
+
+1. la **découverte** — le lieu disparaît de la recherche et de la proximité
+   (filtre `CLUB_EN_SERVICE` dans la requête de `public-venues`) ;
+2. l'**événement et sa carte** — 404, le même que pour un événement privé
+   auquel on n'est pas invité. Pas 403 : l'état du compte d'un club ne regarde
+   pas le public ;
+3. la **création de panier** ;
+4. le **paiement** — vérifié une seconde fois : un panier ouvert avant la
+   suspension ne doit pas pouvoir être réglé après.
+
+Le message rendu au client ne parle jamais de suspension : « Ce lieu ne prend pas
+de commande pour le moment. »
+
+### Ce qu'elle ne ferme PAS, volontairement
+
+Les écrans de l'équipe. Une suspension ne doit pas laisser en plan les commandes
+**déjà payées** : le comptoir les prépare et les remet, le club garde sa
+comptabilité. Fermer les postes ferait perdre de l'argent à des clients qui n'y
+sont pour rien. Les deux tableaux affichent en revanche un bandeau — sans lui,
+une équipe constaterait un silence sans le comprendre, et chercherait la panne
+du mauvais côté.
+
+### Vérification
+
+`test/integration/statut-organisation.int-spec.ts`, sur base réelle, passe par
+les **vrais contrôleurs** : rejouer le filtre à la main aurait prouvé qu'il
+fonctionne, pas qu'il est branché — c'est exactement ce qui manquait ici. Sur le
+code d'avant, 4 de ces 7 tests échouent ; les 3 autres décrivent ce qui ne devait
+pas changer (club actif, réactivation, commandes payées toujours servables).
+
+Déployé après vérification qu'aucune organisation n'était suspendue en
+production : faire respecter ce statut aurait sinon fait disparaître un club en
+service.

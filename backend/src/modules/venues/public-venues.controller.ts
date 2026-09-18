@@ -4,6 +4,7 @@ import { EventStatus, EventVisibility, Prisma, VenueStatus } from '@prisma/clien
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
+import { CLUB_EN_SERVICE } from '../../common/helpers/organisation-ouverte';
 
 /**
  * PublicVenuesController — découverte des lieux pour l'app mobile (Phase 16).
@@ -48,6 +49,9 @@ export class PublicVenuesController {
     const term = q?.trim();
     const where: Prisma.VenueWhereInput = {
       status: VenueStatus.ACTIVE,
+      // Un club suspendu n'apparaît plus : ni par la recherche, ni par la
+      // proximité. C'est la première chose que « suspendre » doit faire.
+      ...CLUB_EN_SERVICE,
       ...(term
         ? {
             OR: [
