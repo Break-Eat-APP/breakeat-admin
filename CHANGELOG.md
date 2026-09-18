@@ -29,8 +29,16 @@ contient aucune trace du SDK natif (vérifié sur le bundle).
 Sans elle, l'app retombe sur la page hébergée — le serveur le dit dans ses
 journaux, et le contrôle de démarrage la réclame comme les autres.
 
-Apple Pay attend un identifiant marchand Apple (`APPLE_MERCHANT_ID`) : le code
-s'allume dès qu'il est posé. En attendant, la carte fonctionne, dans l'app.
+Apple Pay est câblé et attend son identifiant marchand (`APPLE_MERCHANT_ID`) :
+la feuille le propose dès qu'il est posé, et n'en parle pas sans lui — le
+demander sans identifiant ferait échouer l'ouverture de la feuille, donc le
+paiement. Les trois démarches Apple et Stripe sont écrites dans `REPRISE.md`.
+En attendant, la carte fonctionne, dans l'app.
+
+`GET /health` porte enfin `paiementNatif` : vrai quand la clé publiable est
+posée. « Est-ce que je paie dans l'app ou sur une page web ? » se constatait
+seulement en payant ; la question se répond maintenant de l'extérieur, en une
+commande — et jamais en montrant la clé.
 
 `+ apps/mobile/src/lib/paiement.ts` (web) `+ paiement.native.ts` (téléphone)
 `+ @stripe/stripe-react-native` + son plugin Expo

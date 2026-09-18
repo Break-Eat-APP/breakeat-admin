@@ -36,4 +36,29 @@ describe('HealthController', () => {
     expect(result.commit).toBeDefined();
     expect(result.commit.length).toBeGreaterThan(0);
   });
+
+  // « Est-ce que je paie dans l'app ou sur une page web ? » se constatait
+  // seulement en payant. Ce booleen repond de l'exterieur, en une commande.
+  describe('paiementNatif', () => {
+    const cle = process.env.STRIPE_PUBLISHABLE_KEY;
+    afterEach(() => {
+      if (cle === undefined) delete process.env.STRIPE_PUBLISHABLE_KEY;
+      else process.env.STRIPE_PUBLISHABLE_KEY = cle;
+    });
+
+    it('est vrai quand la cle publiable est posee', () => {
+      process.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_peu_importe';
+      expect(controller.check().paiementNatif).toBe(true);
+    });
+
+    it('est faux sans elle — l app retombera sur la page hebergee', () => {
+      delete process.env.STRIPE_PUBLISHABLE_KEY;
+      expect(controller.check().paiementNatif).toBe(false);
+    });
+
+    it('ne laisse jamais filtrer la cle elle-meme', () => {
+      process.env.STRIPE_PUBLISHABLE_KEY = 'pk_test_valeur_secrete_ou_pas';
+      expect(JSON.stringify(controller.check())).not.toContain('pk_test_');
+    });
+  });
 });

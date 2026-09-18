@@ -190,6 +190,16 @@ module.exports = {
     eas: {
       projectId: 'a6f65999-68f3-4f33-a8de-449d568ab0b5',
     },
+    /**
+     * L'identifiant marchand Apple, quand il existe.
+     *
+     * Posé ici en PLUS du plugin : le plugin l'inscrit dans les droits de la
+     * build (c'est ce qui autorise Apple Pay), `extra` le rend lisible à
+     * l'exécution — la feuille de paiement doit savoir si elle peut proposer
+     * Apple Pay ou non. Une seule variable pour les deux, sinon l'un
+     * s'allumerait sans l'autre.
+     */
+    applePayMerchantId: process.env.APPLE_MERCHANT_ID ?? null,
   },
   // PAS de bloc `updates` ni `runtimeVersion` : ils declarent des mises a
   // jour a distance (OTA) que `expo-updates` fournirait — or le paquet n'est

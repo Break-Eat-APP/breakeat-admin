@@ -15,6 +15,16 @@ export interface HealthResponse {
    * ne disait laquelle etait en ligne. Ce champ le dit.
    */
   commit: string;
+  /**
+   * Le serveur peut-il ouvrir une feuille de paiement NATIVE ?
+   *
+   * Vrai quand `STRIPE_PUBLISHABLE_KEY` est posee. Faux, l'app retombe sur la
+   * page hebergee et le client sort de l'application le temps de regler --
+   * exactement le symptome qu'on a mis du temps a expliquer, faute de pouvoir
+   * le constater de l'exterieur. Un booleen, jamais la cle : savoir qu'une
+   * configuration est faite n'apprend rien a personne.
+   */
+  paiementNatif: boolean;
 }
 
 /**
@@ -34,6 +44,7 @@ export class HealthController {
       version: process.env.npm_package_version ?? '0.1.0',
       // Railway pose cette variable a chaque construction.
       commit: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? 'inconnu',
+      paiementNatif: Boolean(process.env.STRIPE_PUBLISHABLE_KEY),
     };
   }
 }

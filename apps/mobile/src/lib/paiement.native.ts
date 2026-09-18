@@ -19,10 +19,27 @@
  * peut pas ouvrir de feuille native, et un paiement impossible serait pire
  * qu'un paiement qui sort de l'app.
  */
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import * as WebBrowser from 'expo-web-browser';
 import { initPaymentSheet, initStripe, presentPaymentSheet } from '@stripe/stripe-react-native';
 import { THEME } from '@lib/theme';
+import { ENV } from '@lib/config/env';
 import type { DemandePaiement, Reglement } from '@lib/paiement';
+
+/**
+ * L'identifiant marchand Apple — ou rien.
+ *
+ * Il ne s'invente pas : il se crée dans le portail Apple, et les droits de la
+ * build doivent le porter. Déclarer ici un identifiant qui n'existe pas ferait
+ * échouer la signature. Tant qu'il est absent, la feuille ne propose pas Apple
+ * Pay ; la carte, elle, fonctionne — dans l'app.
+ */
+const MARCHAND_APPLE =
+  (Constants.expoConfig?.extra?.applePayMerchantId as string | null | undefined) || undefined;
+
+/** Le pays du compte encaisseur — celui des clubs, et de la monnaie. */
+const PAYS = 'FR';
 
 /**
  * Où Stripe ramène après une authentification 3-D Secure.
@@ -49,12 +66,21 @@ async function feuilleNative(
   // La clé vient du SERVEUR, à chaque paiement : elle suit son mode (test ou
   // production) au lieu d'être gelée dans la build. Passer l'un à l'autre ne
   // demande donc pas de relivrer l'application.
-  await initStripe({ publishableKey });
+  await initStripe({ publishableKey, merchantIdentifier: MARCHAND_APPLE });
 
   const preparation = await initPaymentSheet({
     merchantDisplayName: libelle,
     paymentIntentClientSecret: clientSecret,
     returnURL: RETOUR_3DS,
+    // Apple Pay ne s'affiche que si l'identifiant marchand existe. Le demander
+    // sans lui ferait échouer l'ouverture de la feuille — donc le paiement.
+    ...(MARCHAND_APPLE ? { applePay: { merchantCountryCode: PAYS } } : {}),
+    // Google Pay n'a de sens que sur Android, et l'environnement d'essai doit
+    // suivre la build : un vrai paiement dans une build de test serait pire
+    // qu'un paiement refusé.
+    ...(Platform.OS === 'android'
+      ? { googlePay: { merchantCountryCode: PAYS, testEnv: !ENV.IS_PRODUCTION } }
+      : {}),
     // Un paiement différé (virement, prélèvement) confirmerait une commande
     // avant que l'argent n'arrive : la buvette servirait à crédit sans le
     // savoir.

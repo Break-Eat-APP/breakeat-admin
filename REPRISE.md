@@ -400,12 +400,58 @@ moment de payer. Deux façons de le voir : le journal de démarrage liste la
 variable dans « Variables absentes », et chaque paiement écrit
 « STRIPE_PUBLISHABLE_KEY absente ».
 
-**Apple Pay** attend, lui, un identifiant marchand créé dans le portail Apple
-(Certificates, Identifiers & Profiles → Merchant IDs, par exemple
-`merchant.com.shapper.breakeat`), la capacité Apple Pay cochée sur l'App ID,
-puis `APPLE_MERCHANT_ID` dans le profil `beta` de `eas.json`. Le code s'allume
-tout seul dès qu'il est posé ; sans lui, le paiement par carte fonctionne, dans
-l'app.
+Vérification en une commande, une fois la variable posée :
+
+```
+curl -s https://breakeat-admin-production.up.railway.app/health
+```
+
+`"paiementNatif":true` ⇒ l'app paiera dans sa propre feuille. `false` ⇒ elle
+retombera sur la page hébergée. Le champ ne montre jamais la clé, seulement si
+elle est là.
+
+### Apple Pay — les trois démarches, dans cet ordre
+
+Le code est prêt : il s'allume dès que `APPLE_MERCHANT_ID` existe, et reste
+silencieux sans lui. Ce qui manque ne peut se faire que depuis les comptes
+Apple et Stripe.
+
+**1. Créer l'identifiant marchand** (portail Apple → Certificates, Identifiers
+& Profiles → Identifiers → liste déroulante en haut à droite : *Merchant IDs* →
+« + »).
+- Description : `Break Eat`
+- Identifiant : `merchant.com.shapper.breakeat`
+
+**2. Autoriser l'app à s'en servir** (Identifiers → App IDs →
+`com.shapper.breakeat` → capacité **Apple Pay Payment Processing** → cocher
+l'identifiant marchand → Save).
+
+⚠️ Comme pour « Sign In with Apple » en septembre : cocher une capacité rend le
+profil de provisionnement périmé. La build suivante doit être lancée **sans
+`--non-interactive`**, sinon EAS ne peut pas en régénérer un et la build est
+refusée par Xcode.
+
+**3. Le certificat de traitement, côté Stripe** (Stripe → Paramètres → Moyens de
+paiement → Apple Pay → ajouter une application iOS). La mécanique, quels que
+soient les libellés du tableau de bord du moment :
+- Stripe fournit une **demande de certificat** (fichier `.certSigningRequest`) ;
+- on la téléverse dans Apple, sur le Merchant ID créé à l'étape 1 (*Apple Pay
+  Payment Processing Certificate* → Create Certificate) ;
+- Apple rend un `.cer`, qu'on redonne à Stripe.
+
+À refaire **dans chaque mode** : les clés de test et de production sont deux
+comptes distincts aux yeux de Stripe.
+
+**4. Poser la variable** — dans `apps/mobile/eas.json`, profil `beta` (et
+`preview` si les essais passent par là), à côté de `EXPO_PUBLIC_API_URL` :
+
+```json
+"APPLE_MERCHANT_ID": "merchant.com.shapper.breakeat"
+```
+
+Volontairement PAS posée à l'avance : déclarer un identifiant marchand qui
+n'existe pas encore ferait échouer la signature de la build. L'étape 1 d'abord,
+cette ligne ensuite.
 
 ## 🗃️ Archivés et supprimés — la règle
 
