@@ -5,6 +5,98 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.64.0] — 2026-09-17 — Produits manquants
+
+Un produit affiché disponible peut ne plus l'être au comptoir : erreur de
+gestion, fût vide. Le client le découvrait en arrivant, après avoir attendu.
+
+**Le geste du comptoir.** Sur chaque commande en cours, un bouton « Manquant » :
+une touche par ligne, un compteur quand le client en a pris plusieurs, et
+« retirer de la carte (HS) » coché d'emblée — si le produit manque pour ce
+client, il manquera pour le suivant. Remettre une ligne à zéro annule une erreur
+de saisie.
+
+**Ce que voit le client.** La Live Activity passe à « Produit manquant » avec une
+**alerte qui allume l'écran** — une mise à jour ordinaire change l'affichage en
+silence, ce qui ne suffit pas pour une nouvelle qui demande un geste. Sans Live
+Activity active, une notification prend le relais, jamais les deux. Le bandeau
+apparaît dans « Mes commandes » et dans le suivi de commande.
+
+**HS.** Le statut existait en base mais aucun écran ne permettait de le poser :
+bouton « En vente / HS » par produit dans le dashboard manager, bandeau « Hors
+carte » au poste pour remettre en vente — c'est le comptoir qui sait quand un fût
+est changé.
+
+Pas de remboursement automatique : il se règle au comptoir, là où le client est
+invité à se présenter.
+
+`+ backend/src/modules/orders/produits-manquants.service.ts`
+`+ backend/src/modules/products/dto/disponibilite-produit.dto.ts`
+`+ backend/test/integration/produits-manquants.int-spec.ts`
+`+ apps/operator/src/components/MissingItemsPanel.tsx`, `ProduitsHsBar.tsx`
+`+ apps/mobile/src/components/missing-items-banner.tsx`
+`~ live-activity (alerte APNs, numéro court, détail du manque), widget Swift`
+`~ migration 20260917_produits_manquants (missing_quantity + contrainte CHECK)`
+
+---
+
+## [0.63.0] — 2026-09-16 — Sessions, archivés, supprimés, démonstration
+
+**Le dashboard « sautait » au clic.** Le serveur fait tourner le jeton de
+renouvellement : son premier usage le consomme. Une page qui lance deux requêtes
+à la fois en demandait deux, et le refus du second était pris pour une session
+morte — tout était effacé, organisation choisie comprise. Les trois clients
+(manager, opérateur, app) ne lancent plus qu'un seul renouvellement à la fois.
+Le même défaut déconnectait un client au retour de Stripe.
+
+**Archiver n'est plus bannir.** Un compte archivé gardait son adresse : la même
+personne ne pouvait plus s'inscrire, ni par e-mail ni par Apple. Elle repart
+désormais d'un compte NEUF ; l'ancien garde son historique (la comptabilité reste
+juste) mais rend son adresse et ses identités. Même règle pour le slug d'une
+organisation inactive. Réactiver depuis le back-office reprend l'adresse si
+personne ne l'a utilisée, et dit pourquoi sinon.
+
+**La démonstration se purge.** L'ancien passage en caisse créait de vraies
+commandes marquées payées sans qu'un centime ne bouge : elles gonflaient le
+chiffre d'affaires et la TVA. Le back-office montre le détail par organisation,
+puis efface commandes, paiements, mouvements de points (soldes rétablis) et
+libère les créneaux.
+
+**Au passage** : `/health` annonce le commit déployé — deux livraisons avaient
+paru passées alors qu'elles avaient échoué au démarrage ; le démarrage attend la
+base au lieu d'abandonner (P1001) ; Railway ne redéploie plus l'API pour un
+commit de documentation.
+
+`+ backend/src/common/helpers/liberation-archives.ts`
+`+ backend/test/integration/archives.int-spec.ts` (26 tests)
+`+ apps/backoffice/src/components/purge-demo.tsx`
+`~ migration 20260916_liberation_archives (archived_email, archived_slug)`
+
+---
+
+## [0.62.0] — 2026-09-07 — La cloche de notifications, et « Continuer avec Apple »
+
+**Les campagnes n'avaient aucun destinataire** : `expo-notifications` n'était pas
+installé et la fonction qui enregistre le jeton d'un téléphone n'avait aucun
+appelant — les journaux disaient « envoyé à 0 appareil(s) » depuis des jours. Le
+jeton s'enregistre après connexion, chaque envoi archive le message, et la cloche
+porte un compteur lu au SERVEUR : un compte local ne survivrait ni à une
+réinstallation ni au second téléphone du même client.
+
+**Apple.** « Continuer avec Apple » est branché : le jeton est vérifié contre les
+clés publiques d'Apple, émetteur ET destinataire. Le rattachement suit le sujet
+du fournisseur, jamais l'adresse — et jamais sur une adresse non certifiée, ce
+qui donnerait le compte d'un client à qui saurait en déclarer l'adresse. Google
+attend ses identifiants ; Facebook ne sera pas branché (son jeton ne certifie pas
+l'adresse).
+
+`+ backend/src/modules/auth/social-identity.service.ts`
+`+ backend/src/modules/notifications/user-notifications.service.ts`
+`+ apps/mobile/src/screens/notifications.screen.tsx`, `lib/push-notifications.ts`
+`~ migrations 20260907_notifications_client, 20260907_identites_sociales`
+
+---
+
 ## [0.61.0] — 2026-09-06 — Reçu téléchargeable, et un poste par buvette
 
 ### Le reçu

@@ -10,6 +10,7 @@
 > | Pourquoi cette décision technique ? | `brain/ENGINEERING_MANUAL.md` |
 > | Quel était le plan, phase par phase ? | `brain/ROADMAP.md` (1→10 planifiées, 11→22 reconstituées) |
 > | Résumé d'une session de travail | `brain/TASK_SUMMARY.md` |
+> | État complet du dépôt, dette, tests | `brain/audits/AUDIT_2026-09-18_etat-du-depot.md` |
 > | Ordre de construction initial (phases 1→19) | `DEVELOPMENT_LOG.md` — historique, non tenu au-delà |
 >
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
