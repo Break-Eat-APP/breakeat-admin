@@ -5354,3 +5354,89 @@ avec et sans la variable.
 La leçon générale : une valeur de configuration qui traverse une sérialisation
 ne revient pas forcément telle qu'elle est partie. Ce qu'on vérifie n'est pas ce
 qu'on a écrit, c'est ce qui arrive de l'autre côté.
+
+---
+
+## Phase 41 — Les clubs lisent leurs données eux-mêmes (18/09/2026)
+
+Un club demandait « quel est le trafic de connexion sur l'application chez
+nous ? » et personne ne pouvait répondre : rien ne l'enregistrait. Il demandait
+la liste de ses clients, et il fallait que quelqu'un se connecte pour la lui
+envoyer. Deux manques différents, une même conséquence : le club dépendait de
+nous pour connaître son propre public.
+
+### Le fichier client : déduit, jamais collecté
+
+Tout vient des commandes déjà enregistrées. Un club voit qui a commandé CHEZ
+LUI, combien de fois, pour quel montant, depuis quand, dans quels lieux, et quel
+produit revient le plus. Rien de nouveau n'est demandé au client.
+
+Deux décisions structurantes :
+
+- **Le périmètre financier est celui de la comptabilité** — paiement réussi,
+  commande non annulée. Deux conventions différentes donneraient deux totaux
+  pour le même client, et c'est la page affichant le plus petit qu'on croirait
+  cassée.
+- **L'export passe par la même fonction que l'écran.** Un fichier qui diverge de
+  ce qui est affiché fait douter des deux.
+
+L'OPÉRATEUR n'y a pas accès : il tient un comptoir, il n'a rien à faire avec les
+adresses de la clientèle. Le rôle MARKETING, lui, existe pour ce travail.
+
+### Le CSV : trois détails qui décident si le fichier s'ouvre
+
+Point-virgule (Excel français lit la virgule comme séparateur décimal et
+rangerait tout dans une colonne), marque d'ordre UTF-8 (sans elle les accents
+deviennent illisibles — sur un fichier de noms, c'est rédhibitoire), et fins de
+ligne CRLF.
+
+Un quatrième, moins visible : une cellule commençant par `=`, `+`, `-` ou `@`
+est EXÉCUTÉE à l'ouverture par Excel. Comme ces fichiers portent des noms
+choisis par les clients eux-mêmes, la valeur est préfixée d'une apostrophe.
+C'est une injection à part entière — elle ne traverse pas notre code, elle
+s'exécute chez celui qui ouvre le fichier.
+
+### La fréquentation : ce que les commandes ne voient pas
+
+Une commande ne connaît que la seconde moitié de l'histoire. Le visiteur qui
+regarde la carte et repart sans rien prendre n'existe nulle part — or c'est
+précisément lui qui intéresse un club.
+
+Une ligne par VISITEUR, par TYPE de visite, par PÉRIMÈTRE et par fenêtre de
+trente minutes. Dix allers-retours entre la carte et le panier sont UNE visite,
+pas dix : c'est ce qui rend le chiffre comparable d'un match à l'autre, et ce
+qui empêche la table d'enfler. Le mécanisme n'est pas dans le code mais dans un
+index unique PostgreSQL — vérifié sur base réelle, dix appels donnent une ligne
+à dix passages.
+
+Trois garde-fous, parce que la route d'écriture est ouverte aux visiteurs NON
+connectés (c'est tout son intérêt) :
+
+1. le club est **déduit** du lieu ou de l'événement, relus en base — l'app ne
+   peut pas attribuer des visites à qui elle veut ;
+2. un lieu inconnu n'écrit **rien** ;
+3. l'échec est **silencieux** : une mesure d'audience ne doit jamais empêcher un
+   client de commander.
+
+Côté application, l'appel ne passe pas par le client HTTP habituel : une
+statistique ne doit JAMAIS déclencher un renouvellement de session. Le jeton de
+renouvellement est à usage unique, et le dépenser pour une mesure risquerait la
+session d'un client en train de payer. Jeton expiré ⇒ visite comptée comme
+anonyme, et c'est très bien.
+
+### La limite, écrite à l'écran
+
+La mesure repose sur un identifiant d'INSTALLATION que l'application fournit
+elle-même. Elle compte donc des appareils, pas des personnes ; une
+réinstallation compte double ; et rien n'empêcherait de fabriquer de fausses
+visites. Ce sont des ordres de grandeur d'audience, pas des chiffres certifiés
+comme l'est le chiffre d'affaires. La page le dit, sous les compteurs — un
+chiffre dont on tait les limites finit toujours par être cité comme une preuve.
+
+### Ce qui n'a PAS été fait, et pourquoi
+
+L'envoi de campagnes publicitaires à partir de ces segments. La prospection par
+e-mail vers des particuliers demande un accord préalable, et commander à un
+stand n'est pas un accord. Le jour où ce sujet reviendra, il faudra une case
+d'accord horodatée, un export qui la respecte, et un moyen de se désinscrire
+dans chaque message.

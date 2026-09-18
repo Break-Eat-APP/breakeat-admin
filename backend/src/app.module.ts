@@ -26,6 +26,8 @@ import { AppSettingsModule } from './modules/app-settings/app-settings.module';
 import { GroupsModule } from './modules/groups/groups.module';
 import { BackofficeModule } from './modules/backoffice/backoffice.module';
 import { StatsModule } from './modules/stats/stats.module';
+import { ClientsModule } from './modules/clients/clients.module';
+import { FrequentationModule } from './modules/frequentation/frequentation.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
 import { LiveActivityModule } from './modules/live-activity/live-activity.module';
@@ -78,6 +80,8 @@ import appConfig from './config/app.config';
     // Phase 11 — Operator dashboard (configurable screens)
     // Phase 15 — Manager dashboard (org/event analytics)
     StatsModule,
+    ClientsModule,
+    FrequentationModule,
     // Phase 18 — Notifications push (fondation Expo : C1/C2/C3)
     NotificationsModule,
     LoyaltyModule,

@@ -56,6 +56,7 @@ import { OrderTrackingScreen } from '@screens/order-tracking.screen';
 import { SplitScreen } from '@screens/split.screen';
 import { useDeepLinks } from '@lib/hooks/use-deep-links';
 import { ecouterOuvertures, ecouterPush, enregistrerPush } from '@lib/push-notifications';
+import { signalerVisite } from '@lib/frequentation';
 import { useNotifStore } from '@store/notif.store';
 import { NotificationsScreen } from '@screens/notifications.screen';
 
@@ -139,6 +140,9 @@ export default function AppPreview() {
   useEffect(() => {
     setReady(true);
     void rehydrate();
+    // La fréquentation : ce que les commandes ne disent pas. Un club veut
+    // savoir combien de monde a regardé, pas seulement combien a payé.
+    signalerVisite('APP_OPEN');
   }, [setReady, rehydrate]);
 
   /**
@@ -155,6 +159,7 @@ export default function AppPreview() {
    */
   useEffect(() => {
     if (!token) return;
+    signalerVisite('LOGIN');
     void enregistrerPush();
 
     // Le compte de la cloche : lu une fois à la connexion — une annonce a pu

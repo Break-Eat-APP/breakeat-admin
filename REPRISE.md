@@ -16,7 +16,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-09-18 (statut d'organisation respecté ; paiement DANS l'app, Apple Pay câblé ; reçu et numéro du jour)_
+_Dernière mise à jour : 2026-09-18 (paiement DANS l'app ; page « Mes clients » : audience, fichier et export CSV par lieu)_
 
 ## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
@@ -70,6 +70,38 @@ pour ses destinataires, et la cloche lit ce compte au serveur.
 clients ; **Facebook ne le sera pas** — son jeton ne certifie pas l'adresse, et
 rattacher une inscription rapide à un compte existant sur une adresse non
 certifiée donnerait le compte d'un client à qui saurait en déclarer l'adresse.
+
+## 📊 DONNÉES CLUB — « Mes clients » (18/09/2026)
+
+Le tableau de bord manager porte une page **Mes clients** : le club y lit son
+audience et son fichier, filtre par lieu et par période, et **télécharge son
+CSV lui-même**. Plus besoin que quelqu'un se connecte pour le lui envoyer.
+
+| Ce qu'il voit | D'où ça vient |
+|---|---|
+| Visiteurs uniques, passages, dont connectés | table `frequentation` |
+| Ont commandé, taux de conversion | commandes payées non annulées |
+| Fréquentation par lieu | `frequentation` + noms des lieux |
+| Fichier client (nom, e-mail, téléphone, commandes, total, panier moyen, première/dernière, lieux, produit préféré) | commandes + comptes |
+
+**La fréquentation compte des APPAREILS, pas des personnes.** Une
+réinstallation compte double, et rien n'empêcherait de fabriquer de fausses
+visites : ce sont des ordres de grandeur d'audience, pas des chiffres certifiés
+comme le chiffre d'affaires. La page le dit sous les compteurs — un chiffre dont
+on tait les limites finit cité comme une preuve.
+
+**Le téléphone est vide pour presque tout le monde** : le champ existe en base,
+mais aucun écran de l'application ne le demande. La colonne se remplira si l'on
+décide un jour de le réclamer au profil.
+
+**L'envoi de campagnes à partir de ces segments n'est PAS fait**, volontairement.
+La prospection par e-mail vers des particuliers demande un accord préalable, et
+commander à un stand n'en est pas un. Il faudra une case d'accord horodatée, un
+export qui la respecte, et un lien de désinscription dans chaque message.
+
+**À surveiller :** la table `frequentation` grandit avec le trafic. Une purge
+au-delà de 24 mois sera à prévoir — la mesure n'a aucun intérêt rétroactif
+au-delà, et c'est aussi une donnée à ne pas garder indéfiniment.
 
 ## 🔎 MÉTHODE — À LIRE AVANT DE CHERCHER UN BUG
 

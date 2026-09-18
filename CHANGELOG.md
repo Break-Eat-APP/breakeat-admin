@@ -5,6 +5,38 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.68.0] — 2026-09-18 — Chaque club lit ses données lui-même
+
+**« Mes clients »**, nouvelle page du tableau de bord. Le club choisit son lieu
+et sa période, lit ses chiffres, et télécharge son fichier. Personne n'a plus
+besoin de se connecter à sa place pour le lui envoyer.
+
+**Le fichier client** se déduit des commandes : qui a commandé chez lui, combien
+de fois, pour quel montant, depuis quand, dans quels lieux, et quel produit
+revient le plus. Rien de nouveau n'est demandé au client. Le périmètre est celui
+de la comptabilité — paiement réussi, commande non annulée — pour que les deux
+pages racontent la même histoire. L'opérateur n'y a pas accès : il tient un
+comptoir.
+
+**L'export CSV** s'ouvre vraiment dans Excel français : point-virgule, marque
+d'ordre UTF-8, fins de ligne CRLF, montants à virgule et colonnes sommables. Une
+valeur commençant par `=`, `+`, `-` ou `@` est neutralisée — ces fichiers
+portent des noms choisis par les clients, et une formule s'exécuterait chez
+celui qui ouvre le fichier.
+
+**La fréquentation**, enfin mesurée : combien de personnes ont ouvert
+l'application chez un club, et combien ont fini par commander. Le visiteur qui
+regarde la carte et repart n'existait nulle part. Une visite = un appareil, un
+périmètre, une fenêtre de trente minutes — dix allers-retours comptent pour une.
+La page affiche ses propres limites : ce sont des appareils, pas des personnes.
+
+`+ backend/src/modules/clients/` `+ backend/src/modules/frequentation/`
+`+ backend/src/common/helpers/csv.ts` `+ migration 20260918_frequentation`
+`+ apps/admin/src/app/(admin)/clients/page.tsx` `+ apps/mobile/src/lib/frequentation.ts`
+584 tests unitaires (+29), 50 d'intégration (+6).
+
+---
+
 ## [0.67.1] — 2026-09-18 — Apple Pay en attente, et un `null` qui valait vrai
 
 Le certificat Apple Pay est déposé chez Stripe mais **pas activé** : Stripe

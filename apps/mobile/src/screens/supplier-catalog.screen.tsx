@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
+import { signalerVisite } from '@lib/frequentation';
 import {
   apiGetPublicProducts,
   formatPrice,
@@ -29,6 +30,11 @@ interface SectionData {
 
 export function SupplierCatalogScreen({ route, navigation }: Props) {
   const { eventId, supplierId } = route.params;
+  // La carte ouverte : la consultation qui compte vraiment pour un club, celle
+  // d'un client à deux doigts de commander — ou qui repart sans rien prendre.
+  useEffect(() => {
+    signalerVisite('MENU_VIEW', { eventId });
+  }, [eventId]);
   const { items, addItem, incrementItem, decrementItem, totalCents, totalItems } =
     useCartStore();
 

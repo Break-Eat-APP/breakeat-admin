@@ -129,6 +129,36 @@ async function req<T>(
   return res.json() as Promise<T>;
 }
 
+// ─── Fréquentation (mesure d'audience) ────────────────────────
+
+/**
+ * Signale une visite. Volontairement HORS du chemin `req`.
+ *
+ * Deux raisons, et la seconde est la vraie : la route répond 204 sans corps, et
+ * `req` finit par `res.json()` — il échouerait donc à chaque appel réussi. Mais
+ * surtout, une mesure d'audience ne doit JAMAIS déclencher un renouvellement de
+ * session : le jeton de renouvellement est à usage unique, et le dépenser pour
+ * une statistique risquerait la session d'un client en train de commander.
+ *
+ * Jeton expiré ⇒ la visite est comptée comme anonyme. C'est le bon compromis.
+ */
+export async function apiSignalerVisite(visite: {
+  visitorKey: string;
+  kind: string;
+  venueId?: string;
+  eventId?: string;
+}): Promise<void> {
+  const token = useAuthStore.getState().token;
+  await fetch(`${BASE}/frequentation`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(visite),
+  });
+}
+
 // ─── Types ────────────────────────────────────────────────────
 
 export interface LoginResponse {

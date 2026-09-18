@@ -1503,3 +1503,92 @@ export function heureVersMinutes(v: string): number | null {
   if (h > 24 || min > 59) return null;
   return h * 60 + min;
 }
+
+// ─── Clients et fréquentation ──────────────────────────────────────────────────
+
+/** Une ligne du fichier client, telle que le serveur la calcule. */
+export interface FicheClient {
+  userId: string;
+  nom: string;
+  email: string;
+  telephone: string | null;
+  commandes: number;
+  totalCents: number;
+  panierMoyenCents: number;
+  premiereCommande: string;
+  derniereCommande: string;
+  lieux: string[];
+  produitPrefere: string | null;
+}
+
+export interface AudienceLieu {
+  venueId: string;
+  nom: string;
+  visiteursUniques: number;
+  visites: number;
+}
+
+export interface AudienceClub {
+  visiteursUniques: number;
+  visites: number;
+  visiteursConnectes: number;
+  clientsAyantCommande: number;
+  tauxConversion: number | null;
+  parJour: Array<{ jour: string; visiteursUniques: number; visites: number }>;
+  parLieu: AudienceLieu[];
+}
+
+/** Ce qui restreint la lecture : un lieu, une période, ou rien. */
+export interface FiltreDonnees {
+  venueId?: string;
+  du?: string;
+  au?: string;
+}
+
+function parametres(filtre: FiltreDonnees): string {
+  const p = new URLSearchParams();
+  if (filtre.venueId) p.set('venueId', filtre.venueId);
+  if (filtre.du) p.set('du', filtre.du);
+  if (filtre.au) p.set('au', filtre.au);
+  const texte = p.toString();
+  return texte ? `?${texte}` : '';
+}
+
+export async function apiGetClients(orgId: string, filtre: FiltreDonnees = {}): Promise<FicheClient[]> {
+  return req<FicheClient[]>('GET', `/organizations/${orgId}/clients${parametres(filtre)}`);
+}
+
+export async function apiGetFrequentation(
+  orgId: string,
+  filtre: FiltreDonnees = {},
+): Promise<AudienceClub> {
+  return req<AudienceClub>('GET', `/organizations/${orgId}/frequentation${parametres(filtre)}`);
+}
+
+/**
+ * Télécharge le fichier client, sans passer par `req`.
+ *
+ * Deux raisons : la réponse est un CSV, pas du JSON — `req` tenterait de le
+ * lire comme un objet ; et surtout le jeton voyage dans un EN-TÊTE, ce qu'un
+ * simple lien ne sait pas faire. On récupère donc le contenu, puis on le remet
+ * au navigateur comme un fichier. Le jeton ne se retrouve jamais dans une
+ * adresse, donc jamais dans l'historique.
+ */
+export async function apiTelechargerClients(orgId: string, filtre: FiltreDonnees = {}): Promise<void> {
+  const res = await fetch(`${API_URL}/organizations/${orgId}/clients/export${parametres(filtre)}`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) throw new Error(`Téléchargement impossible (${res.status})`);
+
+  const contenu = await res.blob();
+  const adresse = URL.createObjectURL(contenu);
+  const lien = document.createElement('a');
+  lien.href = adresse;
+  lien.download = `clients-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(lien);
+  lien.click();
+  lien.remove();
+  // Libéré tout de suite après : un objet non révoqué garde le fichier en
+  // mémoire tant que l'onglet est ouvert.
+  URL.revokeObjectURL(adresse);
+}

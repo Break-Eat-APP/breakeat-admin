@@ -1553,3 +1553,52 @@ model LoyaltyTransaction {
   @@index([accountId, createdAt])
   @@map("loyalty_transactions")
 }
+
+/// La fréquentation de l'application, mesurée par visite.
+///
+/// Une ligne par VISITEUR, par TYPE de visite, par PÉRIMÈTRE et par fenêtre de
+/// trente minutes — pas une ligne par écran ouvert. Dix allers-retours entre la
+/// carte et le panier sont UNE visite : c'est ce qui rend le chiffre comparable
+/// d'un match à l'autre, et ce qui empêche la table d'enfler.
+///
+/// Aucune relation déclarée vers `User`, `Venue` ou `Event` : une mesure doit
+/// survivre à la disparition de ce qu'elle mesure. Un lieu fermé n'efface pas
+/// l'histoire de sa saison, un compte supprimé ne troue pas les totaux d'un
+/// club.
+model Frequentation {
+  id String @id @default(uuid())
+
+  /// Identifiant d'INSTALLATION, tiré au sort par l'app et gardé sur
+  /// l'appareil. Anonyme : il ne dit rien de la personne, il sert seulement à
+  /// ne pas compter deux fois le même téléphone.
+  visitorKey String  @map("visitor_key")
+  /// Rempli seulement si le visiteur est connecté. L'écart entre les deux est
+  /// précisément ce qu'on cherche à mesurer.
+  userId     String? @map("user_id")
+
+  organizationId String? @map("organization_id")
+  venueId        String? @map("venue_id")
+  eventId        String? @map("event_id")
+
+  /// APP_OPEN | LOGIN | VENUE_VIEW | EVENT_VIEW | MENU_VIEW
+  kind  String
+  /// `kind:venue:event`, recomposé par le serveur. Il existe parce qu'un index
+  /// unique PostgreSQL tient deux NULL pour différents : sans lui, une visite
+  /// sans lieu ne se dédoublonnerait jamais.
+  scope String
+
+  /// Début de la tranche de trente minutes à laquelle la visite se rattache.
+  windowStart DateTime @map("window_start")
+  /// Nombre de signalements dans cette fenêtre : distingue un passage d'une
+  /// consultation insistante.
+  hits        Int      @default(1)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([visitorKey, scope, windowStart], map: "frequentation_visite_unique")
+  @@index([organizationId, windowStart], map: "frequentation_org_fenetre")
+  @@index([venueId, windowStart], map: "frequentation_lieu_fenetre")
+  @@index([eventId, windowStart], map: "frequentation_evenement_fenetre")
+  @@map("frequentation")
+}

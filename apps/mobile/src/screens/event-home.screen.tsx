@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
+import { signalerVisite } from '@lib/frequentation';
 import {
   apiGetPublicEvent,
   formatTime,
@@ -48,6 +49,11 @@ function retourEnArriere(navigation: {
 
 export function EventHomeScreen({ route, navigation }: Props) {
   const { eventId } = route.params;
+  // Une visite par ouverture d'événement. Le serveur en déduit le lieu et le
+  // club : l'app ne choisit pas à qui attribuer l'audience.
+  useEffect(() => {
+    signalerVisite('EVENT_VIEW', { eventId });
+  }, [eventId]);
   const { token } = useAuthStore();
   // Le bandeau de connexion doit rester au-dessus de la barre du bas flottante.
   const basFlottant = useFloatingBarBottom();

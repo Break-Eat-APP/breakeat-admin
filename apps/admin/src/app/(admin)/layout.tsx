@@ -11,6 +11,7 @@ import {
   CalendarDays,
   Store,
   Tags,
+  Contact,
   Palette,
   Megaphone,
   Building2,
@@ -77,6 +78,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/team', icon: Users, label: 'Équipe' },
       { href: '/groups', icon: Tags, label: 'Groupes de clients' },
+      { href: '/clients', icon: Contact, label: 'Mes clients' },
     ],
   },
   {

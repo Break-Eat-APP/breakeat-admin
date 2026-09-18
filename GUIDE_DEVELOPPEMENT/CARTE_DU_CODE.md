@@ -28,6 +28,8 @@ Modules et à quoi ils servent :
 | `bootstrap` | Reprise de l'accès principal (route inerte sans secret) |
 | `realtime` | Temps réel (Socket.IO) vers l'écran opérateur. **Rejoindre un salon `supplier:` est VÉRIFIÉ** : membre du club, et son comptoir si le compte y est rattaché — sinon le temps réel serait une porte dérobée vers ce que l'API refuse (`isolation-buvettes.spec.ts`) |
 | `notifications` | Push Expo : campagnes programmées + **notifications archivées** (`user-notifications.service.ts`), lues par la cloche de l'app. Le push PAR STATUT existe encore mais n'a plus d'appelant depuis le 07/09 — la Live Activity le doublait |
+| `clients` | Fichier client d'un club, déduit des commandes, + export CSV. Même périmètre financier que `stats` : deux conventions donneraient deux totaux pour le même client |
+| `frequentation` | Audience de l'app : une visite = un appareil, un périmètre, une fenêtre de 30 min. Seule route d'écriture ouverte aux visiteurs NON connectés — c'est justement celui que les commandes ne voient pas |
 | `stats`, `backoffice` | Analytics club + KPIs super-admin. **Le CA HT se déduit du taux de TVA figé sur chaque ligne de commande** (5,5 / 10 / 20 %), jamais d'un taux global — voir `common/helpers/tva.ts` |
 | `feature-flags`, `app-settings` | Config sans redéploiement (CMS clé/valeur) |
 | `flaix` | Intégration Flaix (API tierce — voir `brain/FLAIX_CONTRACT.md`) |
@@ -55,7 +57,9 @@ source de sa décision ; contourner l'un d'eux fait diverger deux écrans :
 `compte-stripe.ts` (à quel compte va l'argent : celui de la buvette si exploitant
 tiers, sinon celui du club), `tva.ts` (les trois taux de la restauration, la
 dérivation HT et la ventilation), `ventilation-commandes.ts` (cette ventilation
-lue en base, partagée par `stats` et `backoffice`), `require-org-access.ts`.
+lue en base, partagée par `stats` et `backoffice`), `require-org-access.ts`,
+`csv.ts` (point-virgule + marque d'ordre UTF-8 : ce qui décide si Excel français
+ouvre le fichier ou le range en une seule colonne).
 
 **Garde-fou de démarrage** : `verifierConfigurationProduction()` dans `main.ts`
 énumère au démarrage les variables absentes ou pointant encore sur `localhost`.
