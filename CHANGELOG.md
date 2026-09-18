@@ -5,6 +5,25 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.67.1] — 2026-09-18 — Apple Pay en attente, et un `null` qui valait vrai
+
+Le certificat Apple Pay est déposé chez Stripe mais **pas activé** : Stripe
+prévient que l'activer révoquerait les certificats déjà créés sur cet identifiant
+marchand, partagé avec l'application encore publiée. `APPLE_MERCHANT_ID` est donc
+retiré de `eas.json` : tant que Stripe ne peut pas déchiffrer les jetons, l'app
+ne doit pas proposer Apple Pay — l'échec arriverait après que le client a posé
+son doigt. La carte, dans l'app, fonctionne sans lui.
+
+En vérifiant ce retrait, un piège : Expo sérialise `null` en `{}`, **qui est vrai
+en JavaScript**. L'app aurait cru avoir un identifiant marchand et ouvert Apple
+Pay avec un objet vide — rendant le paiement impossible pour tout le monde. La
+clé est maintenant absente quand la variable n'existe pas, et le code n'accepte
+qu'une chaîne commençant par `merchant.`.
+
+`~ app.config.js, paiement.native.ts, eas.json`
+
+---
+
 ## [0.67.0] — 2026-09-18 — Le paiement entre DANS l'application
 
 La 0.66 avait rendu le retour automatique, mais laissait la page web : le client

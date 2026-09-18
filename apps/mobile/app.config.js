@@ -198,8 +198,16 @@ module.exports = {
      * l'exécution — la feuille de paiement doit savoir si elle peut proposer
      * Apple Pay ou non. Une seule variable pour les deux, sinon l'un
      * s'allumerait sans l'autre.
+     *
+     * La clé est ABSENTE quand il n'y a pas d'identifiant, et surtout pas
+     * posée à `null` : Expo sérialise `null` en `{}`, qui est VRAI en
+     * JavaScript. L'app croirait alors avoir un identifiant marchand, ouvrirait
+     * Apple Pay avec un objet vide, et la feuille de paiement refuserait de
+     * s'ouvrir — donc plus de paiement du tout.
      */
-    applePayMerchantId: process.env.APPLE_MERCHANT_ID ?? null,
+    ...(process.env.APPLE_MERCHANT_ID
+      ? { applePayMerchantId: process.env.APPLE_MERCHANT_ID }
+      : {}),
   },
   // PAS de bloc `updates` ni `runtimeVersion` : ils declarent des mises a
   // jour a distance (OTA) que `expo-updates` fournirait — or le paquet n'est

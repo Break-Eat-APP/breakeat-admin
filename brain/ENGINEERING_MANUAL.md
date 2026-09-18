@@ -5311,3 +5311,46 @@ dans le portail développeur et ne peut pas être inventé ici — en déclarer 
 n'existe pas ferait échouer la signature de la build. Le code est écrit pour
 s'allumer dès que `APPLE_MERCHANT_ID` est posé, et reste silencieux sans lui.
 En attendant, la carte fonctionne, dans l'app.
+
+---
+
+## Phase 40 — Apple Pay : ne pas le proposer tant qu'il ne marche pas (18/09/2026)
+
+Le certificat Apple Pay a été produit et déposé chez Stripe, mais **pas activé** :
+Stripe prévient que l'activer révoquerait les certificats déjà créés sur cet
+identifiant marchand — `merchant.com.shapper.breakeat` étant partagé avec
+l'application précédente, encore publiée.
+
+`APPLE_MERCHANT_ID` a donc été RETIRÉ de `eas.json`. Le raisonnement tient en
+une phrase : tant que Stripe ne peut pas déchiffrer les jetons Apple Pay, l'app
+ne doit pas le proposer, car l'échec arriverait APRÈS que le client a posé son
+doigt — c'est-à-dire au moment où il croit avoir payé. Un moyen de paiement
+absent se remarque à peine ; un moyen de paiement qui échoue au dernier instant
+fait perdre la commande et la confiance.
+
+La sortie propre est un identifiant marchand SÉPARÉ pour cette application. Un
+par app est le cas normal : l'ancien certificat n'est jamais touché, le nouvel
+identifiant part vierge, et la limite de deux certificats — qui se compte par
+identifiant — cesse de serrer.
+
+### Le piège trouvé en vérifiant : `null` devient `{}`
+
+En contrôlant que le retrait avait bien pris effet, `expo config` a répondu
+`applePayMerchantId: {}` là où le code écrivait `?? null`. Expo sérialise le
+`null` de la configuration en objet vide — **qui est vrai en JavaScript**.
+
+Le test d'existence côté app (`|| undefined`) laissait donc passer `{}` : la
+feuille se serait ouverte en réclamant Apple Pay avec un identifiant
+inutilisable, et le paiement serait devenu impossible **pour tout le monde**,
+pas seulement pour Apple Pay. Une variable retirée aurait cassé plus qu'une
+variable posée.
+
+Corrigé des deux côtés, parce qu'un seul n'aurait tenu que jusqu'au prochain
+détour : la clé est maintenant ABSENTE de `extra` quand la variable n'existe pas,
+et le code n'accepte qu'une chaîne commençant par `merchant.` — la seule forme
+qu'un identifiant marchand Apple puisse avoir. Les deux cas ont été vérifiés
+avec et sans la variable.
+
+La leçon générale : une valeur de configuration qui traverse une sérialisation
+ne revient pas forcément telle qu'elle est partie. Ce qu'on vérifie n'est pas ce
+qu'on a écrit, c'est ce qui arrive de l'autre côté.

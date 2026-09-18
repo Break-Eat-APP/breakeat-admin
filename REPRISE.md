@@ -475,12 +475,34 @@ sert à rien, et Apple Pay échouerait après que le client a posé son doigt.
 À vérifier **dans chaque mode** : test et production sont deux comptes distincts
 aux yeux de Stripe.
 
-**4. ✅ FAIT** — `APPLE_MERCHANT_ID` est dans `eas.json`. La chaîne complète a
-été vérifiée sans build, par `expo config --type introspect` : le plugin reçoit
-l'identifiant, le droit iOS `com.apple.developer.in-app-payments` le porte
-(c'est lui que le profil de provisionnement doit couvrir), et `extra` le rend
-lisible à l'exécution — sans quoi la feuille ne proposerait pas Apple Pay même
-avec les droits en règle.
+**4. ⏸️ EN ATTENTE — `APPLE_MERCHANT_ID` a été RETIRÉ de `eas.json`.**
+
+Le certificat est déposé chez Stripe mais **pas activé** : Stripe prévient que
+l'activer révoquerait les certificats déjà créés sur cet identifiant marchand —
+donc potentiellement celui dont se sert l'application publiée.
+
+Tant que Stripe ne peut pas déchiffrer les jetons Apple Pay, l'app ne doit pas
+le proposer : le paiement échouerait APRÈS que le client a posé son doigt. La
+build 16 part donc **sans Apple Pay** — le paiement par carte, dans l'app,
+fonctionne sans lui. Remettre la ligne est une manipulation d'une seconde.
+
+### La sortie propre : un identifiant marchand SÉPARÉ
+
+`merchant.com.shapper.breakeat` est partagé avec l'application précédente. Rien
+n'oblige à le partager : un identifiant marchand par application est le cas
+normal.
+
+En créer un neuf (par exemple `merchant.com.breakeat.app`) règle tout d'un coup :
+l'ancien certificat n'est jamais touché, donc l'app publiée ne risque rien ; le
+nouvel identifiant part vierge, donc aucune révocation ; et la limite de deux
+certificats se compte par identifiant, donc elle cesse de serrer. Côté code,
+c'est une ligne dans `eas.json`.
+
+La chaîne technique, elle, est vérifiée : `expo config` confirme que le plugin
+reçoit l'identifiant, que le droit iOS `com.apple.developer.in-app-payments` le
+porte (c'est lui que le profil de provisionnement doit couvrir), et que `extra`
+le rend lisible à l'exécution. Les trois répondent à la variable, et disparaissent
+tous les trois sans elle.
 
 ## 🗃️ Archivés et supprimés — la règle
 

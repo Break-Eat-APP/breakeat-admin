@@ -35,8 +35,23 @@ import type { DemandePaiement, Reglement } from '@lib/paiement';
  * échouer la signature. Tant qu'il est absent, la feuille ne propose pas Apple
  * Pay ; la carte, elle, fonctionne — dans l'app.
  */
-const MARCHAND_APPLE =
-  (Constants.expoConfig?.extra?.applePayMerchantId as string | null | undefined) || undefined;
+const MARCHAND_APPLE = identifiantMarchand(Constants.expoConfig?.extra?.applePayMerchantId);
+
+/**
+ * N'accepte qu'un identifiant marchand qui en a la forme.
+ *
+ * Ce n'est pas de la prudence gratuite : Expo sérialise une valeur `null` de
+ * la configuration en `{}`, qui est VRAI en JavaScript. Un simple test de
+ * vérité laissait donc passer un objet vide, la feuille s'ouvrait en réclamant
+ * Apple Pay sans identifiant utilisable, et le paiement devenait impossible —
+ * pour tout le monde, pas seulement pour Apple Pay.
+ *
+ * Tout identifiant marchand Apple commence par `merchant.` : c'est la seule
+ * chose qu'on puisse vérifier ici, et elle suffit à écarter ce cas.
+ */
+function identifiantMarchand(valeur: unknown): string | undefined {
+  return typeof valeur === 'string' && valeur.startsWith('merchant.') ? valeur : undefined;
+}
 
 /** Le pays du compte encaisseur — celui des clubs, et de la monnaie. */
 const PAYS = 'FR';
