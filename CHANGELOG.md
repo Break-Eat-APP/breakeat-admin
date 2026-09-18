@@ -5,6 +5,36 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.66.0] — 2026-09-18 — Payer sans sortir de l'app, et un reçu qui vaut justificatif
+
+**Le retour du paiement.** La page de Stripe s'ouvrait déjà dans une feuille
+Safari intégrée, mais l'app attendait que cette feuille se referme pour aller
+chercher la commande — et la fermeture dépendait d'un rebond `breakeat://` lancé
+en JavaScript, qu'iOS ignore quand il n'est pas déclenché par un appui. Le
+client payait, restait devant une page web « Paiement accepté », et revenait à
+la main. Le sondage démarre maintenant EN MÊME TEMPS que l'ouverture de la page,
+et c'est lui qui referme la feuille dès que la commande existe. Le mode test de
+Stripe n'y était pour rien.
+
+**« BE-00000005 » → « N° 5 ».** Le numéro du jour était lu en base puis jeté au
+moment de construire la réponse : l'écran de confirmation et la Live Activity
+n'avaient que la référence longue à montrer. Celle-ci reste affichée dessous, en
+petit — elle est unique à vie, là où le numéro du jour recommence chaque matin.
+
+**Le reçu.** Il porte désormais le numéro du jour, la référence longue, et
+l'adresse du client à qui il est délivré : un ticket anonyme ne se fait pas
+rembourser.
+
+**Le bouton d'arrivée** de « Mes commandes » parle enfin comme le reste de
+l'app : « Clique ici pour nous avertir lorsque tu es devant le point de
+retrait ».
+
+`+ backend/src/modules/orders/recu.service.spec.ts` (5 tests)
+`~ cart.service (commandeDuPanier rend dailyNumber), recu.service`
+`~ mobile : checkout, order-confirmation, order-history, split, root-navigator`
+
+---
+
 ## [0.65.0] — 2026-09-18 — Suspendre un club suspend vraiment
 
 `OrgStatus` existait, le back-office savait le changer, et **aucune ligne ne le

@@ -504,7 +504,7 @@ function OrderCard({
           >
             <Ionicons name="hand-left-outline" size={16} color="#fff" />
             <Text style={styles.arrivedBtnText}>
-              Cliquez ici et signalez-nous quand vous êtes devant le point de retrait
+              Clique ici pour nous avertir lorsque tu es devant le point de retrait
             </Text>
           </Pressable>
         ))}

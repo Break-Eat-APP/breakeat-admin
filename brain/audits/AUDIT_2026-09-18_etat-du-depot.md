@@ -55,7 +55,7 @@ réserves sont écrites en commentaires explicites ou dans `ENGINEERING_MANUAL.m
 
 | Suite | Nombre | Commande |
 |---|---|---|
-| Unitaires backend | **544** (44 fichiers) | `pnpm --filter @break-eat/backend test` |
+| Unitaires backend | **550** (45 fichiers) | `pnpm --filter @break-eat/backend test` |
 | Intégration, base réelle | **44** (3 fichiers) | `pnpm test:integration` + `DATABASE_URL_TEST` |
 | Applications (mobile, web) | **0** | — |
 
@@ -152,9 +152,11 @@ gênent aucun build — mais ils ne sont plus tenus à jour.
 
 1. **Build 16** — non lancée, seul point encore ouvert. Elle apporterait sur le
    téléphone : la Live Activity réordonnée (plus de bouton vert coupé, plus de
-   « Retrait prévu à 00:00 », numéro de commande à la place de l'heure) et le
-   bandeau « produit manquant » dans l'écran **Suivi**. Tout le reste est déjà
-   actif côté serveur.
+   « Retrait prévu à 00:00 », numéro de commande à la place de l'heure), le
+   bandeau « produit manquant » dans l'écran **Suivi**, le retour automatique
+   dans l'app après paiement, « N° 5 » au lieu de « BE-00000005 » sur l'écran de
+   confirmation, et le nouveau libellé du bouton d'arrivée (phase 38). Tout le
+   reste est déjà actif côté serveur.
 
 Faits dans la même journée : la purge de la démonstration (back-office) et la
 vérification des statuts d'organisation, qui a permis de faire respecter ce

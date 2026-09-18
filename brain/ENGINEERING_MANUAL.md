@@ -5195,3 +5195,58 @@ pas changer (club actif, réactivation, commandes payées toujours servables).
 Déployé après vérification qu'aucune organisation n'était suspendue en
 production : faire respecter ce statut aurait sinon fait disparaître un club en
 service.
+
+---
+
+## Phase 38 — Revenir dans l'app après avoir payé (18/09/2026)
+
+### Le sentiment de sortir de l'application
+
+Le paiement s'ouvre dans une feuille Safari INTÉGRÉE (`openBrowserAsync`) :
+techniquement, le client n'a jamais quitté Break Eat. Ce qui le faisait sortir,
+c'est la suite. L'app attendait que la feuille se referme pour aller chercher
+la commande, et cette fermeture dépendait d'un rebond `breakeat://` lancé en
+JavaScript depuis la page de retour — qu'iOS ignore quand il n'est pas
+déclenché par un appui. Le client payait, se retrouvait devant une page web
+« Paiement accepté », et devait revenir à la main.
+
+Le renversement : la commande ne naît pas du retour du navigateur, elle naît du
+webhook Stripe. L'app n'a donc aucune raison d'attendre la feuille. Le sondage
+démarre maintenant EN MÊME TEMPS que l'ouverture de la page, et c'est lui qui
+referme la feuille dès que la commande existe. Le rebond `breakeat://` reste en
+place, mais il n'est plus le seul chemin de retour — il n'en est plus qu'un
+raccourci.
+
+Deux échéances plutôt qu'une : cinq minutes tant que la page est ouverte (le
+client saisit sa carte), vingt secondes après sa fermeture (le webhook a pris
+du retard). Et une ouverture qui échoue — `openBrowserAsync` refuse une seconde
+feuille quand une première est déjà là — interrompt l'attente au lieu de la
+laisser courir : sans page de paiement, aucune commande ne peut naître.
+
+Le mode test de Stripe n'entre pour rien dans tout cela : il change les cartes
+acceptées, pas le chemin de retour.
+
+### « BE-00000005 » là où le comptoir annonce « 5 »
+
+`dailyNumber` était lu en base par `commandeDuPanier`… puis jeté au moment de
+construire la réponse. L'écran de confirmation et la Live Activity n'avaient
+donc que la référence longue à afficher, et la Live Activity la gardait jusqu'à
+la première poussée du serveur.
+
+Le numéro court part nu (« 5 ») vers la Live Activity : c'est la carte qui écrit
+« N° » devant, et c'est aussi ce que le serveur enverra ensuite. Deux formats
+différents feraient changer le libellé sous les yeux du client.
+
+La référence longue ne disparaît pas — elle reste sous le numéro, en petit. Elle
+est unique à vie, là où le numéro du jour recommence à 1 chaque matin : c'est
+elle que le support retrouvera dans six mois.
+
+### Le reçu porte à qui il est délivré
+
+Un ticket anonyme ne se fait pas rembourser. Une note de frais, une comptabilité
+de club ou une réclamation demandent toutes de savoir qui a payé : l'adresse du
+client figure désormais sur le reçu, sous les deux numéros. Elle seule — le reçu
+ne porte toujours ni domicile ni moyen de paiement.
+
+Un compte supprimé ne bloque pas le document : la ligne disparaît, le reçu reste
+lisible. Le justificatif d'un achat déjà payé survit à son acheteur.

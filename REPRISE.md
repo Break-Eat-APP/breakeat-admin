@@ -377,6 +377,13 @@ de bouton vert coupé, numéro de commande à la place de l'heure) et le bandeau
 dans l'écran « Suivi » (phase 36). La suppression du « Retrait prévu à 00:00 »
 et le libellé court sont côté serveur : effectifs dès le déploiement.
 
+Elle emporte aussi la phase 38 : le retour automatique dans l'app après le
+paiement (l'app referme elle-même la feuille Safari dès que la commande existe),
+« N° 5 » à la place de « BE-00000005 » sur l'écran de confirmation et au
+démarrage de la Live Activity, et le nouveau libellé du bouton d'arrivée.
+Côté serveur — donc actifs dès le déploiement, sans build : le numéro du jour
+rendu à l'app et le reçu (numéro du jour + référence + adresse du client).
+
 ## 🗃️ Archivés et supprimés — la règle
 
 **Archiver n'est pas bannir.** Un compte archivé ne se connecte plus, mais la

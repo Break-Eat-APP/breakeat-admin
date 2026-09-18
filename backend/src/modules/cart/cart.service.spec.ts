@@ -649,3 +649,36 @@ describe('CartService — produit sans ligne de stock', () => {
     expect(res).toBeNull();
   });
 });
+
+// --- Le numero rendu a l'app au retour du paiement --------------
+
+describe('CartService — la commande rendue à l’app après paiement', () => {
+  it('porte le numéro du jour, et pas seulement la référence longue', async () => {
+    // Il était lu en base puis jeté à la construction de la réponse : l'écran
+    // de confirmation et la Live Activity n'avaient donc que « BE-00000005 » à
+    // montrer, là où le comptoir annonce « 5 ».
+    const prisma = {
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'order-1',
+          publicOrderNumber: 'BE-00000005',
+          dailyNumber: 5,
+          totalCents: 700,
+          status: 'PAID',
+          slot: null,
+          supplierId: SUPPLIER_ID,
+        }),
+      },
+      supplier: { findUnique: jest.fn().mockResolvedValue({ name: 'Buvette', planUrl: null }) },
+    } as unknown as PrismaService;
+
+    const reponse = await CartService.prototype.commandeDuPanier.call(
+      { prisma, requireOwnership: jest.fn().mockResolvedValue({}) } as never,
+      CART_ID,
+      USER_ID,
+    );
+
+    expect(reponse.order?.dailyNumber).toBe(5);
+    expect(reponse.order?.publicOrderNumber).toBe('BE-00000005');
+  });
+});

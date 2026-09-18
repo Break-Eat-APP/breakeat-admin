@@ -156,6 +156,7 @@ export function SplitScreen({ route, navigation }: Props) {
       navigation.replace('OrderConfirmation', {
         orderId: order.id,
         publicOrderNumber: order.publicOrderNumber,
+        dailyNumber: order.dailyNumber,
         totalCents: order.totalCents,
       });
     } catch (e: unknown) {

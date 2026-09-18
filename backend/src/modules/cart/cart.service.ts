@@ -662,6 +662,11 @@ export class CartService {
       order: {
         id: order.id,
         publicOrderNumber: order.publicOrderNumber,
+        // Le numéro court, celui qu'on crie au comptoir. Il était lu en base
+        // et jeté ici : l'écran de confirmation et la Live Activity n'avaient
+        // que la référence longue à afficher, d'où « BE-00000005 » au lieu de
+        // « N° 5 ».
+        dailyNumber: order.dailyNumber,
         totalCents: order.totalCents,
         status: order.status,
         supplierName: buvette?.name ?? null,

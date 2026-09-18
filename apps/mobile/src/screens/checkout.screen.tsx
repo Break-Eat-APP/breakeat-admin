@@ -65,23 +65,57 @@ async function ouvrirPaiement(url: string): Promise<void> {
 }
 
 /**
- * Attend que le webhook Stripe ait cree la commande, sans bloquer indefiniment.
+ * Attend que le webhook Stripe ait cree la commande — PENDANT que la page de
+ * paiement est encore ouverte.
  *
- * On interroge le serveur a intervalle court pendant une vingtaine de secondes.
- * Au-dela, ce n'est plus un delai de traitement : soit le client a annule, soit
- * quelque chose ne va pas — et dans les deux cas il vaut mieux le dire que
- * laisser tourner un sablier.
+ * C'est tout l'interet : la commande ne naît pas du retour du navigateur, elle
+ * naît du webhook. L'app n'a donc aucune raison d'attendre que la feuille se
+ * referme pour savoir que c'est paye. Auparavant, le sondage ne demarrait
+ * qu'apres fermeture, et cette fermeture dependait d'un rebond `breakeat://`
+ * lance en JavaScript depuis la page de retour — qu'iOS bloque quand il n'est
+ * pas declenche par un appui. Le client payait, restait devant une page web
+ * « Paiement accepte », et devait revenir a la main : il avait le sentiment
+ * d'avoir quitte l'application, parce que c'etait le cas.
+ *
+ * Desormais, des que la commande existe, l'app referme la feuille elle-meme.
+ *
+ * Deux echeances : tant que la page est ouverte, le client est peut-etre en
+ * train de saisir sa carte, et cinq minutes ne sont pas de trop. Une fois la
+ * page refermee, vingt secondes suffisent — au-dela, ce n'est plus un delai de
+ * traitement, et mieux vaut le dire que laisser tourner un sablier.
  */
-async function attendreLaCommande(cartId: string) {
-  const FIN = Date.now() + 20_000;
-  while (Date.now() < FIN) {
+async function attendreLaCommande(
+  cartId: string,
+  pageFermee: Promise<void>,
+  abandonner: () => boolean,
+) {
+  const DEBUT = Date.now();
+  let finDeLattente = DEBUT + 5 * 60_000;
+  void pageFermee.then(() => {
+    finDeLattente = Math.min(finDeLattente, Date.now() + 20_000);
+  });
+
+  while (Date.now() < finDeLattente) {
+    if (abandonner()) return null;
     try {
       const reponse = await apiCommandeDuPanier(cartId);
-      if (reponse.pret && reponse.order) return reponse.order;
+      if (reponse.pret && reponse.order) {
+        // La feuille peut encore afficher la page de retour de Stripe : c'est
+        // l'app qui la referme, sans rien attendre du navigateur.
+        try {
+          await WebBrowser.dismissBrowser();
+        } catch {
+          // Deja fermee — cas nominal quand le client a appuye sur « OK ».
+        }
+        return reponse.order;
+      }
     } catch {
       // Reseau capricieux au retour d'un navigateur : on retente.
     }
-    await new Promise<void>((r) => setTimeout(r, 1_200));
+    // Serre pendant la premiere minute, puis espace : au-dela, le client
+    // remplit encore son formulaire, et rien ne sert de marteler le serveur.
+    const attente = Date.now() - DEBUT < 60_000 ? 1_200 : 3_000;
+    await new Promise<void>((r) => setTimeout(r, attente));
   }
   return null;
 }
@@ -208,7 +242,18 @@ export function CheckoutScreen({ navigation }: Props) {
       //
       // La page reste HEBERGEE par Stripe : aucun numero de carte ne transite
       // par notre code, et Apple Pay continue de fonctionner.
-      await ouvrirPaiement(checkoutUrl);
+      //
+      // On n'attend PAS que la feuille se referme : le sondage ci-dessous part
+      // tout de suite, en parallele, et c'est lui qui la refermera.
+      //
+      // Une ouverture qui echoue doit se dire tout de suite, et non au bout
+      // d'une attente : sans page de paiement, aucune commande ne peut naitre.
+      // `openBrowserAsync` refuse par exemple d'ouvrir une seconde feuille
+      // quand une premiere l'est deja — un double appui suffit.
+      const ouverture: { echec?: Error } = {};
+      const pageFermee = ouvrirPaiement(checkoutUrl).catch((e: unknown) => {
+        ouverture.echec = e instanceof Error ? e : new Error(String(e));
+      });
 
       // 5. Attendre que la commande NAISSE.
       //
@@ -218,7 +263,12 @@ export function CheckoutScreen({ navigation }: Props) {
       // — mais il n'est pas nul, et afficher « aucune commande » pendant ce
       // temps-la ferait croire a un echec.
       setStep('Confirmation du paiement…');
-      const commande = await attendreLaCommande(cart.id);
+      const commande = await attendreLaCommande(
+        cart.id,
+        pageFermee,
+        () => ouverture.echec !== undefined,
+      );
+      if (ouverture.echec) throw ouverture.echec;
 
       if (!commande) {
         // Paiement peut-etre annule, peut-etre juste lent. On ne vide donc PAS
@@ -238,6 +288,7 @@ export function CheckoutScreen({ navigation }: Props) {
       navigation.replace('OrderConfirmation', {
         orderId: commande.id,
         publicOrderNumber: commande.publicOrderNumber,
+        dailyNumber: commande.dailyNumber,
         totalCents: commande.totalCents,
         buvettePlanUrl: commande.pickupPlanUrl,
       });

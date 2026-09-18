@@ -53,7 +53,14 @@ export type RootStackParamList = {
   SupplierCatalog: { eventId: string; supplierId: string };
   SlotSelector: { eventId: string };
   Checkout: undefined;
-  OrderConfirmation: { orderId: string; publicOrderNumber: string; totalCents: number; buvettePlanUrl?: string | null };
+  OrderConfirmation: {
+    orderId: string;
+    publicOrderNumber: string;
+    /** Le numéro court du jour — celui qu'on annonce au comptoir. */
+    dailyNumber?: number | null;
+    totalCents: number;
+    buvettePlanUrl?: string | null;
+  };
   /** PHASE 25 — l'ardoise partagee. Ouverte aussi depuis un navigateur, sans compte. */
   Split: { code: string };
   OrderTracking: { orderId: string };

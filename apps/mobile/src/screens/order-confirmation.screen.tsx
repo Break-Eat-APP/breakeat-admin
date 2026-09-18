@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
-import { formatPrice } from '@lib/api/mobile-api';
+import { formatOrderNumber, formatPrice } from '@lib/api/mobile-api';
 import {
   initLiveActivityTokenSync,
   startOrderTracking,
@@ -20,8 +20,13 @@ import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderConfirmation'>;
 
 export function OrderConfirmationScreen({ route, navigation }: Props) {
-  const { orderId, publicOrderNumber, totalCents, buvettePlanUrl } = route.params;
+  const { orderId, publicOrderNumber, dailyNumber, totalCents, buvettePlanUrl } = route.params;
   const [planOpen, setPlanOpen] = useState(false);
+
+  // « N° 5 », pas « BE-00000005 » : c'est ce numéro-là qui sera crié au
+  // comptoir. La référence longue reste affichée dessous, en petit — elle ne
+  // sert qu'au support, et personne ne la lit à voix haute.
+  const numero = formatOrderNumber({ dailyNumber, publicOrderNumber });
 
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -31,8 +36,18 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
   // premier token immédiatement, et il ne doit pas se perdre.
   useEffect(() => {
     initLiveActivityTokenSync();
-    void startOrderTracking({ orderId, orderNumber: publicOrderNumber });
-  }, [orderId, publicOrderNumber]);
+    // La Live Activity démarre AVANT la première poussée du serveur : si on lui
+    // donne la référence longue, c'est elle que l'écran verrouillé affiche, et
+    // elle y reste jusqu'au premier changement d'état.
+    //
+    // Le numéro part NU (« 5 ») : c'est la carte qui écrit « N° » devant, et
+    // c'est aussi ce que le serveur enverra ensuite. Deux formats différents
+    // feraient changer le libellé sous les yeux du client.
+    void startOrderTracking({
+      orderId,
+      orderNumber: dailyNumber != null ? String(dailyNumber) : publicOrderNumber,
+    });
+  }, [orderId, dailyNumber, publicOrderNumber]);
 
   useEffect(() => {
     Animated.sequence([
@@ -65,7 +80,12 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
         <View style={styles.orderCard}>
           <View style={styles.orderRow}>
             <Text style={styles.orderLabel}>N° de commande</Text>
-            <Text style={styles.orderNumber}>{publicOrderNumber}</Text>
+            <View style={styles.numeroBloc}>
+              <Text style={styles.orderNumber}>{numero}</Text>
+              {dailyNumber != null ? (
+                <Text style={styles.reference}>Réf. {publicOrderNumber}</Text>
+              ) : null}
+            </View>
           </View>
           <View style={styles.divider} />
           <View style={styles.orderRow}>
@@ -164,7 +184,9 @@ const styles = StyleSheet.create({
   },
   orderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   orderLabel: { color: THEME.inkSoft, fontSize: 13 },
-  orderNumber: { color: THEME.ink, fontSize: 15, fontWeight: '700', letterSpacing: 1 },
+  numeroBloc: { alignItems: 'flex-end' },
+  orderNumber: { color: THEME.ink, fontSize: 17, fontWeight: '700', letterSpacing: 1 },
+  reference: { color: THEME.inkSoft, fontSize: 11, marginTop: 2, letterSpacing: 0.3 },
   orderAmount: { color: THEME.orange, fontSize: 18, fontWeight: '800' },
   divider: { height: 1, backgroundColor: THEME.bgSubtle },
   statusBadge: {

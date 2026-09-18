@@ -26,7 +26,7 @@ export class RecuService {
     });
     if (!order) throw new NotFoundException('Commande introuvable');
 
-    const [buvette, club] = await Promise.all([
+    const [buvette, club, client] = await Promise.all([
       this.prisma.supplier.findUnique({
         where: { id: order.supplierId },
         select: { name: true },
@@ -34,6 +34,14 @@ export class RecuService {
       this.prisma.organization.findUnique({
         where: { id: order.organizationId },
         select: { name: true },
+      }),
+      // À qui ce reçu est délivré. Un justificatif anonyme ne se fait pas
+      // rembourser : une note de frais, une comptabilité de club ou une
+      // réclamation demandent toutes de savoir qui a payé. L'adresse suffit —
+      // le reçu ne porte toujours ni domicile ni moyen de paiement.
+      this.prisma.user.findUnique({
+        where: { id: order.userId },
+        select: { email: true },
       }),
     ]);
 
@@ -91,7 +99,7 @@ export class RecuService {
   h1 { font-size: 17px; margin: 0 0 2px; }
   .club { color: #6b625c; font-size: 13.5px; margin: 0 0 18px; }
   .num { font-size: 13px; color: #6b625c; font-variant-numeric: tabular-nums;
-         letter-spacing: .4px; margin: 0 0 20px; }
+         letter-spacing: .4px; margin: 0 0 20px; line-height: 1.7; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   td { padding: 7px 0; vertical-align: top; }
   .q { color: #6b625c; width: 34px; font-variant-numeric: tabular-nums; }
@@ -118,7 +126,11 @@ export class RecuService {
     <div class="ticket">
       <h1>${echapper(buvette?.name ?? 'Commande')}</h1>
       <p class="club">${echapper(club?.name ?? '')}</p>
-      <p class="num">Reçu n° ${echapper(order.publicOrderNumber)}</p>
+      <p class="num">
+        ${order.dailyNumber != null ? `Commande n° ${order.dailyNumber}<br>` : ''}
+        Reçu n° ${echapper(order.publicOrderNumber)}
+        ${client?.email ? `<br>Délivré à ${echapper(client.email)}` : ''}
+      </p>
 
       <table>${lignes}</table>
 
