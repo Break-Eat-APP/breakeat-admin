@@ -574,7 +574,16 @@ export async function apiGetScheduledPushes(orgId: string): Promise<ScheduledPus
 
 export async function apiCreateScheduledPush(
   orgId: string,
-  data: { eventId?: string; kind?: 'PUSH' | 'DISCOUNT_CAMPAIGN'; title: string; body?: string; discountPercent?: number; scheduledAt: string },
+  data: {
+    eventId?: string;
+    /** Cible un LIEU du club. Absent = tous ses clients. */
+    venueId?: string;
+    kind?: 'PUSH' | 'DISCOUNT_CAMPAIGN';
+    title: string;
+    body?: string;
+    discountPercent?: number;
+    scheduledAt: string;
+  },
 ): Promise<ScheduledPush> {
   return req<ScheduledPush>('POST', `/organizations/${orgId}/scheduled-pushes`, data);
 }

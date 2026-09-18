@@ -20,6 +20,8 @@ import { PushTokensService } from './push-tokens.service';
 
 export interface CreateScheduledPushInput {
   eventId?: string;
+  /** Cible un LIEU du club. Absent = tous ses clients. */
+  venueId?: string;
   kind?: 'PUSH' | 'DISCOUNT_CAMPAIGN';
   title: string;
   body?: string;
@@ -52,10 +54,22 @@ export class ScheduledPushService {
       if (!event) throw new BadRequestException("L'événement n'appartient pas à cette organisation.");
     }
 
+    // Le lieu doit appartenir au club. Sans cette vérification, un club
+    // pourrait adresser un message aux clients d'un autre en devinant un
+    // identifiant.
+    if (dto.venueId) {
+      const lieu = await this.prisma.venue.findFirst({
+        where: { id: dto.venueId, organizationId: orgId },
+        select: { id: true },
+      });
+      if (!lieu) throw new BadRequestException("Ce lieu n'appartient pas à cette organisation.");
+    }
+
     return this.prisma.scheduledPush.create({
       data: {
         organizationId: orgId,
         eventId: dto.eventId ?? null,
+        venueId: dto.venueId ?? null,
         kind: dto.kind ?? 'PUSH',
         title: dto.title.trim(),
         body: dto.body?.trim() ?? '',
@@ -84,11 +98,16 @@ export class ScheduledPushService {
 
   /**
    * Résout les jetons push cibles.
-   * - orgId null → tous les utilisateurs actifs de la plateforme (tokens enregistrés).
-   * - orgId défini → membres ayant commandé dans l'org (+ event si précisé).
+   * - orgId null → tous les utilisateurs de la plateforme (jetons enregistrés) ;
+   * - orgId défini → ceux qui ont commandé dans l'org, restreints à
+   *   l'événement ou au LIEU quand l'un des deux est précisé.
    */
-  async resolveAudience(orgId: string | null, eventId: string | null): Promise<string[]> {
-    return (await this.destinataires(orgId, eventId)).tokens;
+  async resolveAudience(
+    orgId: string | null,
+    eventId: string | null,
+    venueId: string | null = null,
+  ): Promise<string[]> {
+    return (await this.destinataires(orgId, eventId, venueId)).tokens;
   }
 
   /**
@@ -105,6 +124,7 @@ export class ScheduledPushService {
   private async destinataires(
     orgId: string | null,
     eventId: string | null,
+    venueId: string | null = null,
   ): Promise<{ tokens: string[]; userIds: string[] }> {
     if (orgId === null) {
       // Diffusion plateforme : on ne connaît que les appareils enregistrés.
@@ -114,8 +134,16 @@ export class ScheduledPushService {
         userIds: [...new Set(rows.map((r) => r.userId))],
       };
     }
+    // Segmenter PAR LIEU : un club qui tient plusieurs adresses n'a aucune
+    // raison d'annoncer une soirée au Vélodrome aux clients de son annexe. Le
+    // message arriverait à des gens qu'il ne concerne pas — et c'est ainsi
+    // qu'on se fait couper les notifications.
     const orders = await this.prisma.order.findMany({
-      where: { organizationId: orgId, ...(eventId ? { eventId } : {}) },
+      where: {
+        organizationId: orgId,
+        ...(eventId ? { eventId } : {}),
+        ...(venueId ? { venueId } : {}),
+      },
       select: { userId: true },
       distinct: ['userId'],
     });
@@ -133,7 +161,11 @@ export class ScheduledPushService {
     const sp = await this.prisma.scheduledPush.findUnique({ where: { id } });
     if (!sp) return;
     try {
-      const { tokens, userIds } = await this.destinataires(sp.organizationId, sp.eventId);
+      const { tokens, userIds } = await this.destinataires(
+        sp.organizationId,
+        sp.eventId,
+        sp.venueId,
+      );
 
       // Archivé AVANT l'envoi, et sans dépendre de son succès : un push balayé
       // de l'écran n'existe plus, la cloche est le seul endroit où l'annonce

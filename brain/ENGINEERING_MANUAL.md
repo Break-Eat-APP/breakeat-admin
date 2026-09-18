@@ -5505,3 +5505,73 @@ faute classique de la limitation de débit, et elle ne se voit qu'en production.
 15.5.18 → 15.5.25. Deux avis CRITIQUES corrigés en 15.5.24 ; montée corrective
 dans la même version mineure. Il ne reste aucun avis critique dans l'arbre de
 production, ni aucun avis sur Next.
+
+---
+
+## Phase 43 — Ce qu'un club sait de ses clients (19/09/2026)
+
+### Nouveaux visiteurs, à la place des « téléchargements par lieu »
+
+Le club demandait combien de personnes avaient téléchargé l'app chez lui. C'est
+**impossible**, et pas par faiblesse de notre code : un téléchargement se passe
+sur l'App Store, avant la première ouverture, et Apple ne donne que des totaux
+par pays.
+
+Ce qu'on mesure à la place vaut mieux : l'appareil dont la toute PREMIÈRE
+ouverture de l'application a eu lieu chez ce club. Quelqu'un qui télécharge sans
+jamais ouvrir n'apporte rien à personne.
+
+`DISTINCT ON` — une particularité PostgreSQL — rend la chose en une requête :
+pour chaque appareil, sa ligne la plus ancienne, avec le lieu. Vérifié sur base
+réelle : un visiteur venu d'un autre stade n'est pas une découverte, et une
+découverte d'il y a un an n'entre pas dans une période d'une semaine.
+
+### Prénom et nom, séparés
+
+`display_name` portait tout : « Jo », « Jo Bricole », ou ce qu'Apple voulait
+bien donner. Lisible à l'écran, inutilisable dans un fichier remis à un club.
+
+Découper un champ unique n'est jamais fiable — « Jean-Pierre De La Tour »
+n'obéit à aucune règle — donc on demande les deux. Les colonnes restent
+NULLABLES et le resteront : les comptes antérieurs n'en ont pas, et Apple ne
+transmet le nom qu'à la toute première autorisation, pas toujours. Les rendre
+obligatoires bloquerait ces inscriptions-là.
+
+`nomAffiche()` décide à UN seul endroit de ce qu'on montre : prénom + nom si on
+les a, sinon la saisie, sinon le début de l'adresse — plutôt qu'une carte de
+commande signée « undefined ».
+
+Le téléphone est vérifié dans sa FORME seulement. Le comptoir s'en sert pour
+joindre un client qui ne vient pas chercher sa commande ; prétendre l'avoir
+vérifié demanderait un code par SMS.
+
+### La fiche d'un client, et l'isolation entre clubs
+
+Ses commandes, leurs articles, ses totaux. Strictement dans le périmètre du
+club : il voit ce qui a été commandé CHEZ LUI, jamais ailleurs. Un fichier
+client ne doit pas devenir une fenêtre sur la concurrence — vérifié par un test
+d'intégration où le même client commande dans deux clubs.
+
+Les agrégats de la fiche viennent de `lister()`, la même fonction que le
+tableau. Une fiche qui afficherait un autre total ferait douter des deux.
+
+### Un piège évité de justesse : l'ordre des routes
+
+`GET /clients/:clientId` déclarée AVANT `GET /clients/export` aurait fait
+prendre « export » pour un identifiant de client — le téléchargement aurait
+répondu 400. NestJS résout dans l'ordre de déclaration. Mon propre commentaire
+disait « déclarée après », le code disait l'inverse : c'est le commentaire qui a
+trahi l'erreur.
+
+### Les campagnes, segmentées par lieu
+
+Un club qui tient plusieurs adresses n'a aucune raison d'annoncer une soirée au
+Vélodrome aux clients de son annexe. Le message arriverait à des gens qu'il ne
+concerne pas — et c'est ainsi qu'on se fait couper les notifications,
+définitivement, par les clients eux-mêmes.
+
+`venueId` est vérifié comme appartenant au club : sans cela, un club pourrait
+s'adresser aux clients d'un autre en devinant un identifiant. Nul = tous les
+clients du club, le comportement existant ne change pas. Et la diffusion
+PLATEFORME — tous clubs confondus — reste au back-office, réservée au
+super-admin.

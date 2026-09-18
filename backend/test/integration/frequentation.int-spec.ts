@@ -153,6 +153,29 @@ decrire('fréquentation et fichier client (base réelle)', () => {
     expect(fichier.map((c) => c.nom)).toEqual(['Chez moi']);
   });
 
+  it('la fiche d’un client ne montre QUE les commandes passées chez ce club', async () => {
+    // Un fichier client ne doit pas devenir une fenêtre sur la concurrence :
+    // le même client commande dans deux clubs, chacun ne voit que le sien.
+    const mien = await creerOrganisationComplete(s.prisma, unique('mien'), sa);
+    const autre = await creerOrganisationComplete(s.prisma, unique('autre'), sa);
+    const client = await s.prisma.user.create({
+      data: { email: `${unique('jo')}@test.fr`, passwordHash: 'x', displayName: 'Jo' },
+    });
+
+    await creerCommande(s.prisma, client.id, mien);
+    await creerCommande(s.prisma, client.id, mien);
+    await creerCommande(s.prisma, client.id, autre);
+
+    const fiche = await clients.fiche(mien.org.id, sa, client.id);
+    expect(fiche.commandes).toHaveLength(2);
+    expect(fiche.client?.commandes).toBe(2);
+
+    // Les totaux de la fiche et ceux du tableau sortent du MÊME calcul : une
+    // fiche qui afficherait un autre montant ferait douter des deux.
+    const [dansLaListe] = await clients.lister(mien.org.id, sa);
+    expect(fiche.client?.totalCents).toBe(dansLaListe.totalCents);
+  });
+
   it('l’export CSV rend exactement ce que la liste affiche', async () => {
     const o = await creerOrganisationComplete(s.prisma, unique('club'), sa);
     const client = await s.prisma.user.create({

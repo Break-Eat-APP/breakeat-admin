@@ -167,7 +167,7 @@ export class FrequentationService {
         },
       }),
       this.prisma.order.groupBy({
-        by: ['userId'],
+        by: ['userId', 'venueId'],
         where: {
           organizationId: orgId,
           paymentStatus: PaymentStatus.SUCCEEDED,
@@ -189,6 +189,15 @@ export class FrequentationService {
     const visiteurs = new Set(visites.map((v) => v.visitorKey));
     const connectes = new Set(visites.filter((v) => v.userId).map((v) => v.userId as string));
     const acheteurs = new Set(commandes.map((c) => c.userId));
+
+    // Les clients de CHAQUE lieu : un habitué du Vélodrome qui commande une
+    // fois à l'annexe compte pour les deux, et c'est ce qu'un club veut savoir.
+    const clientsParLieu = new Map<string, Set<string>>();
+    for (const c of commandes) {
+      const deja = clientsParLieu.get(c.venueId) ?? new Set<string>();
+      deja.add(c.userId);
+      clientsParLieu.set(c.venueId, deja);
+    }
 
     // Ceux qui ont REGARDÉ puis COMMANDÉ, sur la même période et le même
     // périmètre. C'est cette intersection qui donne un taux honnête : le
@@ -233,7 +242,7 @@ export class FrequentationService {
         connectes.size > 0 ? Math.round((connectesAyantCommande / connectes.size) * 1000) / 10 : null,
       nouveauxVisiteurs: nouveaux,
       parJour: this.parJour(visites),
-      parLieu: this.parLieu(visites, noms, decouvertes, filtre.du),
+      parLieu: this.parLieu(visites, noms, decouvertes, clientsParLieu, filtre.du),
     };
   }
 
@@ -287,6 +296,7 @@ export class FrequentationService {
     visites: LigneVisite[],
     noms: Map<string, string>,
     decouvertes: Map<string, { venueId: string | null; quand: Date }>,
+    clientsParLieu: Map<string, Set<string>>,
     depuis?: Date,
   ): AudienceLieu[] {
     const lieux = new Map<string, { visiteurs: Set<string>; visites: number; neufs: Set<string> }>();
@@ -317,6 +327,7 @@ export class FrequentationService {
         visiteursUniques: l.visiteurs.size,
         visites: l.visites,
         nouveauxVisiteurs: l.neufs.size,
+        clients: clientsParLieu.get(venueId)?.size ?? 0,
       }))
       .sort((a, b) => b.visiteursUniques - a.visiteursUniques);
   }
@@ -350,6 +361,8 @@ export interface AudienceLieu {
   visites: number;
   /** Appareils dont la toute PREMIÈRE ouverture de l'app a eu lieu ici. */
   nouveauxVisiteurs: number;
+  /** Comptes DISTINCTS ayant commandé dans ce lieu sur la période. */
+  clients: number;
 }
 
 export interface AudienceClub {

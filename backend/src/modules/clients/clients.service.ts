@@ -177,6 +177,73 @@ export class ClientsService {
   }
 
   /**
+   * La fiche d'UN client : ses agrégats, et le détail de ses commandes.
+   *
+   * Strictement limitée au périmètre du club : il voit les commandes passées
+   * CHEZ LUI, jamais celles que cette personne a passées ailleurs. Un fichier
+   * client ne doit pas devenir une fenêtre sur la concurrence.
+   */
+  async fiche(
+    orgId: string,
+    userId: string,
+    clientId: string,
+    filtre: FiltreClients = {},
+  ): Promise<FicheDetaillee> {
+    await requireOrgAccess(this.prisma, userId, orgId, ClientsService.ROLES);
+
+    const commandes = await this.prisma.order.findMany({
+      where: { ...this.perimetre(orgId, filtre), userId: clientId },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        publicOrderNumber: true,
+        dailyNumber: true,
+        createdAt: true,
+        totalCents: true,
+        status: true,
+        venueId: true,
+        items: {
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          select: { productNameSnapshot: true, quantity: true, lineTotalCents: true },
+        },
+      },
+    });
+
+    const noms = new Map(
+      (
+        await this.prisma.venue.findMany({
+          where: { id: { in: [...new Set(commandes.map((c) => c.venueId))] } },
+          select: { id: true, name: true },
+        })
+      ).map((v) => [v.id, v.name]),
+    );
+
+    // Le client lui-même, relu depuis la liste : les agrégats restent calculés
+    // à UN seul endroit, donc la fiche ne peut pas afficher un total différent
+    // de celui du tableau qui l'a ouverte.
+    const liste = await this.lister(orgId, userId, filtre);
+    const client = liste.find((c) => c.userId === clientId) ?? null;
+
+    return {
+      client,
+      commandes: commandes.map((c) => ({
+        id: c.id,
+        numero: c.dailyNumber != null ? `N° ${c.dailyNumber}` : c.publicOrderNumber,
+        reference: c.publicOrderNumber,
+        quand: c.createdAt.toISOString(),
+        lieu: noms.get(c.venueId) ?? 'Lieu supprimé',
+        totalCents: c.totalCents,
+        statut: c.status,
+        articles: c.items.map((a) => ({
+          nom: a.productNameSnapshot,
+          quantite: a.quantity,
+          totalCents: a.lineTotalCents,
+        })),
+      })),
+    };
+  }
+
+  /**
    * Le même fichier, en CSV.
    *
    * Passe par `lister` plutôt que de refaire ses requêtes : l'export doit être
@@ -259,4 +326,24 @@ export interface FicheClient {
   derniereCommande: string;
   lieux: string[];
   produitPrefere: string | null;
+}
+
+/** Une commande, telle qu'elle apparaît dans la fiche d'un client. */
+export interface CommandeDeLaFiche {
+  id: string;
+  /** Le numéro du jour quand il existe, sinon la référence longue. */
+  numero: string;
+  reference: string;
+  quand: string;
+  lieu: string;
+  totalCents: number;
+  statut: string;
+  articles: { nom: string; quantite: number; totalCents: number }[];
+}
+
+/** La fiche complète d'un client, dans le périmètre d'UN club. */
+export interface FicheDetaillee {
+  /** Nul si ce client n'a aucune commande dans le périmètre lu. */
+  client: FicheClient | null;
+  commandes: CommandeDeLaFiche[];
 }

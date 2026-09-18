@@ -10,6 +10,16 @@ class CreateScheduledPushDto {
   @IsOptional()
   eventId?: string;
 
+  /**
+   * Cible un LIEU du club. Absent = tous ses clients, comme avant.
+   *
+   * Le serveur vérifie qu'il appartient bien au club : sans cela, un club
+   * pourrait s'adresser aux clients d'un autre en devinant un identifiant.
+   */
+  @IsUUID()
+  @IsOptional()
+  venueId?: string;
+
   @IsIn(['PUSH', 'DISCOUNT_CAMPAIGN'])
   @IsOptional()
   kind?: 'PUSH' | 'DISCOUNT_CAMPAIGN';

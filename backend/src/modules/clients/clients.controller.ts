@@ -57,4 +57,23 @@ export class ClientsController {
       .header('Content-Disposition', `attachment; filename="${nomFichier}"`)
       .send(csv);
   }
+
+  /**
+   * GET /api/v1/organizations/:orgId/clients/:clientId
+   *
+   * Déclarée APRÈS `/clients/export` : sans cela, « export » serait pris pour
+   * un identifiant de client, et le téléchargement répondrait 400.
+   */
+  @Get('organizations/:orgId/clients/:clientId')
+  fiche(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('clientId', ParseUUIDPipe) clientId: string,
+    @CurrentUser() user: JwtPayload,
+    @Query('venueId') venueId?: string,
+    @Query('du') du?: string,
+    @Query('au') au?: string,
+  ) {
+    return this.clients.fiche(orgId, user.sub, clientId, lireFiltre({ venueId, du, au }));
+  }
+
 }

@@ -7,9 +7,11 @@ import {
   apiCreateScheduledPush,
   apiCancelScheduledPush,
   apiGetEvents,
+  apiGetVenues,
   getOrgId,
   type ScheduledPush,
   type AdminEvent,
+  type Venue,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 
@@ -27,6 +29,7 @@ export default function CampaignsPage() {
   const orgId = getOrgId();
   const [items, setItems] = useState<ScheduledPush[]>([]);
   const [events, setEvents] = useState<AdminEvent[]>([]);
+  const [lieux, setLieux] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState('');
   const [saving, setSaving] = useState(false);
@@ -36,6 +39,7 @@ export default function CampaignsPage() {
     title: '',
     body: '',
     eventId: '',
+    venueId: '',
     discountPercent: '50',
     scheduledAt: '',
   });
@@ -44,7 +48,12 @@ export default function CampaignsPage() {
     if (!orgId) { setLoading(false); return; }
     setLoading(true);
     try {
-      const [list, evs] = await Promise.all([apiGetScheduledPushes(orgId), apiGetEvents(orgId)]);
+      const [list, evs, lx] = await Promise.all([
+        apiGetScheduledPushes(orgId),
+        apiGetEvents(orgId),
+        apiGetVenues(orgId).catch(() => []),
+      ]);
+      setLieux(Array.isArray(lx) ? lx : []);
       setItems(Array.isArray(list) ? list : []);
       setEvents(Array.isArray(evs) ? evs : []);
     } catch (err) {
@@ -67,10 +76,11 @@ export default function CampaignsPage() {
         title: form.title.trim(),
         body: form.body.trim() || undefined,
         eventId: form.eventId || undefined,
+        venueId: form.venueId || undefined,
         discountPercent: form.kind === 'DISCOUNT_CAMPAIGN' ? parseInt(form.discountPercent, 10) : undefined,
         scheduledAt: new Date(form.scheduledAt).toISOString(),
       });
-      setForm({ kind: 'PUSH', title: '', body: '', eventId: '', discountPercent: '50', scheduledAt: '' });
+      setForm({ kind: 'PUSH', title: '', body: '', eventId: '', venueId: '', discountPercent: '50', scheduledAt: '' });
       setMsg('✓ Programmé.');
       await load();
     } catch (err) {
@@ -132,6 +142,23 @@ export default function CampaignsPage() {
             <div style={miniLabel}>Message</div>
             <input value={form.body} onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))} style={field} placeholder="Texte de la notification" />
           </div>
+          {lieux.length > 1 && (
+            <div>
+              <div style={miniLabel}>Lieu (optionnel — sinon tous)</div>
+              <select
+                value={form.venueId}
+                onChange={(e) => setForm((f) => ({ ...f, venueId: e.target.value }))}
+                style={{ ...field, cursor: 'pointer' }}
+              >
+                <option value="">Tous les clients du club</option>
+                {lieux.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    Clients de {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
             <div style={miniLabel}>Événement (optionnel — sinon tous)</div>
             <select value={form.eventId} onChange={(e) => setForm((f) => ({ ...f, eventId: e.target.value }))} style={{ ...field, cursor: 'pointer' }}>
