@@ -532,6 +532,24 @@ export async function apiGetSuppliers(orgId: string): Promise<Supplier[]> {
  * de vente qui a vendu effacerait son chiffre d'affaires. Il se ferme alors
  * plutôt qu'il ne se supprime.
  */
+/**
+ * Duplique un point de retrait AVEC sa carte, sous un nouveau nom.
+ *
+ * Quatre points de retrait qui vendent la même chose ne doivent pas demander
+ * quatre saisies — ni quatre occasions de se tromper sur un prix ou une TVA.
+ * La copie est indépendante : mettre un produit en rupture chez l'une ne touche
+ * pas l'autre.
+ */
+export async function apiDupliquerSupplier(
+  orgId: string,
+  supplierId: string,
+  name: string,
+): Promise<Supplier> {
+  return req<Supplier>('POST', `/organizations/${orgId}/suppliers/${supplierId}/dupliquer`, {
+    name,
+  });
+}
+
 export async function apiDeleteSupplier(orgId: string, supplierId: string): Promise<void> {
   return req<void>('DELETE', `/organizations/${orgId}/suppliers/${supplierId}`);
 }

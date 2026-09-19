@@ -10,6 +10,7 @@ import { RecapPanel } from '@/components/RecapPanel';
 import { LoginForm } from '@/components/LoginForm';
 import { SlotBar } from '@/components/SlotBar';
 import { ProduitsHsBar } from '@/components/ProduitsHsBar';
+import { CartePanel } from '@/components/CartePanel';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useSound } from '@/hooks/useSound';
 import {
@@ -317,6 +318,8 @@ export default function DashboardPage() {
 
   // Récap produits — masqué par défaut, ouvert à la demande pendant le service.
   const [recapOpen, setRecapOpen] = useState(false);
+  // La carte de la buvette : retirer un produit AVANT qu'un client le commande.
+  const [carteOuverte, setCarteOuverte] = useState(false);
 
   // Phase 11.4c — stack identical baskets into grouped cards (off by default so
   // the board behaves exactly as before until the operator opts in).
@@ -546,6 +549,16 @@ export default function DashboardPage() {
           >
             {recapOpen ? '📊 Récap ✓' : '📊 Récap'}
           </HeaderButton>
+          {/* Le comptoir sait AVANT le client qu'un fût est vide : il doit
+              pouvoir retirer le produit sans attendre une commande, ni un
+              manager qui n'est pas derrière le comptoir. */}
+          <HeaderButton
+            onClick={() => setCarteOuverte((v) => !v)}
+            title="La carte : mettre un produit en rupture"
+            fontSize={13}
+          >
+            {carteOuverte ? '🍺 Carte ✓' : '🍺 Carte'}
+          </HeaderButton>
           <HeaderButton onClick={() => void loadSnapshot()} title="Actualiser">
             ↺
           </HeaderButton>
@@ -706,6 +719,16 @@ export default function DashboardPage() {
               />
             ))}
           </div>
+
+          {carteOuverte && token && (
+            <CartePanel
+              orgId={orgId}
+              supplierId={supplierId}
+              token={token}
+              onChangement={() => setVersionHs((v) => v + 1)}
+              onFermer={() => setCarteOuverte(false)}
+            />
+          )}
 
           {/* Récap produits — derived from the active screen's visible orders */}
           {recapOpen && (

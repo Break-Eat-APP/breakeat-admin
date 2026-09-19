@@ -14,7 +14,7 @@ import {
 import type { CreateSupplierDto } from './dto/create-supplier.dto';
 import type { UpdateSupplierDto } from './dto/update-supplier.dto';
 import type { UpdateSupplierStatusDto } from './dto/update-supplier-status.dto';
-import type { Supplier } from '@prisma/client';
+import { ProductStatus, SupplierStatus, type Supplier } from '@prisma/client';
 
 /** Projection publique renvoyée à un exploitant externe résolvant un code de parrainage. */
 export interface ReferralLookupResult {
@@ -66,6 +66,108 @@ export class SuppliersService {
 
     this.logger.log(`Supplier created: ${supplier.id} ("${supplier.name}") in org ${organizationId}`);
     return supplier;
+  }
+
+  /**
+   * Duplique une buvette AVEC sa carte.
+   *
+   * Quatre points de retrait qui vendent la même chose, c'est quatre fois la
+   * même carte à ressaisir — et autant d'occasions de se tromper sur un prix ou
+   * un taux de TVA. On copie, on renomme, c'est tout.
+   *
+   * CE QUI EST COPIÉ : les catégories, les produits, leurs prix, leur TVA,
+   * leurs descriptions et leurs images. La carte de la nouvelle buvette est
+   * identique à celle de l'ancienne, et parfaitement INDÉPENDANTE ensuite :
+   * mettre un produit en rupture ici ne touche pas l'original.
+   *
+   * CE QUI NE L'EST PAS, et volontairement :
+   *
+   *  - le STOCK. Les quantités décrivent une réalité physique, celle d'un
+   *    comptoir précis. Les recopier annoncerait des bouteilles qui n'existent
+   *    pas. Sans ligne de stock, un produit est simplement « non suivi », donc
+   *    commandable — c'est la règle déjà en place ;
+   *  - le RATTACHEMENT AUX ÉVÉNEMENTS. Une buvette dupliquée pendant un match
+   *    apparaîtrait aussitôt sur la carte des clients, sans point de retrait ni
+   *    équipe derrière. Le club la rattache quand elle est prête ;
+   *  - le CODE DE PARRAINAGE, unique par définition. Un exploitant externe
+   *    dupliqué en reçoit un neuf.
+   *
+   * Tout se fait en UNE transaction : une carte à moitié copiée serait pire
+   * qu'un échec franc — le club croirait avoir tout, et découvrirait les
+   * manques un soir de service.
+   */
+  async dupliquer(
+    organizationId: string,
+    userId: string,
+    supplierId: string,
+    nouveauNom: string,
+  ): Promise<Supplier> {
+    await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
+
+    const nom = nouveauNom?.trim();
+    if (!nom) throw new BadRequestException('Donnez un nom à la nouvelle buvette.');
+
+    const source = await this.prisma.supplier.findFirst({
+      where: { id: supplierId, organizationId },
+      include: {
+        categories: { include: { products: true } },
+      },
+    });
+    if (!source) throw new NotFoundException('Buvette introuvable');
+
+    const copie = await this.prisma.$transaction(async (tx) => {
+      const buvette = await tx.supplier.create({
+        data: {
+          organizationId,
+          name: nom,
+          preparationZone: source.preparationZone,
+          planUrl: source.planUrl,
+          imageUrl: source.imageUrl,
+          isExternal: source.isExternal,
+          referralCode: source.isExternal ? await this.generateUniqueReferralCode() : null,
+          // Fermée à la création : une buvette qui s'ouvrirait seule prendrait
+          // des commandes que personne n'attend derrière le comptoir.
+          status: SupplierStatus.CLOSED,
+        },
+      });
+
+      for (const categorie of source.categories) {
+        const categorieCopiee = await tx.category.create({
+          data: {
+            supplierId: buvette.id,
+            name: categorie.name,
+            sortOrder: categorie.sortOrder,
+          },
+        });
+
+        for (const produit of categorie.products) {
+          await tx.product.create({
+            data: {
+              supplierId: buvette.id,
+              categoryId: categorieCopiee.id,
+              name: produit.name,
+              description: produit.description,
+              price: produit.price,
+              vatRateBps: produit.vatRateBps,
+              imageUrl: produit.imageUrl,
+              availableFrom: produit.availableFrom,
+              availableUntil: produit.availableUntil,
+              // Une copie repart EN VENTE, même si l'original est en rupture :
+              // la rupture décrit le stock d'un comptoir, pas le produit.
+              status: ProductStatus.ACTIVE,
+            },
+          });
+        }
+      }
+
+      return buvette;
+    });
+
+    const combien = source.categories.reduce((n, c) => n + c.products.length, 0);
+    this.logger.log(
+      `Buvette ${supplierId} dupliquée en ${copie.id} (« ${nom} ») — ${combien} produit(s) copié(s)`,
+    );
+    return copie;
   }
 
   /** Génère un code de parrainage unique au format BE-XXXXXX (6 alphanum. sans ambiguïté). */

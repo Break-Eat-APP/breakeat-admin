@@ -7,6 +7,7 @@ import {
   apiGetSuppliers,
   apiCreateSupplier,
   apiDeleteSupplier,
+  apiDupliquerSupplier,
   type Supplier,
   getOrgId,
 } from '@/lib/api/admin-client';
@@ -57,6 +58,36 @@ export default function SuppliersPage() {
 
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+
+  /**
+   * Duplique un point de retrait avec toute sa carte.
+   *
+   * Le nom est demandé D'ABORD : deux points de retrait nommés pareil seraient
+   * impossibles à distinguer au comptoir comme dans les statistiques, et
+   * renommer après coup est le genre de chose qu'on oublie de faire.
+   */
+  const handleDupliquer = async (id: string, nom: string) => {
+    const propose = prompt(
+      `Nom du nouveau point de retrait ?
+
+Sa carte sera identique à celle de « ${nom} », ` +
+        `puis totalement indépendante.`,
+      `${nom} (2)`,
+    );
+    if (propose === null) return;
+    if (!propose.trim()) return;
+
+    setDuplicatingId(id);
+    try {
+      await apiDupliquerSupplier(orgId!, id, propose.trim());
+      await load();
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Duplication impossible.');
+    } finally {
+      setDuplicatingId(null);
+    }
+  };
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`Supprimer « ${name} » ?
@@ -266,6 +297,30 @@ Cette action est definitive.`)) return;
                   <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: '3px 12px', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
                     {st.label}
                   </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void handleDupliquer(s.id, s.name);
+                    }}
+                    disabled={duplicatingId === s.id}
+                    title="Créer un point de retrait avec la même carte"
+                    style={{
+                      background: '#fff',
+                      border: `1px solid ${BRAND.border}`,
+                      color: BRAND.inkSoft,
+                      borderRadius: 8,
+                      padding: '5px 12px',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      cursor: duplicatingId === s.id ? 'wait' : 'pointer',
+                      fontFamily: 'inherit',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {duplicatingId === s.id ? 'Copie…' : 'Dupliquer'}
+                  </button>
                   <button
                     type="button"
                     onClick={(e) => {

@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { IsNotEmpty, IsString, MaxLength } from 'class-validator';
 import { SuppliersService } from './suppliers.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
@@ -18,6 +19,14 @@ import { UpdateSupplierStatusDto } from './dto/update-supplier-status.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
+
+/** Le seul choix à faire en dupliquant : comment s'appelle la nouvelle. */
+class DupliquerSupplierDto {
+  @IsString()
+  @IsNotEmpty({ message: 'Donnez un nom à la nouvelle buvette.' })
+  @MaxLength(80)
+  name!: string;
+}
 
 @UseGuards(JwtAuthGuard)
 @Controller('organizations/:orgId/suppliers')
@@ -33,6 +42,23 @@ export class SuppliersController {
     @Body() dto: CreateSupplierDto,
   ) {
     return this.suppliersService.create(orgId, user.sub, dto);
+  }
+
+  /**
+   * POST /api/v1/organizations/:orgId/suppliers/:id/dupliquer
+   *
+   * Recopie la buvette ET sa carte sous un nouveau nom. Quatre points de
+   * retrait qui vendent la même chose ne doivent pas demander quatre saisies.
+   */
+  @Post(':id/dupliquer')
+  @HttpCode(HttpStatus.CREATED)
+  dupliquer(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: DupliquerSupplierDto,
+  ) {
+    return this.suppliersService.dupliquer(orgId, user.sub, id, dto.name);
   }
 
   /** GET /api/v1/organizations/:orgId/suppliers */

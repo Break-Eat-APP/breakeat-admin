@@ -5626,3 +5626,60 @@ un statut, rien d'autre. Le bandeau reste donc factuel — « remboursement
 partiel », sans dire combien. Afficher une somme demanderait une colonne, et
 donc une décision : elle n'a de sens que le jour où le remboursement sera
 déclenché depuis nos écrans.
+
+---
+
+## Phase 45 — La carte, entre les mains du comptoir (19/09/2026)
+
+### Le geste qui manquait
+
+Un produit ne pouvait passer « en rupture » qu'en RÉACTION : le comptoir
+signalait un manquant sur une commande déjà passée, et le produit disparaissait
+de la carte au passage. Autrement dit, **il fallait qu'un client ait commandé le
+Coca pour qu'on puisse dire qu'il n'y en a plus.**
+
+Or le comptoir sait avant. Le fût est vide, le carton est parti. Le panneau « La
+carte » du poste opérateur liste les produits de SA buvette et permet de retirer
+ou de remettre en vente, sans attendre une commande ni un manager qui n'est pas
+derrière le comptoir.
+
+Deux détails qui comptent en service :
+- un filtre, parce qu'une carte de quarante produits ne se parcourt pas à la
+  main un soir de match ;
+- les produits masqués par un manager (`INACTIVE`, `ARCHIVED`) sont affichés
+  **sans bouton**, avec la raison. Le serveur refuse de les basculer : offrir un
+  bouton qui échoue serait pire que n'en offrir aucun.
+
+Rien de tout cela ne touche les autres buvettes : les produits leur
+appartiennent déjà, et le serveur refuse tout produit d'une autre buvette. La
+règle était donc déjà tenue — il manquait seulement le geste.
+
+### Dupliquer une buvette avec sa carte
+
+Quatre points de retrait qui vendent la même chose, c'est quatre fois la même
+carte à ressaisir, et autant d'occasions de se tromper sur un prix ou un taux
+de TVA.
+
+Ce qui est copié : catégories, produits, prix, TVA, descriptions, images. La
+copie est ensuite **parfaitement indépendante** — c'est la propriété qui compte,
+et elle est vérifiée sur base réelle : mettre un produit en rupture sur la copie
+laisse l'original en vente.
+
+Ce qui ne l'est PAS, et pourquoi :
+
+- **le stock** : les quantités décrivent un comptoir physique. Les recopier
+  annoncerait des bouteilles qui n'existent pas. Sans ligne de stock, un produit
+  est « non suivi », donc commandable — la règle déjà en place ;
+- **le rattachement aux événements** : une buvette dupliquée pendant un match
+  apparaîtrait aussitôt chez les clients, sans point de retrait ni équipe
+  derrière. Le club la rattache quand elle est prête ;
+- **le code de parrainage**, unique par définition ;
+- **l'état** : la copie naît FERMÉE. Une buvette qui s'ouvrirait seule prendrait
+  des commandes que personne n'attend.
+
+Un produit en rupture chez l'original repart **en vente** sur la copie : la
+rupture décrit le stock d'un comptoir, pas le produit.
+
+Tout se fait en UNE transaction. Une carte à moitié copiée serait pire qu'un
+échec franc : le club croirait avoir tout, et découvrirait les manques un soir
+de service.
