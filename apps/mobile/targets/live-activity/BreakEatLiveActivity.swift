@@ -33,13 +33,43 @@ private func statusColor(for state: BreakEatOrderAttributes.ContentState) -> Col
   return Brand.orange
 }
 
-private func statusSymbol(for state: BreakEatOrderAttributes.ContentState) -> String {
+/// Le symbole qui REMPLACE le logo quand il se passe quelque chose.
+///
+/// `nil` pour le cours normal des choses : c'est alors la marque qui s'affiche.
+/// Les autres états portent une information qu'un logo ne dirait pas — commande
+/// prête, produit manquant, retard — et elle prime sur la présence de marque.
+private func symboleParticulier(for state: BreakEatOrderAttributes.ContentState) -> String? {
   if state.hasMissingItems { return "exclamationmark.triangle.fill" }
   if state.isCancelled { return "xmark.circle.fill" }
   if state.isReady { return "checkmark.circle.fill" }
   if state.status == "COLLECTED" { return "bag.circle.fill" }
   if state.status == "DELAYED" { return "clock.badge.exclamationmark.fill" }
-  return "bolt.circle.fill"
+  return nil
+}
+
+/// L'icône d'état : le logo Break Eat au cours normal, un symbole parlant
+/// quand il se passe quelque chose.
+///
+/// Le logo garde son FOND BLANC, et c'est voulu : la carte de l'écran
+/// verrouillé est sombre, et une marque orange posée dessus s'y fondrait. Sur
+/// blanc, elle se voit d'un coup d'œil — c'est tout l'intérêt d'être là.
+private struct IconeEtat: View {
+  let state: BreakEatOrderAttributes.ContentState
+  var taille: CGFloat = 21
+
+  var body: some View {
+    if let symbole = symboleParticulier(for: state) {
+      Image(systemName: symbole)
+        .font(.system(size: taille, weight: .semibold))
+        .foregroundStyle(statusColor(for: state))
+    } else {
+      Image("LogoBreakEat")
+        .resizable()
+        .scaledToFit()
+        .frame(width: taille * 1.3, height: taille * 1.3)
+        .clipShape(Circle())
+    }
+  }
 }
 
 // MARK: - Liens de retour vers l'app
@@ -116,9 +146,7 @@ private struct HeroRow: View {
         Circle()
           .fill(statusColor(for: state).opacity(0.13))
           .frame(width: 42, height: 42)
-        Image(systemName: statusSymbol(for: state))
-          .font(.system(size: 21, weight: .semibold))
-          .foregroundStyle(statusColor(for: state))
+        IconeEtat(state: state, taille: 21)
       }
 
       VStack(alignment: .leading, spacing: 3) {
@@ -397,9 +425,7 @@ struct BreakEatLiveActivity: Widget {
             Circle()
               .fill(statusColor(for: context.state).opacity(0.18))
               .frame(width: 38, height: 38)
-            Image(systemName: statusSymbol(for: context.state))
-              .font(.system(size: 19, weight: .semibold))
-              .foregroundStyle(statusColor(for: context.state))
+            IconeEtat(state: context.state, taille: 19)
           }
           .padding(.leading, 4)
         }
@@ -492,8 +518,11 @@ struct BreakEatLiveActivity: Widget {
 
       } compactLeading: {
         // ── Vue compacte : une seule commande en cours ─────────
-        Image(systemName: statusSymbol(for: context.state))
-          .foregroundStyle(statusColor(for: context.state))
+        //
+        // C'est ici que le client voit Break Eat quand il est ailleurs dans son
+        // téléphone. La marque y a toute sa place — sauf quand un état demande
+        // son attention.
+        IconeEtat(state: context.state, taille: 15)
 
       } compactTrailing: {
         if context.state.hasMissingItems {
@@ -511,8 +540,10 @@ struct BreakEatLiveActivity: Widget {
 
       } minimal: {
         // ── Vue minimale : plusieurs activités simultanées ─────
-        Image(systemName: statusSymbol(for: context.state))
-          .foregroundStyle(statusColor(for: context.state))
+        //
+        // Quelques points de large, au milieu d'autres applications : c'est le
+        // logo qui permet de reconnaître la nôtre d'un regard.
+        IconeEtat(state: context.state, taille: 14)
       }
       // Ouvre l'app sur le suivi de la commande concernée.
       .widgetURL(orderURL(orderId: context.attributes.orderId))

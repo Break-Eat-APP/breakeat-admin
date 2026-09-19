@@ -21,4 +21,26 @@ module.exports = {
   bundleIdentifier: `${process.env.BUNDLE_ID ?? 'com.shapper.breakeat'}.LiveActivity`,
   deploymentTarget: '16.2',
   frameworks: ['SwiftUI', 'WidgetKit', 'ActivityKit'],
+
+  /**
+   * Le logo, compilé DANS l'extension.
+   *
+   * Une extension est un binaire séparé : elle ne voit ni les assets de
+   * l'application, ni son bundle JavaScript. Le logo doit donc être livré ici,
+   * sinon `Image("LogoBreakEat")` ne trouverait rien et l'écran verrouillé
+   * afficherait un carré vide — sans la moindre erreur de compilation.
+   *
+   * Trois tailles pour les trois densités d'écran : une seule image redimensionnée
+   * par le système paraîtrait floue sur un iPhone récent.
+   *
+   * Le fond BLANC est dans l'image : le logo doit ressortir sur la carte
+   * sombre de l'écran verrouillé, pas s'y fondre.
+   */
+  images: {
+    LogoBreakEat: {
+      '1x': './logo-live-activity.png',
+      '2x': './logo-live-activity@2x.png',
+      '3x': './logo-live-activity@3x.png',
+    },
+  },
 };
