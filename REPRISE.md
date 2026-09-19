@@ -132,6 +132,43 @@ n'est pas une sauvegarde.
 ni dans le dépôt (le `.gitignore` le refuse désormais) ni dans un envoi. Il se
 range ailleurs que sur la machine qu'il protège.
 
+## 📮 SERVICE CLIENT ET PARRAINAGE — 19/09/2026
+
+**Aide & contact** (profil de l'app) remplace l'ancien « Disponible
+prochainement ». Quatre motifs — commande, paiement, compte, autre — qui
+ouvrent la messagerie avec un message DÉJÀ PRÉPARÉ : l'amorce rappelle ce
+qu'on aura besoin de savoir, et le pied porte le compte, l'appareil et la
+version. Sans ça, chaque échange commence par « quel compte ? quelle
+version ? », et une réponse qui tenait en un message en demande trois.
+
+⚠️ **L'ADRESSE EST À CONFIRMER** : `contact@breakeatapp.com`, posée dans
+`apps/mobile/src/screens/aide.screen.tsx` (constante `ADRESSE_SUPPORT`, une
+seule ligne à changer). Une adresse fausse est pire que pas de bouton : le
+client croit avoir écrit, personne ne reçoit rien, et il attend une réponse qui
+ne viendra jamais.
+
+**Inviter un ami** ouvre la feuille de partage du système — WhatsApp, iMessage,
+mail, tout ce que la personne a déjà. Rien à intégrer.
+
+### Le parrainage : ce qu'il faut savoir AVANT d'en décider l'économie
+
+Ce partage ne dit pas QUI a invité QUI, et ce n'est pas un oubli : **un lien
+vers l'App Store perd tout paramètre en chemin**. Apple ne transmet rien à
+l'application après l'installation. Attribuer automatiquement une installation
+à un parrain demande un service tiers de lien différé — payant, et qui piste
+l'appareil.
+
+La façon fiable, gratuite et honnête reste le **code que le filleul saisit**
+dans l'application après son inscription.
+
+Reste la question que tu as posée toi-même, et qui est la vraie : **une
+récompense de parrainage sort de ta poche**, puisque les produits appartiennent
+aux buvettes. Trois pistes, à trancher avant d'écrire une ligne :
+offrir des POINTS de fidélité (le programme existe déjà, et c'est le club qui
+les honore) ; faire porter la remise par le club volontaire, en échange des
+nouveaux clients qu'elle lui amène ; ou ne rien offrir du tout et garder le
+partage tel quel, qui ne coûte rien et fonctionne déjà.
+
 ## 🚀 QUI DÉPLOIE QUOI — vérifié le 18/09/2026
 
 Trois chemins différents, et le confondre fait chercher une panne là où il n'y

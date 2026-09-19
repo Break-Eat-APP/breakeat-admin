@@ -59,6 +59,7 @@ import { ecouterOuvertures, ecouterPush, enregistrerPush } from '@lib/push-notif
 import { signalerVisite } from '@lib/frequentation';
 import { useNotifStore } from '@store/notif.store';
 import { NotificationsScreen } from '@screens/notifications.screen';
+import { AideScreen } from '@screens/aide.screen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -214,6 +215,7 @@ export default function AppPreview() {
               <Stack.Screen name="Cart" component={CartScreen} />
               <Stack.Screen name="Profile" component={ProfileScreen} />
               <Stack.Screen name="Partners" component={PartnersScreen} />
+              <Stack.Screen name="Aide" component={AideScreen} />
 
               {/* Auth */}
               <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />

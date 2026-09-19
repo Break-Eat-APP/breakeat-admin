@@ -64,6 +64,8 @@ export type RootStackParamList = {
   /** PHASE 25 — l'ardoise partagee. Ouverte aussi depuis un navigateur, sans compte. */
   Split: { code: string };
   OrderTracking: { orderId: string };
+  /** Service client : les motifs, et un message déjà préparé. */
+  Aide: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();

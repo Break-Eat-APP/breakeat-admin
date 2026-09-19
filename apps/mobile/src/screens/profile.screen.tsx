@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { partagerLApplication } from '@lib/partage';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { useAuthStore } from '@store/auth.store';
@@ -71,7 +72,12 @@ export function ProfileScreen() {
         <View style={styles.divider} />
         <NotificationsMenuItem />
         <View style={styles.divider} />
-        <MenuItem label="Aide & contact" onPress={() => showAlert('Bientôt', 'Disponible prochainement.')} />
+        <MenuItem label="Aide & contact" onPress={() => navigation.navigate('Aide')} />
+        <View style={styles.divider} />
+        {/* Le partage : la feuille du système porte déjà WhatsApp, iMessage et
+            le reste. Rien à intégrer, et le client retrouve l'application qu'il
+            utilise tous les jours. */}
+        <MenuItem label="Inviter un ami" onPress={() => void partagerLApplication()} />
         <View style={styles.divider} />
         <MenuItem label="Mentions légales" onPress={() => showAlert('Bientôt', 'Disponible prochainement.')} />
         <View style={styles.divider} />
