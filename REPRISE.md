@@ -194,8 +194,10 @@ Ce qu'il faut savoir avant d'y toucher :
 - **Réservé aux rôles de direction** (`MANAGE_ROLES`) : un contrat ne regarde ni
   le comptoir ni l'équipe marketing.
 
-⚠️ **Une migration à déployer** : `20260919_documents`. Tant qu'elle n'est pas
-passée sur Railway, la page répond en erreur — la table n'existe pas.
+**La migration `20260919_documents` part toute seule** : Railway lance
+`prisma migrate deploy` au démarrage (`railway.json`). Rien à faire à la main —
+mais tant que le backend n'a pas redémarré, la page répond en erreur, la table
+n'existant pas encore.
 
 Couvert par `backend/test/integration/documents.int-spec.ts` (8 essais sur base
 réelle) : contenu rendu **octet pour octet**, faux PDF refusé, et un club qui
