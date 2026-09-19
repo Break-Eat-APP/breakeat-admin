@@ -11,11 +11,12 @@ import { showAlert } from '@lib/alert';
 type Props = NativeStackScreenProps<RootStackParamList, 'Aide'>;
 
 /**
- * ⚠️ L'ADRESSE DU SERVICE CLIENT — à confirmer avant la mise en ligne.
+ * L'adresse du service client — confirmée le 19/09/2026.
  *
- * Une adresse fausse est pire que pas de bouton du tout : le client croit avoir
- * écrit, personne ne reçoit rien, et il attend une réponse qui ne viendra
- * jamais. Elle est isolée ici pour n'avoir qu'une ligne à changer.
+ * Isolée ici pour n'avoir qu'une ligne à changer le jour venu. Et à ne jamais
+ * changer à la légère : une adresse fausse est pire que pas de bouton du tout.
+ * Le client croit avoir écrit, personne ne reçoit rien, et il attend une
+ * réponse qui ne viendra jamais.
  */
 const ADRESSE_SUPPORT = 'contact@breakeatapp.com';
 

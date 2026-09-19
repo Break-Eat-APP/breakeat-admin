@@ -141,11 +141,11 @@ qu'on aura besoin de savoir, et le pied porte le compte, l'appareil et la
 version. Sans ça, chaque échange commence par « quel compte ? quelle
 version ? », et une réponse qui tenait en un message en demande trois.
 
-⚠️ **L'ADRESSE EST À CONFIRMER** : `contact@breakeatapp.com`, posée dans
-`apps/mobile/src/screens/aide.screen.tsx` (constante `ADRESSE_SUPPORT`, une
-seule ligne à changer). Une adresse fausse est pire que pas de bouton : le
-client croit avoir écrit, personne ne reçoit rien, et il attend une réponse qui
-ne viendra jamais.
+L'adresse est **`contact@breakeatapp.com`**, confirmée le 19/09/2026 et posée
+dans `apps/mobile/src/screens/aide.screen.tsx` (constante `ADRESSE_SUPPORT`, une
+seule ligne à changer). À ne jamais modifier à la légère : une adresse fausse
+est pire que pas de bouton du tout — le client croit avoir écrit, personne ne
+reçoit rien, et il attend une réponse qui ne viendra jamais.
 
 **Inviter un ami** ouvre la feuille de partage du système — WhatsApp, iMessage,
 mail, tout ce que la personne a déjà. Rien à intégrer.
