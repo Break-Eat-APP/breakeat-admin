@@ -1,17 +1,34 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { THEME, shadowSoft, HEAD } from '@lib/theme';
-import { BreakEatLogo } from '@components/break-eat-logo';
+import { useCartStore } from '@store/cart.store';
+import { useNotifStore } from '@store/notif.store';
 import { navigateTo } from '@navigation/nav-ref';
 import type { RootStackParamList } from '@navigation/root-navigator';
 
+// L'eclair de la marque, deja sur son fond orange — et c'est EXACTEMENT le
+// meme : #FD4000, releve au pixel dans le fichier d'origine. Le raccord avec
+// la pastille est donc invisible.
+const ECLAIR = require('../../assets/eclair-neon.png');
+
 /**
  * Barre du bas PERSISTANTE — rendue en overlay au-dessus de chaque écran
- * (hors du Stack), façon application native : Lieux · Mes commandes (gros
- * bouton central) · Panier. Toujours accessible pour revenir à l'accueil.
+ * (hors du Stack), façon application native.
+ *
+ * Cinq places : Lieux · Panier — la PASTILLE — Alertes · Profil. À gauche le
+ * parcours d'achat, à droite ce qui appartient au client, et au milieu ce pour
+ * quoi il rouvre l'application : ses commandes en cours.
+ *
+ * L'éclair plutôt que le logo dans la pastille : un logo répété à chaque écran
+ * ne dit rien de ce que le bouton FAIT. L'éclair dit la rapidité — la promesse
+ * de l'app — et se lit à 24 pixels, ce qu'un lockup ne fait pas.
+ *
+ * Alertes et Profil étaient jusqu'ici deux icônes dans le bandeau orange de
+ * l'accueil, donc introuvables depuis tout autre écran. Ici, elles suivent le
+ * client partout.
  */
 
 // Geometrie REELLE de la barre — a lire avec `styles`, en bas de ce fichier.
@@ -19,15 +36,18 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 // dans `styles` sans les reporter ici remettrait un bouton sous la barre.
 const ECART_BAS = 16; // `wrap` : bottom = insets.bottom + 16
 const HAUTEUR_BARRE = 70; // `bar`
-const DEBORD_PASTILLE = 37; // `fab` : 72 de haut, marginTop -38 → deborde vers le haut
+// `fab` : marginTop -34. Borne HAUTE du debord reel (~22 px une fois la
+// colonne recentree) — on arrondit vers le haut, jamais vers le bas : trop
+// d'espace reserve ne se voit pas, trop peu cache un bouton.
+const DEBORD_PASTILLE = 34;
 
 /**
  * Hauteur occupee par la barre, hors zone sure.
  *
- * La pastille centrale COMPTE : elle deborde de 37 px au-dessus de la barre.
- * Une valeur qui l'ignore laisse le bouton « Mes commandes » mordre sur ce qui
- * se trouve dessous — c'est ce qui arrivait au bouton « Choisir un creneau »,
- * dont la moitie basse disparaissait.
+ * La pastille centrale COMPTE : elle deborde au-dessus de la barre. Une valeur
+ * qui l'ignore laisse le bouton « Mes commandes » mordre sur ce qui se trouve
+ * dessous — c'est ce qui arrivait au bouton « Choisir un creneau », dont la
+ * moitie basse disparaissait.
  *
  * Valeur PLANCHER : preferer `useBottomBarSpace()`, qui ajoute l'encoche.
  */
@@ -60,47 +80,135 @@ export function useFloatingBarBottom(ecart = 12): number {
 /** Écrans où la barre est masquée (plein écran / parcours bloquant). */
 const HIDDEN_ON: Array<keyof RootStackParamList> = ['Login', 'QRScanner'];
 
+/**
+ * Le compte porté par une icône.
+ *
+ * Au-delà de 99, « 99+ » : trois chiffres ne tiennent pas dans une pastille de
+ * 18 px, et l'écart entre 128 et 214 n'intéresse plus personne.
+ */
+function Pastille({ compte }: { compte: number }) {
+  if (compte <= 0) return null;
+  return (
+    <View style={[styles.badge, compte > 9 && styles.badgeLarge]}>
+      <Text style={styles.badgeText}>{compte > 99 ? '99+' : compte}</Text>
+    </View>
+  );
+}
+
+function Onglet({
+  icone,
+  libelle,
+  actif,
+  compte = 0,
+  onPress,
+}: {
+  icone: React.ReactNode;
+  libelle: string;
+  actif: boolean;
+  compte?: number;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.tab} onPress={onPress} hitSlop={6}>
+      <View>
+        {icone}
+        <Pastille compte={compte} />
+      </View>
+      <Text style={[styles.tabLabel, actif && styles.tabLabelActive]} numberOfLines={1}>
+        {libelle}
+      </Text>
+      {/* Le point sous l'onglet actif. L'orange seul se perd chez les daltoniens
+          et sur un écran en plein soleil ; une forme, non. */}
+      <View style={[styles.dot, actif && styles.dotActive]} />
+    </Pressable>
+  );
+}
+
 export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
   const insets = useSafeAreaInsets();
+  // Selecteurs SCALAIRES : rendre un objet ici re-rendrait la barre a chaque
+  // changement du panier, sur tous les ecrans.
+  const articles = useCartStore((e) => e.items.reduce((total, i) => total + i.quantity, 0));
+  const nonLues = useNotifStore((e) => e.nonLues);
 
   if (!currentRoute || HIDDEN_ON.includes(currentRoute as keyof RootStackParamList)) {
     return null;
   }
 
   const isLieux = currentRoute === 'Lieux';
-  const isCommandes = currentRoute === 'Commandes';
   const isPanier = currentRoute === 'Cart';
+  const isCommandes = currentRoute === 'Commandes';
+  const isAlertes = currentRoute === 'Notifications';
+  const isProfil = currentRoute === 'Profile';
+
+  const teinte = (actif: boolean) => (actif ? THEME.orange : THEME.inkSoft);
 
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: insets.bottom + 16 }]}>
       <View style={[styles.bar, shadowSoft]}>
-        {/* Lieux */}
-        <Pressable style={styles.tab} onPress={() => navigateTo('Lieux')}>
-          <MaterialCommunityIcons
-            name="stadium-variant"
-            size={26}
-            color={isLieux ? THEME.orange : THEME.grey}
-          />
-          <Text style={[styles.tabLabel, isLieux && styles.tabLabelActive]}>Lieux</Text>
-        </Pressable>
+        <Onglet
+          libelle="Lieux"
+          actif={isLieux}
+          onPress={() => navigateTo('Lieux')}
+          icone={
+            <MaterialCommunityIcons name="stadium-variant" size={23} color={teinte(isLieux)} />
+          }
+        />
+        <Onglet
+          libelle="Panier"
+          actif={isPanier}
+          compte={articles}
+          onPress={() => navigateTo('Cart')}
+          icone={
+            <Ionicons
+              name={isPanier ? 'cart' : 'cart-outline'}
+              size={23}
+              color={teinte(isPanier)}
+            />
+          }
+        />
 
-        {/* Mes commandes — gros bouton central surélevé */}
-        <Pressable style={styles.fabWrap} onPress={() => navigateTo('Commandes')}>
-          <View style={styles.fab}>
-            <BreakEatLogo size={56} variant="white" />
+        {/* Mes commandes — la pastille surélevée. */}
+        <Pressable style={styles.fabWrap} onPress={() => navigateTo('Commandes')} hitSlop={6}>
+          {/* Deux vues imbriquees, et non une seule : sur iOS, une ombre posee
+              sur la meme vue qu'un `overflow: hidden` est rognee avec le
+              contenu — la pastille perdrait son relief. L'exterieure porte
+              l'ombre, l'interieure decoupe l'image en rond. */}
+          <View style={[styles.fabOmbre, isCommandes && styles.fabOmbreActive]}>
+            <View style={styles.fab}>
+              <Image source={ECLAIR} style={styles.fabImage} resizeMode="cover" />
+            </View>
           </View>
-          <Text style={[styles.fabLabel, isCommandes && styles.tabLabelActive]}>Mes commandes</Text>
+          <Text style={[styles.fabLabel, !isCommandes && styles.fabLabelInactive]} numberOfLines={1}>
+            Commandes
+          </Text>
         </Pressable>
 
-        {/* Panier */}
-        <Pressable style={styles.tab} onPress={() => navigateTo('Cart')}>
-          <Ionicons
-            name={isPanier ? 'cart' : 'cart-outline'}
-            size={26}
-            color={isPanier ? THEME.orange : THEME.grey}
-          />
-          <Text style={[styles.tabLabel, isPanier && styles.tabLabelActive]}>Panier</Text>
-        </Pressable>
+        <Onglet
+          libelle="Alertes"
+          actif={isAlertes}
+          compte={nonLues}
+          onPress={() => navigateTo('Notifications')}
+          icone={
+            <Ionicons
+              name={isAlertes ? 'notifications' : 'notifications-outline'}
+              size={23}
+              color={teinte(isAlertes)}
+            />
+          }
+        />
+        <Onglet
+          libelle="Profil"
+          actif={isProfil}
+          onPress={() => navigateTo('Profile')}
+          icone={
+            <Ionicons
+              name={isProfil ? 'person-circle' : 'person-circle-outline'}
+              size={24}
+              color={teinte(isProfil)}
+            />
+          }
+        />
       </View>
     </View>
   );
@@ -116,27 +224,81 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     height: 70,
-    borderRadius: 36,
+    borderRadius: 35,
     backgroundColor: THEME.surface,
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
   },
 
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 4 },
-  tabLabel: { fontSize: 10, fontFamily: HEAD.semibold, color: THEME.grey, marginTop: 2, letterSpacing: 0.2 },
+  tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 6 },
+  tabLabel: {
+    fontSize: 10,
+    fontFamily: HEAD.semibold,
+    color: THEME.inkSoft,
+    marginTop: 3,
+    letterSpacing: 0.2,
+  },
   tabLabelActive: { color: THEME.orange },
 
-  fabWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  // Le point garde sa place meme eteint : sans cela, l'onglet actif se
+  // decalerait de trois pixels vers le haut a chaque changement d'ecran.
+  dot: { width: 4, height: 4, borderRadius: 2, marginTop: 3, backgroundColor: 'transparent' },
+  dotActive: { backgroundColor: THEME.orange },
+
+  // Largeur FIXE, et non `flex` : la pastille ne doit pas retrecir sur un
+  // petit ecran au point de mordre sur « Panier ».
+  fabWrap: { width: 82, alignItems: 'center', justifyContent: 'center' },
+  fabOmbre: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginTop: -34,
+    // Un fond OPAQUE est necessaire : une vue transparente ne projette aucune
+    // ombre sur iOS.
+    backgroundColor: THEME.orange,
+    // Ombre ORANGE, pas grise : la pastille doit paraitre posee au-dessus de
+    // la barre, pas collee dessus.
+    shadowColor: THEME.orange,
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  // L'image fige la couleur : la pastille ne peut plus foncer pour dire « tu y
+  // es ». C'est l'ombre qui porte le signal, avec le libelle passe en orange.
+  fabOmbreActive: { shadowOpacity: 0.6, shadowRadius: 16, elevation: 12 },
   fab: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: '100%',
+    height: '100%',
+    borderRadius: 32,
+    overflow: 'hidden',
+    borderWidth: 5,
+    borderColor: '#fff',
+    backgroundColor: THEME.orange,
+  },
+  fabImage: { width: '100%', height: '100%' },
+  fabLabel: {
+    fontSize: 10,
+    fontFamily: HEAD.bold,
+    color: THEME.orange,
+    marginTop: 4,
+    letterSpacing: 0.2,
+  },
+  fabLabelInactive: { color: THEME.inkSoft },
+
+  badge: {
+    position: 'absolute',
+    top: -6,
+    left: 13,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
     backgroundColor: THEME.orange,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -38,
-    borderWidth: 5,
+    borderWidth: 2,
     borderColor: '#fff',
-    ...shadowSoft,
   },
-  fabLabel: { fontSize: 10, fontFamily: HEAD.bold, color: THEME.orange, marginTop: 2, letterSpacing: 0.2 },
+  badgeLarge: { left: 10 },
+  badgeText: { color: '#fff', fontSize: 10, fontFamily: HEAD.bold, lineHeight: 13 },
 });

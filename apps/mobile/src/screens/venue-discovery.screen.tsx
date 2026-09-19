@@ -53,7 +53,7 @@ export function VenueDiscoveryScreen() {
   const espaceBas = useBottomBarSpace();
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
-  const { nonLues, rafraichir } = useNotifStore();
+  const { rafraichir } = useNotifStore();
   const { coords, status: locStatus, request: requestLocation } = useUserLocation();
   const [query, setQuery] = useState('');
   const [planUrl, setPlanUrl] = useState<string | null>(null);
@@ -131,29 +131,6 @@ export function VenueDiscoveryScreen() {
       <View style={[styles.band, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerRow}>
           <Image source={LOGO_FULL_WHITE} style={styles.lockup} resizeMode="contain" />
-          <View style={styles.headerIcons}>
-            {/* La cloche et son compte.
-                Un point seul disait « il y a du nouveau » sans dire combien :
-                le client ouvrait pour trouver un unique message, ou vingt. Le
-                chiffre lui laisse le choix d'y aller maintenant ou plus tard.
-                Au-delà de 99, « 99+ » — trois chiffres ne tiennent pas dans une
-                pastille, et la différence entre 128 et 214 n'intéresse plus. */}
-            <Pressable
-              onPress={() => navigation.navigate('Notifications')}
-              hitSlop={8}
-              style={styles.bellWrap}
-            >
-              <Ionicons name="notifications-outline" size={26} color="#fff" />
-              {nonLues > 0 && (
-                <View style={[styles.notifBadge, nonLues > 9 && styles.notifBadgeLarge]}>
-                  <Text style={styles.notifBadgeText}>{nonLues > 99 ? '99+' : nonLues}</Text>
-                </View>
-              )}
-            </Pressable>
-            <Pressable onPress={() => navigation.navigate('Profile')} hitSlop={8}>
-              <Ionicons name="menu" size={28} color="#fff" />
-            </Pressable>
-          </View>
         </View>
       </View>
 
@@ -365,26 +342,6 @@ const styles = StyleSheet.create({
   band: { backgroundColor: THEME.orange, paddingBottom: 16, paddingHorizontal: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 6 },
   lockup: { width: 150, height: 150 * (212 / 760) },
-  headerIcons: { position: 'absolute', right: 0, top: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: 18 },
-  bellWrap: {},
-  notifBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -6,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 4,
-    backgroundColor: '#22c55e',
-    // Le liseré orange détache le vert du bandeau, sur lequel il se poserait
-    // sinon sans limite nette.
-    borderWidth: 2,
-    borderColor: THEME.orange,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  notifBadgeLarge: { paddingHorizontal: 5 },
-  notifBadgeText: { color: '#fff', fontSize: 10.5, fontWeight: '800' },
 
   searchBox: {
     flexDirection: 'row', alignItems: 'center', gap: 10,

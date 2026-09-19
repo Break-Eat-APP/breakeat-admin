@@ -169,6 +169,31 @@ les honore) ; faire porter la remise par le club volontaire, en échange des
 nouveaux clients qu'elle lui amène ; ou ne rien offrir du tout et garder le
 partage tel quel, qui ne coûte rien et fonctionne déjà.
 
+## 📱 BARRE DU BAS — refonte du 19/09/2026
+
+Cinq places : **Lieux · Panier — la PASTILLE — Alertes · Profil**. À gauche le
+parcours d'achat, à droite ce qui appartient au client, au milieu ses commandes.
+
+- **La cloche et le menu ont QUITTÉ le bandeau orange de l'accueil.** Ils n'y
+  vivaient que sur l'écran Lieux : depuis le panier ou une commande, le client
+  ne pouvait atteindre ni ses notifications ni son profil. Deux cloches sur le
+  même écran n'avaient pas de sens — le bandeau ne porte plus que le lockup.
+- **Deux compteurs** : les notifications non lues (« 99+ » au-delà) et le nombre
+  d'articles au panier. Lus par sélecteur SCALAIRE sur les stores zustand —
+  rendre un objet re-rendrait la barre à chaque changement de panier, sur tous
+  les écrans.
+- **La pastille porte une IMAGE** (`assets/eclair-neon.png`, éclair néon sur son
+  fond orange), pas une icône vectorielle. Deux conséquences : l'orange du
+  fichier est exactement `#FD4000` — relevé au pixel — donc le raccord avec la
+  pastille est invisible ; et la couleur est FIGÉE, la pastille ne peut plus
+  foncer pour dire « tu y es ». C'est l'ombre qui porte ce signal.
+- **Deux vues imbriquées pour la pastille**, et ce n'est pas du zèle : sur iOS,
+  une ombre posée sur la même vue qu'un `overflow: hidden` est rognée avec le
+  contenu. L'extérieure porte l'ombre, l'intérieure découpe l'image en rond.
+- **`BOTTOM_BAR_SPACE` est passé de 123 à 120** (la pastille a maigri de 72 à
+  64). Les trois constantes en tête du fichier sont la seule source du calcul :
+  les changer dans `styles` sans les reporter remettrait un bouton sous la barre.
+
 ## 📄 DOCUMENTATION DU CLUB — 19/09/2026
 
 Dashboard manager → **Mon lieu → Documentation**. Le club dépose son contrat
