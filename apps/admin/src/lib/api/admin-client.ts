@@ -1626,3 +1626,68 @@ export async function apiTelechargerClients(orgId: string, filtre: FiltreDonnees
   // mémoire tant que l'onglet est ouvert.
   URL.revokeObjectURL(adresse);
 }
+
+// ─── Documents du club ────────────────────────────────────────────────────────
+
+/** Un document déposé. Le contenu n'est JAMAIS dans cette liste. */
+export interface DocumentClub {
+  id: string;
+  name: string;
+  sizeBytes: number;
+  createdAt: string;
+  /** `null` si le compte qui l'a déposé n'existe plus. */
+  deposePar: string | null;
+}
+
+export async function apiGetDocuments(orgId: string): Promise<DocumentClub[]> {
+  return req<DocumentClub[]>('GET', `/organizations/${orgId}/documents`);
+}
+
+/**
+ * Dépose un PDF.
+ *
+ * `fetch` nu, et non `req` : le corps est un `FormData`. Poser soi-même un
+ * `Content-Type` sur du multipart CASSE l'envoi — la frontière est générée par
+ * le navigateur, et elle doit figurer dans l'en-tête. On le laisse faire.
+ */
+export async function apiDeposerDocument(orgId: string, fichier: File): Promise<DocumentClub> {
+  const corps = new FormData();
+  corps.append('fichier', fichier);
+
+  const res = await fetch(`${API_URL}/organizations/${orgId}/documents`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${getToken()}` },
+    body: corps,
+  });
+
+  if (!res.ok) {
+    // Le serveur explique POURQUOI il refuse (pas un PDF, trop lourd) : ce
+    // message vaut mieux qu'un code d'erreur affiché tel quel.
+    const detail = await res.json().catch(() => null);
+    throw new Error(detail?.message ?? `Dépôt impossible (${res.status})`);
+  }
+  return res.json() as Promise<DocumentClub>;
+}
+
+/**
+ * Récupère le PDF et rend une adresse locale, à donner à un `<iframe>`.
+ *
+ * Un `<iframe src="…/fichier">` ne marcherait pas : le jeton voyage dans un
+ * en-tête, et un iframe ne sait pas en poser. On lit donc le fichier nous-mêmes,
+ * puis on le remet au navigateur comme un objet local. Le jeton ne se retrouve
+ * jamais dans une adresse — donc jamais dans l'historique.
+ *
+ * L'APPELANT doit révoquer l'adresse quand il a fini : sinon le PDF reste en
+ * mémoire tant que l'onglet est ouvert.
+ */
+export async function apiOuvrirDocument(orgId: string, documentId: string): Promise<string> {
+  const res = await fetch(`${API_URL}/organizations/${orgId}/documents/${documentId}/fichier`, {
+    headers: { Authorization: `Bearer ${getToken()}` },
+  });
+  if (!res.ok) throw new Error(`Lecture impossible (${res.status})`);
+  return URL.createObjectURL(await res.blob());
+}
+
+export async function apiSupprimerDocument(orgId: string, documentId: string): Promise<void> {
+  await req<{ supprime: true }>('DELETE', `/organizations/${orgId}/documents/${documentId}`);
+}

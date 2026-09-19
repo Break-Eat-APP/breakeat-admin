@@ -30,6 +30,7 @@ import { COMPTEURS } from './common/securite/limitation';
 import { APP_GUARD } from '@nestjs/core';
 import { StatsModule } from './modules/stats/stats.module';
 import { ClientsModule } from './modules/clients/clients.module';
+import { DocumentsModule } from './modules/documents/documents.module';
 import { FrequentationModule } from './modules/frequentation/frequentation.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
@@ -88,6 +89,7 @@ import appConfig from './config/app.config';
     ThrottlerModule.forRoot(COMPTEURS),
     StatsModule,
     ClientsModule,
+    DocumentsModule,
     FrequentationModule,
     // Phase 18 — Notifications push (fondation Expo : C1/C2/C3)
     NotificationsModule,

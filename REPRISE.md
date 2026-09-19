@@ -169,6 +169,38 @@ les honore) ; faire porter la remise par le club volontaire, en échange des
 nouveaux clients qu'elle lui amène ; ou ne rien offrir du tout et garder le
 partage tel quel, qui ne coûte rien et fonctionne déjà.
 
+## 📄 DOCUMENTATION DU CLUB — 19/09/2026
+
+Dashboard manager → **Mon lieu → Documentation**. Le club dépose son contrat
+signé en PDF, le relit **dans la page** (aucun téléchargement), en garde
+plusieurs, et peut en supprimer.
+
+Ce qu'il faut savoir avant d'y toucher :
+
+- **Le contenu vit dans la base** (`documents.content`, `BYTEA`), pas dans un
+  stockage objet. Choix assumé : un contrat par club, quelques méga-octets, et
+  surtout **aucune adresse publique** — la lecture passe par la même
+  authentification que le reste, sans lien signé à faire expirer. Le jour où le
+  volume l'exigera, seul `documents.service.ts` bougera.
+- **Le type est vérifié sur le CONTENU**, pas sur ce que le navigateur annonce :
+  un vrai PDF commence par `%PDF-`. Renommer un `.php` en `.pdf` ne passe pas.
+- **Borne à 10 Mo posée deux fois** : dans l'intercepteur (le téléversement
+  s'arrête avant de traverser le réseau) et **dans la base**
+  (`documents_taille_raisonnable`), pour le jour où une route oublierait.
+- **L'aperçu ne peut pas être un simple `<iframe src="…/fichier">`** : le jeton
+  voyage dans un EN-TÊTE, qu'un iframe ne sait pas poser. On lit le fichier, on
+  le remet au navigateur comme objet local, et on **révoque** l'adresse à la
+  fermeture — sinon le PDF reste en mémoire tant que l'onglet est ouvert.
+- **Réservé aux rôles de direction** (`MANAGE_ROLES`) : un contrat ne regarde ni
+  le comptoir ni l'équipe marketing.
+
+⚠️ **Une migration à déployer** : `20260919_documents`. Tant qu'elle n'est pas
+passée sur Railway, la page répond en erreur — la table n'existe pas.
+
+Couvert par `backend/test/integration/documents.int-spec.ts` (8 essais sur base
+réelle) : contenu rendu **octet pour octet**, faux PDF refusé, et un club qui
+n'atteint jamais le document d'un autre même en connaissant son identifiant.
+
 ## 🚀 QUI DÉPLOIE QUOI — vérifié le 18/09/2026
 
 Trois chemins différents, et le confondre fait chercher une panne là où il n'y

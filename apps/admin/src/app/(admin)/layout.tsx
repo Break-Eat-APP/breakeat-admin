@@ -15,6 +15,7 @@ import {
   Palette,
   Megaphone,
   Building2,
+  FileText,
   Users,
   Settings,
   type LucideIcon,
@@ -67,6 +68,9 @@ const NAV_GROUPS: NavGroup[] = [
       // pas dans un groupe « communication » avec les campagnes push.
       { href: '/appearance', icon: Palette, label: "Apparence de l'app" },
       { href: '/events', icon: CalendarDays, label: 'Événements' },
+      // Le contrat signé avec Break Eat et les pièces du lieu : c'est une
+      // pièce DU LIEU, pas un réglage système.
+      { href: '/documentation', icon: FileText, label: 'Documentation' },
     ],
   },
   {

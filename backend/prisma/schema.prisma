@@ -340,6 +340,7 @@ model Organization {
   venues                  Venue[]
   events                  Event[]
   suppliers               Supplier[]
+  documents               Document[]
   pickupPoints            PickupPoint[]
   groups                  Group[]
   /// PHASE 11 — reusable operator-dashboard screen definitions
@@ -1614,4 +1615,35 @@ model Frequentation {
   @@index([venueId, windowStart], map: "frequentation_lieu_fenetre")
   @@index([eventId, windowStart], map: "frequentation_evenement_fenetre")
   @@map("frequentation")
+}
+
+/// Un document déposé par un club : contrat signé, attestation, etc.
+///
+/// Le CONTENU vit dans la base. L'alternative — un stockage objet — demanderait
+/// des identifiants que personne n'a posés, et bloquerait la fonctionnalité sur
+/// une inscription chez un hébergeur. Ces documents sont peu nombreux, petits,
+/// et lus rarement.
+///
+/// Ce que ça simplifie, et qui compte pour un contrat : l'accès passe par la
+/// même authentification que le reste. Aucune adresse publique, aucun lien
+/// signé à faire expirer.
+model Document {
+  id             String @id @default(uuid())
+  organizationId String @map("organization_id")
+
+  /// Le nom tel que le club l'a déposé.
+  name      String
+  mimeType  String @map("mime_type")
+  sizeBytes Int    @map("size_bytes")
+  /// Borné à 10 Mo par la base elle-même (`documents_taille_raisonnable`).
+  content   Bytes
+
+  /// Qui a déposé. Nul si le compte a disparu depuis.
+  uploadedBy String?  @map("uploaded_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt], map: "documents_org_date")
+  @@map("documents")
 }
