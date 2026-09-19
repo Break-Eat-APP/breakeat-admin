@@ -28,6 +28,7 @@ import { EVT_COMMANDES_A_RECHARGER } from '@lib/hooks/use-deep-links';
 import { useCartStore } from '@store/cart.store';
 import * as WebBrowser from 'expo-web-browser';
 import { MissingItemsBanner } from '@components/missing-items-banner';
+import { RemboursementBanner } from '@components/remboursement-banner';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -419,6 +420,12 @@ function OrderCard({
           style={styles.manquant}
         />
       )}
+
+      {/* Remboursement — JAMAIS masqué par l'état de la commande.
+          Un remboursement arrive le plus souvent APRÈS que tout est terminé :
+          le limiter aux commandes en cours reviendrait à ne l'afficher
+          quasiment jamais. */}
+      <RemboursementBanner paymentStatus={order.paymentStatus} style={styles.manquant} />
 
       {/* Progression — trois traits légendés, arrondis.
           Le libellé compte : « Préparation » dit ce qui se passe, là où un point

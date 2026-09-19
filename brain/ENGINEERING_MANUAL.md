@@ -5575,3 +5575,54 @@ s'adresser aux clients d'un autre en devinant un identifiant. Nul = tous les
 clients du club, le comportement existant ne change pas. Et la diffusion
 PLATEFORME — tous clubs confondus — reste au back-office, réservée au
 super-admin.
+
+---
+
+## Phase 44 — Dire au client qu'il a été remboursé (19/09/2026)
+
+### Le constat
+
+La base savait déjà l'enregistrer : `PaymentStatus` porte `REFUNDED` et
+`PARTIALLY_REFUNDED` depuis les origines. L'API le renvoyait même déjà, les
+routes de commande utilisant `include` et non `select`.
+
+**Personne ne le lisait.** Une commande remboursée s'affichait « Récupérée »,
+comme si de rien n'était. Le client voyait l'argent revenir sur son compte sans
+que l'application lui en dise un mot — ou, pire, ne le voyait pas revenir et
+n'avait aucune trace de la décision.
+
+### Pourquoi c'était à faire MAINTENANT, et pas « quand Flaix arrivera »
+
+L'EXÉCUTION d'un remboursement dépend de qui encaisse : seule la clé qui a créé
+le paiement peut le rembourser. Le jour où un partenaire encaissera à notre
+place, c'est lui qui déclenchera.
+
+Son AFFICHAGE, non. Quel que soit celui qui rend l'argent, c'est dans CETTE
+application que le client vient voir où en est sa commande. Ce bandeau vaut donc
+dans tous les scénarios — il n'y a rien de spéculatif à l'écrire.
+
+### Deux décisions d'affichage
+
+**Bleu, et non rouge.** Le rouge dit « problème », et il est déjà pris par
+l'annulation et le produit manquant. Un remboursement est une information :
+l'argent revient. Le teinter en rouge inquiéterait un client à qui il n'arrive,
+au fond, rien de grave.
+
+**Le délai est écrit noir sur blanc.** « Comptez quelques jours ouvrés, selon
+votre banque. » Ce n'est pas du remplissage : l'argent ne revient pas à la
+seconde, et un client qui ne voit rien sur son compte le lendemain croit qu'on
+ne l'a pas remboursé. C'est le message que reçoit un service client juste après
+chaque remboursement.
+
+**Et il n'est JAMAIS masqué par l'état de la commande.** Un remboursement
+arrive presque toujours APRÈS que tout est terminé : le limiter aux commandes en
+cours reviendrait à ne l'afficher quasiment jamais. La première version le
+faisait — c'est l'erreur à ne pas refaire.
+
+### Ce qui manque encore
+
+Le MONTANT remboursé n'est pas stocké : `Payment` porte le montant d'origine et
+un statut, rien d'autre. Le bandeau reste donc factuel — « remboursement
+partiel », sans dire combien. Afficher une somme demanderait une colonne, et
+donc une décision : elle n'a de sens que le jour où le remboursement sera
+déclenché depuis nos écrans.

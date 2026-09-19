@@ -355,6 +355,14 @@ export interface Order {
    */
   dailyNumber?: number | null;
   status: string;
+  /**
+   * Statut du PAIEMENT — distinct de celui de la commande.
+   *
+   * `REFUNDED` / `PARTIALLY_REFUNDED` : le client a été remboursé. L'API le
+   * renvoyait depuis toujours ; rien ne le lisait, et une commande remboursée
+   * s'affichait « Récupérée », comme si de rien n'était.
+   */
+  paymentStatus?: string | null;
   totalCents: number;
   currency: string;
   createdAt: string;

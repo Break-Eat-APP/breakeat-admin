@@ -16,6 +16,7 @@ import { apiGetOrder, formatOrderNumber, formatPrice, type Order } from '@lib/ap
 import { PageHeader } from '@components/page-header';
 import { Ionicons } from '@expo/vector-icons';
 import { MissingItemsBanner, ROUGE_MANQUANT } from '@components/missing-items-banner';
+import { RemboursementBanner } from '@components/remboursement-banner';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderTracking'>;
 
@@ -237,6 +238,12 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
         {!statusCfg.isFinal && (
           <MissingItemsBanner lignes={order.items} comptoir={order.supplierName} />
         )}
+
+        {/* Remboursement — HORS de la condition ci-dessus, volontairement.
+            Un remboursement arrive presque toujours APRÈS que la commande est
+            terminée : le masquer sur les commandes finies reviendrait à ne
+            jamais l'afficher. */}
+        <RemboursementBanner paymentStatus={order.paymentStatus} style={{ marginTop: 10 }} />
 
         {/* Progress steps (only for non-final normal flow) */}
         {order.status !== 'CANCELLED' && order.status !== 'RECOVERED' && (
