@@ -25,6 +25,15 @@ export type TypeVisite = (typeof TYPES_VISITE)[number];
 const FENETRE_MS = 30 * 60 * 1000;
 
 /**
+ * Le premier jour où la fréquentation a été mesurée (mise en service).
+ *
+ * Avant cette date, un jour avec des commandes et « 0 visiteur » ne dit PAS
+ * que personne n'est venu : il dit que personne ne comptait. Le tableau de bord
+ * l'écrit en toutes lettres plutôt que d'afficher des zéros.
+ */
+export const DEBUT_MESURE_FREQUENTATION = '2026-09-18';
+
+/**
  * La fréquentation de l'application : qui l'ouvre, et où.
  *
  * Ce que ça répond, et qui n'avait aucune réponse jusqu'ici : « combien de
@@ -188,7 +197,7 @@ export class FrequentationService {
       // Pour le détail PAR JOUR : quand, combien, où.
       this.prisma.order.findMany({
         where: whereCommandes,
-        select: { createdAt: true, totalCents: true, venueId: true },
+        select: { createdAt: true, totalCents: true, venueId: true, userId: true },
       }),
       // Les matchs de la période, pour nommer chaque jour. Le contenant
       // invisible d'un lieu ouvert en continu n'est pas un match.
@@ -363,7 +372,7 @@ export class FrequentationService {
    */
   private parJour(e: {
     visites: LigneVisite[];
-    ventes: Array<{ createdAt: Date; totalCents: number; venueId: string }>;
+    ventes: Array<{ createdAt: Date; totalCents: number; venueId: string; userId: string }>;
     matchs: Array<{ name: string; startAt: Date; venueId: string }>;
     decouvertes: Array<{ cle: string; premiere: { venueId: string; quand: Date } }>;
     jourDe: (instant: Date, venueId: string | null) => string;
@@ -374,6 +383,8 @@ export class FrequentationService {
         visiteurs: Set<string>;
         passages: Set<string>;
         nouveaux: Set<string>;
+        connectes: Set<string>;
+        acheteurs: Set<string>;
         commandes: number;
         caTtcCents: number;
         evenements: Set<string>;
@@ -386,6 +397,8 @@ export class FrequentationService {
           visiteurs: new Set(),
           passages: new Set(),
           nouveaux: new Set(),
+          connectes: new Set(),
+          acheteurs: new Set(),
           commandes: 0,
           caTtcCents: 0,
           evenements: new Set(),
@@ -399,6 +412,7 @@ export class FrequentationService {
       const t = jour(e.jourDe(v.windowStart, v.venueId));
       t.visiteurs.add(v.visitorKey);
       t.passages.add(clePassage(v));
+      if (v.userId) t.connectes.add(v.userId);
     }
     for (const d of e.decouvertes) {
       jour(e.jourDe(d.premiere.quand, d.premiere.venueId)).nouveaux.add(d.cle);
@@ -407,6 +421,7 @@ export class FrequentationService {
       const t = jour(e.jourDe(c.createdAt, c.venueId));
       t.commandes += 1;
       t.caTtcCents += c.totalCents;
+      t.acheteurs.add(c.userId);
     }
     for (const m of e.matchs) {
       // Seulement les jours où il s'est passé quelque chose : un match créé
@@ -420,9 +435,19 @@ export class FrequentationService {
         visiteursUniques: t.visiteurs.size,
         visites: t.passages.size,
         nouveauxVisiteurs: t.nouveaux.size,
+        visiteursConnectes: t.connectes.size,
+        // Des COMPTES des deux côtés, comme la carte du haut.
+        clientsAyantCommande: t.acheteurs.size,
+        tauxConversion:
+          t.connectes.size > 0
+            ? Math.round(
+                ([...t.connectes].filter((u) => t.acheteurs.has(u)).length / t.connectes.size) * 1000,
+              ) / 10
+            : null,
         commandes: t.commandes,
         caTtcCents: t.caTtcCents,
         evenements: [...t.evenements].sort((a, b) => a.localeCompare(b, 'fr')),
+        mesure: cle >= DEBUT_MESURE_FREQUENTATION,
       }))
       .sort((a, b) => a.jour.localeCompare(b.jour));
 
@@ -519,11 +544,18 @@ export interface TrancheAudience {
   visiteursUniques: number;
   visites: number;
   nouveauxVisiteurs: number;
+  visiteursConnectes: number;
+  /** CLIENTS différents qui ont commandé ce jour-là (un client = une personne). */
+  clientsAyantCommande: number;
+  /** Parmi les visiteurs connectés du jour, la part qui a commandé ; `null` sans visiteur connecté. */
+  tauxConversion: number | null;
   /** Commandes payées et non annulées — le périmètre de la comptabilité. */
   commandes: number;
   caTtcCents: number;
   /** Les matchs de ce jour-là, pour que la ligne dise de quoi elle parle. */
   evenements: string[];
+  /** Faux avant la mise en service de la mesure : les zéros n'y veulent rien dire. */
+  mesure: boolean;
 }
 
 export interface AudienceLieu {

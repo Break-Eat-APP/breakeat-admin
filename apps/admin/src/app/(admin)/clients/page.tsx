@@ -254,14 +254,21 @@ export default function ClientsPage() {
           valeur={audience ? INT.format(audience.visiteursUniques) : '—'}
           precision={
             audience
-              ? `${INT.format(audience.visites)} visite${audience.visites > 1 ? 's' : ''} au total`
+              ? `${INT.format(audience.visites)} passage${audience.visites > 1 ? 's' : ''}`
               : undefined
           }
         />
         <Chiffre
           icone={Users}
-          libelle="Dont connectés"
+          libelle="Connectés à leur compte"
           valeur={audience ? INT.format(audience.visiteursConnectes) : '—'}
+          precision={
+            audience
+              ? `sur ${INT.format(audience.visiteursUniques)} visiteur${
+                  audience.visiteursUniques > 1 ? 's' : ''
+                } unique${audience.visiteursUniques > 1 ? 's' : ''}`
+              : undefined
+          }
         />
         <Chiffre
           icone={Sparkles}
@@ -295,6 +302,10 @@ export default function ClientsPage() {
         réinstalle l&apos;application compte deux fois. Ce sont des ordres de grandeur
         d&apos;audience — le chiffre d&apos;affaires, lui, reste exact.
         <br />
+        <strong>Connectés à leur compte</strong> = les visiteurs qui étaient connectés à leur compte
+        Break Eat en ouvrant votre carte : on sait qui ils sont. Les autres sont des téléphones
+        anonymes.
+        <br />
         Le <strong>taux de conversion</strong> ne porte que sur les visiteurs <em>identifiés</em>,
         les seuls qu&apos;on puisse relier à une commande : combien, parmi ceux qui étaient
         connectés en regardant, ont fini par commander.
@@ -304,8 +315,8 @@ export default function ClientsPage() {
         découverts ici » : aucune boutique d&apos;applications ne dit où un téléchargement a eu
         lieu — et télécharger sans jamais ouvrir n&apos;apporte rien.
         <br />
-        Une <strong>visite</strong> = un appareil venu chez vous dans une même demi-heure,
-        quel que soit le nombre d&apos;écrans consultés. « 1 visiteur, 2 visites » : une
+        Un <strong>passage</strong> = un téléphone venu chez vous dans une même demi-heure,
+        quel que soit le nombre d&apos;écrans consultés. « 1 visiteur unique, 2 passages » : une
         personne venue deux fois.
         <br />
         La fréquentation est mesurée depuis le <strong>18 septembre 2026</strong> : sur une période
@@ -325,7 +336,7 @@ export default function ClientsPage() {
                 <th style={{ padding: '6px 0' }}>Lieu</th>
                 <th style={{ padding: '6px 0', textAlign: 'right' }}>Visiteurs</th>
                 <th style={{ padding: '6px 0', textAlign: 'right' }}>Nouveaux</th>
-                <th style={{ padding: '6px 0', textAlign: 'right' }}>Visites</th>
+                <th style={{ padding: '6px 0', textAlign: 'right' }}>Passages</th>
               </tr>
             </thead>
             <tbody>

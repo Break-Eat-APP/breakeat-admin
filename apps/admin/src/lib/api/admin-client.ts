@@ -1597,10 +1597,17 @@ export interface TrancheAudience {
   visiteursUniques: number;
   visites: number;
   nouveauxVisiteurs: number;
+  visiteursConnectes: number;
+  /** Clients DIFFÉRENTS qui ont commandé ce jour-là. */
+  clientsAyantCommande: number;
+  /** Parmi les visiteurs connectés du jour, la part qui a commandé ; `null` sans visiteur connecté. */
+  tauxConversion: number | null;
   commandes: number;
   caTtcCents: number;
   /** Les matchs de ce jour-là. */
   evenements: string[];
+  /** Faux avant la mise en service de la mesure (18/09/2026). */
+  mesure: boolean;
 }
 
 /** Ce qui restreint la lecture : un lieu, une période, ou rien. */

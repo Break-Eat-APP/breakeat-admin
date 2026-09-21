@@ -247,8 +247,18 @@ visiteurs ; à égalité, le plus de commandes).
   d'un match du soir sur le lendemain.
 - Commandes et CA : même périmètre que la comptabilité (payé, non annulé).
 - Un match sans une visite ni une commande ne crée pas de ligne.
-- « Passages » est devenu **« visites »** partout : « 1 visiteur, 2 visites » =
-  une personne venue deux fois (une visite = un appareil dans une demi-heure).
+- **On garde « passages »** : essayé « visites », trop proche de « visiteurs » à
+  la lecture. « 1 visiteur unique, 2 passages » = une personne venue deux fois
+  (un passage = un téléphone dans une demi-heure).
+- **Les colonnes du jour sont celles des cartes du haut** : visiteurs uniques,
+  connectés à leur compte, nouveaux, ont commandé, taux de conversion — puis
+  commandes et CA TTC. « Ont commandé » compte des CLIENTS, « Commandes » leur
+  nombre total.
+- **Avant le 18/09/2026, « Fréquentation non mesurée à cette date »** au lieu de
+  zéros (`DEBUT_MESURE_FREQUENTATION`) : ces jours-là, personne ne comptait.
+- La colonne « Match » n'apparaît que si au moins un jour en a un.
+- **« Dont connectés » est devenu « Connectés à leur compte »** : la question a
+  été posée, l'intitulé ne suffisait pas.
 - **Départage des premiers lieux** : deux lieux ouverts dans la même demi-heure
   ont la même `window_start` ; PostgreSQL tirait au hasard. `created_at` tranche
   désormais — un essai passait ou échouait selon le tirage.

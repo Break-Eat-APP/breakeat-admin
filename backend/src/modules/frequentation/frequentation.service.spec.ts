@@ -278,6 +278,37 @@ describe('FrequentationService — lire l’audience', () => {
     expect(audience.parJour.map((j) => j.nouveauxVisiteurs)).toEqual([1, 0]);
   });
 
+  it('par jour : connectés, clients qui ont commandé, taux — et les jours non mesurés', async () => {
+    const service = monter(
+      [
+        visite('a', '2026-09-20T18:00:00Z', 1, 'u1'),
+        visite('b', '2026-09-20T18:05:00Z', 1, 'u2'),
+        visite('c', '2026-09-20T18:10:00Z'),
+      ],
+      [],
+      [],
+      [
+        // u1 commande deux fois : UN client, DEUX commandes.
+        { createdAt: new Date('2026-09-20T18:20:00Z'), totalCents: 450, venueId: LIEU, userId: 'u1' },
+        { createdAt: new Date('2026-09-20T19:20:00Z'), totalCents: 300, venueId: LIEU, userId: 'u1' },
+        // Avant la mise en service de la mesure : une commande, aucun visiteur compté.
+        { createdAt: new Date('2026-09-06T18:00:00Z'), totalCents: 800, venueId: LIEU, userId: 'u9' },
+      ],
+    );
+    const audience = await service.pourOrganisation(ORG, 'moi');
+    const [avant, jour] = audience.parJour;
+
+    expect(jour).toMatchObject({
+      visiteursUniques: 3,
+      visiteursConnectes: 2,
+      clientsAyantCommande: 1,
+      commandes: 2,
+      tauxConversion: 50,
+      mesure: true,
+    });
+    expect(avant).toMatchObject({ jour: '2026-09-06', commandes: 1, mesure: false, tauxConversion: null });
+  });
+
   it('pas de meilleur jour quand personne n’est venu', async () => {
     const service = monter([], []);
     const audience = await service.pourOrganisation(ORG, 'moi');

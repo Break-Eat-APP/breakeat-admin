@@ -24,13 +24,22 @@ function dateLisible(jour: string, longue = false): string {
   });
 }
 
+/** « 1 client » / « 2 clients » — le pluriel porte sur chaque mot. */
+const pluriel = (n: number, singulier: string, plurielForme: string) =>
+  `${INT.format(n)} ${n > 1 ? plurielForme : singulier}`;
+
 /**
  * Le détail JOUR PAR JOUR de la période choisie.
  *
- * Répond à la question que les totaux sur 7 ou 30 jours noient : quel jour —
- * quel match — a fait venir le plus de monde, et ce qu'il a rapporté. Le jour
- * est celui du comptoir (il bascule à 4h du matin) : la fin d'un match du soir
- * reste sur son jour.
+ * Les MÊMES colonnes que les cartes du haut — visiteurs uniques, connectés à
+ * leur compte, nouveaux, ont commandé, taux de conversion — pour qu'on lise un
+ * jour comme on lit la période. Puis ce que le jour a rapporté.
+ *
+ * Deux règles pour ne rien afficher de trompeur :
+ *  - avant la mise en service de la mesure, la fréquentation est écrite
+ *    « non mesurée » : un zéro dirait que personne n'est venu ;
+ *  - la colonne des matchs n'apparaît que s'il y en a — une colonne de tirets
+ *    n'apprend rien.
  */
 export function JourParJour({
   jours,
@@ -41,8 +50,11 @@ export function JourParJour({
 }) {
   const meilleur = jours.find((j) => j.jour === meilleurJour) ?? null;
   const maxVisiteurs = Math.max(1, ...jours.map((j) => j.visiteursUniques));
+  const avecMatchs = jours.some((j) => j.evenements.length > 0);
   // Le plus récent en haut : c'est le dernier match qu'on vient regarder.
   const lignes = [...jours].sort((a, b) => b.jour.localeCompare(a.jour));
+
+  const th: React.CSSProperties = { padding: '6px 8px', textAlign: 'right', fontWeight: 600, verticalAlign: 'bottom' };
 
   return (
     <section
@@ -73,13 +85,13 @@ export function JourParJour({
           <Trophy size={22} color={BRAND.orange} style={{ flexShrink: 0 }} />
           <div style={{ fontSize: 13.5, color: BRAND.ink, lineHeight: 1.45 }}>
             <div style={{ fontWeight: 700 }}>
-              Meilleur jour : {dateLisible(meilleur.jour, true)}
+              Jour le plus fréquenté : {dateLisible(meilleur.jour, true)}
               {meilleur.evenements.length > 0 ? ` — ${meilleur.evenements.join(', ')}` : ''}
             </div>
             <div style={{ color: BRAND.inkSoft }}>
-              {INT.format(meilleur.visiteursUniques)} visiteur{meilleur.visiteursUniques > 1 ? 's' : ''}
+              {pluriel(meilleur.visiteursUniques, 'visiteur unique', 'visiteurs uniques')}
               {' · '}
-              {INT.format(meilleur.commandes)} commande{meilleur.commandes > 1 ? 's' : ''}
+              {pluriel(meilleur.clientsAyantCommande, 'client a', 'clients ont')} commandé
               {' · '}
               {EUR.format(meilleur.caTtcCents / 100)} TTC
             </div>
@@ -92,73 +104,109 @@ export function JourParJour({
           Aucune activité sur cette période.
         </p>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ color: BRAND.inkSoft, textAlign: 'left', fontSize: 12 }}>
-                <th style={{ padding: '6px 8px 6px 0' }}>Date</th>
-                <th style={{ padding: '6px 8px' }}>Match</th>
-                <th style={{ padding: '6px 8px', minWidth: 150 }}>Visiteurs</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Nouveaux</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Visites</th>
-                <th style={{ padding: '6px 8px', textAlign: 'right' }}>Commandes</th>
-                <th style={{ padding: '6px 0 6px 8px', textAlign: 'right' }}>CA TTC</th>
-              </tr>
-            </thead>
-            <tbody>
-              {lignes.map((j) => {
-                const estMeilleur = j.jour === meilleurJour;
-                return (
-                  <tr
-                    key={j.jour}
-                    style={{
-                      borderTop: `1px solid ${BRAND.border}`,
-                      background: estMeilleur ? BRAND.orangeTint : undefined,
-                    }}
-                  >
-                    <td style={{ padding: '9px 8px 9px 0', color: BRAND.ink, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      {estMeilleur ? <Trophy size={13} color={BRAND.orange} style={{ marginRight: 6, verticalAlign: -2 }} /> : null}
-                      {dateLisible(j.jour)}
-                    </td>
-                    <td style={{ padding: '9px 8px', color: BRAND.inkSoft, whiteSpace: 'nowrap' }}>
-                      {j.evenements.length > 0 ? j.evenements.join(', ') : '—'}
-                    </td>
-                    <td style={{ padding: '9px 8px' }}>
-                      {/* La barre se lit avant le chiffre : on repère le pic
-                          d'un coup d'œil, sans comparer des nombres. */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ flex: 1, height: 8, background: BRAND.bgSubtle, borderRadius: 4 }}>
-                          <div
-                            style={{
-                              width: `${(j.visiteursUniques / maxVisiteurs) * 100}%`,
-                              height: '100%',
-                              background: BRAND.orange,
-                              borderRadius: 4,
-                              opacity: estMeilleur ? 1 : 0.55,
-                            }}
-                          />
-                        </div>
-                        <span style={{ minWidth: 34, textAlign: 'right', fontWeight: 600, color: BRAND.ink }}>
-                          {INT.format(j.visiteursUniques)}
-                        </span>
-                      </div>
-                    </td>
-                    <td style={{ padding: '9px 8px', textAlign: 'right', color: BRAND.orange, fontWeight: 600 }}>
-                      {INT.format(j.nouveauxVisiteurs)}
-                    </td>
-                    <td style={{ padding: '9px 8px', textAlign: 'right', color: BRAND.inkSoft }}>
-                      {INT.format(j.visites)}
-                    </td>
-                    <td style={{ padding: '9px 8px', textAlign: 'right' }}>{INT.format(j.commandes)}</td>
-                    <td style={{ padding: '9px 0 9px 8px', textAlign: 'right', fontWeight: 600 }}>
-                      {EUR.format(j.caTtcCents / 100)}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ color: BRAND.inkSoft, fontSize: 12 }}>
+                  <th style={{ ...th, textAlign: 'left', paddingLeft: 0 }}>Date</th>
+                  {avecMatchs ? <th style={{ ...th, textAlign: 'left' }}>Match</th> : null}
+                  <th style={{ ...th, textAlign: 'left', minWidth: 170 }}>Visiteurs uniques</th>
+                  <th style={th}>Connectés à leur compte</th>
+                  <th style={th}>Nouveaux</th>
+                  <th style={th}>Ont commandé</th>
+                  <th style={th}>Taux de conversion</th>
+                  <th style={th}>Commandes</th>
+                  <th style={{ ...th, paddingRight: 0 }}>CA TTC</th>
+                </tr>
+              </thead>
+              <tbody>
+                {lignes.map((j) => {
+                  const estMeilleur = j.jour === meilleurJour;
+                  const cellule: React.CSSProperties = { padding: '9px 8px', textAlign: 'right' };
+                  return (
+                    <tr
+                      key={j.jour}
+                      style={{
+                        borderTop: `1px solid ${BRAND.border}`,
+                        background: estMeilleur ? BRAND.orangeTint : undefined,
+                      }}
+                    >
+                      <td style={{ padding: '9px 8px 9px 0', color: BRAND.ink, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {estMeilleur ? (
+                          <Trophy size={13} color={BRAND.orange} style={{ marginRight: 6, verticalAlign: -2 }} />
+                        ) : null}
+                        {dateLisible(j.jour)}
+                      </td>
+                      {avecMatchs ? (
+                        <td style={{ padding: '9px 8px', color: BRAND.inkSoft, whiteSpace: 'nowrap' }}>
+                          {j.evenements.join(', ')}
+                        </td>
+                      ) : null}
+
+                      {j.mesure ? (
+                        <>
+                          <td style={{ padding: '9px 8px' }}>
+                            {/* La barre se lit avant le chiffre : on repère le
+                                pic d'un coup d'œil, sans comparer des nombres. */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ flex: 1, height: 8, background: BRAND.bgSubtle, borderRadius: 4 }}>
+                                <div
+                                  style={{
+                                    width: `${(j.visiteursUniques / maxVisiteurs) * 100}%`,
+                                    height: '100%',
+                                    background: BRAND.orange,
+                                    borderRadius: 4,
+                                    opacity: estMeilleur ? 1 : 0.55,
+                                  }}
+                                />
+                              </div>
+                              <span style={{ minWidth: 34, textAlign: 'right', fontWeight: 600, color: BRAND.ink }}>
+                                {INT.format(j.visiteursUniques)}
+                              </span>
+                            </div>
+                          </td>
+                          <td style={cellule}>{INT.format(j.visiteursConnectes)}</td>
+                          <td style={{ ...cellule, color: j.nouveauxVisiteurs > 0 ? BRAND.orange : BRAND.inkSoft, fontWeight: 600 }}>
+                            {INT.format(j.nouveauxVisiteurs)}
+                          </td>
+                        </>
+                      ) : (
+                        // Une seule cellule sur les trois colonnes de
+                        // fréquentation : « non mesuré », et pas trois zéros.
+                        <td
+                          colSpan={3}
+                          style={{ padding: '9px 8px', color: BRAND.grey, fontStyle: 'italic', fontSize: 12.5 }}
+                        >
+                          Fréquentation non mesurée à cette date
+                        </td>
+                      )}
+
+                      <td style={{ ...cellule, fontWeight: 600 }}>{INT.format(j.clientsAyantCommande)}</td>
+                      <td style={{ ...cellule, color: BRAND.inkSoft }}>
+                        {j.mesure && j.tauxConversion !== null ? `${j.tauxConversion} %` : '—'}
+                      </td>
+                      <td style={cellule}>{INT.format(j.commandes)}</td>
+                      <td style={{ ...cellule, paddingRight: 0, fontWeight: 600 }}>
+                        {EUR.format(j.caTtcCents / 100)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <p style={{ fontSize: 11.5, color: BRAND.inkSoft, margin: '12px 0 0', lineHeight: 1.6 }}>
+            <strong>Visiteurs uniques</strong> : téléphones différents qui ont ouvert votre carte ce
+            jour-là. <strong>Connectés à leur compte</strong> : ceux dont on sait qui ils sont.{' '}
+            <strong>Ont commandé</strong> : clients différents ;{' '}
+            <strong>Commandes</strong> : leur nombre total — un client peut en passer plusieurs.
+            Le <strong>taux de conversion</strong> : parmi les visiteurs connectés, la part qui a
+            commandé. Chaque jour va jusqu&apos;à 4 h du matin : la fin d&apos;un match du soir reste
+            sur son jour.
+          </p>
+        </>
       )}
     </section>
   );
