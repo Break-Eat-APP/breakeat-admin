@@ -26,6 +26,8 @@ import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { endTrackingForFinishedOrders } from '@lib/live-activity-tracking';
 import { EVT_COMMANDES_A_RECHARGER } from '@lib/hooks/use-deep-links';
 import { useCartStore } from '@store/cart.store';
+import { useSuiviStore } from '@store/suivi.store';
+import { JAUNE, JAUNE_FOND, JAUNE_TEXTE } from '@lib/suivi-commande';
 import * as WebBrowser from 'expo-web-browser';
 import { MissingItemsBanner } from '@components/missing-items-banner';
 import { RemboursementBanner } from '@components/remboursement-banner';
@@ -69,8 +71,8 @@ interface StatusUi {
 }
 
 const STATUS_UI: Record<string, StatusUi> = {
-  PAID: { phase: 'received', label: 'Commande reçue', color: THEME.ink, tint: THEME.bgSubtle, icon: 'receipt-outline' },
-  ACCEPTED: { phase: 'received', label: 'Commande reçue', color: THEME.ink, tint: THEME.bgSubtle, icon: 'receipt-outline' },
+  PAID: { phase: 'received', label: 'Commande reçue', color: JAUNE_TEXTE, tint: JAUNE_FOND, icon: 'receipt-outline' },
+  ACCEPTED: { phase: 'received', label: 'Commande reçue', color: JAUNE_TEXTE, tint: JAUNE_FOND, icon: 'receipt-outline' },
   PREPARING: { phase: 'preparing', label: 'En préparation', color: THEME.orange, tint: THEME.orangeTint, icon: 'flame-outline' },
   READY: { phase: 'ready', label: 'Prête à retirer', color: GREEN, tint: GREEN_TINT, icon: 'checkmark-circle-outline' },
   PICKED_UP: { phase: 'done', label: 'Récupérée', color: GREEN, tint: GREEN_TINT, icon: 'bag-check-outline' },
@@ -93,11 +95,18 @@ const isLive = (status: string): boolean => {
   return p === 'received' || p === 'preparing' || p === 'ready';
 };
 
-/** Étapes de la barre de progression (dans l'ordre du parcours). */
-const STEPS: { phase: Phase; label: string; color: string }[] = [
-  { phase: 'received', label: 'Reçue', color: THEME.ink },
-  { phase: 'preparing', label: 'Préparation', color: THEME.orange },
-  { phase: 'ready', label: 'Prête', color: GREEN },
+/**
+ * Étapes de la barre de progression (dans l'ordre du parcours) — les MÊMES
+ * couleurs que l'anneau de la pastille : le client lit la même chose en bas de
+ * l'écran et sur sa commande.
+ *
+ * `texte` à part pour la réception : le jaune vif se voit sur un trait, mais
+ * écrit sur fond blanc il ne se lit presque pas.
+ */
+const STEPS: { phase: Phase; label: string; color: string; texte: string }[] = [
+  { phase: 'received', label: 'Reçue', color: JAUNE, texte: JAUNE_TEXTE },
+  { phase: 'preparing', label: 'Préparation', color: THEME.orange, texte: THEME.orange },
+  { phase: 'ready', label: 'Prête', color: GREEN, texte: GREEN },
 ];
 
 export function OrderHistoryScreen() {
@@ -139,6 +148,9 @@ export function OrderHistoryScreen() {
     try {
       const recues = await apiGetMyOrders();
       setOrders(recues);
+      // La pastille de la barre du bas lit ces mêmes commandes : on les lui
+      // donne plutôt que de la laisser refaire l'appel.
+      useSuiviStore.getState().publier(recues);
       // Une commande remise n'a plus rien a suivre : on ferme sa carte sur
       // l'ecran verrouille, sans dependre d'une poussee APNs qui peut manquer.
       void endTrackingForFinishedOrders(recues);
@@ -448,7 +460,7 @@ function OrderCard({
                 <Text
                   style={[
                     styles.stepLabel,
-                    atteint && { color: s.color, fontFamily: HEAD.bold },
+                    atteint && { color: s.texte, fontFamily: HEAD.bold },
                   ]}
                 >
                   {s.label}

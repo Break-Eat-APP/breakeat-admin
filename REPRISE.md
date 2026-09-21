@@ -194,6 +194,40 @@ parcours d'achat, à droite ce qui appartient au client, au milieu ses commandes
   64). Les trois constantes en tête du fichier sont la seule source du calcul :
   les changer dans `styles` sans les reporter remettrait un bouton sous la barre.
 
+### L'anneau de suivi autour de la pastille — 21/09/2026
+
+La pastille dit où en est la commande, depuis TOUS les écrans :
+**jaune au tiers** (reçue) → **orange aux deux tiers** (préparation) → **vert
+plein** (prête, avec une onde verte : le seul moment où le client doit bouger)
+→ **vert plein + ✓** (récupérée) → **bleu + flèche** (remboursée en totalité).
+L'éclair flotte en permanence dans son disque.
+
+- **Paliers réels, jamais de pourcentage inventé** : on ne sait pas si une
+  préparation en est à 30 ou à 50 %.
+- **Deux commandes en cours** (deux buvettes) : l'anneau suit la plus AVANCÉE —
+  celle qui va demander au client de se déplacer en premier.
+- **Le ✓ et le bleu s'effacent dix minutes** après la dernière mise à jour de
+  la commande (`DUREE_FIN_MS`).
+- **Un remboursement PARTIEL ne passe pas au bleu** : la commande continue
+  d'être servie. ⚠️ Aujourd'hui aucun code n'écrit `REFUNDED` — le bleu ne
+  s'allumera que lorsque les remboursements seront enregistrés (Flaix ou
+  webhook Stripe).
+- **Le réseau ne travaille que pendant une commande en cours** : un chargement
+  à l'ouverture, au retour au premier plan et après paiement ; sondage toutes
+  les 10 s seulement tant qu'une commande est en cours. L'écran « Mes
+  commandes » publie ce qu'il charge dans `suivi.store` : pas de double appel.
+- **« Réduire les animations »** est respecté (plus de flottement ni d'onde).
+- La règle vit dans `lib/suivi-commande.ts`, fonction PURE, couverte par
+  `lib/__tests__/suivi-commande.test.ts` (12 essais).
+- **La carte de commande a pris les mêmes couleurs** : « Reçue » en jaune au
+  lieu de l'anthracite. Deux jaunes : `JAUNE` pour les traits, `JAUNE_TEXTE`
+  (plus sourd) pour les libellés — le jaune vif ne se lit pas en texte.
+- **Nouvelle dépendance native : `react-native-svg`** — la pastille ne
+  s'affichera qu'à partir du build suivant.
+- **Jest mobile réparé** : le préréglage React Native ne tournait pas avec pnpm
+  (aucun test mobile n'existait). `transformIgnorePatterns` laisse désormais
+  Babel transformer les modules de `.pnpm`.
+
 ## 📄 DOCUMENTATION DU CLUB — 19/09/2026
 
 Dashboard manager → **Mon lieu → Documentation**. Le club dépose son contrat

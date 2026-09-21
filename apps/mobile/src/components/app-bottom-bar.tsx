@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -7,12 +7,9 @@ import { THEME, shadowSoft, HEAD } from '@lib/theme';
 import { useCartStore } from '@store/cart.store';
 import { useNotifStore } from '@store/notif.store';
 import { navigateTo } from '@navigation/nav-ref';
+import { PastilleSuivi } from '@components/pastille-suivi';
+import { useEtatPastille } from '@lib/use-etat-pastille';
 import type { RootStackParamList } from '@navigation/root-navigator';
-
-// L'eclair de la marque, deja sur son fond orange — et c'est EXACTEMENT le
-// meme : #FD4000, releve au pixel dans le fichier d'origine. Le raccord avec
-// la pastille est donc invisible.
-const ECLAIR = require('../../assets/eclair-neon.png');
 
 /**
  * Barre du bas PERSISTANTE — rendue en overlay au-dessus de chaque écran
@@ -36,9 +33,10 @@ const ECLAIR = require('../../assets/eclair-neon.png');
 // dans `styles` sans les reporter ici remettrait un bouton sous la barre.
 const ECART_BAS = 16; // `wrap` : bottom = insets.bottom + 16
 const HAUTEUR_BARRE = 70; // `bar`
-// `fab` : marginTop -34. Borne HAUTE du debord reel (~22 px une fois la
-// colonne recentree) — on arrondit vers le haut, jamais vers le bas : trop
-// d'espace reserve ne se voit pas, trop peu cache un bouton.
+// `fabCadre` : l'anneau (80 px) remonte de 32 px, ce qui laisse le disque
+// exactement ou il etait avant l'anneau. Debord reel ~30 px ; 34 est la borne
+// HAUTE — on arrondit vers le haut, jamais vers le bas : trop d'espace reserve
+// ne se voit pas, trop peu cache un bouton.
 const DEBORD_PASTILLE = 34;
 
 /**
@@ -130,6 +128,8 @@ export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
   // changement du panier, sur tous les ecrans.
   const articles = useCartStore((e) => e.items.reduce((total, i) => total + i.quantity, 0));
   const nonLues = useNotifStore((e) => e.nonLues);
+  // Appele AVANT le retour anticipe ci-dessous : un hook ne se saute pas.
+  const etatPastille = useEtatPastille(currentRoute);
 
   if (!currentRoute || HIDDEN_ON.includes(currentRoute as keyof RootStackParamList)) {
     return null;
@@ -170,14 +170,8 @@ export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
 
         {/* Mes commandes — la pastille surélevée. */}
         <Pressable style={styles.fabWrap} onPress={() => navigateTo('Commandes')} hitSlop={6}>
-          {/* Deux vues imbriquees, et non une seule : sur iOS, une ombre posee
-              sur la meme vue qu'un `overflow: hidden` est rognee avec le
-              contenu — la pastille perdrait son relief. L'exterieure porte
-              l'ombre, l'interieure decoupe l'image en rond. */}
-          <View style={[styles.fabOmbre, isCommandes && styles.fabOmbreActive]}>
-            <View style={styles.fab}>
-              <Image source={ECLAIR} style={styles.fabImage} resizeMode="cover" />
-            </View>
+          <View style={styles.fabCadre}>
+            <PastilleSuivi etat={etatPastille} actif={isCommandes} />
           </View>
           <Text style={[styles.fabLabel, !isCommandes && styles.fabLabelInactive]} numberOfLines={1}>
             Commandes
@@ -247,40 +241,16 @@ const styles = StyleSheet.create({
   // Largeur FIXE, et non `flex` : la pastille ne doit pas retrecir sur un
   // petit ecran au point de mordre sur « Panier ».
   fabWrap: { width: 82, alignItems: 'center', justifyContent: 'center' },
-  fabOmbre: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    marginTop: -34,
-    // Un fond OPAQUE est necessaire : une vue transparente ne projette aucune
-    // ombre sur iOS.
-    backgroundColor: THEME.orange,
-    // Ombre ORANGE, pas grise : la pastille doit paraitre posee au-dessus de
-    // la barre, pas collee dessus.
-    shadowColor: THEME.orange,
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
-  // L'image fige la couleur : la pastille ne peut plus foncer pour dire « tu y
-  // es ». C'est l'ombre qui porte le signal, avec le libelle passe en orange.
-  fabOmbreActive: { shadowOpacity: 0.6, shadowRadius: 16, elevation: 12 },
-  fab: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 32,
-    overflow: 'hidden',
-    borderWidth: 5,
-    borderColor: '#fff',
-    backgroundColor: THEME.orange,
-  },
-  fabImage: { width: '100%', height: '100%' },
+  // L'anneau deborde de 8 px autour du disque : on remonte le cadre d'autant
+  // de plus, pour que le disque ne bouge pas d'un pixel.
+  fabCadre: { marginTop: -32 },
   fabLabel: {
     fontSize: 10,
     fontFamily: HEAD.bold,
     color: THEME.orange,
-    marginTop: 4,
+    // L'anneau garde 2 px vides sous son trait : on les reprend, sinon le
+    // libelle frole le bas de la barre.
+    marginTop: -2,
     letterSpacing: 0.2,
   },
   fabLabelInactive: { color: THEME.inkSoft },
