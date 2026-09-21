@@ -182,11 +182,18 @@ parcours d'achat, à droite ce qui appartient au client, au milieu ses commandes
   d'articles au panier. Lus par sélecteur SCALAIRE sur les stores zustand —
   rendre un objet re-rendrait la barre à chaque changement de panier, sur tous
   les écrans.
-- **La pastille porte une IMAGE** (`assets/eclair-neon.png`, éclair néon sur son
-  fond orange), pas une icône vectorielle. Deux conséquences : l'orange du
-  fichier est exactement `#FD4000` — relevé au pixel — donc le raccord avec la
-  pastille est invisible ; et la couleur est FIGÉE, la pastille ne peut plus
-  foncer pour dire « tu y es ». C'est l'ombre qui porte ce signal.
+- **La pastille porte l'éclair de la marque en VECTEUR, sur fond blanc**, et il
+  prend la couleur de l'étape (orange au repos, puis jaune, orange, vert ;
+  bleu si remboursé). L'éclair néon d'avant était une image : couleurs figées.
+  Le tracé vient du fichier Canva du 21/09 — que Canva avait exporté en SVG
+  mais avec une IMAGE dedans, donc impossible à recolorer : son contour a été
+  retracé (31 sommets) et vérifié par superposition. Copie propre, réutilisable
+  dans Canva : `logo/eclair-vectorise.svg`.
+- **Les transitions de l'anneau et de la couleur ne passent PAS par `Animated`**
+  sur le dessin SVG : sur le web, ces valeurs animées ne se mettent pas à jour
+  (l'anneau restait au tiers, l'éclair restait jaune — vu dans l'aperçu web).
+  `useGlissement` fait avancer de simples valeurs d'état, image par image.
+  Le flottement et l'onde, eux, restent sur `Animated` : ce sont des vues.
 - **Deux vues imbriquées pour la pastille**, et ce n'est pas du zèle : sur iOS,
   une ombre posée sur la même vue qu'un `overflow: hidden` est rognée avec le
   contenu. L'extérieure porte l'ombre, l'intérieure découpe l'image en rond.

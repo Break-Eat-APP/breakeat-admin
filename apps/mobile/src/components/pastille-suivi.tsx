@@ -1,16 +1,31 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 
 import { THEME } from '@lib/theme';
 import { JAUNE, type EtatPastille } from '@lib/suivi-commande';
 import { BLEU_REMBOURSEMENT } from '@components/remboursement-banner';
 
-// L'eclair de la marque, deja sur son fond orange — et c'est EXACTEMENT le
-// meme : #FD4000, releve au pixel dans le fichier d'origine. Le raccord avec
-// le disque est donc invisible, meme quand l'eclair bouge.
-const ECLAIR = require('../../assets/eclair-neon.png');
+/**
+ * Le tracé de l'éclair de la marque.
+ *
+ * Retracé depuis le fichier Canva du 21/09/2026 : Canva l'avait exporté en SVG,
+ * mais en y enveloppant une IMAGE — impossible à recolorer. Son contour a été
+ * suivi pixel par pixel puis simplifié en 31 sommets (angles arrondis compris),
+ * et superposé à l'original pour contrôle. Copie propre : `logo/eclair-vectorise.svg`.
+ *
+ * Un VECTEUR et non une image : c'est ce qui permet de le recolorer à chaque
+ * étape, là où l'éclair néon avait ses couleurs figées dans le fichier.
+ */
+const ECLAIR = {
+  largeur: 467,
+  hauteur: 778,
+  trace:
+    'M440 4 L450 4 L460 11 L463 17 L462 28 L296 297 L296 302 L300 306 L415 307 L424 314 ' +
+    'L426 319 L426 327 L421 338 L410 354 L370 400 L246 536 L30 761 L17 774 L13 774 L10 771 ' +
+    'L13 759 L130 471 L132 461 L127 456 L13 456 L8 455 L4 447 L75 295 L144 121 L150 114 L163 108 Z',
+};
 
 const VERT = '#16a34a';
 const PISTE = '#EFE9E4';
@@ -18,6 +33,14 @@ const PISTE = '#EFE9E4';
 /** Encombrement total : l'anneau entoure le disque de 8 px de chaque cote. */
 export const TAILLE_PASTILLE = 80;
 const DISQUE = 64;
+/** Hauteur de l'éclair dans le disque ; sa largeur suit ses proportions. */
+const HAUTEUR_ECLAIR = 40;
+const LARGEUR_ECLAIR = Math.round((HAUTEUR_ECLAIR * ECLAIR.largeur) / ECLAIR.hauteur);
+/**
+ * Épaisseur du contour, en unités du dessin : ~1,2 px à l'écran. Avec des
+ * jointures ARRONDIES, elle adoucit aussi les angles du tracé.
+ */
+const CONTOUR_ECLAIR = (1.2 * ECLAIR.hauteur) / HAUTEUR_ECLAIR;
 const RAYON = 36;
 const EPAISSEUR = 4;
 const CIRCONFERENCE = 2 * Math.PI * RAYON;
@@ -25,22 +48,32 @@ const CIRCONFERENCE = 2 * Math.PI * RAYON;
 interface Apparence {
   /** Part de l'anneau remplie, de 0 a 1. */
   progression: number;
+  /** Couleur de l'éclair ET de l'anneau : les deux disent la même chose. */
   couleur: string;
+  /**
+   * Contour de l'éclair, une nuance plus sombre.
+   *
+   * Indispensable au JAUNE : sur fond blanc, un éclair jaune sans contour se lit
+   * à peine. Les autres couleurs en profitent aussi, plus discrètement.
+   */
+  contour: string;
   badge?: 'checkmark' | 'arrow-undo';
   /** Le seul moment ou le client doit bouger : on insiste. */
   appel?: boolean;
 }
 
 const APPARENCES: Record<EtatPastille, Apparence> = {
-  repos: { progression: 0, couleur: PISTE },
-  recue: { progression: 1 / 3, couleur: JAUNE },
-  preparation: { progression: 2 / 3, couleur: THEME.orange },
-  prete: { progression: 1, couleur: VERT, appel: true },
-  recuperee: { progression: 1, couleur: VERT, badge: 'checkmark' },
-  remboursee: { progression: 1, couleur: BLEU_REMBOURSEMENT, badge: 'arrow-undo' },
+  // Au repos, l'orange de la marque — et PAS d'anneau : c'est l'absence
+  // d'anneau qui distingue « rien en cours » de « en préparation », tous deux
+  // orange.
+  repos: { progression: 0, couleur: THEME.orange, contour: '#C73200' },
+  recue: { progression: 1 / 3, couleur: JAUNE, contour: '#A16207' },
+  preparation: { progression: 2 / 3, couleur: THEME.orange, contour: '#C73200' },
+  prete: { progression: 1, couleur: VERT, contour: '#15803d', appel: true },
+  recuperee: { progression: 1, couleur: VERT, contour: '#15803d', badge: 'checkmark' },
+  remboursee: { progression: 1, couleur: BLEU_REMBOURSEMENT, contour: '#1e3a8a', badge: 'arrow-undo' },
 };
 
-const CercleAnime = Animated.createAnimatedComponent(Circle);
 
 /** « Réduire les animations » (iOS / Android) : on respecte le réglage. */
 function useAnimationsReduites(): boolean {
@@ -54,10 +87,62 @@ function useAnimationsReduites(): boolean {
 }
 
 /**
- * La pastille centrale : l'éclair de la marque, entouré de l'anneau qui dit où
- * en est la commande.
+ * Des valeurs qui glissent vers leur cible, image par image.
  *
- * L'anneau avance par PALIERS RÉELS — un tiers à la réception, deux tiers en
+ * Pourquoi pas `Animated` sur le dessin SVG : sur le WEB, les valeurs animées
+ * passées à un tracé SVG ne se mettent pas à jour — l'anneau passait bien au
+ * vert mais restait au tiers, et l'éclair restait jaune. Vérifié dans l'aperçu
+ * web. Ici, ce sont de simples valeurs d'état : elles marchent partout, et ne
+ * bougent que lors d'un changement d'étape, rare.
+ *
+ * Une transition interrompue repart de ce qui est AFFICHÉ, pas de l'ancienne
+ * cible : pas de saut.
+ */
+function useGlissement(cible: readonly number[], duree: number): number[] {
+  // La cible en texte : un tableau neuf à chaque rendu relancerait l'effet.
+  const cle = cible.join(',');
+  const [valeurs, setValeurs] = useState<number[]>(() => [...cible]);
+  const affichees = useRef<number[]>([...cible]);
+  useEffect(() => {
+    const arrivee = cle.split(',').map(Number);
+    const depart = affichees.current;
+    if (duree === 0 || depart.every((v, i) => v === arrivee[i])) {
+      affichees.current = arrivee;
+      setValeurs(arrivee);
+      return;
+    }
+    const debut = Date.now();
+    let image = 0;
+    const avancer = () => {
+      const t = Math.min(1, (Date.now() - debut) / duree);
+      const adouci = 1 - Math.pow(1 - t, 3);
+      affichees.current = depart.map((v, i) => v + (arrivee[i] - v) * adouci);
+      setValeurs(affichees.current);
+      if (t < 1) image = requestAnimationFrame(avancer);
+    };
+    image = requestAnimationFrame(avancer);
+    return () => cancelAnimationFrame(image);
+  }, [cle, duree]);
+  return valeurs;
+}
+
+/** `#rrggbb` → [r, g, b]. */
+function versRgb(hex: string): number[] {
+  return [0, 1, 2].map((i) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16));
+}
+
+/** Une couleur qui passe à la suivante en fondu, plutôt que de sauter. */
+function useCouleurEnFondu(cible: string, duree: number): string {
+  const [r, g, b] = useGlissement(versRgb(cible), duree);
+  return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
+}
+
+/**
+ * La pastille centrale : l'éclair de la marque, sur fond blanc, entouré de
+ * l'anneau qui dit où en est la commande.
+ *
+ * L'éclair et l'anneau prennent la couleur de l'étape — jaune, orange, vert. Et
+ * l'anneau avance par PALIERS RÉELS — un tiers à la réception, deux tiers en
  * préparation, plein quand c'est prêt — jamais par un pourcentage inventé : on
  * ne sait pas si une préparation en est à 30 ou à 50 %.
  */
@@ -65,21 +150,12 @@ export function PastilleSuivi({ etat, actif }: { etat: EtatPastille; actif: bool
   const apparence = APPARENCES[etat];
   const reduites = useAnimationsReduites();
 
+  const remplissage = useCouleurEnFondu(apparence.couleur, reduites ? 0 : 600);
+  const contour = useCouleurEnFondu(apparence.contour, reduites ? 0 : 600);
+
   // ── L'anneau glisse d'un palier au suivant.
-  const progression = useRef(new Animated.Value(apparence.progression)).current;
-  useEffect(() => {
-    Animated.timing(progression, {
-      toValue: apparence.progression,
-      duration: reduites ? 0 : 900,
-      easing: Easing.bezier(0.4, 0, 0.2, 1),
-      // Une propriete SVG : le pilote natif ne sait pas l'animer.
-      useNativeDriver: false,
-    }).start();
-  }, [apparence.progression, progression, reduites]);
-  const decalage = progression.interpolate({
-    inputRange: [0, 1],
-    outputRange: [CIRCONFERENCE, 0],
-  });
+  const [progression] = useGlissement([apparence.progression], reduites ? 0 : 900);
+  const decalage = CIRCONFERENCE * (1 - progression);
 
   // ── L'éclair flotte : il monte, redescend et tangue, en permanence.
   const flottement = useRef(new Animated.Value(0)).current;
@@ -118,7 +194,7 @@ export function PastilleSuivi({ etat, actif }: { etat: EtatPastille; actif: bool
         {apparence.progression > 0 ? (
           <Circle cx={40} cy={40} r={RAYON} stroke={PISTE} strokeWidth={EPAISSEUR} fill="none" />
         ) : null}
-        <CercleAnime
+        <Circle
           cx={40}
           cy={40}
           r={RAYON}
@@ -153,21 +229,28 @@ export function PastilleSuivi({ etat, actif }: { etat: EtatPastille; actif: bool
           la meme vue qu'un `overflow: hidden` est rognee avec le contenu. */}
       <View style={[styles.ombre, actif && styles.ombreActive]}>
         <View style={styles.disque}>
-          <Animated.Image
-            source={ECLAIR}
-            resizeMode="cover"
-            style={[
-              styles.eclair,
-              {
-                transform: [
-                  { translateY: flottement.interpolate({ inputRange: [0, 1], outputRange: [3, -4] }) },
-                  { rotate: flottement.interpolate({ inputRange: [0, 1], outputRange: ['-3deg', '3deg'] }) },
-                  // Agrandi : le mouvement ne decouvre jamais le bord de l'image.
-                  { scale: 1.12 },
-                ],
-              },
-            ]}
-          />
+          <Animated.View
+            style={{
+              transform: [
+                { translateY: flottement.interpolate({ inputRange: [0, 1], outputRange: [3, -4] }) },
+                { rotate: flottement.interpolate({ inputRange: [0, 1], outputRange: ['-4deg', '4deg'] }) },
+              ],
+            }}
+          >
+            <Svg
+              width={LARGEUR_ECLAIR}
+              height={HAUTEUR_ECLAIR}
+              viewBox={`0 0 ${ECLAIR.largeur} ${ECLAIR.hauteur}`}
+            >
+              <Path
+                d={ECLAIR.trace}
+                fill={remplissage}
+                stroke={contour}
+                strokeWidth={CONTOUR_ECLAIR}
+                strokeLinejoin="round"
+              />
+            </Svg>
+          </Animated.View>
         </View>
       </View>
 
@@ -202,25 +285,29 @@ const styles = StyleSheet.create({
     height: DISQUE,
     borderRadius: DISQUE / 2,
     // Un fond OPAQUE : une vue transparente ne projette aucune ombre sur iOS.
-    backgroundColor: THEME.orange,
-    // Ombre ORANGE, pas grise : la pastille parait posee au-dessus de la barre.
-    shadowColor: THEME.orange,
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+    backgroundColor: '#fff',
+    // Ombre neutre : c'est elle, avec l'anneau, qui détache le disque blanc
+    // de la barre blanche. Teintée, elle se battrait avec la couleur d'étape.
+    shadowColor: THEME.ink,
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 6,
   },
-  ombreActive: { shadowOpacity: 0.6, shadowRadius: 16, elevation: 12 },
+  ombreActive: { shadowOpacity: 0.28, shadowRadius: 14, elevation: 10 },
   disque: {
     width: '100%',
     height: '100%',
     borderRadius: DISQUE / 2,
     overflow: 'hidden',
-    borderWidth: 5,
-    borderColor: '#fff',
-    backgroundColor: THEME.orange,
+    backgroundColor: '#fff',
+    // Un filet presque invisible : au repos, sans anneau, c'est lui qui trace
+    // le bord du disque sur la barre.
+    borderWidth: 1,
+    borderColor: 'rgba(36, 31, 29, 0.07)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  eclair: { width: '100%', height: '100%' },
   badge: {
     position: 'absolute',
     right: 2,
