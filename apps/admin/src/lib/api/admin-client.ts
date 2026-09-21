@@ -310,6 +310,8 @@ export interface AdminEvent {
   visibility?: EventVisibility;
   /** Present on single-event reads (GET /events/:id): groups granted access. */
   groups?: { groupId: string }[];
+  /** Lien du rapport Flaix de ce match — posé à la main après l'événement. */
+  flaixReportUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -418,6 +420,21 @@ export async function apiUpdateEvent(
   },
 ): Promise<AdminEvent> {
   return req<AdminEvent>('PATCH', `/organizations/${orgId}/events/${eventId}`, data);
+}
+
+/**
+ * Pose (ou retire, avec `null`) le lien du rapport Flaix d'un événement.
+ *
+ * Route à part de `apiUpdateEvent` : elle accepte un événement TERMINÉ, le
+ * rapport arrivant après le match. Le serveur n'accepte que des liens
+ * https vers flaixlabs.com, et dit pourquoi il refuse.
+ */
+export async function apiDefinirRapportFlaix(
+  orgId: string,
+  eventId: string,
+  url: string | null,
+): Promise<{ id: string; flaixReportUrl: string | null }> {
+  return req('PATCH', `/organizations/${orgId}/events/${eventId}/rapport-flaix`, { url });
 }
 
 /** GET /organizations/:id/members — enriched with user + supplier info */

@@ -235,6 +235,31 @@ L'éclair flotte en permanence dans son disque.
   (aucun test mobile n'existait). `transformIgnorePatterns` laisse désormais
   Babel transformer les modules de `.pnpm`.
 
+## 📊 RAPPORTS FLAIX — 21/09/2026
+
+Les rapports d'événements vivent chez Flaix, derrière les identifiants Flaix du
+directeur, et chaque rapport a sa propre adresse. Deux accès depuis le dashboard :
+
+- **Menu → Pilotage → « Rapports Flaix »** : ouvre `ops.flaixlabs.com/login` dans
+  un nouvel onglet.
+- **Fiche d'un événement → carte « Rapport Flaix »** : on colle l'adresse du
+  rapport de CE match ; un bouton « Voir le rapport Flaix » apparaît, et le match
+  porte l'étiquette « 📊 Rapport Flaix » dans la liste.
+
+À savoir :
+- **Route à part** (`PATCH …/events/:id/rapport-flaix`) : la modification
+  ordinaire refuse un événement terminé, or le rapport arrive APRÈS le match.
+  Refusée seulement sur le contenant invisible d'un lieu ouvert en continu.
+- **Seuls les liens `https://*.flaixlabs.com` passent** (`events/lien-flaix.ts`) :
+  le bouton mène à une page où le directeur tape son mot de passe — un faux
+  domaine qui imite Flaix (`flaixlabs.com.pirate.fr`) en ferait un piège.
+  Identifiants dans l'adresse refusés aussi. La base exige https en plus.
+- **Break Eat ne stocke jamais les identifiants Flaix.**
+- Les routes publiques de l'app client construisent leurs réponses champ par
+  champ : le lien ne sort pas vers les clients.
+- Quand Flaix sera branché, le lien pourra se remplir tout seul depuis
+  l'identifiant d'événement Flaix.
+
 ## 📄 DOCUMENTATION DU CLUB — 19/09/2026
 
 Dashboard manager → **Mon lieu → Documentation**. Le club dépose son contrat

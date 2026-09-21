@@ -12,6 +12,7 @@ import {
   Store,
   Tags,
   Contact,
+  FileBarChart,
   Palette,
   Megaphone,
   Building2,
@@ -46,6 +47,10 @@ const NAV_GROUPS: NavGroup[] = [
       // Avec le tableau de bord et la comptabilité : c'est du PILOTAGE. Le
       // club y lit son audience et sa clientèle, pas une configuration.
       { href: '/clients', icon: Contact, label: 'Mes clients' },
+      // Les rapports d'événements vivent chez Flaix, avec leurs propres
+      // identifiants : on y mène, sans jamais toucher au mot de passe. Le lien
+      // de CHAQUE match est sur sa fiche événement.
+      { href: 'https://ops.flaixlabs.com/login', icon: FileBarChart, label: 'Rapports Flaix', external: true },
     ],
   },
   {

@@ -17,6 +17,7 @@ import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { UpdateEventStatusDto } from './dto/update-event-status.dto';
 import { AttachSupplierDto } from './dto/attach-supplier.dto';
+import { DefinirRapportFlaixDto } from './dto/definir-rapport-flaix.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
@@ -86,6 +87,21 @@ export class EventsController {
     @Body() dto: UpdateEventStatusDto,
   ) {
     return this.eventsService.updateStatus(orgId, id, user.sub, dto);
+  }
+
+  /**
+   * PATCH /api/v1/organizations/:orgId/events/:id/rapport-flaix
+   *
+   * Accepté sur un événement TERMINÉ : le rapport arrive après le match.
+   */
+  @Patch(':id/rapport-flaix')
+  definirRapportFlaix(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: DefinirRapportFlaixDto,
+  ) {
+    return this.eventsService.definirRapportFlaix(orgId, id, user.sub, dto.url);
   }
 
   /** POST /api/v1/organizations/:orgId/events/:id/suppliers */

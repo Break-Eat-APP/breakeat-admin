@@ -16,6 +16,7 @@ import type { CreateEventDto } from './dto/create-event.dto';
 import type { UpdateEventDto } from './dto/update-event.dto';
 import type { UpdateEventStatusDto } from './dto/update-event-status.dto';
 import type { Event, EventSupplier, Supplier } from '@prisma/client';
+import { verifierLienFlaix } from './lien-flaix';
 
 export type EventWithSuppliers = Event & {
   eventSuppliers: (EventSupplier & { supplier: Supplier })[];
@@ -306,6 +307,45 @@ export class EventsService {
   // ─── Private guards ───────────────────────────────────────────
 
   /** Throws if the event is in a terminal state (ENDED or CANCELLED). */
+  /**
+   * Pose (ou retire) le lien du rapport Flaix d'un événement.
+   *
+   * Une route À PART de `update`, et c'est voulu : `update` refuse un événement
+   * terminé — or le rapport Flaix arrive justement APRÈS le match. Ce lien
+   * accompagne l'événement, il n'en change pas la configuration.
+   */
+  async definirRapportFlaix(
+    organizationId: string,
+    eventId: string,
+    userId: string,
+    saisie: string | null | undefined,
+  ): Promise<{ id: string; flaixReportUrl: string | null }> {
+    await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
+
+    const existing = await this.prisma.event.findFirst({
+      where: { id: eventId, organizationId },
+    });
+    if (!existing) throw new NotFoundException('Event not found');
+    this.guardPermanentContainer(existing);
+
+    let url: string | null = null;
+    if (saisie && saisie.trim()) {
+      const verdict = verifierLienFlaix(saisie);
+      if (!verdict.valide) throw new BadRequestException(verdict.raison);
+      url = verdict.url;
+    }
+
+    const maj = await this.prisma.event.update({
+      where: { id: eventId },
+      data: { flaixReportUrl: url },
+      select: { id: true, flaixReportUrl: true },
+    });
+    this.logger.log(
+      `Rapport Flaix ${url ? 'posé' : 'retiré'} pour l'événement ${eventId} (org ${organizationId}) par ${userId}`,
+    );
+    return maj;
+  }
+
   private guardFinalized(event: Event): void {
     if (event.status === EventStatus.ENDED || event.status === EventStatus.CANCELLED) {
       throw new BadRequestException(

@@ -34,6 +34,7 @@ import {
   operatorDashboardUrl,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
+import { RapportFlaix } from '@/components/rapport-flaix';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -536,6 +537,17 @@ export default function EventDetailPage() {
             </div>
           </>
         ) : null}
+      </Card>
+
+      {/* Le rapport Flaix : juste sous les chiffres, c'est le même geste — lire
+          comment s'est passé le match. */}
+      <Card title="Rapport Flaix">
+        <RapportFlaix
+          orgId={orgId}
+          eventId={event.id}
+          lien={event.flaixReportUrl ?? null}
+          onChange={(lien) => setEvent((e) => (e ? { ...e, flaixReportUrl: lien } : e))}
+        />
       </Card>
 
       {/* Status change */}

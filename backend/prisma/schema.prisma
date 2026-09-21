@@ -460,6 +460,11 @@ model Event {
   description          String?
   logoUrl              String?         @map("logo_url")
   primaryColor         String?         @map("primary_color")
+  /// Lien vers le rapport Flaix de l'événement, posé à la main après le match
+  /// en attendant l'intégration Flaix. Toujours https://*.flaixlabs.com
+  /// (`events/lien-flaix.ts`) : il s'affiche dans le dashboard d'un directeur,
+  /// qui y saisit ses identifiants Flaix.
+  flaixReportUrl       String?         @map("flaix_report_url")
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
 

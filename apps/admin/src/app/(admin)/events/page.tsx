@@ -387,6 +387,23 @@ ${msg}`);
                           🔒 Privé
                         </span>
                       )}
+                      {/* Une étiquette, pas un lien : toute la ligne mène déjà à
+                          la fiche, et un lien dans un lien n'est pas du HTML
+                          valide. Le bouton du rapport est sur la fiche. */}
+                      {ev.flaixReportUrl ? (
+                        <span
+                          style={{
+                            background: BRAND.bgSubtle,
+                            color: BRAND.inkSoft,
+                            borderRadius: 999,
+                            padding: '2px 9px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                          }}
+                        >
+                          📊 Rapport Flaix
+                        </span>
+                      ) : null}
                     </div>
                     <div style={{ fontSize: 12, color: BRAND.grey, marginTop: 2 }}>
                       {new Date(ev.startAt).toLocaleDateString('fr-FR')}
