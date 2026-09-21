@@ -50,7 +50,24 @@ decrire('fréquentation et fichier client (base réelle)', () => {
 
     const audience = await frequentation.pourOrganisation(o.org.id, sa);
     expect(audience.visiteursUniques).toBe(1);
-    expect(audience.visites).toBe(10);
+    // UN passage, et non dix : c'est tout l'objet de la fenêtre de trente
+    // minutes. Le tableau de bord affichait la somme des écrans vus.
+    expect(audience.visites).toBe(1);
+    expect(audience.parLieu[0].visites).toBe(1);
+    expect(audience.parJour[0].visites).toBe(1);
+  });
+
+  it('la carte puis le menu, dans la même demi-heure, font UN passage', async () => {
+    // Deux écrans différents écrivent deux lignes (périmètres distincts) :
+    // c'est toujours la même venue au stade.
+    const o = await creerOrganisationComplete(s.prisma, unique('club'), sa);
+    const cle = unique('installation');
+    await frequentation.signaler({ visitorKey: cle, kind: 'EVENT_VIEW', eventId: o.event.id });
+    await frequentation.signaler({ visitorKey: cle, kind: 'MENU_VIEW', eventId: o.event.id });
+    await frequentation.signaler({ visitorKey: cle, kind: 'MENU_VIEW', eventId: o.event.id });
+
+    const audience = await frequentation.pourOrganisation(o.org.id, sa);
+    expect(audience.visites).toBe(1);
   });
 
   it('deux appareils font deux visiteurs', async () => {
@@ -98,6 +115,13 @@ decrire('fréquentation et fichier client (base réelle)', () => {
     const neuf = unique('neuf');
     const habitue = unique('habitue');
 
+    // La VRAIE séquence de l'application : chaque lancement signale d'abord
+    // une ouverture SANS lieu (l'écran d'accueil), avant que le client ne
+    // choisisse un stade. Les premiers essais l'omettaient — et c'est
+    // précisément ce qui faisait tout rater en production.
+    await frequentation.signaler({ visitorKey: neuf, kind: 'APP_OPEN' });
+    await frequentation.signaler({ visitorKey: habitue, kind: 'APP_OPEN' });
+
     // Celui-ci découvre Break Eat chez notre club.
     await frequentation.signaler({ visitorKey: neuf, kind: 'VENUE_VIEW', venueId: club.venue.id });
 
@@ -115,6 +139,44 @@ decrire('fréquentation et fichier client (base réelle)', () => {
 
     expect(chezNous?.visiteursUniques).toBe(2);
     expect(chezNous?.nouveauxVisiteurs).toBe(1);
+    // La carte du haut dit « ont découvert l'app ICI » : même règle, même
+    // chiffre que la ligne du lieu. Elle comptait les deux.
+    expect(audience.nouveauxVisiteurs).toBe(1);
+
+    // Et pour l'AUTRE club, c'est l'habitué qui est la découverte.
+    const autre = await frequentation.pourOrganisation(ailleurs.org.id, sa);
+    expect(autre.nouveauxVisiteurs).toBe(1);
+  });
+
+  it('les nouveaux du club sont la somme des nouveaux de ses lieux', async () => {
+    // Deux lieux dans le même club : la carte du haut et le tableau par lieu
+    // ne doivent jamais se contredire.
+    const club = await creerOrganisationComplete(s.prisma, unique('club'), sa);
+    const annexe = await s.prisma.venue.create({
+      data: {
+        organizationId: club.org.id,
+        name: 'Annexe',
+        address: '2 rue du Sport',
+        operatingMode: 'PERMANENT',
+      },
+    });
+    const a = unique('a');
+    const b = unique('b');
+    await frequentation.signaler({ visitorKey: a, kind: 'APP_OPEN' });
+    await frequentation.signaler({ visitorKey: a, kind: 'VENUE_VIEW', venueId: club.venue.id });
+    await frequentation.signaler({ visitorKey: b, kind: 'APP_OPEN' });
+    await frequentation.signaler({ visitorKey: b, kind: 'VENUE_VIEW', venueId: annexe.id });
+    // `a` passe aussi à l'annexe : il n'y est pas nouveau, il l'est au stade.
+    await frequentation.signaler({ visitorKey: a, kind: 'VENUE_VIEW', venueId: annexe.id });
+
+    const audience = await frequentation.pourOrganisation(club.org.id, sa);
+    const somme = audience.parLieu.reduce((t, l) => t + l.nouveauxVisiteurs, 0);
+    expect(audience.nouveauxVisiteurs).toBe(2);
+    expect(somme).toBe(2);
+
+    // Filtré sur l'annexe : seul `b` y a découvert l'app.
+    const surAnnexe = await frequentation.pourOrganisation(club.org.id, sa, { venueId: annexe.id });
+    expect(surAnnexe.nouveauxVisiteurs).toBe(1);
   });
 
   it('une période récente ne compte pas une découverte ancienne', async () => {

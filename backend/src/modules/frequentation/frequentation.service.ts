@@ -210,12 +210,22 @@ export class FrequentationService {
     // au numérateur — le taux paraîtrait donc plus faible qu'il n'est.
     const connectesAyantCommande = [...connectes].filter((c) => acheteurs.has(c)).length;
 
-    // La toute première ouverture de chaque appareil : ce qui distingue une
+    // Le PREMIER LIEU que chaque appareil a jamais ouvert : ce qui distingue une
     // découverte d'un habitué.
-    const decouvertes = await this.premieresOuvertures([...visiteurs]);
+    const decouvertes = await this.premiersLieux([...visiteurs]);
+    // Même règle que la colonne « Nouveaux » de chaque lieu, pour que la carte
+    // du haut et le tableau ne se contredisent jamais : la découverte a eu lieu
+    // CHEZ CE CLUB (et dans ce lieu si on en a choisi un), pendant la période.
+    // Elle comptait tout appareil ouvert pour la première fois dans la période,
+    // où qu'il ait découvert l'application.
     const nouveaux = [...visiteurs].filter((cle) => {
       const premiere = decouvertes.get(cle);
-      return premiere !== undefined && (!filtre.du || premiere.quand >= filtre.du);
+      return (
+        premiere !== undefined &&
+        premiere.organizationId === orgId &&
+        (!filtre.venueId || premiere.venueId === filtre.venueId) &&
+        (!filtre.du || premiere.quand >= filtre.du)
+      );
     }).length;
 
     // Les noms de lieux, pour que le tableau se lise sans aller les chercher.
@@ -231,7 +241,7 @@ export class FrequentationService {
 
     return {
       visiteursUniques: visiteurs.size,
-      visites: visites.reduce((total, v) => total + v.hits, 0),
+      visites: compterPassages(visites),
       visiteursConnectes: connectes.size,
       clientsAyantCommande: acheteurs.size,
       connectesAyantCommande,
@@ -247,68 +257,81 @@ export class FrequentationService {
   }
 
   /**
-   * Où et quand chaque appareil a ouvert l'application POUR LA PREMIÈRE FOIS.
+   * Le PREMIER LIEU que chaque appareil a jamais ouvert dans l'application, et
+   * quand.
    *
    * C'est ce qui remplace, honnêtement, le « nombre de téléchargements par
    * lieu » — qu'aucune boutique d'applications ne fournit : un téléchargement
    * se passe avant que l'app ne s'ouvre, et Apple ne dit ni où ni par qui.
    *
-   * Ce chiffre-ci vaut mieux, d'ailleurs : quelqu'un qui télécharge et n'ouvre
-   * jamais n'apporte rien à un club.
+   * Le premier LIEU, et non la première ouverture : chaque lancement signale
+   * d'abord une ouverture SANS lieu (l'écran d'accueil), avant que le client ne
+   * choisisse un stade. La toute première ligne d'un appareil n'est donc jamais
+   * dans un lieu — la prendre faisait tomber la colonne « Nouveaux » à zéro
+   * partout.
    *
    * `DISTINCT ON` est une particularité PostgreSQL, et c'est elle qui rend la
-   * chose possible en UNE requête : pour chaque appareil, la ligne la plus
-   * ancienne, avec le lieu où elle a eu lieu.
+   * chose possible en UNE requête : pour chaque appareil, la plus ancienne
+   * ligne rattachée à un lieu.
    */
-  private async premieresOuvertures(
+  private async premiersLieux(
     cles: string[],
-  ): Promise<Map<string, { venueId: string | null; quand: Date }>> {
+  ): Promise<Map<string, { organizationId: string | null; venueId: string; quand: Date }>> {
     if (cles.length === 0) return new Map();
 
     const lignes = await this.prisma.$queryRaw<
-      Array<{ visitor_key: string; venue_id: string | null; window_start: Date }>
+      Array<{
+        visitor_key: string;
+        organization_id: string | null;
+        venue_id: string;
+        window_start: Date;
+      }>
     >`
-      SELECT DISTINCT ON ("visitor_key") "visitor_key", "venue_id", "window_start"
+      SELECT DISTINCT ON ("visitor_key") "visitor_key", "organization_id", "venue_id", "window_start"
       FROM "frequentation"
       WHERE "visitor_key" IN (${Prisma.join(cles)})
+        AND "venue_id" IS NOT NULL
       ORDER BY "visitor_key", "window_start" ASC
     `;
     return new Map(
-      lignes.map((l) => [l.visitor_key, { venueId: l.venue_id, quand: l.window_start }]),
+      lignes.map((l) => [
+        l.visitor_key,
+        { organizationId: l.organization_id, venueId: l.venue_id, quand: l.window_start },
+      ]),
     );
   }
 
   private parJour(visites: LigneVisite[]): TrancheAudience[] {
-    const jours = new Map<string, { visiteurs: Set<string>; visites: number }>();
+    const jours = new Map<string, { visiteurs: Set<string>; passages: Set<string> }>();
     for (const v of visites) {
       const jour = v.windowStart.toISOString().slice(0, 10);
-      const tranche = jours.get(jour) ?? { visiteurs: new Set<string>(), visites: 0 };
+      const tranche = jours.get(jour) ?? { visiteurs: new Set<string>(), passages: new Set<string>() };
       tranche.visiteurs.add(v.visitorKey);
-      tranche.visites += v.hits;
+      tranche.passages.add(clePassage(v));
       jours.set(jour, tranche);
     }
     return [...jours.entries()]
-      .map(([jour, t]) => ({ jour, visiteursUniques: t.visiteurs.size, visites: t.visites }))
+      .map(([jour, t]) => ({ jour, visiteursUniques: t.visiteurs.size, visites: t.passages.size }))
       .sort((a, b) => a.jour.localeCompare(b.jour));
   }
 
   private parLieu(
     visites: LigneVisite[],
     noms: Map<string, string>,
-    decouvertes: Map<string, { venueId: string | null; quand: Date }>,
+    decouvertes: Map<string, { venueId: string; quand: Date }>,
     clientsParLieu: Map<string, Set<string>>,
     depuis?: Date,
   ): AudienceLieu[] {
-    const lieux = new Map<string, { visiteurs: Set<string>; visites: number; neufs: Set<string> }>();
+    const lieux = new Map<string, { visiteurs: Set<string>; passages: Set<string>; neufs: Set<string> }>();
     for (const v of visites) {
       if (!v.venueId) continue;
       const ligne = lieux.get(v.venueId) ?? {
         visiteurs: new Set<string>(),
-        visites: 0,
+        passages: new Set<string>(),
         neufs: new Set<string>(),
       };
       ligne.visiteurs.add(v.visitorKey);
-      ligne.visites += v.hits;
+      ligne.passages.add(clePassage(v));
 
       // Un NOUVEAU visiteur de ce lieu : celui dont la toute première ouverture
       // de l'application, jamais, a eu lieu ICI — et dans la période lue. Un
@@ -325,12 +348,29 @@ export class FrequentationService {
         venueId,
         nom: noms.get(venueId) ?? 'Lieu supprimé',
         visiteursUniques: l.visiteurs.size,
-        visites: l.visites,
+        visites: l.passages.size,
         nouveauxVisiteurs: l.neufs.size,
         clients: clientsParLieu.get(venueId)?.size ?? 0,
       }))
       .sort((a, b) => b.visiteursUniques - a.visiteursUniques);
   }
+}
+
+/**
+ * Un PASSAGE : un appareil, une demi-heure.
+ *
+ * Ni le nombre d'écrans vus (`hits`), ni le nombre de lignes : la carte puis le
+ * menu écrivent deux lignes distinctes (périmètres différents) pour une seule
+ * venue au stade. Dix allers-retours entre la carte et le panier font UN
+ * passage — c'est tout l'objet de la fenêtre de trente minutes. Le tableau de
+ * bord affichait la somme des écrans vus.
+ */
+function clePassage(v: { visitorKey: string; windowStart: Date }): string {
+  return `${v.visitorKey}|${v.windowStart.getTime()}`;
+}
+
+function compterPassages(visites: Array<{ visitorKey: string; windowStart: Date }>): number {
+  return new Set(visites.map(clePassage)).size;
 }
 
 interface LigneVisite {

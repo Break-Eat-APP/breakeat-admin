@@ -118,10 +118,11 @@ describe('FrequentationService — lire l’audience', () => {
 
     const audience = await service.pourOrganisation(ORG, 'moi');
 
-    // Deux appareils, six passages : les deux chiffres répondent à des
-    // questions différentes, et confondre les deux fait croire au double.
+    // Deux appareils, TROIS passages : `a` est venu deux demi-heures, `b` une.
+    // Les écrans vus pendant un passage (`hits`) ne sont pas des passages — les
+    // additionner donnait 6, et faisait croire à six venues.
     expect(audience.visiteursUniques).toBe(2);
-    expect(audience.visites).toBe(6);
+    expect(audience.visites).toBe(3);
   });
 
   describe('le taux de conversion', () => {

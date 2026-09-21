@@ -292,10 +292,17 @@ export default function ClientsPage() {
         les seuls qu&apos;on puisse relier à une commande : combien, parmi ceux qui étaient
         connectés en regardant, ont fini par commander.
         <br />
-        <strong>Nouveaux visiteurs</strong> = ceux dont la toute première ouverture de
-        l&apos;application a eu lieu chez vous. C&apos;est la mesure honnête de « combien nous ont
+        <strong>Nouveaux visiteurs</strong> = ceux pour qui votre lieu est le tout premier lieu
+        ouvert dans l&apos;application. C&apos;est la mesure honnête de « combien nous ont
         découverts ici » : aucune boutique d&apos;applications ne dit où un téléchargement a eu
         lieu — et télécharger sans jamais ouvrir n&apos;apporte rien.
+        <br />
+        Un <strong>passage</strong> = un appareil venu chez vous dans une même demi-heure,
+        quel que soit le nombre d&apos;écrans consultés.
+        <br />
+        La fréquentation est mesurée depuis le <strong>18 septembre 2026</strong> : sur une période
+        qui commence avant, « Ont commandé » peut dépasser les visiteurs — les commandes, elles,
+        sont comptées depuis toujours.
       </p>
 
       {/* ─── Audience par lieu ───────────────────────────────── */}
