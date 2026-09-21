@@ -508,10 +508,23 @@ function OrderCard({
             style={({ pressed }) => [styles.arrivedBtn, pressed && styles.pressed]}
             onPress={() => onArrived(order.id)}
             hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel="Clique ici pour nous avertir lorsque tu es devant le point de retrait"
           >
-            <Ionicons name="hand-left-outline" size={16} color="#fff" />
-            <Text style={styles.arrivedBtnText}>
-              Clique ici pour nous avertir lorsque tu es devant le point de retrait
+            {/* Deux lignes FORCEES, de longueur voisine (36 et 32 signes).
+                Laissee libre, la coupure tombait ou le hasard de la largeur
+                la mettait : une ligne pleine, un mot orphelin. Pas d'icone :
+                la main prenait la largeur dont le texte avait besoin.
+                `adjustsFontSizeToFit` est le filet des petits ecrans (iPhone
+                SE) — le texte retrecit legerement plutot que de passer a
+                trois lignes. */}
+            <Text
+              style={styles.arrivedBtnText}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.85}
+            >
+              {'Clique ici pour nous avertir lorsque\ntu es devant le point de retrait'}
             </Text>
           </Pressable>
         ))}
@@ -646,11 +659,13 @@ const styles = StyleSheet.create({
   },
   planBtnText: { color: THEME.orange, fontSize: 14, fontFamily: HEAD.bold },
   arrivedBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+    alignItems: 'center', justifyContent: 'center',
     backgroundColor: THEME.orange, borderRadius: THEME.radius.pill,
-    paddingVertical: 11, marginTop: 2,
+    // Une marge LATERALE : sans elle, le texte allait toucher les arrondis
+    // de la pilule — « devant » finissait colle au bord.
+    paddingVertical: 11, paddingHorizontal: 18, marginTop: 2,
   },
-  arrivedBtnText: { color: '#fff', fontSize: 13, fontFamily: HEAD.bold, textAlign: 'center', flex: 1, lineHeight: 18 },
+  arrivedBtnText: { color: '#fff', fontSize: 12, fontFamily: HEAD.bold, textAlign: 'center', lineHeight: 17 },
   recuBtn: {
     flexDirection: 'row',
     alignItems: 'center',
