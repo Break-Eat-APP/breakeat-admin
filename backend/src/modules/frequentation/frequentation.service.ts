@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { jourDeService } from '../../common/helpers/jour-de-service';
 import { requireOrgAccess } from '../../common/helpers/require-org-access';
 import { OrgRole } from '../../common/enums/role.enum';
 
@@ -155,7 +156,24 @@ export class FrequentationService {
         : {}),
     };
 
-    const [visites, commandes] = await Promise.all([
+    // Le même périmètre que la comptabilité : payé, et non annulé.
+    const whereCommandes: Prisma.OrderWhereInput = {
+      organizationId: orgId,
+      paymentStatus: PaymentStatus.SUCCEEDED,
+      status: { not: OrderStatus.CANCELLED },
+      ...(filtre.venueId ? { venueId: filtre.venueId } : {}),
+      ...(filtre.eventId ? { eventId: filtre.eventId } : {}),
+      ...(filtre.du || filtre.au
+        ? {
+            createdAt: {
+              ...(filtre.du ? { gte: filtre.du } : {}),
+              ...(filtre.au ? { lte: filtre.au } : {}),
+            },
+          }
+        : {}),
+    };
+
+    const [visites, commandes, ventes, matchs] = await Promise.all([
       this.prisma.frequentation.findMany({
         where,
         select: {
@@ -166,23 +184,30 @@ export class FrequentationService {
           windowStart: true,
         },
       }),
-      this.prisma.order.groupBy({
-        by: ['userId', 'venueId'],
+      this.prisma.order.groupBy({ by: ['userId', 'venueId'], where: whereCommandes }),
+      // Pour le détail PAR JOUR : quand, combien, où.
+      this.prisma.order.findMany({
+        where: whereCommandes,
+        select: { createdAt: true, totalCents: true, venueId: true },
+      }),
+      // Les matchs de la période, pour nommer chaque jour. Le contenant
+      // invisible d'un lieu ouvert en continu n'est pas un match.
+      this.prisma.event.findMany({
         where: {
           organizationId: orgId,
-          paymentStatus: PaymentStatus.SUCCEEDED,
-          status: { not: OrderStatus.CANCELLED },
+          isPermanentContainer: false,
           ...(filtre.venueId ? { venueId: filtre.venueId } : {}),
-          ...(filtre.eventId ? { eventId: filtre.eventId } : {}),
+          ...(filtre.eventId ? { id: filtre.eventId } : {}),
           ...(filtre.du || filtre.au
             ? {
-                createdAt: {
+                startAt: {
                   ...(filtre.du ? { gte: filtre.du } : {}),
                   ...(filtre.au ? { lte: filtre.au } : {}),
                 },
               }
             : {}),
         },
+        select: { name: true, startAt: true, venueId: true },
       }),
     ]);
 
@@ -228,16 +253,39 @@ export class FrequentationService {
       );
     }).length;
 
-    // Les noms de lieux, pour que le tableau se lise sans aller les chercher.
-    const lieuxIds = [...new Set(visites.map((v) => v.venueId).filter((v): v is string => !!v))];
-    const noms = new Map(
-      (
-        await this.prisma.venue.findMany({
-          where: { id: { in: lieuxIds } },
-          select: { id: true, name: true },
-        })
-      ).map((v) => [v.id, v.name]),
-    );
+    // Les noms de lieux, pour que le tableau se lise sans aller les chercher —
+    // et leurs FUSEAUX, pour que chaque jour soit celui du comptoir.
+    const lieuxIds = [
+      ...new Set(
+        [
+          ...visites.map((v) => v.venueId),
+          ...ventes.map((v) => v.venueId),
+          ...matchs.map((m) => m.venueId),
+        ].filter((v): v is string => !!v),
+      ),
+    ];
+    const lieux = await this.prisma.venue.findMany({
+      where: { id: { in: lieuxIds } },
+      select: { id: true, name: true, timezone: true },
+    });
+    const noms = new Map(lieux.map((v) => [v.id, v.name]));
+    const fuseaux = new Map(lieux.map((v) => [v.id, v.timezone]));
+    const jourDe = (instant: Date, venueId: string | null) =>
+      jourDeService(instant, (venueId && fuseaux.get(venueId)) || 'Europe/Paris')
+        .toISOString()
+        .slice(0, 10);
+
+    // Un nouveau visiteur compte le jour de SA découverte — même règle que la
+    // carte du haut.
+    const decouvertesDuClub = [...visiteurs].flatMap((cle) => {
+      const premiere = decouvertes.get(cle);
+      return premiere &&
+        premiere.organizationId === orgId &&
+        (!filtre.venueId || premiere.venueId === filtre.venueId) &&
+        (!filtre.du || premiere.quand >= filtre.du)
+        ? [{ cle, premiere }]
+        : [];
+    });
 
     return {
       visiteursUniques: visiteurs.size,
@@ -251,7 +299,7 @@ export class FrequentationService {
       tauxConversion:
         connectes.size > 0 ? Math.round((connectesAyantCommande / connectes.size) * 1000) / 10 : null,
       nouveauxVisiteurs: nouveaux,
-      parJour: this.parJour(visites),
+      ...this.parJour({ visites, ventes, matchs, decouvertes: decouvertesDuClub, jourDe }),
       parLieu: this.parLieu(visites, noms, decouvertes, clientsParLieu, filtre.du),
     };
   }
@@ -279,6 +327,10 @@ export class FrequentationService {
   ): Promise<Map<string, { organizationId: string | null; venueId: string; quand: Date }>> {
     if (cles.length === 0) return new Map();
 
+    // `created_at` DÉPARTAGE : deux lieux ouverts dans la même demi-heure ont la
+    // même `window_start`, et PostgreSQL choisissait alors au hasard — un essai
+    // passait ou échouait selon le tirage. La ligne créée la première est celle
+    // du lieu ouvert le premier.
     const lignes = await this.prisma.$queryRaw<
       Array<{
         visitor_key: string;
@@ -291,7 +343,7 @@ export class FrequentationService {
       FROM "frequentation"
       WHERE "visitor_key" IN (${Prisma.join(cles)})
         AND "venue_id" IS NOT NULL
-      ORDER BY "visitor_key", "window_start" ASC
+      ORDER BY "visitor_key", "window_start" ASC, "created_at" ASC
     `;
     return new Map(
       lignes.map((l) => [
@@ -301,18 +353,91 @@ export class FrequentationService {
     );
   }
 
-  private parJour(visites: LigneVisite[]): TrancheAudience[] {
-    const jours = new Map<string, { visiteurs: Set<string>; passages: Set<string> }>();
-    for (const v of visites) {
-      const jour = v.windowStart.toISOString().slice(0, 10);
-      const tranche = jours.get(jour) ?? { visiteurs: new Set<string>(), passages: new Set<string>() };
-      tranche.visiteurs.add(v.visitorKey);
-      tranche.passages.add(clePassage(v));
-      jours.set(jour, tranche);
+  /**
+   * Le détail JOUR PAR JOUR : ce qui répond à « quel jour avons-nous eu le
+   * plus de monde », qu'une somme sur 30 jours noie.
+   *
+   * Le jour est le JOUR DE SERVICE du lieu (bascule à 4h, heure locale) — le
+   * même que la numérotation des commandes. Découper à minuit UTC rangeait la
+   * fin d'un match du soir sur le lendemain.
+   */
+  private parJour(e: {
+    visites: LigneVisite[];
+    ventes: Array<{ createdAt: Date; totalCents: number; venueId: string }>;
+    matchs: Array<{ name: string; startAt: Date; venueId: string }>;
+    decouvertes: Array<{ cle: string; premiere: { venueId: string; quand: Date } }>;
+    jourDe: (instant: Date, venueId: string | null) => string;
+  }): { parJour: TrancheAudience[]; meilleurJour: string | null } {
+    const jours = new Map<
+      string,
+      {
+        visiteurs: Set<string>;
+        passages: Set<string>;
+        nouveaux: Set<string>;
+        commandes: number;
+        caTtcCents: number;
+        evenements: Set<string>;
+      }
+    >();
+    const jour = (cle: string) => {
+      let tranche = jours.get(cle);
+      if (!tranche) {
+        tranche = {
+          visiteurs: new Set(),
+          passages: new Set(),
+          nouveaux: new Set(),
+          commandes: 0,
+          caTtcCents: 0,
+          evenements: new Set(),
+        };
+        jours.set(cle, tranche);
+      }
+      return tranche;
+    };
+
+    for (const v of e.visites) {
+      const t = jour(e.jourDe(v.windowStart, v.venueId));
+      t.visiteurs.add(v.visitorKey);
+      t.passages.add(clePassage(v));
     }
-    return [...jours.entries()]
-      .map(([jour, t]) => ({ jour, visiteursUniques: t.visiteurs.size, visites: t.passages.size }))
+    for (const d of e.decouvertes) {
+      jour(e.jourDe(d.premiere.quand, d.premiere.venueId)).nouveaux.add(d.cle);
+    }
+    for (const c of e.ventes) {
+      const t = jour(e.jourDe(c.createdAt, c.venueId));
+      t.commandes += 1;
+      t.caTtcCents += c.totalCents;
+    }
+    for (const m of e.matchs) {
+      // Seulement les jours où il s'est passé quelque chose : un match créé
+      // d'avance, sans une visite ni une commande, n'apprend rien.
+      jours.get(e.jourDe(m.startAt, m.venueId))?.evenements.add(m.name);
+    }
+
+    const parJour = [...jours.entries()]
+      .map(([cle, t]) => ({
+        jour: cle,
+        visiteursUniques: t.visiteurs.size,
+        visites: t.passages.size,
+        nouveauxVisiteurs: t.nouveaux.size,
+        commandes: t.commandes,
+        caTtcCents: t.caTtcCents,
+        evenements: [...t.evenements].sort((a, b) => a.localeCompare(b, 'fr')),
+      }))
       .sort((a, b) => a.jour.localeCompare(b.jour));
+
+    // Le MEILLEUR jour : le plus de visiteurs ; à égalité, le plus de
+    // commandes ; puis le plus récent. Aucun si personne n'est venu.
+    const meilleur = [...parJour]
+      .filter((t) => t.visiteursUniques > 0)
+      .sort(
+        (a, b) =>
+          b.visiteursUniques - a.visiteursUniques ||
+          b.commandes - a.commandes ||
+          b.jour.localeCompare(a.jour),
+      )[0];
+
+    return { parJour, meilleurJour: meilleur?.jour ?? null };
   }
 
   private parLieu(
@@ -389,9 +514,16 @@ export interface FiltreFrequentation {
 }
 
 export interface TrancheAudience {
+  /** Jour de SERVICE du lieu (bascule à 4h, heure locale), `AAAA-MM-JJ`. */
   jour: string;
   visiteursUniques: number;
   visites: number;
+  nouveauxVisiteurs: number;
+  /** Commandes payées et non annulées — le périmètre de la comptabilité. */
+  commandes: number;
+  caTtcCents: number;
+  /** Les matchs de ce jour-là, pour que la ligne dise de quoi elle parle. */
+  evenements: string[];
 }
 
 export interface AudienceLieu {
@@ -429,5 +561,7 @@ export interface AudienceClub {
    */
   tauxConversion: number | null;
   parJour: TrancheAudience[];
+  /** Le jour qui a vu le plus de visiteurs (`AAAA-MM-JJ`), `null` si personne. */
+  meilleurJour: string | null;
   parLieu: AudienceLieu[];
 }

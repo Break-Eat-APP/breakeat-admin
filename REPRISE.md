@@ -235,6 +235,24 @@ L'éclair flotte en permanence dans son disque.
   (aucun test mobile n'existait). `transformIgnorePatterns` laisse désormais
   Babel transformer les modules de `.pnpm`.
 
+## 📅 MES CLIENTS — JOUR PAR JOUR — 21/09/2026
+
+Sous « Fréquentation par lieu », le tableau **Jour par jour** de la période
+choisie : date, match(s) du jour, visiteurs (avec une barre pour repérer le pic),
+nouveaux, visites, commandes, CA TTC — et le **meilleur jour** en tête (le plus de
+visiteurs ; à égalité, le plus de commandes).
+
+- **Le jour est le JOUR DE SERVICE du lieu** (bascule à 4h, heure du lieu — même
+  helper que la numérotation des commandes). Découper à minuit UTC rangeait la fin
+  d'un match du soir sur le lendemain.
+- Commandes et CA : même périmètre que la comptabilité (payé, non annulé).
+- Un match sans une visite ni une commande ne crée pas de ligne.
+- « Passages » est devenu **« visites »** partout : « 1 visiteur, 2 visites » =
+  une personne venue deux fois (une visite = un appareil dans une demi-heure).
+- **Départage des premiers lieux** : deux lieux ouverts dans la même demi-heure
+  ont la même `window_start` ; PostgreSQL tirait au hasard. `created_at` tranche
+  désormais — un essai passait ou échouait selon le tirage.
+
 ## 📊 RAPPORTS FLAIX — 21/09/2026
 
 Les rapports d'événements vivent chez Flaix, derrière les identifiants Flaix du

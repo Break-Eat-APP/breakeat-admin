@@ -84,12 +84,26 @@ describe('FrequentationService — lire l’audience', () => {
   const ORG = 'cccccccc-3333-4333-8333-333333333333';
   const LIEU = 'aaaaaaaa-1111-4111-8111-111111111111';
 
-  function monter(visites: unknown[], commandes: unknown[], premieres: unknown[] = []) {
+  function monter(
+    visites: unknown[],
+    commandes: unknown[],
+    premieres: unknown[] = [],
+    ventes: unknown[] = [],
+    matchs: unknown[] = [],
+  ) {
     const prisma = {
       user: { findUnique: jest.fn().mockResolvedValue({ globalRole: 'SUPER_ADMIN' }) },
       frequentation: { findMany: jest.fn().mockResolvedValue(visites) },
-      order: { groupBy: jest.fn().mockResolvedValue(commandes) },
-      venue: { findMany: jest.fn().mockResolvedValue([{ id: LIEU, name: 'Vélodrome' }]) },
+      order: {
+        groupBy: jest.fn().mockResolvedValue(commandes),
+        findMany: jest.fn().mockResolvedValue(ventes),
+      },
+      event: { findMany: jest.fn().mockResolvedValue(matchs) },
+      venue: {
+        findMany: jest
+          .fn()
+          .mockResolvedValue([{ id: LIEU, name: 'Vélodrome', timezone: 'Europe/Paris' }]),
+      },
       // La toute première ouverture de chaque appareil : une requête SQL, dont
       // le VRAI comportement est vérifié sur base réelle
       // (`frequentation.int-spec.ts`). Ici, seul le reste du calcul est en jeu.
@@ -199,6 +213,75 @@ describe('FrequentationService — lire l’audience', () => {
     const audience = await service.pourOrganisation(ORG, 'moi');
     expect(audience.parJour.map((j) => j.jour)).toEqual(['2026-09-18', '2026-09-19']);
     expect(audience.parJour[0].visiteursUniques).toBe(2);
+  });
+
+  it('un match du soir reste sur SON jour, même après minuit', async () => {
+    // 02h30 à Paris le 19 = 00h30 UTC le 19 : découpé à minuit UTC, la fin du
+    // match du 18 partait sur le lendemain. Le jour de service bascule à 4h.
+    const service = monter(
+      [visite('a', '2026-09-18T19:00:00Z'), visite('b', '2026-09-19T00:30:00Z')],
+      [],
+    );
+    const audience = await service.pourOrganisation(ORG, 'moi');
+    expect(audience.parJour.map((j) => j.jour)).toEqual(['2026-09-18']);
+    expect(audience.parJour[0].visiteursUniques).toBe(2);
+  });
+
+  it('donne, jour par jour, commandes, chiffre d’affaires et matchs — et le meilleur jour', async () => {
+    const service = monter(
+      [
+        visite('a', '2026-09-13T18:00:00Z'),
+        visite('a', '2026-09-20T18:00:00Z'),
+        visite('b', '2026-09-20T18:10:00Z'),
+        visite('c', '2026-09-20T19:40:00Z'),
+      ],
+      [],
+      [],
+      [
+        { createdAt: new Date('2026-09-20T18:20:00Z'), totalCents: 450, venueId: LIEU },
+        { createdAt: new Date('2026-09-20T19:50:00Z'), totalCents: 750, venueId: LIEU },
+        { createdAt: new Date('2026-09-13T18:30:00Z'), totalCents: 300, venueId: LIEU },
+      ],
+      [
+        { name: 'OM – Nice', startAt: new Date('2026-09-20T17:00:00Z'), venueId: LIEU },
+        // Un match sans une visite ni une commande : il ne crée pas de ligne.
+        { name: 'OM – Lens', startAt: new Date('2026-09-27T17:00:00Z'), venueId: LIEU },
+      ],
+    );
+    const audience = await service.pourOrganisation(ORG, 'moi');
+
+    expect(audience.parJour.map((j) => j.jour)).toEqual(['2026-09-13', '2026-09-20']);
+    expect(audience.parJour[1]).toMatchObject({
+      visiteursUniques: 3,
+      commandes: 2,
+      caTtcCents: 1200,
+      evenements: ['OM – Nice'],
+    });
+    expect(audience.parJour[0]).toMatchObject({ visiteursUniques: 1, commandes: 1, evenements: [] });
+    expect(audience.meilleurJour).toBe('2026-09-20');
+  });
+
+  it('un nouveau visiteur compte le jour de SA découverte', async () => {
+    const service = monter(
+      [visite('a', '2026-09-13T18:00:00Z'), visite('a', '2026-09-20T18:00:00Z')],
+      [],
+      [
+        {
+          visitor_key: 'a',
+          organization_id: ORG,
+          venue_id: LIEU,
+          window_start: new Date('2026-09-13T18:00:00Z'),
+        },
+      ],
+    );
+    const audience = await service.pourOrganisation(ORG, 'moi');
+    expect(audience.parJour.map((j) => j.nouveauxVisiteurs)).toEqual([1, 0]);
+  });
+
+  it('pas de meilleur jour quand personne n’est venu', async () => {
+    const service = monter([], []);
+    const audience = await service.pourOrganisation(ORG, 'moi');
+    expect(audience.meilleurJour).toBeNull();
   });
 
   it('nomme les lieux, et supporte qu’un lieu ait disparu', async () => {

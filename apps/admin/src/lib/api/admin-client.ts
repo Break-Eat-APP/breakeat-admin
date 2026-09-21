@@ -1585,8 +1585,22 @@ export interface AudienceClub {
   connectesAyantCommande: number;
   /** Part des visiteurs IDENTIFIÉS qui ont commandé. `null` s'il n'y en a eu aucun. */
   tauxConversion: number | null;
-  parJour: Array<{ jour: string; visiteursUniques: number; visites: number }>;
+  parJour: TrancheAudience[];
+  /** Le jour qui a vu le plus de visiteurs (`AAAA-MM-JJ`), `null` si personne. */
+  meilleurJour: string | null;
   parLieu: AudienceLieu[];
+}
+
+/** Une journée de la période : le jour de SERVICE du lieu (bascule à 4h). */
+export interface TrancheAudience {
+  jour: string;
+  visiteursUniques: number;
+  visites: number;
+  nouveauxVisiteurs: number;
+  commandes: number;
+  caTtcCents: number;
+  /** Les matchs de ce jour-là. */
+  evenements: string[];
 }
 
 /** Ce qui restreint la lecture : un lieu, une période, ou rien. */

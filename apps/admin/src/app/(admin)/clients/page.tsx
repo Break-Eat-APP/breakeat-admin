@@ -28,6 +28,7 @@ import {
   type Venue,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
+import { JourParJour } from '@/components/jour-par-jour';
 
 const EUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 const INT = new Intl.NumberFormat('fr-FR');
@@ -251,7 +252,11 @@ export default function ClientsPage() {
           icone={Eye}
           libelle="Visiteurs uniques"
           valeur={audience ? INT.format(audience.visiteursUniques) : '—'}
-          precision={audience ? `${INT.format(audience.visites)} passages` : undefined}
+          precision={
+            audience
+              ? `${INT.format(audience.visites)} visite${audience.visites > 1 ? 's' : ''} au total`
+              : undefined
+          }
         />
         <Chiffre
           icone={Users}
@@ -277,7 +282,9 @@ export default function ClientsPage() {
             audience && audience.visiteursConnectes > 0
               ? `${INT.format(audience.connectesAyantCommande)} sur ${INT.format(
                   audience.visiteursConnectes,
-                )} visiteurs identifiés`
+                )} visiteur${audience.visiteursConnectes > 1 ? 's' : ''} identifié${
+                  audience.visiteursConnectes > 1 ? 's' : ''
+                }`
               : 'parmi les visiteurs identifiés'
           }
         />
@@ -297,8 +304,9 @@ export default function ClientsPage() {
         découverts ici » : aucune boutique d&apos;applications ne dit où un téléchargement a eu
         lieu — et télécharger sans jamais ouvrir n&apos;apporte rien.
         <br />
-        Un <strong>passage</strong> = un appareil venu chez vous dans une même demi-heure,
-        quel que soit le nombre d&apos;écrans consultés.
+        Une <strong>visite</strong> = un appareil venu chez vous dans une même demi-heure,
+        quel que soit le nombre d&apos;écrans consultés. « 1 visiteur, 2 visites » : une
+        personne venue deux fois.
         <br />
         La fréquentation est mesurée depuis le <strong>18 septembre 2026</strong> : sur une période
         qui commence avant, « Ont commandé » peut dépasser les visiteurs — les commandes, elles,
@@ -317,7 +325,7 @@ export default function ClientsPage() {
                 <th style={{ padding: '6px 0' }}>Lieu</th>
                 <th style={{ padding: '6px 0', textAlign: 'right' }}>Visiteurs</th>
                 <th style={{ padding: '6px 0', textAlign: 'right' }}>Nouveaux</th>
-                <th style={{ padding: '6px 0', textAlign: 'right' }}>Passages</th>
+                <th style={{ padding: '6px 0', textAlign: 'right' }}>Visites</th>
               </tr>
             </thead>
             <tbody>
@@ -337,6 +345,9 @@ export default function ClientsPage() {
           </table>
         </section>
       ) : null}
+
+      {/* ─── Jour par jour ───────────────────────────────────── */}
+      {audience ? <JourParJour jours={audience.parJour} meilleurJour={audience.meilleurJour} /> : null}
 
       {/* ─── Le fichier client ───────────────────────────────── */}
       <section style={carte}>
