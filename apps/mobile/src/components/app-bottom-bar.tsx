@@ -185,9 +185,12 @@ export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
           onPress={() => navigateTo('Notifications')}
           icone={
             <Ionicons
-              name={isAlertes ? 'notifications' : 'notifications-outline'}
+              // Une cloche PLEINE et orange dès qu'il y a du nouveau : la
+              // pastille chiffrée seule se rate d'un coup d'œil, et le client
+              // ne pensait pas à ouvrir « Alertes ».
+              name={isAlertes || nonLues > 0 ? 'notifications' : 'notifications-outline'}
               size={23}
-              color={teinte(isAlertes)}
+              color={teinte(isAlertes || nonLues > 0)}
             />
           }
         />

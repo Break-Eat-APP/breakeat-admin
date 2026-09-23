@@ -69,7 +69,10 @@ const APPARENCES: Record<EtatPastille, Apparence> = {
   repos: { progression: 0, couleur: THEME.orange, contour: '#C73200' },
   recue: { progression: 1 / 3, couleur: JAUNE, contour: '#A16207' },
   preparation: { progression: 2 / 3, couleur: THEME.orange, contour: '#C73200' },
-  prete: { progression: 1, couleur: VERT, contour: '#15803d', appel: true },
+  // Le ✓ dès que c'est PRÊT, et pas seulement une fois récupéré : c'est le
+  // moment où le client doit savoir que sa commande l'attend. L'onde verte
+  // distingue les deux — elle s'arrête une fois la commande retirée.
+  prete: { progression: 1, couleur: VERT, contour: '#15803d', badge: 'checkmark', appel: true },
   recuperee: { progression: 1, couleur: VERT, contour: '#15803d', badge: 'checkmark' },
   remboursee: { progression: 1, couleur: BLEU_REMBOURSEMENT, contour: '#1e3a8a', badge: 'arrow-undo' },
 };

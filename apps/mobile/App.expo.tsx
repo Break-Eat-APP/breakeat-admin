@@ -10,7 +10,7 @@
  * Entrée native de production = index.js / App.tsx (root-navigator complet).
  */
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { AppState, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -170,9 +170,26 @@ export default function AppPreview() {
     void useNotifStore.getState().rafraichir();
     const arreterPush = ecouterPush(() => useNotifStore.getState().pushReceived());
 
+    // Trois relectures de plus, parce que le push ne suffit pas :
+    //  - au RETOUR au premier plan : une annonce arrivée application fermée ne
+    //    déclenche aucun écouteur, et la cloche restait muette jusqu'à ce que
+    //    le client repasse par l'accueil ;
+    //  - toutes les cinq minutes application ouverte, pour le client qui a
+    //    REFUSÉ les notifications système : aucun push ne lui parviendra
+    //    jamais, la cloche est son seul signal ;
+    //  - à l'ouverture d'une notification touchée, quel qu'en soit le type.
+    const auPremierPlan = AppState.addEventListener('change', (etat) => {
+      if (etat === 'active') void useNotifStore.getState().rafraichir();
+    });
+    const battement = setInterval(() => {
+      if (AppState.currentState === 'active') void useNotifStore.getState().rafraichir();
+    }, 5 * 60_000);
+
     // « Produit manquant » : toucher la notification mène là où le client lit
     // ce qui manque. La navigation peut ne pas être prête au démarrage à froid.
     const arreterOuvertures = ecouterOuvertures((data) => {
+      // Le client vient de toucher une annonce : le compte a changé.
+      void useNotifStore.getState().rafraichir();
       if (data.type !== 'missing_items') return;
       const ouvrir = () => navigationRef.navigate('Commandes');
       if (navigationRef.isReady()) ouvrir();
@@ -182,6 +199,8 @@ export default function AppPreview() {
     return () => {
       arreterPush();
       arreterOuvertures();
+      auPremierPlan.remove();
+      clearInterval(battement);
     };
   }, [token]);
 

@@ -260,6 +260,28 @@ personne pouvait apparaître quatre fois. Désormais :
   commander sans se connecter, l'inclure ferait baisser le taux artificiellement.
 - Le tableau par lieu et le tableau jour par jour suivent les mêmes colonnes.
 
+## 🔔 LA CLOCHE ET LE ✓ — 23/09/2026
+
+**La cloche restait muette.** Le compte des non-lues n'était relu qu'à la
+connexion, à l'arrivée d'un push APPLICATION OUVERTE, et en revenant sur
+l'accueil. Un push reçu app fermée ne déclenche aucun écouteur : le client
+voyait la bannière, puis une cloche éteinte. Trois relectures ajoutées
+(`App.expo.tsx`) :
+
+- au **retour au premier plan** ;
+- **toutes les 5 min** application ouverte — indispensable pour qui a REFUSÉ
+  les notifications système : aucun push ne lui parviendra jamais ;
+- à l'**ouverture d'une notification touchée**, quel qu'en soit le type.
+
+La cloche elle-même s'allume (pleine + orange) dès qu'il y a du nouveau, en plus
+de la pastille chiffrée : un chiffre seul se rate d'un coup d'œil.
+
+**Le ✓ apparaît dès « prête »**, et non plus seulement à « récupérée » : c'est
+le moment où le client doit savoir que sa commande l'attend. L'onde verte
+distingue les deux — elle s'arrête une fois la commande retirée.
+
+⚠️ Les deux demandent une build : ce sont des changements natifs.
+
 ## 📅 MES CLIENTS — JOUR PAR JOUR — 21/09/2026
 
 Sous « Fréquentation par lieu », le tableau **Jour par jour** de la période
