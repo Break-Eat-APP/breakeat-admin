@@ -260,6 +260,23 @@ personne pouvait apparaître quatre fois. Désormais :
   commander sans se connecter, l'inclure ferait baisser le taux artificiellement.
 - Le tableau par lieu et le tableau jour par jour suivent les mêmes colonnes.
 
+## 🧾 MES COMMANDES — EN COURS / TERMINÉES — 23/09/2026
+
+Les cartes se ressemblaient toutes : une commande récupérée affichait encore les
+trois étapes (Reçue · Préparation · Prête), pleines, comme une commande en
+cours. Deux changements :
+
+- **Le résumé des étapes n'apparaît plus que sur une commande EN COURS.**
+  Terminée, il n'apprend plus rien et brouille la lecture.
+- **La liste est coupée en deux** (`SectionList`) : « En cours », puis
+  « Terminées ». Les titres n'apparaissent que s'il y a les deux — sans commande
+  en cours, la liste n'est qu'un historique.
+
+Avant, tout arrivait mélangé, la plus récente en tête : une commande récupérée
+hier pouvait passer devant celle qu'on attend au comptoir.
+
+⚠️ Changement d'app : demande une build.
+
 ## 🔔 LA CLOCHE ET LE ✓ — 23/09/2026
 
 **La cloche restait muette.** Le compte des non-lues n'était relu qu'à la

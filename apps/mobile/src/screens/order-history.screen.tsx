@@ -1,10 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
   AppState,
   DeviceEventEmitter,
-  FlatList,
+  SectionList,
   Platform,
   Pressable,
   RefreshControl,
@@ -180,6 +180,21 @@ export function OrderHistoryScreen() {
   // Suivi live : on ne sonde que s'il reste une commande en cours (économie
   // batterie/réseau — une liste 100 % terminée est figée).
   const hasLive = orders.some((o) => isLive(o.status));
+
+  /**
+   * Deux groupes : ce qui attend le client, puis ce qui est derrière lui.
+   *
+   * Les commandes arrivaient mélangées, la plus récente en tête : une commande
+   * récupérée hier pouvait passer devant celle qu'on attend au comptoir.
+   */
+  const sections = useMemo(() => {
+    const enCours = orders.filter((o) => isLive(o.status));
+    const terminees = orders.filter((o) => !isLive(o.status));
+    return [
+      ...(enCours.length > 0 ? [{ titre: 'En cours', data: enCours }] : []),
+      ...(terminees.length > 0 ? [{ titre: 'Terminées', data: terminees }] : []),
+    ];
+  }, [orders]);
   useEffect(() => {
     if (!token || !hasLive) return;
     const t = setInterval(() => void load(), LIVE_POLL_MS);
@@ -300,12 +315,18 @@ export function OrderHistoryScreen() {
           <Text style={styles.emptyText}>Aucune commande pour le moment.</Text>
         </View>
       ) : (
-        <FlatList
-          data={orders}
+        <SectionList
+          sections={sections}
           keyExtractor={(o) => o.id}
           contentContainerStyle={[styles.list, { paddingBottom: espaceBas }]}
+          stickySectionHeadersEnabled={false}
           refreshControl={
             <RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={THEME.orange} />
+          }
+          // Un titre SEULEMENT s'il y a les deux : sans commande en cours, la
+          // liste n'est qu'un historique, et « Terminées » n'y apprend rien.
+          renderSectionHeader={({ section }) =>
+            sections.length > 1 ? <Text style={styles.sectionTitre}>{section.titre}</Text> : null
           }
           renderItem={({ item }) => (
             <OrderCard
@@ -443,7 +464,11 @@ function OrderCard({
           Le libellé compte : « Préparation » dit ce qui se passe, là où un point
           demande de deviner. L'étape EN COURS est plus épaisse, pour se repérer
           sans lire. */}
-      {cfg.phase !== 'cancelled' && (
+      {/* Le résumé des étapes ne sert QUE pendant l'attente. Une fois la
+          commande récupérée, ces trois traits pleins n'apprennent plus rien et
+          font ressembler une commande finie à une commande en cours — c'est
+          précisément ce qui rendait la liste illisible. */}
+      {live && (
         <View style={styles.steps}>
           {STEPS.map((s, i) => {
             const atteint = stepIndex >= i || cfg.phase === 'done';
@@ -591,6 +616,14 @@ const styles = StyleSheet.create({
   ctaText: { color: '#fff', fontFamily: HEAD.bold, fontSize: 15 },
 
   list: { padding: 16, gap: 14 },
+  sectionTitre: {
+    color: THEME.inkSoft,
+    fontSize: 12.5,
+    fontFamily: HEAD.bold,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginTop: 2,
+  },
 
   /**
    * Carte de commande.
