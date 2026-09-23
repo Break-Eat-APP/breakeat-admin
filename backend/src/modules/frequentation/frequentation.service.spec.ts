@@ -309,6 +309,28 @@ describe('FrequentationService — lire l’audience', () => {
     expect(avant).toMatchObject({ jour: '2026-09-06', commandes: 1, mesure: false, tauxConversion: null });
   });
 
+  it('anonymes et connectés ne se recoupent JAMAIS', async () => {
+    // `b` regarde d'abord sans compte, puis se connecte : on le connaît, il
+    // n'est plus anonyme. Le compter des deux côtés ferait croire à une
+    // personne de plus.
+    const service = monter(
+      [
+        visite('a', '2026-09-20T18:00:00Z'),
+        visite('b', '2026-09-20T18:05:00Z'),
+        visite('b', '2026-09-20T19:05:00Z', 1, 'u1'),
+        visite('c', '2026-09-20T18:10:00Z', 1, 'u2'),
+      ],
+      [],
+    );
+    const audience = await service.pourOrganisation(ORG, 'moi');
+
+    expect(audience.visiteursUniques).toBe(3);
+    expect(audience.visiteursAnonymes).toBe(1);
+    expect(audience.visiteursConnectes).toBe(2);
+    expect(audience.parJour[0]).toMatchObject({ visiteursAnonymes: 1, visiteursConnectes: 2 });
+    expect(audience.parLieu[0]).toMatchObject({ visiteursAnonymes: 1, visiteursConnectes: 2 });
+  });
+
   it('pas de meilleur jour quand personne n’est venu', async () => {
     const service = monter([], []);
     const audience = await service.pourOrganisation(ORG, 'moi');

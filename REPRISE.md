@@ -235,6 +235,25 @@ L'éclair flotte en permanence dans son disque.
   (aucun test mobile n'existait). `transformIgnorePatterns` laisse désormais
   Babel transformer les modules de `.pnpm`.
 
+## 🔢 MES CLIENTS — DES CHIFFRES QUI NE SE RECOUPENT PAS — 23/09/2026
+
+Les cartes se chevauchaient : « Visiteurs uniques » contenait les connectés, qui
+contenaient les nouveaux, qui contenaient ceux qui avaient commandé. Une même
+personne pouvait apparaître quatre fois. Désormais :
+
+- **Visiteurs anonymes** = téléphones venus SANS qu'aucun compte ne s'y connecte.
+- **Clients connectés** = comptes différents vus, comptés UNE fois sur la période.
+- Les deux **s'additionnent** et ne se recoupent jamais. Un téléphone qui se
+  connecte en cours de route bascule du côté des connectés (test dédié).
+- **Nouveaux visiteurs** et **Ont commandé** sont des détails de ces deux
+  chiffres, pas des personnes en plus — l'intitulé le dit.
+- **« Passages » a disparu de l'écran** : un seul chiffre par carte. La fenêtre
+  de 30 min reste interne (elle dédoublonne les visites), elle n'est plus
+  affichée nulle part.
+- Le taux de conversion reste calculé sur les CONNECTÉS : un anonyme ne peut pas
+  commander sans se connecter, l'inclure ferait baisser le taux artificiellement.
+- Le tableau par lieu et le tableau jour par jour suivent les mêmes colonnes.
+
 ## 📅 MES CLIENTS — JOUR PAR JOUR — 21/09/2026
 
 Sous « Fréquentation par lieu », le tableau **Jour par jour** de la période

@@ -250,36 +250,27 @@ export default function ClientsPage() {
       <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 12 }}>
         <Chiffre
           icone={Eye}
-          libelle="Visiteurs uniques"
-          valeur={audience ? INT.format(audience.visiteursUniques) : '—'}
-          precision={
-            audience
-              ? `${INT.format(audience.visites)} passage${audience.visites > 1 ? 's' : ''}`
-              : undefined
-          }
+          libelle="Visiteurs anonymes"
+          valeur={audience ? INT.format(audience.visiteursAnonymes) : '—'}
+          precision="regardent sans compte"
         />
         <Chiffre
           icone={Users}
-          libelle="Connectés à leur compte"
+          libelle="Clients connectés"
           valeur={audience ? INT.format(audience.visiteursConnectes) : '—'}
-          precision={
-            audience
-              ? `sur ${INT.format(audience.visiteursUniques)} visiteur${
-                  audience.visiteursUniques > 1 ? 's' : ''
-                } unique${audience.visiteursUniques > 1 ? 's' : ''}`
-              : undefined
-          }
+          precision="comptés une fois, même s'ils reviennent"
         />
         <Chiffre
           icone={Sparkles}
           libelle="Nouveaux visiteurs"
           valeur={audience ? INT.format(audience.nouveauxVisiteurs) : '—'}
-          precision="ont découvert l'app ici"
+          precision="votre lieu est le 1er qu'ils ont ouvert"
         />
         <Chiffre
           icone={ShoppingBag}
           libelle="Ont commandé"
           valeur={audience ? INT.format(audience.clientsAyantCommande) : '—'}
+          precision="parmi les clients connectés"
         />
         <Chiffre
           icone={TrendingUp}
@@ -298,26 +289,21 @@ export default function ClientsPage() {
       </section>
 
       <p style={{ fontSize: 11.5, color: BRAND.inkSoft, margin: 0, lineHeight: 1.6 }}>
-        <strong>Visiteurs uniques</strong> compte des APPAREILS, pas des personnes : un client qui
-        réinstalle l&apos;application compte deux fois. Ce sont des ordres de grandeur
-        d&apos;audience — le chiffre d&apos;affaires, lui, reste exact.
+<strong>Anonymes</strong> et <strong>connectés</strong> ne se recoupent jamais, et
+        s&apos;additionnent : c&apos;est toute votre audience. Un téléphone qui se connecte en cours
+        de route passe du côté des connectés — on le connaît, il n&apos;a plus rien d&apos;anonyme.
+        Chacun est compté <em>une seule fois</em> sur la période, même s&apos;il revient dix fois.
         <br />
-        <strong>Connectés à leur compte</strong> = les visiteurs qui étaient connectés à leur compte
-        Break Eat en ouvrant votre carte : on sait qui ils sont. Les autres sont des téléphones
-        anonymes.
+        <strong>Nouveaux visiteurs</strong> et <strong>Ont commandé</strong> sont des détails des
+        deux premiers chiffres, pas des personnes en plus : un nouveau visiteur qui commande apparaît
+        dans les deux, et il reste une seule personne.
         <br />
-        Le <strong>taux de conversion</strong> ne porte que sur les visiteurs <em>identifiés</em>,
-        les seuls qu&apos;on puisse relier à une commande : combien, parmi ceux qui étaient
-        connectés en regardant, ont fini par commander.
+        Les anonymes sont des APPAREILS : un client qui réinstalle l&apos;app compte deux fois. Ce
+        sont des ordres de grandeur — le chiffre d&apos;affaires, lui, reste exact.
         <br />
         <strong>Nouveaux visiteurs</strong> = ceux pour qui votre lieu est le tout premier lieu
-        ouvert dans l&apos;application. C&apos;est la mesure honnête de « combien nous ont
-        découverts ici » : aucune boutique d&apos;applications ne dit où un téléchargement a eu
-        lieu — et télécharger sans jamais ouvrir n&apos;apporte rien.
-        <br />
-        Un <strong>passage</strong> = un téléphone venu chez vous dans une même demi-heure,
-        quel que soit le nombre d&apos;écrans consultés. « 1 visiteur unique, 2 passages » : une
-        personne venue deux fois.
+        ouvert dans l&apos;application : la mesure honnête de « combien nous ont découverts ici ».
+        Aucune boutique d&apos;applications ne dit où un téléchargement a eu lieu.
         <br />
         La fréquentation est mesurée depuis le <strong>18 septembre 2026</strong> : sur une période
         qui commence avant, « Ont commandé » peut dépasser les visiteurs — les commandes, elles,
@@ -334,21 +320,19 @@ export default function ClientsPage() {
             <thead>
               <tr style={{ color: BRAND.inkSoft, textAlign: 'left', fontSize: 12 }}>
                 <th style={{ padding: '6px 0' }}>Lieu</th>
-                <th style={{ padding: '6px 0', textAlign: 'right' }}>Visiteurs</th>
+                <th style={{ padding: '6px 0', textAlign: 'right' }}>Anonymes</th>
+                <th style={{ padding: '6px 0', textAlign: 'right' }}>Connectés</th>
                 <th style={{ padding: '6px 0', textAlign: 'right' }}>Nouveaux</th>
-                <th style={{ padding: '6px 0', textAlign: 'right' }}>Passages</th>
               </tr>
             </thead>
             <tbody>
               {audience.parLieu.map((l) => (
                 <tr key={l.venueId} style={{ borderTop: `1px solid ${BRAND.border}` }}>
                   <td style={{ padding: '8px 0', color: BRAND.ink }}>{l.nom}</td>
-                  <td style={{ padding: '8px 0', textAlign: 'right' }}>{INT.format(l.visiteursUniques)}</td>
+                  <td style={{ padding: '8px 0', textAlign: 'right' }}>{INT.format(l.visiteursAnonymes)}</td>
+                  <td style={{ padding: '8px 0', textAlign: 'right' }}>{INT.format(l.visiteursConnectes)}</td>
                   <td style={{ padding: '8px 0', textAlign: 'right', color: BRAND.orange, fontWeight: 600 }}>
                     {INT.format(l.nouveauxVisiteurs)}
-                  </td>
-                  <td style={{ padding: '8px 0', textAlign: 'right', color: BRAND.inkSoft }}>
-                    {INT.format(l.visites)}
                   </td>
                 </tr>
               ))}

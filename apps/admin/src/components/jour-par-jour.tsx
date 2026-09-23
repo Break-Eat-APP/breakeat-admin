@@ -31,9 +31,9 @@ const pluriel = (n: number, singulier: string, plurielForme: string) =>
 /**
  * Le détail JOUR PAR JOUR de la période choisie.
  *
- * Les MÊMES colonnes que les cartes du haut — visiteurs uniques, connectés à
- * leur compte, nouveaux, ont commandé, taux de conversion — pour qu'on lise un
- * jour comme on lit la période. Puis ce que le jour a rapporté.
+ * Les MÊMES colonnes que les cartes du haut — anonymes, connectés, nouveaux,
+ * ont commandé — pour qu'on lise un jour comme on lit la période. Puis ce que
+ * le jour a rapporté.
  *
  * Deux règles pour ne rien afficher de trompeur :
  *  - avant la mise en service de la mesure, la fréquentation est écrite
@@ -49,7 +49,7 @@ export function JourParJour({
   meilleurJour: string | null;
 }) {
   const meilleur = jours.find((j) => j.jour === meilleurJour) ?? null;
-  const maxVisiteurs = Math.max(1, ...jours.map((j) => j.visiteursUniques));
+  const maxVisiteurs = Math.max(1, ...jours.map((j) => j.visiteursAnonymes));
   const avecMatchs = jours.some((j) => j.evenements.length > 0);
   // Le plus récent en haut : c'est le dernier match qu'on vient regarder.
   const lignes = [...jours].sort((a, b) => b.jour.localeCompare(a.jour));
@@ -89,7 +89,9 @@ export function JourParJour({
               {meilleur.evenements.length > 0 ? ` — ${meilleur.evenements.join(', ')}` : ''}
             </div>
             <div style={{ color: BRAND.inkSoft }}>
-              {pluriel(meilleur.visiteursUniques, 'visiteur unique', 'visiteurs uniques')}
+              {pluriel(meilleur.visiteursAnonymes, 'anonyme', 'anonymes')}
+              {' · '}
+              {pluriel(meilleur.visiteursConnectes, 'connecté', 'connectés')}
               {' · '}
               {pluriel(meilleur.clientsAyantCommande, 'client a', 'clients ont')} commandé
               {' · '}
@@ -111,11 +113,10 @@ export function JourParJour({
                 <tr style={{ color: BRAND.inkSoft, fontSize: 12 }}>
                   <th style={{ ...th, textAlign: 'left', paddingLeft: 0 }}>Date</th>
                   {avecMatchs ? <th style={{ ...th, textAlign: 'left' }}>Match</th> : null}
-                  <th style={{ ...th, textAlign: 'left', minWidth: 170 }}>Visiteurs uniques</th>
-                  <th style={th}>Connectés à leur compte</th>
+                  <th style={{ ...th, textAlign: 'left', minWidth: 170 }}>Visiteurs anonymes</th>
+                  <th style={th}>Clients connectés</th>
                   <th style={th}>Nouveaux</th>
                   <th style={th}>Ont commandé</th>
-                  <th style={th}>Taux de conversion</th>
                   <th style={th}>Commandes</th>
                   <th style={{ ...th, paddingRight: 0 }}>CA TTC</th>
                 </tr>
@@ -153,7 +154,7 @@ export function JourParJour({
                               <div style={{ flex: 1, height: 8, background: BRAND.bgSubtle, borderRadius: 4 }}>
                                 <div
                                   style={{
-                                    width: `${(j.visiteursUniques / maxVisiteurs) * 100}%`,
+                                    width: `${(j.visiteursAnonymes / maxVisiteurs) * 100}%`,
                                     height: '100%',
                                     background: BRAND.orange,
                                     borderRadius: 4,
@@ -162,7 +163,7 @@ export function JourParJour({
                                 />
                               </div>
                               <span style={{ minWidth: 34, textAlign: 'right', fontWeight: 600, color: BRAND.ink }}>
-                                {INT.format(j.visiteursUniques)}
+                                {INT.format(j.visiteursAnonymes)}
                               </span>
                             </div>
                           </td>
@@ -183,9 +184,6 @@ export function JourParJour({
                       )}
 
                       <td style={{ ...cellule, fontWeight: 600 }}>{INT.format(j.clientsAyantCommande)}</td>
-                      <td style={{ ...cellule, color: BRAND.inkSoft }}>
-                        {j.mesure && j.tauxConversion !== null ? `${j.tauxConversion} %` : '—'}
-                      </td>
                       <td style={cellule}>{INT.format(j.commandes)}</td>
                       <td style={{ ...cellule, paddingRight: 0, fontWeight: 600 }}>
                         {EUR.format(j.caTtcCents / 100)}
@@ -198,13 +196,11 @@ export function JourParJour({
           </div>
 
           <p style={{ fontSize: 11.5, color: BRAND.inkSoft, margin: '12px 0 0', lineHeight: 1.6 }}>
-            <strong>Visiteurs uniques</strong> : téléphones différents qui ont ouvert votre carte ce
-            jour-là. <strong>Connectés à leur compte</strong> : ceux dont on sait qui ils sont.{' '}
-            <strong>Ont commandé</strong> : clients différents ;{' '}
+<strong>Anonymes</strong> et <strong>connectés</strong> ne se recoupent pas : ensemble,
+            ils font l&apos;audience du jour. <strong>Ont commandé</strong> : clients différents ;{' '}
             <strong>Commandes</strong> : leur nombre total — un client peut en passer plusieurs.
-            Le <strong>taux de conversion</strong> : parmi les visiteurs connectés, la part qui a
-            commandé. Chaque jour va jusqu&apos;à 4 h du matin : la fin d&apos;un match du soir reste
-            sur son jour.
+            Chaque jour va jusqu&apos;à 4 h du matin : la fin d&apos;un match du soir reste sur son
+            jour.
           </p>
         </>
       )}

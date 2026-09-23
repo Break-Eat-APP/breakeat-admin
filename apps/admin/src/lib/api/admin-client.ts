@@ -1566,6 +1566,8 @@ export interface FicheClient {
 }
 
 export interface AudienceLieu {
+  visiteursAnonymes: number;
+  visiteursConnectes: number;
   venueId: string;
   nom: string;
   visiteursUniques: number;
@@ -1575,7 +1577,10 @@ export interface AudienceLieu {
 }
 
 export interface AudienceClub {
+  /** Tous les téléphones venus : anonymes + ceux d'un client identifié. */
   visiteursUniques: number;
+  /** Téléphones venus SANS qu'aucun compte ne s'y connecte. */
+  visiteursAnonymes: number;
   visites: number;
   visiteursConnectes: number;
   clientsAyantCommande: number;
@@ -1595,6 +1600,7 @@ export interface AudienceClub {
 export interface TrancheAudience {
   jour: string;
   visiteursUniques: number;
+  visiteursAnonymes: number;
   visites: number;
   nouveauxVisiteurs: number;
   visiteursConnectes: number;

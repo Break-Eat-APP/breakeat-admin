@@ -222,6 +222,11 @@ export class FrequentationService {
 
     const visiteurs = new Set(visites.map((v) => v.visitorKey));
     const connectes = new Set(visites.filter((v) => v.userId).map((v) => v.userId as string));
+    // Un téléphone est ANONYME tant qu'aucune de ses visites n'a porté de
+    // compte. Celui qui se connecte en cours de route bascule du côté des
+    // connectés : on le connaît, il n'a plus rien d'anonyme.
+    const identifies = new Set(visites.filter((v) => v.userId).map((v) => v.visitorKey));
+    const anonymes = [...visiteurs].filter((cle) => !identifies.has(cle)).length;
     const acheteurs = new Set(commandes.map((c) => c.userId));
 
     // Les clients de CHAQUE lieu : un habitué du Vélodrome qui commande une
@@ -298,6 +303,9 @@ export class FrequentationService {
 
     return {
       visiteursUniques: visiteurs.size,
+      // Les DEUX chiffres qui ne se recoupent jamais : un téléphone anonyme
+      // n'est pas dans `visiteursConnectes`, et inversement.
+      visiteursAnonymes: anonymes,
       visites: compterPassages(visites),
       visiteursConnectes: connectes.size,
       clientsAyantCommande: acheteurs.size,
@@ -381,6 +389,7 @@ export class FrequentationService {
       string,
       {
         visiteurs: Set<string>;
+        identifies: Set<string>;
         passages: Set<string>;
         nouveaux: Set<string>;
         connectes: Set<string>;
@@ -395,6 +404,7 @@ export class FrequentationService {
       if (!tranche) {
         tranche = {
           visiteurs: new Set(),
+          identifies: new Set(),
           passages: new Set(),
           nouveaux: new Set(),
           connectes: new Set(),
@@ -412,7 +422,10 @@ export class FrequentationService {
       const t = jour(e.jourDe(v.windowStart, v.venueId));
       t.visiteurs.add(v.visitorKey);
       t.passages.add(clePassage(v));
-      if (v.userId) t.connectes.add(v.userId);
+      if (v.userId) {
+        t.connectes.add(v.userId);
+        t.identifies.add(v.visitorKey);
+      }
     }
     for (const d of e.decouvertes) {
       jour(e.jourDe(d.premiere.quand, d.premiere.venueId)).nouveaux.add(d.cle);
@@ -433,6 +446,7 @@ export class FrequentationService {
       .map(([cle, t]) => ({
         jour: cle,
         visiteursUniques: t.visiteurs.size,
+        visiteursAnonymes: [...t.visiteurs].filter((cle) => !t.identifies.has(cle)).length,
         visites: t.passages.size,
         nouveauxVisiteurs: t.nouveaux.size,
         visiteursConnectes: t.connectes.size,
@@ -472,16 +486,31 @@ export class FrequentationService {
     clientsParLieu: Map<string, Set<string>>,
     depuis?: Date,
   ): AudienceLieu[] {
-    const lieux = new Map<string, { visiteurs: Set<string>; passages: Set<string>; neufs: Set<string> }>();
+    const lieux = new Map<
+      string,
+      {
+        visiteurs: Set<string>;
+        identifies: Set<string>;
+        connectes: Set<string>;
+        passages: Set<string>;
+        neufs: Set<string>;
+      }
+    >();
     for (const v of visites) {
       if (!v.venueId) continue;
       const ligne = lieux.get(v.venueId) ?? {
         visiteurs: new Set<string>(),
+        identifies: new Set<string>(),
+        connectes: new Set<string>(),
         passages: new Set<string>(),
         neufs: new Set<string>(),
       };
       ligne.visiteurs.add(v.visitorKey);
       ligne.passages.add(clePassage(v));
+      if (v.userId) {
+        ligne.connectes.add(v.userId);
+        ligne.identifies.add(v.visitorKey);
+      }
 
       // Un NOUVEAU visiteur de ce lieu : celui dont la toute première ouverture
       // de l'application, jamais, a eu lieu ICI — et dans la période lue. Un
@@ -498,6 +527,8 @@ export class FrequentationService {
         venueId,
         nom: noms.get(venueId) ?? 'Lieu supprimé',
         visiteursUniques: l.visiteurs.size,
+        visiteursAnonymes: [...l.visiteurs].filter((cle) => !l.identifies.has(cle)).length,
+        visiteursConnectes: l.connectes.size,
         visites: l.passages.size,
         nouveauxVisiteurs: l.neufs.size,
         clients: clientsParLieu.get(venueId)?.size ?? 0,
@@ -542,6 +573,8 @@ export interface TrancheAudience {
   /** Jour de SERVICE du lieu (bascule à 4h, heure locale), `AAAA-MM-JJ`. */
   jour: string;
   visiteursUniques: number;
+  /** Téléphones venus ce jour-là sans qu'aucun compte ne s'y connecte. */
+  visiteursAnonymes: number;
   visites: number;
   nouveauxVisiteurs: number;
   visiteursConnectes: number;
@@ -559,6 +592,10 @@ export interface TrancheAudience {
 }
 
 export interface AudienceLieu {
+  /** Téléphones venus ici sans qu'aucun compte ne s'y connecte. */
+  visiteursAnonymes: number;
+  /** Comptes différents vus ici. */
+  visiteursConnectes: number;
   venueId: string;
   nom: string;
   visiteursUniques: number;
@@ -570,7 +607,10 @@ export interface AudienceLieu {
 }
 
 export interface AudienceClub {
+  /** Tous les téléphones venus : anonymes + ceux d'un client identifié. */
   visiteursUniques: number;
+  /** Téléphones venus SANS qu'aucun compte ne s'y connecte. */
+  visiteursAnonymes: number;
   visites: number;
   visiteursConnectes: number;
   clientsAyantCommande: number;
