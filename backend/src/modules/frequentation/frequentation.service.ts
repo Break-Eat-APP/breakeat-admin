@@ -182,7 +182,11 @@ export class FrequentationService {
         : {}),
     };
 
-    const [visites, commandes, ventes, matchs] = await Promise.all([
+    // Le même périmètre, mais SANS borne de date : la première commande d'un
+    // client chez ce club ne dépend pas de la période qu'on regarde.
+    const wherePremieres: Prisma.OrderWhereInput = { ...whereCommandes, createdAt: undefined };
+
+    const [visites, commandes, ventes, matchs, premieresCommandes] = await Promise.all([
       this.prisma.frequentation.findMany({
         where,
         select: {
@@ -218,7 +222,22 @@ export class FrequentationService {
         },
         select: { name: true, startAt: true, venueId: true },
       }),
+      this.prisma.order.groupBy({
+        by: ['userId'],
+        where: wherePremieres,
+        _min: { createdAt: true },
+      }),
     ]);
+
+    // Un NOUVEAU client : sa toute première commande chez ce club tombe dans la
+    // période regardée. Sur « Tout », ils le sont tous — et c'est juste.
+    const premiereCommande = new Map(
+      premieresCommandes.map((c) => [c.userId, c._min.createdAt as Date | null]),
+    );
+    const estNouveauClient = (userId: string, borne?: Date) => {
+      const premiere = premiereCommande.get(userId);
+      return premiere !== undefined && premiere !== null && (!borne || premiere >= borne);
+    };
 
     const visiteurs = new Set(visites.map((v) => v.visitorKey));
     const connectes = new Set(visites.filter((v) => v.userId).map((v) => v.userId as string));
@@ -228,6 +247,7 @@ export class FrequentationService {
     const identifies = new Set(visites.filter((v) => v.userId).map((v) => v.visitorKey));
     const anonymes = [...visiteurs].filter((cle) => !identifies.has(cle)).length;
     const acheteurs = new Set(commandes.map((c) => c.userId));
+    const nouveauxClients = [...acheteurs].filter((u) => estNouveauClient(u, filtre.du)).length;
 
     // Les clients de CHAQUE lieu : un habitué du Vélodrome qui commande une
     // fois à l'annexe compte pour les deux, et c'est ce qu'un club veut savoir.
@@ -309,6 +329,8 @@ export class FrequentationService {
       visites: compterPassages(visites),
       visiteursConnectes: connectes.size,
       clientsAyantCommande: acheteurs.size,
+      /** Part des précédents dont c'est la PREMIÈRE commande chez ce club. */
+      clientsNouveaux: nouveauxClients,
       connectesAyantCommande,
       // Parmi les visiteurs IDENTIFIÉS, la part qui a commandé. Nulle quand
       // personne d'identifié n'est venu : afficher 0 % serait un jugement, pas
@@ -316,7 +338,14 @@ export class FrequentationService {
       tauxConversion:
         connectes.size > 0 ? Math.round((connectesAyantCommande / connectes.size) * 1000) / 10 : null,
       nouveauxVisiteurs: nouveaux,
-      ...this.parJour({ visites, ventes, matchs, decouvertes: decouvertesDuClub, jourDe }),
+      ...this.parJour({
+        visites,
+        ventes,
+        matchs,
+        decouvertes: decouvertesDuClub,
+        jourDe,
+        premiereCommande,
+      }),
       parLieu: this.parLieu(visites, noms, decouvertes, clientsParLieu, filtre.du),
     };
   }
@@ -384,6 +413,8 @@ export class FrequentationService {
     matchs: Array<{ name: string; startAt: Date; venueId: string }>;
     decouvertes: Array<{ cle: string; premiere: { venueId: string; quand: Date } }>;
     jourDe: (instant: Date, venueId: string | null) => string;
+    /** Première commande de chaque client chez ce club, toutes dates confondues. */
+    premiereCommande: Map<string, Date | null>;
   }): { parJour: TrancheAudience[]; meilleurJour: string | null } {
     const jours = new Map<
       string,
@@ -394,6 +425,7 @@ export class FrequentationService {
         nouveaux: Set<string>;
         connectes: Set<string>;
         acheteurs: Set<string>;
+        nouveauxClients: Set<string>;
         commandes: number;
         caTtcCents: number;
         evenements: Set<string>;
@@ -409,6 +441,7 @@ export class FrequentationService {
           nouveaux: new Set(),
           connectes: new Set(),
           acheteurs: new Set(),
+          nouveauxClients: new Set(),
           commandes: 0,
           caTtcCents: 0,
           evenements: new Set(),
@@ -435,6 +468,11 @@ export class FrequentationService {
       t.commandes += 1;
       t.caTtcCents += c.totalCents;
       t.acheteurs.add(c.userId);
+      // Sa première commande chez ce club est-elle celle de ce jour-là ?
+      const premiere = e.premiereCommande.get(c.userId);
+      if (premiere && e.jourDe(premiere, c.venueId) === e.jourDe(c.createdAt, c.venueId)) {
+        t.nouveauxClients.add(c.userId);
+      }
     }
     for (const m of e.matchs) {
       // Seulement les jours où il s'est passé quelque chose : un match créé
@@ -452,6 +490,7 @@ export class FrequentationService {
         visiteursConnectes: t.connectes.size,
         // Des COMPTES des deux côtés, comme la carte du haut.
         clientsAyantCommande: t.acheteurs.size,
+        clientsNouveaux: t.nouveauxClients.size,
         tauxConversion:
           t.connectes.size > 0
             ? Math.round(
@@ -580,6 +619,8 @@ export interface TrancheAudience {
   visiteursConnectes: number;
   /** CLIENTS différents qui ont commandé ce jour-là (un client = une personne). */
   clientsAyantCommande: number;
+  /** Parmi eux, ceux dont c'était la première commande chez ce club. */
+  clientsNouveaux: number;
   /** Parmi les visiteurs connectés du jour, la part qui a commandé ; `null` sans visiteur connecté. */
   tauxConversion: number | null;
   /** Commandes payées et non annulées — le périmètre de la comptabilité. */
@@ -614,6 +655,8 @@ export interface AudienceClub {
   visites: number;
   visiteursConnectes: number;
   clientsAyantCommande: number;
+  /** Parmi eux, ceux dont c'est la première commande chez ce club. */
+  clientsNouveaux: number;
   /**
    * Appareils qui ont découvert Break Eat pendant la période lue, tous lieux
    * confondus. Ce que ne dit AUCUNE boutique d'applications : un

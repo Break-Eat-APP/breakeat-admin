@@ -183,7 +183,14 @@ export function JourParJour({
                         </td>
                       )}
 
-                      <td style={{ ...cellule, fontWeight: 600 }}>{INT.format(j.clientsAyantCommande)}</td>
+                      <td style={{ ...cellule, fontWeight: 600 }}>
+                        {INT.format(j.clientsAyantCommande)}
+                        {j.clientsNouveaux > 0 ? (
+                          <div style={{ fontSize: 11, fontWeight: 400, color: BRAND.orange }}>
+                            dont {INT.format(j.clientsNouveaux)} nouveau{j.clientsNouveaux > 1 ? 'x' : ''}
+                          </div>
+                        ) : null}
+                      </td>
                       <td style={cellule}>{INT.format(j.commandes)}</td>
                       <td style={{ ...cellule, paddingRight: 0, fontWeight: 600 }}>
                         {EUR.format(j.caTtcCents / 100)}
@@ -198,7 +205,8 @@ export function JourParJour({
           <p style={{ fontSize: 11.5, color: BRAND.inkSoft, margin: '12px 0 0', lineHeight: 1.6 }}>
 <strong>Anonymes</strong> et <strong>connectés</strong> ne se recoupent pas : ensemble,
             ils font l&apos;audience du jour. <strong>Ont commandé</strong> : clients différents ;{' '}
-            <strong>Commandes</strong> : leur nombre total — un client peut en passer plusieurs.
+            <strong>Commandes</strong> : leur nombre total — un client peut en passer plusieurs.{' '}
+            <strong>Dont nouveaux</strong> : première commande chez vous.
             Chaque jour va jusqu&apos;à 4 h du matin : la fin d&apos;un match du soir reste sur son
             jour.
           </p>

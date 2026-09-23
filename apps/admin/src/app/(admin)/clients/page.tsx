@@ -270,7 +270,13 @@ export default function ClientsPage() {
           icone={ShoppingBag}
           libelle="Ont commandé"
           valeur={audience ? INT.format(audience.clientsAyantCommande) : '—'}
-          precision="parmi les clients connectés"
+          precision={
+            audience && audience.clientsNouveaux > 0
+              ? `dont ${INT.format(audience.clientsNouveaux)} nouveau${
+                  audience.clientsNouveaux > 1 ? 'x' : ''
+                } client${audience.clientsNouveaux > 1 ? 's' : ''}`
+              : 'parmi les clients connectés'
+          }
         />
         <Chiffre
           icone={TrendingUp}
@@ -296,7 +302,9 @@ export default function ClientsPage() {
         <br />
         <strong>Nouveaux visiteurs</strong> et <strong>Ont commandé</strong> sont des détails des
         deux premiers chiffres, pas des personnes en plus : un nouveau visiteur qui commande apparaît
-        dans les deux, et il reste une seule personne.
+        dans les deux, et il reste une seule personne. On ne peut pas commander sans être connecté,
+        donc « Ont commandé » ne contient jamais d&apos;anonyme. « Dont X nouveaux clients » = ceux
+        dont c&apos;est la <em>première commande chez vous</em>.
         <br />
         Les anonymes sont des APPAREILS : un client qui réinstalle l&apos;app compte deux fois. Ce
         sont des ordres de grandeur — le chiffre d&apos;affaires, lui, reste exact.

@@ -1584,6 +1584,8 @@ export interface AudienceClub {
   visites: number;
   visiteursConnectes: number;
   clientsAyantCommande: number;
+  /** Parmi eux, ceux dont c'est la première commande chez ce club. */
+  clientsNouveaux: number;
   /** Appareils qui ont découvert Break Eat pendant la période, tous lieux confondus. */
   nouveauxVisiteurs: number;
   /** Visiteurs identifiés qui ont AUSSI commandé — le numérateur du taux. */
@@ -1606,6 +1608,8 @@ export interface TrancheAudience {
   visiteursConnectes: number;
   /** Clients DIFFÉRENTS qui ont commandé ce jour-là. */
   clientsAyantCommande: number;
+  /** Parmi eux, ceux dont c'était la première commande chez ce club. */
+  clientsNouveaux: number;
   /** Parmi les visiteurs connectés du jour, la part qui a commandé ; `null` sans visiteur connecté. */
   tauxConversion: number | null;
   commandes: number;

@@ -246,7 +246,13 @@ personne pouvait apparaître quatre fois. Désormais :
 - Les deux **s'additionnent** et ne se recoupent jamais. Un téléphone qui se
   connecte en cours de route bascule du côté des connectés (test dédié).
 - **Nouveaux visiteurs** et **Ont commandé** sont des détails de ces deux
-  chiffres, pas des personnes en plus — l'intitulé le dit.
+  chiffres, pas des personnes en plus — l'intitulé le dit. On ne peut pas
+  commander sans être connecté : « Ont commandé » ne contient jamais d'anonyme,
+  et additionner les cartes compterait deux fois la même personne.
+- **« Dont X nouveaux clients »** sous « Ont commandé » : ceux dont c'est la
+  PREMIÈRE commande chez ce club (et non la découverte de l'app). Donnée sûre —
+  les commandes existent depuis toujours, la fréquentation depuis le 18/09
+  seulement. Le tableau jour par jour le montre aussi, par jour.
 - **« Passages » a disparu de l'écran** : un seul chiffre par carte. La fenêtre
   de 30 min reste interne (elle dédoublonne les visites), elle n'est plus
   affichée nulle part.

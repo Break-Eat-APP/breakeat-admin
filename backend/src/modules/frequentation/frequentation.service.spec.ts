@@ -90,12 +90,18 @@ describe('FrequentationService — lire l’audience', () => {
     premieres: unknown[] = [],
     ventes: unknown[] = [],
     matchs: unknown[] = [],
+    premieres_commandes: unknown[] = [],
   ) {
     const prisma = {
       user: { findUnique: jest.fn().mockResolvedValue({ globalRole: 'SUPER_ADMIN' }) },
       frequentation: { findMany: jest.fn().mockResolvedValue(visites) },
       order: {
-        groupBy: jest.fn().mockResolvedValue(commandes),
+        // Deux appels : le groupement de la période, puis la PREMIÈRE commande
+        // de chaque client, toutes dates confondues.
+        groupBy: jest
+          .fn()
+          .mockResolvedValueOnce(commandes)
+          .mockResolvedValue(premieres_commandes),
         findMany: jest.fn().mockResolvedValue(ventes),
       },
       event: { findMany: jest.fn().mockResolvedValue(matchs) },
@@ -329,6 +335,30 @@ describe('FrequentationService — lire l’audience', () => {
     expect(audience.visiteursConnectes).toBe(2);
     expect(audience.parJour[0]).toMatchObject({ visiteursAnonymes: 1, visiteursConnectes: 2 });
     expect(audience.parLieu[0]).toMatchObject({ visiteursAnonymes: 1, visiteursConnectes: 2 });
+  });
+
+  it('distingue un NOUVEAU client d’un habitué', async () => {
+    // `u1` commandait déjà l'an dernier : ce n'est pas un nouveau client, même
+    // s'il commande encore aujourd'hui. `u2`, lui, découvre la caisse.
+    const service = monter(
+      [visite('a', '2026-09-20T18:00:00Z', 1, 'u1'), visite('b', '2026-09-20T18:00:00Z', 1, 'u2')],
+      [{ userId: 'u1' }, { userId: 'u2' }],
+      [],
+      [
+        { createdAt: new Date('2026-09-20T18:30:00Z'), totalCents: 450, venueId: LIEU, userId: 'u1' },
+        { createdAt: new Date('2026-09-20T18:40:00Z'), totalCents: 700, venueId: LIEU, userId: 'u2' },
+      ],
+      [],
+      [
+        { userId: 'u1', _min: { createdAt: new Date('2025-11-02T20:00:00Z') } },
+        { userId: 'u2', _min: { createdAt: new Date('2026-09-20T18:40:00Z') } },
+      ],
+    );
+    const audience = await service.pourOrganisation(ORG, 'moi', { du: new Date('2026-09-01T00:00:00Z') });
+
+    expect(audience.clientsAyantCommande).toBe(2);
+    expect(audience.clientsNouveaux).toBe(1);
+    expect(audience.parJour[0]).toMatchObject({ clientsAyantCommande: 2, clientsNouveaux: 1 });
   });
 
   it('pas de meilleur jour quand personne n’est venu', async () => {
