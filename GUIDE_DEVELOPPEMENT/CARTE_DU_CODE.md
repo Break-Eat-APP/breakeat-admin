@@ -17,19 +17,20 @@ Modules et à quoi ils servent :
 | `auth`, `users` | Connexion, JWT, comptes. **Apple/Google** : `social-identity.service.ts` vérifie le jeton (émetteur ET destinataire). **Archivés** : `common/helpers/liberation-archives.ts` — un compte archivé rend son adresse quand la personne revient, et repart d'un compte neuf |
 | `organizations`, `groups` | Clubs, membres, groupes d'accès privé |
 | `venues` | **Lieux** (géoloc, recherche, Flaix, plan buvettes). `public-venues.controller.ts` = endpoint app |
-| `events`, `slots` | Événements + créneaux de retrait. `public-events.controller.ts` = endpoint app |
+| `events`, `slots` | Événements + créneaux de retrait. `public-events.controller.ts` = endpoint app. **Rapport Flaix** : `lien-flaix.ts` n'accepte que `https://*.flaixlabs.com` (nom d'hôte exact) — le bouton mène à une page où le directeur tape son mot de passe. Route à part (`PATCH :id/rapport-flaix`), acceptée sur un événement TERMINÉ |
 | `suppliers`, `products`, `categories`, `stock` | Points de retrait (« buvettes »), catalogue, stock. Une **catégorie appartient à une buvette**, pas à l'organisation |
 | `orders/produits-manquants.service.ts` | Le comptoir signale ce qu'il n'a pas pu servir : la ligne porte le manque (`missing_quantity`), le client est prévenu (Live Activity, sinon notification), et le produit peut passer HS dans le même geste |
-| `cart`, `orders`, `payments`, `webhooks` | Panier → commande → paiement (Stripe). **Le paiement passe par une page HÉBERGÉE Stripe** (`createHostedCheckout`) : aucun numéro de carte dans notre code, aucune bibliothèque native. La commande naît du webhook `payment_intent.succeeded`, jamais de l'app |
+| `cart`, `orders`, `payments`, `webhooks` | Panier → commande → paiement (Stripe). **Sur NATIF, le paiement se fait DANS l'app** (PaymentSheet `@stripe/stripe-react-native`, `createPaymentIntent`) — le client ne sort plus sur le web ; la page hébergée reste le chemin du web. Aucun numéro de carte ne traverse notre code. La commande naît du webhook `payment_intent.succeeded`, jamais de l'app |
 | `order-splits` | **L'ardoise** : une tournée composée par un hôte, réglée par plusieurs convives depuis un simple navigateur. Cartes AUTORISÉES puis encaissées d'un coup au départ de la commande |
 | `pickup-points` | Comptoirs de retrait (1–4 par buvette) |
 | `loyalty` | Fidélité : solde par organisation, registre immuable |
 | `live-activity` | Live Activity iOS : client APNs + webhook Flaix signé. `construirePayloadLiveActivity` (fonction pure, testée) fabrique la charge utile ; une **alerte** n'y est posée que pour une nouvelle qui demande un geste (produit manquant), sinon la mise à jour est silencieuse |
 | `bootstrap` | Reprise de l'accès principal (route inerte sans secret) |
 | `realtime` | Temps réel (Socket.IO) vers l'écran opérateur. **Rejoindre un salon `supplier:` est VÉRIFIÉ** : membre du club, et son comptoir si le compte y est rattaché — sinon le temps réel serait une porte dérobée vers ce que l'API refuse (`isolation-buvettes.spec.ts`) |
-| `notifications` | Push Expo : campagnes programmées + **notifications archivées** (`user-notifications.service.ts`), lues par la cloche de l'app. Le push PAR STATUT existe encore mais n'a plus d'appelant depuis le 07/09 — la Live Activity le doublait |
+| `notifications` | Push Expo : campagnes programmées + **notifications archivées** (`user-notifications.service.ts`), lues par la cloche de l'app — relue au retour au premier plan, toutes les 5 min app ouverte, et à l'ouverture d'une notification (un push reçu app FERMÉE ne déclenche aucun écouteur). Le push PAR STATUT existe encore mais n'a plus d'appelant depuis le 07/09 — la Live Activity le doublait |
+| `documents` | Pièces contractuelles d'un club (contrat signé…). PDF en base (`BYTEA`, 10 Mo max, borne posée aussi en base), type vérifié sur le CONTENU (`%PDF-`), **aucune adresse publique** : la lecture passe par la route authentifiée, filtrée sur le document ET le club |
 | `clients` | Fichier client d'un club, déduit des commandes, + export CSV. Même périmètre financier que `stats` : deux conventions donneraient deux totaux pour le même client |
-| `frequentation` | Audience de l'app : une visite = un appareil, un périmètre, une fenêtre de 30 min. Seule route d'écriture ouverte aux visiteurs NON connectés — c'est justement celui que les commandes ne voient pas |
+| `frequentation` | Audience de l'app : un passage = un appareil dans une fenêtre de 30 min (et non une somme d'écrans vus). Seule route d'écriture ouverte aux visiteurs NON connectés. **Anonymes et connectés ne se recoupent jamais** ; « nouveau » = le premier LIEU jamais ouvert (la première ouverture, elle, est toujours sans lieu) ; découpage par **jour de service** (bascule à 4 h, heure du lieu) |
 | `stats`, `backoffice` | Analytics club + KPIs super-admin. **Le CA HT se déduit du taux de TVA figé sur chaque ligne de commande** (5,5 / 10 / 20 %), jamais d'un taux global — voir `common/helpers/tva.ts` |
 | `feature-flags`, `app-settings` | Config sans redéploiement (CMS clé/valeur) |
 | `flaix` | Intégration Flaix (API tierce — voir `brain/FLAIX_CONTRACT.md`) |
@@ -84,7 +85,7 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
 |---|---|---|
 | `venue-discovery.screen.tsx` | **Accueil** : recherche + lieux dans 10 km + favoris + plan buvettes. Section « À venir » vide en attendant les données Flaix | ✅ |
 | `login.screen.tsx` | Connexion / inscription (optionnelle) | ✅ |
-| `order-history.screen.tsx`, `profile.screen.tsx` | Historique, profil | ✅ |
+| `order-history.screen.tsx`, `profile.screen.tsx` | Historique (deux sections : **En cours** / **Terminées** ; les étapes ne s'affichent que pendant l'attente), profil | ✅ |
 | `flaix-order.screen.tsx`, `supplier-catalog.screen.tsx`, `cart.screen.tsx`, `slot-selector.screen.tsx`, `checkout.screen.tsx`, `order-confirmation.screen.tsx` | Parcours de commande | ✅ |
 | `event-home.screen.tsx`, `order-tracking.screen.tsx` | Écran d'un lieu (catalogue, retrait) et suivi de commande | ✅ branchés dans `App.expo.tsx` |
 | `qr-scanner.screen.tsx` | Scan QR | ⚠️ **stubbé** dans `App.expo.tsx` — la caméra n'existe pas sur le web |
@@ -92,11 +93,15 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
 | `partners.screen.tsx`, `placeholder.screen.tsx` | Secondaires | ✅ |
 
 **`src/`** — le reste :
-- `components/` — UI réutilisable. Ex. `buvette-plan-viewer.tsx` (plan plein écran zoomable), `crash-guard.tsx` (garde-fou démarrage), `app-bottom-bar.tsx` (nav du bas).
-- `store/` — état global Zustand : `auth.store.ts` (session), `cart.store.ts` (panier), `notif.store.ts`.
+- `components/` — UI réutilisable. Ex. `buvette-plan-viewer.tsx` (plan plein écran zoomable), `crash-guard.tsx` (garde-fou démarrage).
+  - `app-bottom-bar.tsx` — la nav du bas, **cinq places** : Lieux · Panier — la pastille — Alertes · Profil. Les trois constantes de géométrie en tête du fichier sont la SEULE source de `BOTTOM_BAR_SPACE` : les changer dans `styles` sans les reporter remet un bouton sous la barre.
+  - `pastille-suivi.tsx` — l'éclair (tracé vectoriel, recolorable) et l'anneau de suivi. Les transitions n'utilisent PAS `Animated` sur le SVG : sur le web, ces valeurs ne se mettent pas à jour.
+- `store/` — état global Zustand : `auth.store.ts` (session), `cart.store.ts` (panier), `notif.store.ts` (cloche), `suivi.store.ts` (commandes partagées avec la barre du bas — l'écran « Mes commandes » y publie ce qu'il charge, la barre ne refait pas l'appel).
 - `lib/api/mobile-api.ts` — **tous les appels API** + les types (`PublicVenue`, `PublicEvent`, `Order`…).
 - `lib/theme.ts` — couleurs + polices (`HEAD` = Raleway, `BLOC` = Oswald).
 - `lib/alert.ts` — alertes multiplateformes (⚠️ à utiliser à la place de `Alert.alert`).
+- `lib/suivi-commande.ts` — **fonction PURE** qui décide de l'état de la pastille (paliers réels, la commande la plus avancée l'emporte, ✓ et bleu effacés après 10 min). Couverte par `lib/__tests__/suivi-commande.test.ts`.
+- `lib/use-etat-pastille.ts` — la tient à jour : chargement à l'ouverture, au retour au premier plan, après paiement ; sondage 10 s **seulement** tant qu'une commande est en cours.
 - `lib/hooks/use-user-location.ts` — géolocalisation.
 - `lib/hooks/use-deep-links.ts` — liens `breakeat://order/<id>` et `.../arrived`
   (la Live Activity parle à l'app). Le lien `split/<code>`, lui, passe par la
@@ -107,9 +112,12 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
 ## Apps web (Next.js)
 
 - `apps/admin/` — le club gère son lieu, ses buvettes, ses événements, son apparence d'app, ses notifs. Tous les appels : `src/lib/api/admin-client.ts`. Le lieu s'édite dans `src/app/(admin)/organizations/[id]/page.tsx`.
+  - `(admin)/clients/page.tsx` — **Mes clients** : anonymes et connectés (qui ne se recoupent jamais), nouveaux, ont commandé, taux de conversion, fichier client + export CSV. `components/jour-par-jour.tsx` = le détail par jour de service, avec le jour le plus fréquenté en tête.
+  - `(admin)/documentation/page.tsx` — dépôt et lecture des PDF du club (un iframe ne sachant pas poser d'en-tête, le fichier est lu puis remis au navigateur comme objet local, et l'adresse est révoquée).
+  - `components/rapport-flaix.tsx` — le lien du rapport Flaix d'un match, sur la fiche de l'événement.
 - `apps/backoffice/` — super-admin : création de clubs, utilisateurs, groupes, notifications programmées, **purge des commandes de démonstration** (`components/purge-demo.tsx`, encart visible seulement s'il en reste). Appels : `src/lib/api/backoffice-client.ts`.
 - `apps/operator/` — écran buvette temps réel (Kanban des commandes). Appels + Socket.IO. `MissingItemsPanel.tsx` (signaler un produit manquant) et `ProduitsHsBar.tsx` (remettre en vente ce qui est hors carte).
-- Les trois partagent `packages/brand` (couleurs `#FC4002`, logo).
+- Les trois partagent `packages/brand` (orange de marque **`#FD4000`** depuis le 18/09/2026, logo).
 
 **À savoir sur les apps web :**
 - **`NEXT_PUBLIC_API_URL` est gravée dans chaque `vercel.json`.** Elle est inlinée à la compilation : absente ce jour-là, le repli `localhost` part en production et l'app appelle la machine du visiteur. Un filet console le signale.
@@ -126,17 +134,20 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
 
 ## Tests — où ils sont, et ce qu'ils couvrent
 
-- `backend/src/**/*.spec.ts` — 543 tests unitaires (doublures), lancés par la CI.
-- `backend/test/integration/*.int-spec.ts` — 37 tests sur une **vraie base**
+- `backend/src/**/*.spec.ts` — 621 tests unitaires (doublures), lancés par la CI.
+- `backend/test/integration/*.int-spec.ts` — 89 tests sur une **vraie base**
   Postgres construite par `prisma migrate deploy` : c'est le seul endroit où les
   règles de suppression, les contraintes `CHECK` et les index uniques sont
   vérifiés. Lancés à la main : `pnpm test:integration` avec `DATABASE_URL_TEST`
   (voir `brain/ENGINEERING_MANUAL.md`, phase 34).
 - `backend/scripts/api-essai-local.js` — lance l'API compilée contre cette base
   d'essai, services extérieurs neutralisés, pour voir les écrans réagir.
-- **Aucun test dans les applications** (mobile, admin, opérateur, back-office),
-  et Jest est cassé côté mobile (préréglage React Native sous pnpm). Voir
-  l'audit du 18/09.
+- `apps/mobile/src/**/__tests__/*.test.ts` — 12 tests. **Jest mobile marche
+  depuis le 21/09/2026** : le préréglage React Native ne tournait pas sous pnpm,
+  `transformIgnorePatterns` laisse désormais Babel transformer les modules de
+  `.pnpm`. Seule la logique PURE y est testée (`lib/suivi-commande.ts`) — pas
+  de rendu d'écran.
+- **Toujours aucun test dans admin, opérateur et back-office.**
 
 ## Un parcours de bout en bout (exemple : passer commande)
 

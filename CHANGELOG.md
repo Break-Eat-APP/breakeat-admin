@@ -5,6 +5,198 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.74.0] — 2026-09-23 — La cloche, le ✓ et les commandes terminées
+
+**La cloche restait muette.** Le compte des non-lues n'était relu qu'à la
+connexion, à l'arrivée d'un push application OUVERTE, et en repassant par
+l'accueil. Un push reçu application fermée ne déclenche aucun écouteur : le
+client voyait la bannière, puis une cloche éteinte. Trois relectures ajoutées —
+retour au premier plan, toutes les cinq minutes application ouverte, ouverture
+d'une notification touchée. La cadence de cinq minutes compte surtout pour qui a
+REFUSÉ les notifications système : aucun push ne lui parviendra jamais. La
+cloche s'allume elle-même, pleine et orange, en plus du chiffre.
+
+**Le ✓ apparaît dès que la commande est PRÊTE**, et non plus seulement une fois
+récupérée : c'est le moment où le client doit savoir qu'elle l'attend. L'onde
+verte distingue les deux.
+
+**Mes commandes, en deux sections.** Une commande récupérée affichait encore les
+trois étapes pleines, comme une commande en cours. Le résumé des étapes ne
+s'affiche plus que pendant l'attente, et la liste est coupée : « En cours »,
+puis « Terminées ». Avant, une commande récupérée hier pouvait passer devant
+celle qu'on attend au comptoir.
+
+`~ apps/mobile/App.expo.tsx` `~ src/components/app-bottom-bar.tsx`
+`~ src/components/pastille-suivi.tsx` `~ src/screens/order-history.screen.tsx`
+621 tests unitaires, 89 d'intégration, 12 mobile.
+
+---
+
+## [0.73.0] — 2026-09-23 — Des chiffres qui ne se recoupent pas
+
+Les cartes de « Mes clients » se chevauchaient : « Visiteurs uniques » contenait
+les connectés, qui contenaient les nouveaux, qui contenaient ceux qui avaient
+commandé. **Une même personne pouvait être comptée quatre fois.**
+
+Deux chiffres seulement s'additionnent désormais, et ne se recoupent jamais :
+**Visiteurs anonymes** (téléphones venus sans qu'aucun compte ne s'y connecte)
+et **Clients connectés** (comptes différents, comptés une fois sur la période).
+Un téléphone qui se connecte en cours de route bascule du côté des connectés.
+
+« Nouveaux visiteurs » et « Ont commandé » sont des PARTS de ces deux chiffres,
+et l'intitulé le dit. On ne peut pas commander sans être connecté : « Ont
+commandé » ne contient jamais d'anonyme. Sous cette carte, **« dont X nouveaux
+clients »** — ceux dont c'est la première commande chez ce club, calculé sur les
+commandes et non sur la découverte de l'app.
+
+Vocabulaire : « visites » a été essayé puis abandonné (trop proche de
+« visiteurs »), « passages » revient et ne figure plus que dans l'aide.
+
+`~ backend/src/modules/frequentation/frequentation.service.ts`
+`~ apps/admin/src/app/(admin)/clients/page.tsx` `~ src/components/jour-par-jour.tsx`
+621 tests unitaires (+3), 89 d'intégration.
+
+---
+
+## [0.72.0] — 2026-09-21 — Le détail jour par jour
+
+« Quel jour avons-nous eu le plus de monde ? » — une somme sur 30 jours noie la
+réponse. Chaque jour de la période a sa ligne : matchs du jour, visiteurs avec
+une barre pour repérer le pic, nouveaux, ont commandé, commandes, CA TTC. Le
+jour le plus fréquenté est annoncé en tête.
+
+Le jour est le **jour de SERVICE du lieu** (bascule à 4 h, heure du lieu), le
+même que la numérotation des commandes : découpé à minuit UTC, la fin d'un match
+du soir partait sur le lendemain. Avant la mise en service de la mesure
+(18/09/2026), le tableau écrit « Fréquentation non mesurée à cette date » —
+trois zéros diraient que personne n'est venu.
+
+`+ apps/admin/src/components/jour-par-jour.tsx`
+`~ backend/src/modules/frequentation/frequentation.service.ts`
+618 tests unitaires (+10), 89 d'intégration (+6).
+
+---
+
+## [0.71.1] — 2026-09-21 — Deux compteurs qui mentaient
+
+**Nouveaux visiteurs.** À chaque lancement, l'app signale d'abord une ouverture
+SANS lieu (l'écran d'accueil). Le calcul prenait cette toute première ligne : la
+colonne « Nouveaux » d'un lieu restait donc toujours à zéro, pendant que la
+carte du haut comptait tout appareil ouvert pour la première fois dans la
+période, où qu'il ait découvert l'application. La règle est maintenant la même
+partout : le premier LIEU jamais ouvert est chez ce club.
+
+**Passages.** La fenêtre de trente minutes existe pour que dix allers-retours
+comptent pour un passage ; le tableau additionnait les écrans vus. Un passage =
+un appareil dans une demi-heure.
+
+**Un départage au hasard.** Deux lieux ouverts dans la même demi-heure ont la
+même fenêtre, et PostgreSQL choisissait le « premier » au hasard — un essai
+passait ou échouait selon le tirage. `created_at` tranche désormais.
+
+`~ backend/src/modules/frequentation/frequentation.service.ts`
+`~ apps/admin/src/app/(admin)/clients/page.tsx`
+608 tests unitaires, 83 d'intégration (+4 qui échouaient avant correction).
+
+---
+
+## [0.71.0] — 2026-09-21 — L'anneau de suivi autour de l'éclair
+
+La pastille centrale dit où en est la commande depuis TOUS les écrans : jaune au
+tiers (reçue), orange aux deux tiers (préparation), vert plein (prête, avec une
+onde verte), vert plein et ✓ (récupérée), bleu et flèche (remboursée en
+totalité). L'éclair prend la même couleur, en fondu, et flotte en permanence.
+
+**Des paliers réels, jamais de pourcentage inventé** : on ne sait pas si une
+préparation en est à 30 ou à 50 %. Avec deux commandes en cours, l'anneau suit
+la plus avancée. Le ✓ et le bleu s'effacent dix minutes après.
+
+**L'éclair est un vecteur.** Le fichier Canva fourni était un SVG qui
+enveloppait une image : son contour a été retracé en 31 sommets et vérifié par
+superposition (`logo/eclair-vectorise.svg`).
+
+**Piège trouvé en vérifiant** : sur le web, les valeurs animées passées à un
+tracé SVG ne se mettent pas à jour — l'anneau restait au tiers, l'éclair restait
+jaune. Les transitions passent par de simples valeurs d'état, image par image.
+
+Le réseau ne travaille que pendant une commande en cours. « Réduire les
+animations » est respecté. Nouvelle dépendance native : `react-native-svg`.
+
+`+ apps/mobile/src/components/pastille-suivi.tsx` `+ src/lib/suivi-commande.ts`
+`+ src/lib/use-etat-pastille.ts` `+ src/store/suivi.store.ts`
+`+ src/lib/__tests__/suivi-commande.test.ts` `- assets/eclair-neon.png`
+608 tests unitaires, 81 d'intégration, **12 mobile** — le Jest mobile ne tournait
+pas du tout avant (préréglage React Native incompatible pnpm).
+
+---
+
+## [0.70.0] — 2026-09-21 — Les rapports Flaix, à un clic
+
+Les rapports d'événements vivent chez Flaix, derrière les identifiants du
+directeur, et chaque rapport a sa propre adresse. Deux accès depuis le tableau
+de bord : une entrée de menu vers la page de connexion Flaix, et sur la fiche
+d'un événement une carte où l'on colle l'adresse du rapport de CE match — un
+bouton l'ouvre, et le match est marqué dans la liste.
+
+**Une route à part** (`PATCH …/events/:id/rapport-flaix`) : la modification
+ordinaire refuse un événement terminé, or le rapport arrive après le match.
+
+**Seuls les liens https vers `flaixlabs.com` passent.** Le bouton mène à une
+page où le directeur tape son mot de passe : un domaine qui l'imite
+(`flaixlabs.com.pirate.fr`) en ferait un piège. Identifiants dans l'adresse
+refusés ; la base exige https de son côté. Break Eat ne stocke jamais les
+identifiants Flaix, et le lien ne sort pas vers l'app cliente.
+
+`+ backend/src/modules/events/lien-flaix.ts` (+ `lien-flaix.spec.ts`)
+`+ dto/definir-rapport-flaix.dto.ts` `+ migration 20260921_rapport_flaix`
+`+ apps/admin/src/components/rapport-flaix.tsx`
+614 tests unitaires (+6), 89 d'intégration (+6).
+
+---
+
+## [0.69.0] — 2026-09-19 — Une barre du bas à cinq places
+
+Lieux · Panier — la pastille — Alertes · Profil. Les alertes et le profil
+n'étaient que deux icônes du bandeau orange de l'accueil : depuis le panier ou
+une commande, le client ne pouvait pas les atteindre. Ils le suivent désormais
+partout, avec deux compteurs — articles au panier, notifications non lues.
+
+Au centre, l'éclair de la marque remplace le logo : un logo répété à chaque
+écran ne dit pas ce que le bouton FAIT.
+
+Au passage, le bouton « Clique ici pour nous avertir… » débordait de sa pilule :
+deux lignes forcées de longueur voisine, icône de main retirée, marge latérale
+ajoutée.
+
+`~ apps/mobile/src/components/app-bottom-bar.tsx`
+`~ src/screens/venue-discovery.screen.tsx` `~ src/screens/order-history.screen.tsx`
+608 tests unitaires, 81 d'intégration.
+
+---
+
+## [0.68.2] — 2026-09-19 — Le contrat signé, lisible sans le télécharger
+
+Section **Documentation** du tableau de bord manager : le club dépose son
+contrat signé en PDF, le relit dans la page sans le télécharger, en garde
+plusieurs, en supprime.
+
+Le contenu vit dans la base (`BYTEA`) plutôt que dans un stockage objet : un
+contrat par club, quelques méga-octets, et surtout **aucune adresse publique** —
+la lecture passe par la même authentification que le reste, sans lien signé à
+faire expirer.
+
+Le type est vérifié sur le CONTENU (`%PDF-`), pas sur ce que le navigateur
+annonce. La borne de 10 Mo est posée dans l'intercepteur ET dans la base. Le
+filtre porte sur le document et sur le club : connaître un identifiant ne donne
+pas accès au contrat d'un autre. Réservé aux rôles de direction.
+
+`+ backend/src/modules/documents/` `+ migration 20260919_documents`
+`+ apps/admin/src/app/(admin)/documentation/page.tsx`
+`+ backend/test/integration/documents.int-spec.ts`
+608 tests unitaires, 81 d'intégration (+8).
+
+---
+
 ## [0.68.1] — 2026-09-18 — L'orange vif devient #FD4000
 
 Sur les cinq surfaces à la fois : application, Live Activity, poste opérateur,

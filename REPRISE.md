@@ -71,6 +71,25 @@ clients ; **Facebook ne le sera pas** — son jeton ne certifie pas l'adresse, e
 rattacher une inscription rapide à un compte existant sur une adresse non
 certifiée donnerait le compte d'un client à qui saurait en déclarer l'adresse.
 
+## 🔓 SUJETS OUVERTS — à reprendre (liste tenue au 29/09/2026)
+
+Ce qui a été décidé mais pas fait, ou fait mais pas encore éprouvé. **Tenir
+cette liste à jour : elle est le premier endroit à relire en reprenant.**
+
+| Sujet | Où on en est | Ce qui manque |
+|---|---|---|
+| **Sauvegarde nocturne** | Script `backend/scripts/sauvegarde.js` écrit et vérifié ; destination validée par le client | Un stockage SÉPARÉ de Railway + la planification. Rien ne tourne aujourd'hui |
+| **Apple Pay** | Retiré proprement de l'app (phase 40) | Créer un identifiant marchand `merchant.com.breakeat.app` À PART, son certificat Stripe, puis reposer `APPLE_MERCHANT_ID`. ⚠️ Ne JAMAIS activer le certificat de `merchant.com.shapper.breakeat` : ça révoquerait celui de l'app publiée |
+| **Sécurité, points 4 et 5** | Les trois premiers verrous sont posés (phase 42) | Verrouillage temporaire après plusieurs échecs de connexion, et confirmation d'adresse e-mail |
+| **Remboursements** | L'app sait les AFFICHER : bandeau client + anneau bleu de la pastille | **Aucun code n'écrit `REFUNDED`** : le bleu ne s'allumera qu'une fois les remboursements enregistrés (Flaix, ou webhook Stripe `charge.refunded`) |
+| **Parrainage** | Partage de lien et QR en place (phase 44) | Trancher l'économie : points de fidélité, remise portée par le club, ou rien. La récompense sortirait de ta poche — les produits appartiennent aux buvettes |
+| **Notifications** | Cloche corrigée (phase 52), build 21 envoyé | À ÉPROUVER en vrai : envoyer une campagne, app en arrière-plan, puis relire les journaux Railway (`Push token enregistré…`, `Expo push: N envoyés…`) |
+| **Liens Flaix** | Carte en place sur chaque fiche d'événement | Les coller à la main, un par match. Se remplira tout seul quand Flaix sera branché |
+| **Envoi EAS bloqué** | Builds 19, 20, 21 : l'envoi AUTOMATIQUE reste en file d'attente | Lancer `eas submit` à la main après chaque build — c'est ce qui passe. À signaler à Expo si ça continue |
+| **Builds 20 et 21** | Chez Apple | Pas encore validés sur un vrai téléphone : cloche, ✓ « prête », liste En cours / Terminées |
+| **Dette : `visites`** | L'API calcule encore les passages | Plus aucun écran ne les affiche. À retirer si rien ne les reprend |
+| **Dette : PDF en base** | Contrats en `BYTEA`, 10 Mo max | Tenable à ce volume. À déplacer vers un stockage objet si les clubs en déposent beaucoup |
+
 ## 🔐 SÉCURITÉ — fait le 18/09, et ce qui reste
 
 **Fait et vérifié en production** : limitation de débit (deux compteurs — large

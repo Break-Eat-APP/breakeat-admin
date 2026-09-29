@@ -5683,3 +5683,316 @@ rupture décrit le stock d'un comptoir, pas le produit.
 Tout se fait en UNE transaction. Une carte à moitié copiée serait pire qu'un
 échec franc : le club croirait avoir tout, et découvrirait les manques un soir
 de service.
+
+## Phase 46 — Le contrat signé, lisible sans le télécharger (19/09/2026)
+
+### Une section « Documentation » dans le tableau de bord
+
+Le contrat entre Break Eat et le club vivait dans une boîte mail. Le dashboard
+manager porte désormais une section **Documentation** : on y dépose des PDF, on
+les relit **dans la page**, on en garde plusieurs, on en supprime.
+
+Lire sans télécharger n'est pas un détail : un document qu'il faut d'abord
+enregistrer sur un bureau pour le relire finit par ne plus être relu.
+
+### Le contenu vit dans la base, et c'est assumé
+
+`documents.content` est un `BYTEA`. L'alternative — un stockage objet —
+demanderait des identifiants que personne n'a posés, et bloquerait la
+fonctionnalité sur une inscription chez un hébergeur. Ces documents sont peu
+nombreux (un contrat par club), petits, et lus rarement.
+
+Ce que ça simplifie, et qui compte pour un CONTRAT : **aucune adresse
+publique**. La lecture passe par la même authentification que le reste, sans
+lien signé à faire expirer, rien à deviner. Le jour où le volume l'exigera,
+déplacer le contenu vers un stockage objet ne touchera qu'un service.
+
+### Trois garde-fous
+
+- **Le type est vérifié sur le CONTENU**, pas sur ce que le navigateur annonce :
+  un vrai PDF commence par `%PDF-`. L'en-tête de type se change en une ligne,
+  pas les premiers octets d'un fichier.
+- **La borne de 10 Mo est posée deux fois** : dans l'intercepteur, qui arrête le
+  téléversement avant qu'il ne traverse le réseau, et dans la base
+  (`documents_taille_raisonnable`), pour le jour où une route oublierait.
+- **Le filtre porte sur le document ET sur le club.** `findFirst` avec
+  l'organisation, jamais `findUnique` sur l'identifiant seul : sinon, connaître
+  un identifiant suffirait à lire le contrat d'un autre club.
+
+Réservé aux rôles de DIRECTION (`MANAGE_ROLES`) : un contrat ne regarde ni le
+comptoir ni l'équipe marketing.
+
+### Un iframe ne sait pas poser un en-tête
+
+L'aperçu ne peut pas être un simple `<iframe src="…/fichier">` : le jeton voyage
+dans un EN-TÊTE, et un iframe n'en pose pas. L'app lit donc le fichier
+elle-même, le remet au navigateur comme objet local, et **révoque** l'adresse à
+la fermeture — sinon le PDF reste en mémoire tant que l'onglet est ouvert.
+
+Huit essais sur base réelle, dont le contenu rendu **octet pour octet** : un
+contrat qui revient abîmé ne vaut rien.
+
+---
+
+## Phase 47 — Une barre du bas à cinq places (19/09/2026)
+
+### Ce qui n'était atteignable que depuis l'accueil
+
+La barre portait trois destinations : Lieux, la pastille centrale, Panier. Les
+**alertes** et le **profil** étaient deux icônes dans le bandeau orange de
+l'accueil — donc introuvables depuis le panier, une commande, ou n'importe quel
+autre écran.
+
+Cinq places désormais : **Lieux · Panier — la PASTILLE — Alertes · Profil**. À
+gauche le parcours d'achat, à droite ce qui appartient au client, au milieu ce
+pour quoi il rouvre l'application. Les deux icônes du bandeau ont été retirées :
+deux cloches sur le même écran n'ont pas de sens.
+
+### Deux compteurs qui suivent le client
+
+Le panier porte le nombre d'articles, les alertes le nombre de non-lues, « 99+ »
+au-delà — trois chiffres ne tiennent pas dans une pastille de 18 px.
+
+Les deux sont lus par **sélecteur scalaire** sur les stores Zustand. Rendre un
+objet re-rendrait la barre à chaque changement de panier, sur tous les écrans.
+
+### La géométrie est une source unique
+
+Trois constantes en tête de `app-bottom-bar.tsx` — écart bas, hauteur de barre,
+débord de la pastille — et `BOTTOM_BAR_SPACE` en dérive. Les modifier dans
+`styles` sans les reporter remettrait un bouton sous la barre : c'est ce qui
+était arrivé au bouton « Choisir un créneau », dont la moitié basse
+disparaissait. La borne est arrondie vers le HAUT : trop d'espace réservé ne se
+voit pas, trop peu cache un bouton.
+
+---
+
+## Phase 48 — L'anneau de suivi, et l'éclair qui change de couleur (21/09/2026)
+
+### Savoir où en est sa commande sans ouvrir l'écran
+
+La pastille centrale porte un anneau qui dit l'avancement, depuis n'importe quel
+écran : **jaune au tiers** (reçue) → **orange aux deux tiers** (préparation) →
+**vert plein** (prête) → **vert plein + ✓** (récupérée) → **bleu + flèche**
+(remboursée). L'éclair prend la même couleur, en fondu.
+
+**Des paliers RÉELS, jamais un pourcentage inventé** : on ne sait pas si une
+préparation en est à 30 ou à 50 %. Une maquette proposait 0–20 %, 20–55 % : ce
+serait afficher 80 % quand personne n'a commencé.
+
+### Trois règles qui décident de ce qu'on voit
+
+`lib/suivi-commande.ts`, fonction PURE, couverte par 12 essais :
+
+1. une commande **en cours** l'emporte toujours ; s'il y en a plusieurs (deux
+   buvettes), on suit **la plus avancée** — c'est elle qui va faire bouger le
+   client ;
+2. sinon la dernière commande terminée, si elle l'a été il y a moins de dix
+   minutes (`DUREE_FIN_MS`) ;
+3. un remboursement **partiel** ne passe pas au bleu : la commande continue
+   d'être servie.
+
+⚠️ Aucun code n'écrit `REFUNDED` aujourd'hui : le bleu ne s'allumera qu'une fois
+les remboursements enregistrés (Flaix ou webhook Stripe).
+
+### Le réseau ne travaille que pendant une commande
+
+Chargement à l'ouverture, au retour au premier plan, après un paiement ; puis
+sondage toutes les dix secondes **tant qu'une commande est en cours**, et rien
+sinon. L'écran « Mes commandes » publie ce qu'il charge dans `suivi.store` : la
+barre s'en sert au lieu de refaire l'appel.
+
+### L'éclair est un VECTEUR, et pourquoi
+
+Le premier éclair était une image (néon sur fond orange) : couleurs figées,
+impossible à recolorer. Le fichier Canva fourni ensuite était un SVG… qui
+enveloppait une IMAGE — Canva fait cela quand l'élément d'origine est une image.
+Son contour a donc été **retracé** (31 sommets, angles arrondis compris) et
+vérifié par superposition à l'original. Copie propre :
+`logo/eclair-vectorise.svg`.
+
+Un contour plus sombre accompagne chaque couleur : sur fond blanc, un éclair
+jaune sans contour ne se lit pas.
+
+### Le piège : `Animated` ne met pas à jour un dessin SVG sur le web
+
+Vérifié dans l'aperçu web : l'anneau passait bien au vert mais **restait au
+tiers**, et l'éclair restait jaune. Les valeurs animées passées à un tracé SVG
+ne se propagent pas côté navigateur. `useGlissement` fait donc avancer de
+simples valeurs d'état, image par image — ça marche partout, et ça ne tourne
+qu'au changement d'étape, rare. Le flottement et l'onde restent sur `Animated` :
+ce sont des vues, pas des tracés.
+
+« Réduire les animations » (réglage système) est respecté.
+
+### Au passage
+
+Le bouton « Clique ici pour nous avertir… » débordait de sa pilule : aucune
+marge latérale, et l'icône de main prenait la largeur dont le texte avait
+besoin. Deux lignes forcées de longueur voisine, icône retirée, marge ajoutée.
+
+---
+
+## Phase 49 — Deux compteurs qui mentaient (21/09/2026)
+
+Découverts en lisant les chiffres d'un vrai club : la carte du haut annonçait
+**1 nouveau visiteur**, la ligne du même lieu **0**. Un seul lieu.
+
+### « Nouveaux visiteurs » : la première ouverture n'est jamais dans un lieu
+
+À chaque lancement, l'application signale d'abord un `APP_OPEN` **sans lieu**
+(l'écran d'accueil), avant que le client ne choisisse un stade. Le calcul
+prenait la toute première ligne de chaque appareil :
+
+- la colonne « Nouveaux » d'un lieu restait donc **toujours à zéro** ;
+- la carte du haut, elle, ne vérifiait pas OÙ la découverte avait eu lieu : elle
+  comptait tout appareil ouvert pour la première fois dans la période, y compris
+  chez un autre club.
+
+La règle est maintenant la même partout : **le premier LIEU jamais ouvert** est
+chez ce club (et dans ce lieu si on en a choisi un). Un essai vérifie que la
+carte du haut et la somme des lieux ne peuvent plus se contredire.
+
+⚠️ Ce chiffre ne dit RIEN des téléchargements : ni Apple ni Google ne disent où
+une app a été téléchargée. Il dit « le premier lieu que ce téléphone a ouvert ».
+
+### « Passages » comptait des écrans
+
+La fenêtre de trente minutes existe pour que dix allers-retours entre la carte
+et le panier comptent pour UN passage. Le tableau de bord, lui, additionnait les
+`hits` — c'est-à-dire chaque écran vu. Un test le vérifiait même sous le titre
+« dix passages… font UNE visite » en attendant `10`.
+
+Un passage est désormais **un appareil dans une demi-heure** : total, par jour
+et par lieu.
+
+### Un départage au hasard
+
+Deux lieux ouverts dans la même demi-heure ont la même `window_start`, et
+PostgreSQL choisissait alors lequel était « le premier » au hasard : un essai
+d'intégration passait ou échouait selon le tirage. `created_at` tranche
+désormais, en second critère du `DISTINCT ON`.
+
+---
+
+## Phase 50 — Les rapports Flaix, à un clic (21/09/2026)
+
+Les rapports d'événements vivent chez Flaix, derrière les identifiants du
+directeur, et **chaque rapport a sa propre adresse**. Deux accès depuis le
+dashboard : une entrée de menu vers `ops.flaixlabs.com/login`, et sur la fiche
+d'un événement une carte où l'on colle l'adresse du rapport de CE match.
+
+### Une route à part, et c'est voulu
+
+`PATCH /organizations/:orgId/events/:id/rapport-flaix`. La modification
+ordinaire d'un événement **refuse un événement terminé** — or le rapport arrive
+justement APRÈS le match. Ce lien accompagne l'événement, il n'en change pas la
+configuration. Refusé, en revanche, sur le contenant invisible d'un lieu ouvert
+en continu : ce n'est pas un match.
+
+### Pourquoi le domaine est vérifié
+
+Le bouton mène à une page où le directeur **tape son mot de passe**. Si
+n'importe quelle adresse était acceptée, un lien vers un site imitant Flaix
+récolterait ses identifiants. `lien-flaix.ts` n'accepte que `https` et
+`flaixlabs.com` ou un de ses sous-domaines — le nom d'hôte EXACT, jamais un
+simple « contient » : `flaixlabs.com.pirate.fr` et `faux-flaixlabs.com`
+contiennent le mot sans être Flaix. Les identifiants glissés dans l'adresse
+(`https://moi:secret@…`) sont refusés aussi. La base exige `https` de son côté.
+
+Break Eat ne stocke jamais les identifiants Flaix, et le lien ne sort pas vers
+l'app cliente : les routes publiques construisent leurs réponses champ par
+champ.
+
+Quand Flaix sera branché, ce lien pourra se remplir tout seul depuis
+l'identifiant d'événement Flaix.
+
+---
+
+## Phase 51 — Des chiffres qui ne se recoupent pas (21–23/09/2026)
+
+### Le détail jour par jour
+
+« Quel jour avons-nous eu le plus de monde ? » — une somme sur 30 jours noie la
+réponse. Chaque jour de la période a sa ligne : matchs du jour, visiteurs (avec
+une barre pour repérer le pic), nouveaux, ont commandé, commandes, CA TTC. Le
+**jour le plus fréquenté** est annoncé en tête.
+
+Le jour est le **JOUR DE SERVICE du lieu** (bascule à 4 h, heure du lieu), le
+même que la numérotation des commandes. Découper à minuit UTC rangeait la fin
+d'un match du soir sur le lendemain.
+
+Un match sans une visite ni une commande ne crée pas de ligne. Avant la mise en
+service de la mesure (`DEBUT_MESURE_FREQUENTATION`, 18/09/2026), le tableau
+écrit **« Fréquentation non mesurée à cette date »** : trois zéros diraient que
+personne n'est venu, alors que personne ne comptait.
+
+### Les cartes se chevauchaient
+
+« Visiteurs uniques » contenait les connectés, qui contenaient les nouveaux, qui
+contenaient ceux qui avaient commandé : **une même personne pouvait être comptée
+quatre fois**. Deux chiffres seulement s'additionnent désormais, et ne se
+recoupent jamais :
+
+- **Visiteurs anonymes** : téléphones venus sans qu'aucun compte ne s'y connecte ;
+- **Clients connectés** : comptes différents, comptés UNE fois sur la période.
+
+Un téléphone qui se connecte en cours de route bascule du côté des connectés —
+on le connaît, il n'a plus rien d'anonyme. Un essai le vérifie.
+
+« Nouveaux visiteurs » et « Ont commandé » restent des **parts** de ces deux
+chiffres, et l'intitulé le dit. On ne peut pas commander sans être connecté :
+« Ont commandé » ne contient jamais d'anonyme, et additionner les cartes
+compterait deux fois la même personne. Le taux de conversion se calcule sur les
+connectés — un anonyme ne peut pas entrer au numérateur.
+
+Sous « Ont commandé », **« dont X nouveaux clients »** : ceux dont c'est la
+PREMIÈRE commande chez ce club. Calculé sur les commandes, et non sur la
+découverte de l'app : les commandes existent depuis toujours, la fréquentation
+depuis le 18/09 seulement.
+
+### Le vocabulaire aussi a été corrigé
+
+« Visites » a été essayé, puis abandonné : à la lecture, le mot se confondait
+avec « visiteurs ». « Passages » est revenu, et n'apparaît plus que dans le
+texte d'aide — une carte, un chiffre. « Dont connectés » est devenu « Connectés
+à leur compte » puis « Clients connectés » : la question avait été posée, donc
+l'intitulé ne suffisait pas.
+
+---
+
+## Phase 52 — La cloche, le ✓ et les commandes terminées (23/09/2026)
+
+### La cloche restait muette
+
+Le compte des non-lues n'était relu qu'à la connexion, à l'arrivée d'un push
+**application ouverte**, et en repassant par l'accueil. Or un push reçu
+application fermée ne déclenche aucun écouteur : le client voyait la bannière,
+puis une cloche éteinte, et devait ouvrir « Alertes » pour savoir.
+
+Trois relectures ajoutées : au **retour au premier plan**, **toutes les cinq
+minutes** application ouverte, et à l'**ouverture d'une notification touchée**.
+La cadence de cinq minutes compte surtout pour qui a REFUSÉ les notifications
+système : aucun push ne lui parviendra jamais, la cloche est son seul signal.
+
+La cloche s'allume elle-même — pleine et orange — en plus de la pastille
+chiffrée : un petit nombre seul se rate d'un coup d'œil.
+
+### Le ✓ dès que la commande est prête
+
+Il n'apparaissait qu'une fois la commande récupérée. C'est pourtant au moment où
+elle est PRÊTE que le client doit savoir qu'elle l'attend. L'onde verte autour
+de la pastille distingue les deux : elle tourne tant que la commande n'est pas
+retirée.
+
+### En cours / Terminées
+
+Une commande récupérée affichait encore les trois étapes pleines — Reçue,
+Préparation, Prête — exactement comme une commande en cours. Empilées, les
+cartes devenaient impossibles à distinguer.
+
+Le résumé des étapes ne s'affiche plus que pendant l'attente, et la liste est
+coupée en deux (`SectionList`) : « En cours », puis « Terminées ». Les titres
+n'apparaissent que s'il y a les deux — sans commande en cours, la liste n'est
+qu'un historique. Avant, tout arrivait mélangé, la plus récente en tête : une
+commande récupérée hier pouvait passer devant celle qu'on attend au comptoir.
