@@ -8,6 +8,7 @@ import {
 import { Prisma, SlotSource, SlotStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { ALL_ORG_ROLES, requireOrgAccess } from '../../common/helpers/require-org-access';
+import { requirePorteeBuvette } from '../../common/helpers/portee-buvette';
 import { OrgRole } from '../../common/enums/role.enum';
 import { CreateSlotDto } from './dto/create-slot.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
@@ -122,12 +123,11 @@ export class SlotsService {
     // n'importe quel autre club, en devinant un identifiant.
     await requireOrgAccess(this.prisma, callerId, event.organizationId, ALL_ORG_ROLES);
 
-    await this.slotTemplates.ensureTodaySlots(eventId, event.venueId);
-
-    const maintenant = new Date();
-    const journee = new Date(
-      Date.UTC(maintenant.getUTCFullYear(), maintenant.getUTCMonth(), maintenant.getUTCDate()),
-    );
+    // La journée vient de la matérialisation elle-même. La recalculer ici,
+    // c'était la recalculer AUTREMENT : elle la posait en heure du lieu, cette
+    // lecture filtrait sur le jour UTC. Entre minuit et 2h, l'équipier ne voyait
+    // pas les créneaux qui venaient d'être créés.
+    const { journee } = await this.slotTemplates.ensureTodaySlots(eventId, event.venueId);
 
     return this.prisma.slot.findMany({
       where: {
@@ -178,6 +178,18 @@ export class SlotsService {
    * Fermer n'annule rien : les commandes déjà placées sur ce créneau restent
    * dues, seule la prise de nouvelles s'arrête.
    */
+  /**
+   * Ouvrir ou fermer un créneau depuis le comptoir.
+   *
+   * Ouvert à l'OPÉRATEUR — c'est lui qui sait quand la file déborde. Mais à SA
+   * buvette : le contrôle de rôle laissait l'opératrice du Nord fermer les
+   * créneaux du Sud, et un créneau fermé, c'est un retrait que le client ne
+   * peut plus choisir.
+   *
+   * Un créneau PARTAGÉ (`supplierId: null`, valable pour toutes les buvettes de
+   * l'événement) n'est pas touché par un poste épinglé : il déciderait pour les
+   * autres. Il reste modifiable par un manager.
+   */
   async updateStatus(eventId: string, id: string, status: SlotStatus, callerId: string) {
     const slot = await this.parId(eventId, id);
     const event = await this.prisma.event.findUniqueOrThrow({
@@ -187,6 +199,13 @@ export class SlotsService {
       ...WRITE_ROLES,
       OrgRole.OPERATOR,
     ]);
+    await requirePorteeBuvette(
+      this.prisma,
+      callerId,
+      event.organizationId,
+      slot.supplierId,
+      'Ce créneau ne concerne pas ta buvette.',
+    );
 
     const updated = await this.prisma.slot.update({
       where: { id },

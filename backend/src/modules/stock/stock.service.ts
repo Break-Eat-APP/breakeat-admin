@@ -12,6 +12,7 @@ import {
   MANAGE_ROLES,
   ALL_ORG_ROLES,
 } from '../../common/helpers/require-org-access';
+import { requirePorteeBuvette } from '../../common/helpers/portee-buvette';
 import type { CreateStockDto } from './dto/create-stock.dto';
 import type { UpdateStockDto } from './dto/update-stock.dto';
 import type { UpdateStockAvailabilityDto } from './dto/update-stock-availability.dto';
@@ -148,9 +149,15 @@ export class StockService {
   }
 
   /**
-   * Toggles isAvailable only — allowed for OPERATOR, MANAGER, ORG_ADMIN.
-   * Used to 86 an item mid-service or bring it back.
-   * Does NOT allow isAvailable = true when quantity = 0.
+   * HS ⇄ en vente, depuis le comptoir. Ouvert à l'OPÉRATEUR, qui est celui qui
+   * voit l'étagère se vider — mais à SA buvette seulement.
+   *
+   * Le contrôle de rôle ne suffisait pas : l'opératrice du Nord, membre du club
+   * et opératrice à bon droit, pouvait retirer de la carte un produit du Sud.
+   * Pas une intrusion — il faut un compte du club — mais le service d'une autre
+   * équipe qui s'arrête en pleine mi-temps, sans explication visible.
+   *
+   * Ne permet jamais `isAvailable = true` quand la quantité est à zéro.
    */
   async updateAvailability(
     organizationId: string,
@@ -167,6 +174,14 @@ export class StockService {
       where: { id: stockId, supplier: { organizationId } },
     });
     if (!existing) throw new NotFoundException('Stock entry not found');
+
+    await requirePorteeBuvette(
+      this.prisma,
+      userId,
+      organizationId,
+      existing.supplierId,
+      'Ce produit appartient à une autre buvette.',
+    );
 
     // Cannot mark available if quantity is 0
     const safeIsAvailable = existing.quantity === 0 ? false : dto.isAvailable;

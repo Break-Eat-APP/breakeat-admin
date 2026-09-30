@@ -42,6 +42,34 @@ function decalageFuseau(instant: Date, fuseau: string): number {
 }
 
 /**
+ * Le jour CALENDAIRE du lieu, rendu comme une date UTC à minuit — une clé, pas
+ * un horodatage.
+ *
+ * À 00h30 à Paris on est déjà le lendemain ; en UTC, pas encore. C'est la clé
+ * des créneaux récurrents (`Slot.serviceDate`), et elle DOIT être calculée de
+ * la même façon à l'écriture et à la lecture : la matérialisation posait le jour
+ * local du lieu, les lectures filtraient sur le jour UTC. Entre minuit et 2h,
+ * les créneaux fraîchement créés étaient donc invisibles — et ceux de la veille
+ * réapparaissaient.
+ *
+ * Distinct du JOUR DE SERVICE ci-dessous, qui bascule à 4h : un créneau porte
+ * l'heure murale de son libellé (« 01:30 »), donc la date de cette heure-là.
+ */
+export function jourCalendaireLocal(instant: Date, fuseau = 'Europe/Paris'): Date {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: fuseau,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(instant)
+      .map((x) => [x.type, x.value]),
+  ) as Record<string, string>;
+  return new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day)));
+}
+
+/**
  * Le jour de service contenant `instant`, rendu comme une date UTC à minuit —
  * une clé, pas un horodatage.
  */

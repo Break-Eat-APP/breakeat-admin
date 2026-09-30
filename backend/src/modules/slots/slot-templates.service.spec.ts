@@ -27,6 +27,7 @@ describe('SlotTemplatesService', () => {
   let service: SlotTemplatesService;
   let prisma: {
     venue: { findUnique: jest.Mock };
+    event: { findUnique: jest.Mock };
     supplier: { findUnique: jest.Mock };
     organizationMember: { findUnique: jest.Mock };
     user: { findUnique: jest.Mock };
@@ -44,6 +45,13 @@ describe('SlotTemplatesService', () => {
   beforeEach(async () => {
     prisma = {
       venue: { findUnique: jest.fn().mockResolvedValue({ organizationId: ORG_ID }) },
+      // Par défaut, le CONTENANT d'un lieu ouvert en continu : c'est le seul
+      // événement que les modèles récurrents servent.
+      event: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ venueId: VENUE_ID, isPermanentContainer: true }),
+      },
       supplier: { findUnique: jest.fn().mockResolvedValue({ organizationId: ORG_ID }) },
       organizationMember: { findUnique: jest.fn().mockResolvedValue({ orgRole: 'MANAGER' }) },
       user: { findUnique: jest.fn().mockResolvedValue({ globalRole: 'CUSTOMER' }) },
@@ -154,8 +162,11 @@ describe('SlotTemplatesService', () => {
 
       const res = await service.ensureTodaySlots(EVENT_ID, VENUE_ID);
 
-      expect(res).toEqual([]);
+      expect(res.creneaux).toEqual([]);
       expect(prisma.slot.create).not.toHaveBeenCalled();
+      // La journée est rendue MÊME sans modèle : c'est elle qui sert de filtre
+      // aux lectures, et un lieu sans créneau récurrent en a besoin aussi.
+      expect(res.journee).toBeInstanceOf(Date);
     });
 
     it('absorbe le doublon : deuxieme visite du jour, aucune erreur', async () => {
@@ -166,7 +177,53 @@ describe('SlotTemplatesService', () => {
 
       await expect(
         service.ensureTodaySlots(EVENT_ID, VENUE_ID),
-      ).resolves.toEqual([]);
+      ).resolves.toEqual(expect.objectContaining({ creneaux: [] }));
+    });
+
+    it('rend la journée DU LIEU, pas celle de Greenwich', async () => {
+      // 00h30 à Paris le 27 août = 22h30 UTC le 26. La matérialisation posait
+      // le 27 (jour local), les lectures filtraient sur le 26 (jour UTC) : les
+      // créneaux fraîchement créés étaient invisibles, et ceux de la veille
+      // remontaient. Une heure par nuit, deux en été.
+      prisma.slotTemplate.findMany.mockResolvedValue([]);
+
+      const res = await service.ensureTodaySlots(
+        EVENT_ID,
+        VENUE_ID,
+        new Date('2026-08-26T22:30:00.000Z'),
+      );
+
+      expect(res.journee.toISOString()).toBe('2026-08-27T00:00:00.000Z');
+    });
+
+    it('ne touche PAS à un événement ponctuel — le club y a saisi ses créneaux', async () => {
+      // Les modèles décrivent le rythme quotidien d'un lieu ouvert en continu.
+      // Matérialisés dans un match, ils garnissaient sa liste d'heures que le
+      // club n'avait pas saisies et ne pouvait pas faire disparaître.
+      prisma.event.findUnique.mockResolvedValue({
+        venueId: VENUE_ID,
+        isPermanentContainer: false,
+      });
+      prisma.slotTemplate.findMany.mockResolvedValue([gabarit()]);
+
+      const res = await service.ensureTodaySlots(EVENT_ID, VENUE_ID);
+
+      expect(prisma.slot.create).not.toHaveBeenCalled();
+      // La journée est rendue quand même : elle sert de filtre de date.
+      expect(res.journee).toBeInstanceOf(Date);
+      expect(res.creneaux).toEqual([]);
+    });
+
+    it('refuse un événement qui n’appartient pas à ce lieu', async () => {
+      prisma.event.findUnique.mockResolvedValue({
+        venueId: 'un-autre-lieu',
+        isPermanentContainer: true,
+      });
+      prisma.slotTemplate.findMany.mockResolvedValue([gabarit()]);
+
+      await service.ensureTodaySlots(EVENT_ID, VENUE_ID);
+
+      expect(prisma.slot.create).not.toHaveBeenCalled();
     });
 
     it('ne masque PAS une vraie erreur de base', async () => {

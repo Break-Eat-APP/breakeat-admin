@@ -1,5 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { StockService } from './stock.service';
 import { PrismaService } from '../../database/prisma.service';
 
@@ -240,6 +245,57 @@ describe('StockService', () => {
       const updateCall = (prisma.stock.update as jest.Mock).mock.calls[0][0];
       // Must be forced to false regardless of dto value
       expect(updateCall.data.isAvailable).toBe(false);
+    });
+
+    it('REFUSE à l’opératrice du Nord de toucher au stock du Sud', async () => {
+      // Le rôle ne suffit pas : elle est bien opératrice de ce club. C'est son
+      // COMPTOIR qui borne ce qu'elle peut retirer de la carte. Sans ce
+      // contrôle, le service d'une autre équipe s'arrêtait en pleine mi-temps.
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue({
+        userId: USER_ID,
+        organizationId: ORG_ID,
+        orgRole: 'OPERATOR',
+        supplierId: OTHER_SUPPLIER_ID,
+      });
+      (prisma.stock.findFirst as jest.Mock).mockResolvedValue(mockStock({ quantity: 5 }));
+
+      await expect(
+        service.updateAvailability(ORG_ID, STOCK_ID, USER_ID, { isAvailable: false }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+
+      expect(prisma.stock.update).not.toHaveBeenCalled();
+    });
+
+    it('laisse passer l’opératrice de SA propre buvette', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue({
+        userId: USER_ID,
+        organizationId: ORG_ID,
+        orgRole: 'OPERATOR',
+        supplierId: SUPPLIER_ID,
+      });
+      (prisma.stock.findFirst as jest.Mock).mockResolvedValue(mockStock({ quantity: 5 }));
+      (prisma.stock.update as jest.Mock).mockResolvedValue(mockStock({ isAvailable: false }));
+
+      await expect(
+        service.updateAvailability(ORG_ID, STOCK_ID, USER_ID, { isAvailable: false }),
+      ).resolves.toBeDefined();
+    });
+
+    it('un MANAGER sans comptoir attitré touche à tout', async () => {
+      // La restriction ne vise que les postes ÉPINGLÉS. Un manager couvre le
+      // lieu entier — le restreindre casserait le dashboard.
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue({
+        userId: USER_ID,
+        organizationId: ORG_ID,
+        orgRole: 'MANAGER',
+        supplierId: null,
+      });
+      (prisma.stock.findFirst as jest.Mock).mockResolvedValue(mockStock({ quantity: 5 }));
+      (prisma.stock.update as jest.Mock).mockResolvedValue(mockStock({ isAvailable: false }));
+
+      await expect(
+        service.updateAvailability(ORG_ID, STOCK_ID, USER_ID, { isAvailable: false }),
+      ).resolves.toBeDefined();
     });
   });
 });

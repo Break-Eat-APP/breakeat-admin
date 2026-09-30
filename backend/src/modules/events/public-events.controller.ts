@@ -11,6 +11,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { ProductStatus, SlotStatus, FlagScope } from '@prisma/client';
 import { GroupsService } from '../groups/groups.service';
 import { SlotTemplatesService } from '../slots/slot-templates.service';
+import { jourCalendaireLocal } from '../../common/helpers/jour-de-service';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
@@ -208,20 +209,21 @@ export class PublicEventsController {
       where: { id: eventId },
       select: { venueId: true },
     });
-    if (event?.venueId) {
-      await this.slotTemplates.ensureTodaySlots(eventId, event.venueId);
-    }
 
-    // Journée courante seulement.
+    // Journée courante seulement, ET la journée DU LIEU.
     //
     // Un lieu ouvert en continu accumule un jeu de créneaux PAR JOUR : sans ce
     // filtre, le client se verrait proposer le « 17h45 » d'il y a trois
     // semaines. Les créneaux ponctuels d'un événement (`serviceDate` nul) ne
     // sont pas datés et restent visibles tant que l'événement dure.
-    const aujourdhui = new Date();
-    const journee = new Date(
-      Date.UTC(aujourdhui.getUTCFullYear(), aujourdhui.getUTCMonth(), aujourdhui.getUTCDate()),
-    );
+    //
+    // La date vient de la matérialisation, qui la calcule en heure du lieu. Ce
+    // filtre employait le jour UTC : entre minuit et 2h à Paris, le client ne
+    // voyait aucun créneau du jour — ils venaient d'être créés sous la date du
+    // lendemain local.
+    const journee = event?.venueId
+      ? (await this.slotTemplates.ensureTodaySlots(eventId, event.venueId)).journee
+      : jourCalendaireLocal(new Date());
 
     // Créneaux de LA buvette choisie, et d'elle seule.
     //

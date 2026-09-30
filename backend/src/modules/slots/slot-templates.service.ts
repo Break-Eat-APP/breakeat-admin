@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { Prisma, SlotSource, SlotStatus } from '@prisma/client';
+import { Prisma, SlotSource, SlotStatus, type Slot } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { requireOrgAccess } from '../../common/helpers/require-org-access';
+import { jourCalendaireLocal } from '../../common/helpers/jour-de-service';
 import { OrgRole } from '../../common/enums/role.enum';
 import type { CreateSlotTemplateDto } from './dto/create-slot-template.dto';
 import type { UpdateSlotTemplateDto } from './dto/update-slot-template.dto';
@@ -181,21 +182,48 @@ export class SlotTemplatesService {
    * L'unicité `(templateId, serviceDate)` rend l'opération sûre sans verrou :
    * deux clients simultanés ne peuvent pas créer de doublon. Le second se heurte
    * à la contrainte, qu'on absorbe.
+   *
+   * ─── SEUL le contenant d'un lieu ouvert en continu est servi ───
+   *
+   * Les modèles décrivent le RYTHME QUOTIDIEN d'un lieu ouvert tous les jours :
+   * « 17h45 », « 18h15 ». Ils étaient matérialisés dans n'importe quel événement
+   * du lieu, donc aussi dans un match, où le club avait posé ses propres
+   * créneaux à la main. Le soir du match, sa liste se garnissait d'heures qu'il
+   * n'avait pas saisies, et il n'avait aucun moyen de les faire disparaître —
+   * elles revenaient à la lecture suivante.
+   *
+   * La journée est rendue dans tous les cas : c'est le filtre de date des
+   * lectures, et un événement ponctuel en a besoin comme les autres.
    */
-  async ensureTodaySlots(eventId: string, venueId: string, quand: Date = new Date()) {
-    const templates = await this.prisma.slotTemplate.findMany({
-      where: { venueId, isActive: true },
-    });
-    if (templates.length === 0) return [];
-
+  async ensureTodaySlots(
+    eventId: string,
+    venueId: string,
+    quand: Date = new Date(),
+  ): Promise<{ journee: Date; creneaux: Slot[] }> {
     // Le fuseau DU LIEU : les heures saisies par le club sont les siennes.
+    // Lu AVANT le test des modèles, parce que la journée est rendue dans tous
+    // les cas — c'est elle qui sert de filtre aux appelants.
     const lieu = await this.prisma.venue.findUnique({
       where: { id: venueId },
       select: { timezone: true },
     });
     const fuseau = lieu?.timezone || 'Europe/Paris';
+    const journee = jourCalendaireLocal(quand, fuseau);
 
-    const journee = jourLocal(quand, fuseau);
+    // Un événement PONCTUEL garde les créneaux que le club a saisis, et eux
+    // seuls. On rend la journée pour le filtre de date, sans rien créer.
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { venueId: true, isPermanentContainer: true },
+    });
+    if (!event?.isPermanentContainer || event.venueId !== venueId) {
+      return { journee, creneaux: [] };
+    }
+
+    const templates = await this.prisma.slotTemplate.findMany({
+      where: { venueId, isActive: true },
+    });
+    if (templates.length === 0) return { journee, creneaux: [] };
 
     // Ne tenter QUE les créneaux manquants.
     //
@@ -241,10 +269,11 @@ export class SlotTemplatesService {
       }
     }
 
-    return this.prisma.slot.findMany({
+    const creneaux = await this.prisma.slot.findMany({
       where: { eventId, serviceDate: journee },
       orderBy: { startAt: 'asc' },
     });
+    return { journee, creneaux };
   }
 
   // ─── Garde-fous ─────────────────────────────────────────────────────
@@ -310,17 +339,3 @@ function instantLocal(jourUtc: Date, minutes: number, fuseau: string): Date {
   return new Date(naif.getTime() - decalageFuseau(naif, fuseau) * 60_000);
 }
 
-/** Jour CALENDAIRE local — à 00h30 à Paris, on est déjà demain, pas encore en UTC. */
-function jourLocal(instant: Date, fuseau: string): Date {
-  const p = Object.fromEntries(
-    new Intl.DateTimeFormat('en-US', {
-      timeZone: fuseau,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    })
-      .formatToParts(instant)
-      .map((x) => [x.type, x.value]),
-  ) as Record<string, string>;
-  return new Date(Date.UTC(Number(p.year), Number(p.month) - 1, Number(p.day)));
-}

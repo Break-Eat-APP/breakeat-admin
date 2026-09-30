@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
@@ -11,6 +10,7 @@ import {
   MANAGE_ROLES,
   ALL_ORG_ROLES,
 } from '../../common/helpers/require-org-access';
+import { requirePorteeBuvette } from '../../common/helpers/portee-buvette';
 import type { CreateProductDto } from './dto/create-product.dto';
 import type { UpdateProductDto } from './dto/update-product.dto';
 import { ProductStatus, type Product } from '@prisma/client';
@@ -224,13 +224,15 @@ export class ProductsService {
       OrgRole.OPERATOR,
     ]);
 
-    const membre = await this.prisma.organizationMember.findUnique({
-      where: { userId_organizationId: { userId, organizationId } },
-      select: { supplierId: true },
-    });
-    if (membre?.supplierId && membre.supplierId !== supplierId) {
-      throw new ForbiddenException('Ce produit appartient à une autre buvette.');
-    }
+    // Même règle que le stock, les créneaux et le temps réel : une seule
+    // fonction la porte, sinon les chemins divergent avec le temps.
+    await requirePorteeBuvette(
+      this.prisma,
+      userId,
+      organizationId,
+      supplierId,
+      'Ce produit appartient à une autre buvette.',
+    );
 
     const produit = await this.prisma.product.findFirst({
       where: { id: productId, supplierId, supplier: { organizationId } },

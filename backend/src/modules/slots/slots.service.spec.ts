@@ -111,7 +111,14 @@ describe('SlotsService', () => {
         // passage : le poste ouvre souvent avant le premier client.
         {
           provide: SlotTemplatesService,
-          useValue: { ensureTodaySlots: jest.fn().mockResolvedValue([]) },
+          // La matérialisation rend LA journée employée : c'est elle qui sert
+          // de filtre. La recalculer dans le service ouvrait l'écart
+          // local/UTC que ce test surveille plus bas.
+          useValue: {
+            ensureTodaySlots: jest
+              .fn()
+              .mockResolvedValue({ journee: new Date('2026-08-27T00:00:00.000Z'), creneaux: [] }),
+          },
         },
       ],
     }).compile();
@@ -206,12 +213,14 @@ describe('SlotsService', () => {
       expect(args.where.eventId).toBe(EVENT_ID);
       expect(args.orderBy).toEqual({ startAt: 'asc' });
 
-      // Aujourd'hui, ou bien un creneau ponctuel non date.
-      const aujourdhui = new Date();
-      const journee = new Date(
-        Date.UTC(aujourdhui.getUTCFullYear(), aujourdhui.getUTCMonth(), aujourdhui.getUTCDate()),
-      );
-      expect(args.where.OR).toEqual([{ serviceDate: null }, { serviceDate: journee }]);
+      // La journée filtrée est EXACTEMENT celle que la matérialisation vient
+      // d'employer — et non un jour recalculé ici. Les deux se calculaient
+      // autrement : elle en heure du lieu, cette lecture en UTC. Entre minuit
+      // et 2h, l'équipier ne voyait pas les créneaux qui venaient de naître.
+      expect(args.where.OR).toEqual([
+        { serviceDate: null },
+        { serviceDate: new Date('2026-08-27T00:00:00.000Z') },
+      ]);
 
       // Le statut n'est PAS filtre : c'est ici qu'un creneau ferme doit rester
       // visible pour etre rouvert.
@@ -413,6 +422,57 @@ describe('SlotsService', () => {
 
       const arg = mockPrisma.slotUpdate.mock.calls[0][0];
       expect(Object.keys(arg.data)).toEqual(['status']);
+    });
+
+    it('REFUSE à l’équipière du Nord de fermer un créneau du Sud', async () => {
+      // Elle est opératrice de ce club, et le rôle l'autorisait. Un créneau
+      // fermé, c'est un retrait que le client ne peut plus choisir : une équipe
+      // ne doit pas pouvoir couper le service d'une autre.
+      mockPrisma.orgMemberFindUnique.mockResolvedValue({
+        orgRole: 'OPERATOR',
+        supplierId: 'sup-sud',
+      });
+      mockPrisma.slotFindFirst.mockResolvedValue(makeSlot({ supplierId: SUPPLIER_ID }));
+
+      await expect(
+        service.updateStatus(EVENT_ID, SLOT_ID, SlotStatus.CLOSED, USER_ID),
+      ).rejects.toThrow(ForbiddenException);
+      expect(mockPrisma.slotUpdate).not.toHaveBeenCalled();
+    });
+
+    it('laisse l’équipière fermer le créneau de SA buvette', async () => {
+      mockPrisma.orgMemberFindUnique.mockResolvedValue({
+        orgRole: 'OPERATOR',
+        supplierId: SUPPLIER_ID,
+      });
+      mockPrisma.slotFindFirst.mockResolvedValue(makeSlot({ supplierId: SUPPLIER_ID }));
+
+      await service.updateStatus(EVENT_ID, SLOT_ID, SlotStatus.CLOSED, USER_ID);
+
+      expect(mockPrisma.slotUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    it('un créneau PARTAGÉ échappe à un poste épinglé — il déciderait pour les autres', async () => {
+      // `supplierId: null` = valable pour toutes les buvettes de l'événement.
+      // Le fermer depuis un seul comptoir couperait le retrait de tout le lieu.
+      mockPrisma.orgMemberFindUnique.mockResolvedValue({
+        orgRole: 'OPERATOR',
+        supplierId: SUPPLIER_ID,
+      });
+      mockPrisma.slotFindFirst.mockResolvedValue(makeSlot({ supplierId: null }));
+
+      await expect(
+        service.updateStatus(EVENT_ID, SLOT_ID, SlotStatus.CLOSED, USER_ID),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    it('le responsable, lui, ferme aussi un créneau partagé', async () => {
+      mockPrisma.orgMemberFindUnique.mockResolvedValue({ orgRole: 'MANAGER', supplierId: null });
+      mockPrisma.slotFindFirst.mockResolvedValue(makeSlot({ supplierId: null }));
+
+      await service.updateStatus(EVENT_ID, SLOT_ID, SlotStatus.CLOSED, USER_ID);
+
+      expect(mockPrisma.slotUpdate).toHaveBeenCalledTimes(1);
     });
   });
 });
