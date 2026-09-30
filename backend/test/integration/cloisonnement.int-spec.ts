@@ -15,6 +15,7 @@
 import { ClientsService } from '../../src/modules/clients/clients.service';
 import { FrequentationService } from '../../src/modules/frequentation/frequentation.service';
 import { ScheduledPushService } from '../../src/modules/notifications/scheduled-push.service';
+import { SlotsService } from '../../src/modules/slots/slots.service';
 import { monterServices, unique, creerOrganisationComplete, creerCommande } from './banc';
 import type { PrismaService } from '../../src/database/prisma.service';
 
@@ -25,6 +26,11 @@ decrire('cloisonnement des données par club et par lieu (base réelle)', () => 
   const s = url ? monterServices(url) : (null as never);
   const clients = url ? new ClientsService(s.prisma) : (null as never);
   const frequentation = url ? new FrequentationService(s.prisma) : (null as never);
+  // La matérialisation des créneaux récurrents ne joue aucun rôle ici : ces
+  // essais portent sur la FRONTIÈRE entre clubs, pas sur le contenu.
+  const creneaux = url
+    ? new SlotsService(s.prisma, { ensureTodaySlots: async () => [] } as never)
+    : (null as never);
   const campagnes = url
     ? new ScheduledPushService(
         s.prisma,
@@ -259,6 +265,51 @@ decrire('cloisonnement des données par club et par lieu (base réelle)', () => 
           venueId: clubB.venue.id,
         }),
       ).rejects.toThrow(/n'appartient pas|n’appartient pas/);
+    });
+  });
+  describe('les créneaux', () => {
+    it('ne se lisent PAS depuis un autre club, même avec le bon identifiant', async () => {
+      // Le cas réel : un compte authentifié chez A, qui connaît l'identifiant
+      // d'un événement de B. Avant correction, il lisait ses créneaux — donc
+      // son rythme de service — sans rien avoir à forcer.
+      const managerDeA = (
+        await s.prisma.user.create({
+          data: {
+            email: `${unique('manager')}@test.fr`,
+            passwordHash: 'x',
+            displayName: 'Manager A',
+            globalRole: 'CUSTOMER',
+          },
+        })
+      ).id;
+      await s.prisma.organizationMember.create({
+        data: { userId: managerDeA, organizationId: clubA.org.id, orgRole: 'MANAGER' },
+      });
+
+      await expect(
+        creneaux.findByEvent(clubB.event.id, managerDeA),
+      ).rejects.toThrow(/forbidden|accès|acces/i);
+    });
+
+    it('ne sortent pas de leur événement : /events/A/slots/<créneau de B> est introuvable', async () => {
+      const creneauDeB = await s.prisma.slot.create({
+        data: {
+          eventId: clubB.event.id,
+          startAt: new Date('2026-09-20T19:00:00Z'),
+          endAt: new Date('2026-09-20T19:15:00Z'),
+          capacity: 10,
+        },
+      });
+
+      // Le super-admin passe tous les contrôles d'organisation : s'il est
+      // refusé, c'est bien le filtre par ÉVÉNEMENT qui opère, et non le rôle.
+      await expect(
+        creneaux.findOne(clubA.event.id, creneauDeB.id, sa),
+      ).rejects.toThrow(/not found/i);
+
+      // Et depuis son propre événement, il se lit normalement.
+      const lu = await creneaux.findOne(clubB.event.id, creneauDeB.id, sa);
+      expect(lu.id).toBe(creneauDeB.id);
     });
   });
 });

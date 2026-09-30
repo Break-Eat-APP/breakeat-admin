@@ -227,14 +227,40 @@ export class OrdersService {
         },
       });
 
-      // 2bis. PHASE 20 — débit des points dans la MÊME transaction que la
-      // commande : pas de remise accordée sans débit correspondant.
-      await this.loyaltyService.redeemForOrderTx(tx, {
-        userId: cart.userId,
-        organizationId: cart.event.organizationId,
+      // 2bis. PHASE 20 — la RÉSERVATION posée au départ du paiement devient la
+      // dépense de cette commande. Le solde a déjà été débité : cette étape ne
+      // peut pas manquer de points, donc elle ne peut pas faire perdre une
+      // commande déjà payée. C'était le défaut : le débit vivait ici, et un
+      // solde entre-temps dépensé annulait toute la transaction.
+      const pointsConvertis = await this.loyaltyService.convertHoldToRedeemTx(tx, {
+        cartId: cart.id,
         orderId: createdOrder.id,
-        points: pointsUsed,
       });
+
+      if (pointsConvertis === 0 && pointsUsed > 0) {
+        // Panier engagé AVANT la mise en place de la réservation : on débite
+        // comme avant. Le solde peut manquer — mais alors la remise a bien été
+        // accordée par Stripe, et refuser la commande ne rendrait rien au
+        // client. On constate, comme pour le stock.
+        try {
+          await this.loyaltyService.redeemForOrderTx(tx, {
+            userId: cart.userId,
+            organizationId: cart.event.organizationId,
+            orderId: createdOrder.id,
+            points: pointsUsed,
+          });
+        } catch (e: unknown) {
+          this.logger.error(
+            `Commande ${publicOrderNumber} : ${pointsUsed} point(s) non débités ` +
+              `(${String(e)}). La commande est CRÉÉE — le paiement est encaissé.`,
+          );
+        }
+      } else if (pointsConvertis !== pointsUsed) {
+        this.logger.warn(
+          `Commande ${publicOrderNumber} : ${pointsConvertis} point(s) réservés pour ` +
+            `${pointsUsed} attendu(s) — remise déjà encaissée, on garde la réservation.`,
+        );
+      }
 
       // 3. Upsert Payment — a FAILED row may already exist if the customer
       //    retried after a `payment_intent.payment_failed` event. We promote
@@ -272,80 +298,10 @@ export class OrdersService {
         },
       });
 
-      // 5. Decrement stock ATOMICALLY with a conditional update.
-      //    The WHERE clause includes `quantity: { gte: item.quantity }` so
-      //    two concurrent transactions cannot both decrement past zero. If
-      //    insufficient stock, updateMany.count === 0 and we throw — the
-      //    whole transaction rolls back (no Order created, no Cart converted).
-      //    This prevents oversell during a rush.
-      for (const item of cart.items) {
-        const perPoint = await tx.stock.findFirst({
-          where: { productId: item.productId, pickupPointId },
-        });
-        const target =
-          perPoint ??
-          (await tx.stock.findFirst({
-            where: { productId: item.productId, pickupPointId: null },
-          }));
-        // ─── RIEN, ICI, NE PEUT REFUSER LA COMMANDE ──────────────
-        //
-        // L'argent est DEJA encaisse quand ce code s'execute : le webhook
-        // arrive apres le debit. Lever une exception ne rend pas l'argent —
-        // elle supprime seulement la commande. Le client a paye, rien ne part
-        // en cuisine, et il ne reste aucune trace de ce qu'il attendait.
-        //
-        // C'est exactement ce qui s'est produit : un produit sans ligne de
-        // stock faisait echouer CHAQUE commande le contenant, Stripe rejouait
-        // le webhook toutes les minutes, et chaque tentative echouait de la
-        // meme facon.
-        //
-        // Le stock est une affaire de SERVICE, pas de paiement. Le refus a sa
-        // place AVANT le reglement — il y est deja, a l'ajout au panier et au
-        // depart du paiement (`assertCumulativeQuantityWithinStock`). Passe le
-        // debit, il n'a plus rien a refuser : il constate.
-        if (!target) {
-          // Produit sans suivi de stock : c'est un etat normal pour un club
-          // qui ne compte pas ses articles. Il n'y a rien a decrementer.
-          continue;
-        }
-
-        const decremented = await tx.stock.updateMany({
-          where: {
-            id: target.id,
-            quantity: { gte: item.quantity },
-          },
-          data: {
-            quantity: { decrement: item.quantity },
-          },
-        });
-
-        if (decremented.count === 0) {
-          // Vendu plus que ce qui restait — deux clients sur le dernier
-          // article, par exemple. On met l'etagere a zero et on la retire de la
-          // carte : c'est la verite du comptoir. La commande, elle, existe, et
-          // l'equipier la voit arriver comme les autres.
-          await tx.stock.update({
-            where: { id: target.id },
-            data: { quantity: 0, isAvailable: false },
-          });
-          this.logger.warn(
-            `Stock depasse sur ${item.productId} : ${item.quantity} demande(s) pour ` +
-              `${target.quantity} restant(s). La commande est CREEE malgre tout — ` +
-              'le paiement est encaisse. Produit retire de la carte.',
-          );
-          continue;
-        }
-
-        // After decrement: if remaining quantity is 0, flip isAvailable=false.
-        // We read once (safe inside this transaction).
-        const refreshed = await tx.stock.findUnique({ where: { id: target.id } });
-        if (refreshed && refreshed.quantity === 0 && refreshed.isAvailable) {
-          await tx.stock.update({
-            where: { id: target.id },
-            data: { isAvailable: false },
-          });
-        }
-      }
+      // 5. Le stock descend, atomiquement. Même code pour l'ardoise : le
+      //    commentaire de `decrementerStock` explique pourquoi il ne refuse
+      //    jamais rien.
+      await this.decrementerStock(tx, pickupPointId, cart.items);
 
       // Le créneau choisi au panier devient celui de la commande.
       //
@@ -407,6 +363,83 @@ export class OrdersService {
     });
 
     return order;
+  }
+
+  /**
+   * Fait descendre le stock des articles vendus — sur TOUS les chemins de
+   * création de commande.
+   *
+   * ─── RIEN, ICI, NE PEUT REFUSER LA COMMANDE ──────────────
+   *
+   * L'argent est DÉJÀ encaissé quand ce code s'exécute : le webhook arrive
+   * après le débit, et l'ardoise encaisse avant de créer. Lever une exception
+   * ne rend pas l'argent — elle supprime seulement la commande. Le client a
+   * payé, rien ne part en cuisine, et il ne reste aucune trace de ce qu'il
+   * attendait.
+   *
+   * C'est exactement ce qui s'est produit : un produit sans ligne de stock
+   * faisait échouer CHAQUE commande le contenant, Stripe rejouait le webhook
+   * toutes les minutes, et chaque tentative échouait de la même façon.
+   *
+   * Le stock est une affaire de SERVICE, pas de paiement. Le refus a sa place
+   * AVANT le règlement — il y est déjà, à l'ajout au panier et au départ du
+   * paiement (`assertCumulativeQuantityWithinStock`). Passé le débit, il n'a
+   * plus rien à refuser : il CONSTATE.
+   *
+   * La condition `quantity: { gte: … }` empêche deux transactions simultanées
+   * de descendre toutes les deux sous zéro. Quand elle refuse, l'étagère est
+   * mise à zéro et retirée de la carte : c'est la vérité du comptoir.
+   *
+   * Extrait du chemin Stripe pour être partagé avec l'ARDOISE, qui ne
+   * décrémentait rien du tout : une tournée partagée vendait ses articles sans
+   * jamais toucher au stock, et pouvait dépasser la quantité disponible sans
+   * que rien ne l'indique au comptoir.
+   */
+  private async decrementerStock(
+    tx: Prisma.TransactionClient,
+    pickupPointId: string | null,
+    lignes: Array<{ productId: string; quantity: number }>,
+  ): Promise<void> {
+    for (const ligne of lignes) {
+      // Le stock du comptoir d'abord, celui de la buvette à défaut.
+      const duComptoir = pickupPointId
+        ? await tx.stock.findFirst({ where: { productId: ligne.productId, pickupPointId } })
+        : null;
+      const cible =
+        duComptoir ??
+        (await tx.stock.findFirst({
+          where: { productId: ligne.productId, pickupPointId: null },
+        }));
+      if (!cible) {
+        // Produit sans suivi de stock : état normal pour un club qui ne compte
+        // pas ses articles. Il n'y a rien à décrémenter.
+        continue;
+      }
+
+      const descendu = await tx.stock.updateMany({
+        where: { id: cible.id, quantity: { gte: ligne.quantity } },
+        data: { quantity: { decrement: ligne.quantity } },
+      });
+
+      if (descendu.count === 0) {
+        await tx.stock.update({
+          where: { id: cible.id },
+          data: { quantity: 0, isAvailable: false },
+        });
+        this.logger.warn(
+          `Stock depasse sur ${ligne.productId} : ${ligne.quantity} demande(s) pour ` +
+            `${cible.quantity} restant(s). La commande est CREEE malgre tout — ` +
+            'le paiement est encaisse. Produit retire de la carte.',
+        );
+        continue;
+      }
+
+      // Étagère vidée : elle quitte la carte.
+      const relu = await tx.stock.findUnique({ where: { id: cible.id } });
+      if (relu && relu.quantity === 0 && relu.isAvailable) {
+        await tx.stock.update({ where: { id: cible.id }, data: { isAvailable: false } });
+      }
+    }
   }
 
   /**
@@ -525,6 +558,11 @@ export class OrdersService {
           metadata: { orderSplitId: split.id, shares: encaissees.length },
         },
       });
+
+      // Le stock descend, comme pour une commande seule. Il ne descendait pas
+      // du tout : une tournée de dix bières laissait l'étagère intacte, et le
+      // comptoir continuait d'en vendre qu'il n'avait plus.
+      await this.decrementerStock(tx, pickupPointId, itemSnapshots);
 
       // Créneau : on ESSAIE, sans faire échouer la commande.
       //

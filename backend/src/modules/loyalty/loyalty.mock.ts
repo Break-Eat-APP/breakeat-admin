@@ -20,6 +20,11 @@ export const loyaltyDisabledProvider: Provider = {
     discountForPoints: jest.fn().mockReturnValue({ pointsUsed: 0, discountCents: 0 }),
     earnForOrder: jest.fn().mockResolvedValue(0),
     redeemForOrderTx: jest.fn().mockResolvedValue(undefined),
+    // Réservation des points : sans programme actif, il n'y a rien à réserver.
+    holdForCart: jest.fn().mockResolvedValue(0),
+    releaseHoldForCart: jest.fn().mockResolvedValue(0),
+    convertHoldToRedeemTx: jest.fn().mockResolvedValue(0),
+    rendreLesReservationsExpirees: jest.fn().mockResolvedValue(undefined),
     assertOrganizationExists: jest.fn().mockResolvedValue(undefined),
   },
 };

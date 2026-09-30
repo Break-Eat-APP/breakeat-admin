@@ -16,7 +16,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-09-18 (paiement DANS l'app ; page « Mes clients » : audience, fichier et export CSV par lieu)_
+_Dernière mise à jour : 2026-09-30 (les 5 défauts P1 de l'audit corrigés : cloisonnement des créneaux, conteneur dormant, ardoise verrouillée et remboursée, stock de l'ardoise, réservation des points avant paiement — phase 53)_
 
 ## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
@@ -71,7 +71,7 @@ clients ; **Facebook ne le sera pas** — son jeton ne certifie pas l'adresse, e
 rattacher une inscription rapide à un compte existant sur une adresse non
 certifiée donnerait le compte d'un client à qui saurait en déclarer l'adresse.
 
-## 🔓 SUJETS OUVERTS — à reprendre (liste tenue au 29/09/2026)
+## 🔓 SUJETS OUVERTS — à reprendre (liste tenue au 30/09/2026)
 
 Ce qui a été décidé mais pas fait, ou fait mais pas encore éprouvé. **Tenir
 cette liste à jour : elle est le premier endroit à relire en reprenant.**
@@ -81,12 +81,14 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Sauvegarde nocturne** | Script `backend/scripts/sauvegarde.js` écrit et vérifié ; destination validée par le client | Un stockage SÉPARÉ de Railway + la planification. Rien ne tourne aujourd'hui |
 | **Apple Pay** | Retiré proprement de l'app (phase 40) | Créer un identifiant marchand `merchant.com.breakeat.app` À PART, son certificat Stripe, puis reposer `APPLE_MERCHANT_ID`. ⚠️ Ne JAMAIS activer le certificat de `merchant.com.shapper.breakeat` : ça révoquerait celui de l'app publiée |
 | **Sécurité, points 4 et 5** | Les trois premiers verrous sont posés (phase 42) | Verrouillage temporaire après plusieurs échecs de connexion, et confirmation d'adresse e-mail |
-| **Remboursements** | L'app sait les AFFICHER : bandeau client + anneau bleu de la pastille | **Aucun code n'écrit `REFUNDED`** : le bleu ne s'allumera qu'une fois les remboursements enregistrés (Flaix, ou webhook Stripe `charge.refunded`) |
+| **Remboursements** | L'app sait les AFFICHER : bandeau client + anneau bleu de la pastille. Depuis le 30/09, l'ARDOISE rembourse pour de vrai (`StripeService.refundPaymentIntent`, parts `REFUNDED`) | **Aucune COMMANDE ne passe encore en `REFUNDED`** : le bleu ne s'allumera pour un paiement seul qu'une fois le remboursement enregistré (webhook Stripe `charge.refunded`, ou Flaix). La brique Stripe est désormais écrite — il reste à la brancher sur la commande |
 | **Parrainage** | Partage de lien et QR en place (phase 44) | Trancher l'économie : points de fidélité, remise portée par le club, ou rien. La récompense sortirait de ta poche — les produits appartiennent aux buvettes |
 | **Notifications** | Cloche corrigée (phase 52), build 21 envoyé | À ÉPROUVER en vrai : envoyer une campagne, app en arrière-plan, puis relire les journaux Railway (`Push token enregistré…`, `Expo push: N envoyés…`) |
 | **Liens Flaix** | Carte en place sur chaque fiche d'événement | Les coller à la main, un par match. Se remplira tout seul quand Flaix sera branché |
 | **Envoi EAS bloqué** | Builds 19, 20, 21 : l'envoi AUTOMATIQUE reste en file d'attente | Lancer `eas submit` à la main après chaque build — c'est ce qui passe. À signaler à Expo si ça continue |
 | **Builds 20 et 21** | Chez Apple | Pas encore validés sur un vrai téléphone : cloche, ✓ « prête », liste En cours / Terminées |
+| **Audit — les 5 P1** | ✅ Corrigés le 30/09 (phase 53) : créneaux cross-tenant, conteneur dormant, ardoise (verrou + remboursement), stock de l'ardoise, réservation des points | Les **tests d'intégration** de ces corrections n'ont pas pu tourner : le moteur Docker ne répondait plus. Relancer `docker start breakeat_audit` puis `pnpm test:integration` — et faire passer les deux migrations sur la base cible avant tout déploiement |
+| **Audit — les 9 P2** | Identifiés, non corrigés. Par ordre de l'audit : 1) stock opérateur non limité à SA buvette, 2) statut de créneau opérateur idem, 3) date des créneaux locale à l'écriture / UTC à la lecture, 4) créneaux récurrents injectés dans tout événement du lieu, 5) KPI back-office contre stats d'organisation sur les commandes ANNULÉES, 6) back-office sans renouvellement de session (15 min puis retour au login), 7) invitation non transactionnelle, 8) course dans l'idempotence des webhooks Stripe, 9) `slotId`/`pickupPointId` de Flaix non bornés à l'événement de la commande | À traiter dans cet ordre. `brain/audits/AUDIT_2026-09-30_par-phase.md` porte le détail et les lignes exactes |
 | **Dette : `visites`** | L'API calcule encore les passages | Plus aucun écran ne les affiche. À retirer si rien ne les reprend |
 | **Dette : PDF en base** | Contrats en `BYTEA`, 10 Mo max | Tenable à ce volume. À déplacer vers un stockage objet si les clubs en déposent beaucoup |
 

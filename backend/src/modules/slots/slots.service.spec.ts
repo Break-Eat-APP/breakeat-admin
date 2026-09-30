@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { SlotSource, SlotStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
@@ -48,6 +53,7 @@ function buildPrisma() {
     slotCreate:              jest.fn(),
     slotFindMany:            jest.fn(),
     slotFindUnique:          jest.fn(),
+    slotFindFirst:           jest.fn(),
     slotUpdate:              jest.fn(),
     slotUpdateMany:          jest.fn(),
     slotDelete:              jest.fn(),
@@ -74,6 +80,7 @@ function buildPrisma() {
       create:     (a: unknown) => mockPrisma.slotCreate(a),
       findMany:   (a: unknown) => mockPrisma.slotFindMany(a),
       findUnique: (a: unknown) => mockPrisma.slotFindUnique(a),
+      findFirst:  (a: unknown) => mockPrisma.slotFindFirst(a),
       update:     (a: unknown) => mockPrisma.slotUpdate(a),
       updateMany: (a: unknown) => mockPrisma.slotUpdateMany(a),
       delete:     (a: unknown) => mockPrisma.slotDelete(a),
@@ -121,6 +128,7 @@ describe('SlotsService', () => {
     mockPrisma.slotCreate.mockResolvedValue(makeSlot());
     mockPrisma.slotFindMany.mockResolvedValue([makeSlot()]);
     mockPrisma.slotFindUnique.mockResolvedValue(makeSlot());
+    mockPrisma.slotFindFirst.mockResolvedValue(makeSlot());
     mockPrisma.slotUpdate.mockResolvedValue(makeSlot());
     mockPrisma.slotUpdateMany.mockResolvedValue({ count: 1 });
     mockPrisma.slotDelete.mockResolvedValue(makeSlot());
@@ -192,7 +200,7 @@ describe('SlotsService', () => {
       // Un lieu ouvert en continu materialise un jeu de creneaux par journee.
       // Sans filtre de date, l'equipier voyait sept « Mi-temps » alignes au
       // bout d'une semaine, sans moyen de reconnaitre celui d'aujourd'hui.
-      const result = await service.findByEvent(EVENT_ID);
+      const result = await service.findByEvent(EVENT_ID, USER_ID);
 
       const args = mockPrisma.slotFindMany.mock.calls[0][0];
       expect(args.where.eventId).toBe(EVENT_ID);
@@ -217,13 +225,33 @@ describe('SlotsService', () => {
 
   describe('findOne', () => {
     it('returns the slot when found', async () => {
-      const result = await service.findOne(SLOT_ID);
+      const result = await service.findOne(EVENT_ID, SLOT_ID, USER_ID);
       expect(result.id).toBe(SLOT_ID);
     });
 
     it('throws NotFoundException when slot does not exist', async () => {
-      mockPrisma.slotFindUnique.mockResolvedValue(null);
-      await expect(service.findOne('missing')).rejects.toThrow(NotFoundException);
+      mockPrisma.slotFindFirst.mockResolvedValue(null);
+      await expect(service.findOne(EVENT_ID, 'missing', USER_ID)).rejects.toThrow(NotFoundException);
+    });
+
+    it('cherche le créneau DANS l’événement de l’URL, jamais par identifiant seul', async () => {
+      // `/events/A/slots/B` ne doit pas rendre le créneau B de l'événement X.
+      await service.findOne(EVENT_ID, SLOT_ID, USER_ID);
+      expect(mockPrisma.slotFindFirst).toHaveBeenCalledWith({
+        where: { id: SLOT_ID, eventId: EVENT_ID },
+      });
+      expect(mockPrisma.slotFindUnique).not.toHaveBeenCalled();
+    });
+
+    it('REFUSE un membre d’un autre club', async () => {
+      // Le cas qui justifie tout : un compte authentifié qui devine un UUID.
+      mockPrisma.orgMemberFindUnique.mockResolvedValue(null);
+      await expect(service.findOne(EVENT_ID, SLOT_ID, USER_ID)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('404 quand l’événement de l’URL n’existe pas', async () => {
+      mockPrisma.eventFindUnique.mockResolvedValue(null);
+      await expect(service.findOne('inconnu', SLOT_ID, USER_ID)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -231,7 +259,7 @@ describe('SlotsService', () => {
 
   describe('update', () => {
     it('updates label and capacity', async () => {
-      await service.update(SLOT_ID, { label: 'New label', capacity: 20 }, USER_ID);
+      await service.update(EVENT_ID, SLOT_ID, { label: 'New label', capacity: 20 }, USER_ID);
       expect(mockPrisma.slotUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ label: 'New label', capacity: 20 }),
@@ -240,7 +268,7 @@ describe('SlotsService', () => {
     });
 
     it('manually closes a slot via status override', async () => {
-      await service.update(SLOT_ID, { status: SlotStatus.CLOSED }, USER_ID);
+      await service.update(EVENT_ID, SLOT_ID, { status: SlotStatus.CLOSED }, USER_ID);
       expect(mockPrisma.slotUpdate).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ status: SlotStatus.CLOSED }),
@@ -251,13 +279,13 @@ describe('SlotsService', () => {
     it('throws BadRequestException when new time window is invalid', async () => {
       // startAt unchanged (12:00), new endAt before it
       await expect(
-        service.update(SLOT_ID, { endAt: '2026-07-01T11:00:00Z' }, USER_ID),
+        service.update(EVENT_ID, SLOT_ID, { endAt: '2026-07-01T11:00:00Z' }, USER_ID),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('throws NotFoundException when slot does not exist', async () => {
-      mockPrisma.slotFindUnique.mockResolvedValue(null);
-      await expect(service.update('missing', {}, USER_ID))
+      mockPrisma.slotFindFirst.mockResolvedValue(null);
+      await expect(service.update(EVENT_ID, 'missing', {}, USER_ID))
         .rejects.toThrow(NotFoundException);
     });
   });
@@ -266,19 +294,19 @@ describe('SlotsService', () => {
 
   describe('remove', () => {
     it('deletes an empty slot and returns deleted id', async () => {
-      const result = await service.remove(SLOT_ID, USER_ID);
+      const result = await service.remove(EVENT_ID, SLOT_ID, USER_ID);
       expect(mockPrisma.slotDelete).toHaveBeenCalledWith({ where: { id: SLOT_ID } });
       expect(result).toEqual({ deleted: SLOT_ID });
     });
 
     it('throws ConflictException when orders are assigned to the slot', async () => {
       mockPrisma.orderCount.mockResolvedValue(3);
-      await expect(service.remove(SLOT_ID, USER_ID)).rejects.toThrow(ConflictException);
+      await expect(service.remove(EVENT_ID, SLOT_ID, USER_ID)).rejects.toThrow(ConflictException);
     });
 
     it('throws NotFoundException when slot does not exist', async () => {
-      mockPrisma.slotFindUnique.mockResolvedValue(null);
-      await expect(service.remove('missing', USER_ID)).rejects.toThrow(NotFoundException);
+      mockPrisma.slotFindFirst.mockResolvedValue(null);
+      await expect(service.remove(EVENT_ID, 'missing', USER_ID)).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -354,7 +382,7 @@ describe('SlotsService', () => {
     it('un equipier peut fermer un creneau — c’est sa decision', async () => {
       mockPrisma.orgMemberFindUnique.mockResolvedValue({ orgRole: 'OPERATOR' });
 
-      await service.updateStatus(SLOT_ID, SlotStatus.CLOSED, USER_ID);
+      await service.updateStatus(EVENT_ID, SLOT_ID, SlotStatus.CLOSED, USER_ID);
 
       expect(mockPrisma.slotUpdate).toHaveBeenCalledWith(
         expect.objectContaining({ data: { status: SlotStatus.CLOSED } }),
@@ -364,7 +392,7 @@ describe('SlotsService', () => {
     it('le responsable le peut aussi', async () => {
       mockPrisma.orgMemberFindUnique.mockResolvedValue({ orgRole: 'MANAGER' });
 
-      await service.updateStatus(SLOT_ID, SlotStatus.OPEN, USER_ID);
+      await service.updateStatus(EVENT_ID, SLOT_ID, SlotStatus.OPEN, USER_ID);
 
       expect(mockPrisma.slotUpdate).toHaveBeenCalledTimes(1);
     });
@@ -373,7 +401,7 @@ describe('SlotsService', () => {
       mockPrisma.orgMemberFindUnique.mockResolvedValue(null);
 
       await expect(
-        service.updateStatus(SLOT_ID, SlotStatus.CLOSED, USER_ID),
+        service.updateStatus(EVENT_ID, SLOT_ID, SlotStatus.CLOSED, USER_ID),
       ).rejects.toThrow();
       expect(mockPrisma.slotUpdate).not.toHaveBeenCalled();
     });
@@ -381,7 +409,7 @@ describe('SlotsService', () => {
     it('ne touche QUE le statut — horaires et capacite restent au club', async () => {
       mockPrisma.orgMemberFindUnique.mockResolvedValue({ orgRole: 'OPERATOR' });
 
-      await service.updateStatus(SLOT_ID, SlotStatus.FULL, USER_ID);
+      await service.updateStatus(EVENT_ID, SLOT_ID, SlotStatus.FULL, USER_ID);
 
       const arg = mockPrisma.slotUpdate.mock.calls[0][0];
       expect(Object.keys(arg.data)).toEqual(['status']);

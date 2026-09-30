@@ -49,6 +49,40 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Split'>;
 /** Rafraîchissement pendant que les convives paient. */
 const POLL_MS = 8_000;
 
+/**
+ * Ce que dit le bandeau quand l'ardoise n'est plus ouverte.
+ *
+ * Chaque etat a sa phrase parce que l'argent n'est pas au meme endroit :
+ * annulee, rien n'a ete preleve ; echouee, tout a ete preleve PUIS rendu.
+ * Dire « aucune carte n'a ete debitee » dans le second cas serait faux, et le
+ * convive qui voit passer deux lignes sur son relevé ne comprendrait pas.
+ */
+const BANDEAU: Record<
+  Exclude<OrderSplit['status'], 'OPEN'>,
+  { icone: keyof typeof Ionicons.glyphMap; couleur: string; texte: string }
+> = {
+  SENDING: {
+    icone: 'time-outline',
+    couleur: THEME.orange,
+    texte: 'La tournée part — encaissement en cours.',
+  },
+  SENT: {
+    icone: 'checkmark-circle',
+    couleur: '#16a34a',
+    texte: 'La commande est partie au comptoir.',
+  },
+  FAILED: {
+    icone: 'alert-circle',
+    couleur: '#b91c1c',
+    texte: 'La commande n’a pas pu être créée. Tout le monde a été remboursé.',
+  },
+  CANCELLED: {
+    icone: 'close-circle',
+    couleur: THEME.grey,
+    texte: 'Cette tournée a été annulée. Aucune carte n’a été débitée.',
+  },
+};
+
 export function SplitScreen({ route, navigation }: Props) {
   // La barre du bas flotte : tout element pose en bas doit lui laisser la
   // place, encoche de l'appareil comprise.
@@ -221,15 +255,11 @@ export function SplitScreen({ route, navigation }: Props) {
         {split.status !== 'OPEN' ? (
           <View style={styles.bandeau}>
             <Ionicons
-              name={split.status === 'SENT' ? 'checkmark-circle' : 'close-circle'}
+              name={BANDEAU[split.status].icone}
               size={18}
-              color={split.status === 'SENT' ? '#16a34a' : THEME.grey}
+              color={BANDEAU[split.status].couleur}
             />
-            <Text style={styles.bandeauTexte}>
-              {split.status === 'SENT'
-                ? 'La commande est partie au comptoir.'
-                : 'Cette tournée a été annulée. Aucune carte n’a été débitée.'}
-            </Text>
+            <Text style={styles.bandeauTexte}>{BANDEAU[split.status].texte}</Text>
           </View>
         ) : (
           <Text style={styles.intro}>

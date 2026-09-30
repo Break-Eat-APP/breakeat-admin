@@ -17,6 +17,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
 import { GroupsService } from '../groups/groups.service';
 import { loyaltyDisabledProvider } from '../loyalty/loyalty.mock';
+import { LoyaltyService, LOYALTY_DISABLED } from '../loyalty/loyalty.service';
 
 const USER_ID = 'user-1';
 const EVENT_ID = 'event-1';
@@ -88,9 +89,10 @@ describe('CartService', () => {
   let service: CartService;
   let prisma: jest.Mocked<PrismaService>;
   let groups: { canAccessEvent: jest.Mock };
+  let module: TestingModule;
 
   beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
+    module = await Test.createTestingModule({
       providers: [
         CartService,
         loyaltyDisabledProvider,
@@ -448,6 +450,61 @@ describe('CartService', () => {
           metadata: expect.objectContaining({ cartId: CART_ID }),
         }),
       );
+    });
+
+    it('RÉSERVE les points AVANT d’appeler Stripe', async () => {
+      // Le défaut : les points étaient débités à la création de la commande,
+      // donc après le paiement. S'ils avaient été dépensés entre-temps, la
+      // commande échouait alors que la carte était débitée. Réservés ici, le
+      // refus arrive avant le paiement — et ne coûte qu'un message.
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue({
+        ...mockCart(),
+        redeemedPoints: 100,
+        items: [{ id: ITEM_ID, productId: PRODUCT_ID, quantity: 2, product: mockProduct() }],
+      });
+      (prisma.product.findUnique as jest.Mock).mockResolvedValue(mockProduct());
+      (prisma.stock.findFirst as jest.Mock).mockResolvedValue(mockStock(50));
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue({ organizationId: ORG_ID });
+
+      const fidelite = module.get(LoyaltyService) as unknown as {
+        getConfigForVenue: jest.Mock;
+        getBalance: jest.Mock;
+        discountForPoints: jest.Mock;
+        holdForCart: jest.Mock;
+      };
+      fidelite.getConfigForVenue.mockResolvedValue({
+        enabled: true,
+        pointsPerEuro: 1,
+        pointValueCents: 1,
+      });
+      fidelite.getBalance.mockResolvedValue(100);
+      fidelite.discountForPoints.mockReturnValue({ pointsUsed: 100, discountCents: 100 });
+
+      const stripe = (service as unknown as { stripe: { createHostedCheckout: jest.Mock } }).stripe;
+      stripe.createHostedCheckout.mockResolvedValue({
+        id: 'cs_test',
+        url: 'https://stripe/pay/cs_test',
+        payment_intent: 'pi_test',
+      });
+
+      await service.checkout(CART_ID, USER_ID, 'web');
+
+      expect(fidelite.holdForCart).toHaveBeenCalledWith({
+        cartId: CART_ID,
+        userId: USER_ID,
+        organizationId: ORG_ID,
+        points: 100,
+      });
+      // L'ordre est le fond du sujet : réserver après avoir annoncé le montant
+      // à Stripe ne protégerait de rien.
+      expect(fidelite.holdForCart.mock.invocationCallOrder[0]).toBeLessThan(
+        stripe.createHostedCheckout.mock.invocationCallOrder[0],
+      );
+
+      // La doublure est partagée par tout ce fichier : on la repose désactivée.
+      fidelite.getConfigForVenue.mockResolvedValue(LOYALTY_DISABLED);
+      fidelite.getBalance.mockResolvedValue(0);
+      fidelite.discountForPoints.mockReturnValue({ pointsUsed: 0, discountCents: 0 });
     });
 
     it('renvoie le client du WEB sur le site, sans passer par le pont', async () => {

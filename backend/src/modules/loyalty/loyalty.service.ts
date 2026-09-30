@@ -4,7 +4,8 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { LoyaltyEntryKind, Prisma } from '@prisma/client';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { CartStatus, LoyaltyEntryKind, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 
 /** Configuration du programme telle que définie par le club, sur son lieu. */
@@ -236,9 +237,212 @@ export class LoyaltyService {
   }
 
   /**
-   * Débite les points utilisés sur une commande. Appelé DANS la transaction de
-   * création de commande (le débit et la commande doivent vivre ou mourir
-   * ensemble : jamais de points perdus sans commande, ni de remise sans débit).
+   * RÉSERVE les points d'un panier, AVANT que le client ne paie.
+   *
+   * Le débit se faisait dans la transaction de création de commande, donc après
+   * la confirmation de Stripe. Des points dépensés entre-temps sur une autre
+   * commande faisaient échouer cette transaction : carte débitée, aucune
+   * commande, et un solde qui ne redevenait pas disponible tout seul. Le webhook
+   * rejouait et échouait de la même façon, indéfiniment.
+   *
+   * Réserver, c'est débiter TOUT DE SUITE et mettre les points de côté. Le refus
+   * pour solde insuffisant arrive alors avant le paiement, là où il ne coûte
+   * qu'un message — et deux paniers du même client ne peuvent plus dépenser les
+   * mêmes points, puisque le premier les a déjà retirés du solde.
+   *
+   * Idempotent par panier : un client qui revient sur l'écran de paiement
+   * retrouve SA réservation, il n'en crée pas une seconde.
+   */
+  async holdForCart(params: {
+    cartId: string;
+    userId: string;
+    organizationId: string;
+    points: number;
+  }): Promise<number> {
+    const panier = await this.prisma.cart.findUnique({
+      where: { id: params.cartId },
+      select: { loyaltyHoldId: true },
+    });
+
+    // Déjà réservé : on rend la réservation existante telle quelle.
+    if (panier?.loyaltyHoldId) {
+      const mouvement = await this.prisma.loyaltyTransaction.findUnique({
+        where: { id: panier.loyaltyHoldId },
+        select: { kind: true, points: true },
+      });
+      if (mouvement && mouvement.kind === LoyaltyEntryKind.HOLD) {
+        const reserves = Math.abs(mouvement.points);
+        if (reserves === params.points) return reserves;
+        // Le montant a changé (le client a modifié son panier) : on rend
+        // l'ancienne réservation avant d'en poser une juste.
+        await this.releaseHoldForCart(params.cartId);
+      } else if (mouvement) {
+        // Déjà devenue la dépense d'une commande : plus rien à réserver.
+        return Math.abs(mouvement.points);
+      }
+    }
+
+    if (params.points <= 0) return 0;
+
+    return this.prisma.$transaction(async (tx) => {
+      const account = await this.upsertAccount(tx, params.userId, params.organizationId);
+
+      // Contrôle du solde ET débit dans la MÊME instruction — voir
+      // `redeemForOrderTx` pour le détail du raisonnement.
+      const { count } = await tx.loyaltyAccount.updateMany({
+        where: { id: account.id, balance: { gte: params.points } },
+        data: { balance: { decrement: params.points } },
+      });
+      if (count === 0) {
+        throw new BadRequestException(
+          `Solde de fidélité insuffisant (${account.balance} point(s) disponible(s))`,
+        );
+      }
+
+      const { balance: balanceAfter } = await tx.loyaltyAccount.findUniqueOrThrow({
+        where: { id: account.id },
+        select: { balance: true },
+      });
+
+      const mouvement = await tx.loyaltyTransaction.create({
+        data: {
+          accountId: account.id,
+          cartId: params.cartId,
+          kind: LoyaltyEntryKind.HOLD,
+          points: -params.points,
+          balanceAfter,
+        },
+      });
+      await tx.cart.update({
+        where: { id: params.cartId },
+        data: { loyaltyHoldId: mouvement.id },
+      });
+
+      this.logger.log(`${params.points} point(s) réservé(s) pour le panier ${params.cartId}`);
+      return params.points;
+    });
+  }
+
+  /**
+   * REND la réservation d'un panier qui n'aboutira pas.
+   *
+   * Sans ce retour, un panier abandonné emporterait les points avec lui : le
+   * client les verrait disparaître de son solde sans jamais avoir rien reçu.
+   *
+   * Ne touche pas une réservation déjà devenue la dépense d'une commande.
+   */
+  async releaseHoldForCart(cartId: string): Promise<number> {
+    const panier = await this.prisma.cart.findUnique({
+      where: { id: cartId },
+      select: { loyaltyHoldId: true },
+    });
+    if (!panier?.loyaltyHoldId) return 0;
+
+    return this.prisma.$transaction(async (tx) => {
+      const mouvement = await tx.loyaltyTransaction.findUnique({
+        where: { id: panier.loyaltyHoldId as string },
+        select: { id: true, accountId: true, kind: true, points: true },
+      });
+      // Déjà convertie en dépense, ou déjà rendue : rien à faire.
+      if (!mouvement || mouvement.kind !== LoyaltyEntryKind.HOLD) {
+        await tx.cart.update({ where: { id: cartId }, data: { loyaltyHoldId: null } });
+        return 0;
+      }
+
+      const points = Math.abs(mouvement.points);
+      const { balance: balanceAfter } = await tx.loyaltyAccount.update({
+        where: { id: mouvement.accountId },
+        data: { balance: { increment: points } },
+        select: { balance: true },
+      });
+      await tx.loyaltyTransaction.create({
+        data: {
+          accountId: mouvement.accountId,
+          cartId,
+          kind: LoyaltyEntryKind.RELEASE,
+          points,
+          balanceAfter,
+        },
+      });
+      await tx.cart.update({ where: { id: cartId }, data: { loyaltyHoldId: null } });
+
+      this.logger.log(`${points} point(s) rendu(s) — panier ${cartId} abandonné`);
+      return points;
+    });
+  }
+
+  /**
+   * La réservation devient la DÉPENSE de la commande : HOLD → REDEEM.
+   *
+   * Ne touche PAS au solde : les points en ont été retirés à la réservation. On
+   * ne fait qu'attribuer le mouvement à la commande née du paiement. C'est ce
+   * qui rend cette étape incapable d'échouer — et donc incapable de faire
+   * perdre une commande déjà payée.
+   *
+   * Le registre garde UN mouvement par dépense : convertir, plutôt qu'ajouter
+   * une seconde ligne, garde la somme des mouvements égale au solde.
+   */
+  async convertHoldToRedeemTx(
+    tx: Prisma.TransactionClient,
+    params: { cartId: string; orderId: string },
+  ): Promise<number> {
+    const panier = await tx.cart.findUnique({
+      where: { id: params.cartId },
+      select: { loyaltyHoldId: true },
+    });
+    if (!panier?.loyaltyHoldId) return 0;
+
+    const mouvement = await tx.loyaltyTransaction.findUnique({
+      where: { id: panier.loyaltyHoldId },
+      select: { id: true, kind: true, points: true, orderId: true },
+    });
+    if (!mouvement) return 0;
+    // Rejeu du webhook : déjà attribuée à cette commande.
+    if (mouvement.kind === LoyaltyEntryKind.REDEEM) return Math.abs(mouvement.points);
+    if (mouvement.kind !== LoyaltyEntryKind.HOLD) return 0;
+
+    await tx.loyaltyTransaction.update({
+      where: { id: mouvement.id },
+      data: { kind: LoyaltyEntryKind.REDEEM, orderId: params.orderId },
+    });
+    return Math.abs(mouvement.points);
+  }
+
+  /**
+   * Rend les réservations des paniers expirés sans paiement.
+   *
+   * Les points d'un panier abandonné doivent revenir à leur propriétaire. C'est
+   * le SEUL chemin de retour : un paiement qui échoue ne rend rien, car le
+   * client peut reprendre la même page de paiement — la réservation lui sert
+   * encore. L'expiration du panier, elle, est définitive.
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async rendreLesReservationsExpirees(): Promise<void> {
+    const oublies = await this.prisma.cart.findMany({
+      where: {
+        loyaltyHoldId: { not: null },
+        status: { not: CartStatus.CONVERTED },
+        expiresAt: { lt: new Date() },
+      },
+      select: { id: true },
+      take: 200,
+    });
+    for (const panier of oublies) {
+      try {
+        await this.releaseHoldForCart(panier.id);
+      } catch (e: unknown) {
+        this.logger.error(`Réservation non rendue pour le panier ${panier.id} : ${String(e)}`);
+      }
+    }
+  }
+
+  /**
+   * Débite les points utilisés sur une commande, SANS réservation préalable.
+   *
+   * Chemin de secours : le chemin normal réserve les points au départ du
+   * paiement (`holdForCart`) puis convertit la réservation
+   * (`convertHoldToRedeemTx`). Cette méthode reste pour les paniers engagés
+   * AVANT la mise en place de la réservation, et pour le mode démo.
    *
    * Vérifie le solde au moment du débit — le panier a pu être préparé bien avant.
    */

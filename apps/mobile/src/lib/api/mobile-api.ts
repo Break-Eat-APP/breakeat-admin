@@ -695,7 +695,11 @@ export interface SplitUnit {
 
 export interface OrderSplit {
   code: string;
-  status: 'OPEN' | 'SENT' | 'CANCELLED';
+  /**
+   * SENDING : les cartes sont en train d'etre encaissees (quelques secondes).
+   * FAILED  : la commande n'a pas pu etre creee, tout le monde a ete rembourse.
+   */
+  status: 'OPEN' | 'SENDING' | 'SENT' | 'FAILED' | 'CANCELLED';
   supplierName: string | null;
   eventId: string;
   supplierId: string;
@@ -727,9 +731,15 @@ export const apiClaimSplitUnits = (code: string, unitIds: string[], claimantName
 export const apiSendSplit = (code: string) =>
   req<Order>(`/order-splits/${encodeURIComponent(code)}/send`, { method: 'POST' });
 
-/** L'hote renonce : toutes les autorisations sont liberees. */
+/**
+ * L'hote renonce : les autorisations sont liberees, et les parts DEJA
+ * encaissees (cas d'un envoi interrompu) sont remboursees.
+ */
 export const apiCancelSplit = (code: string) =>
-  req<{ liberees: number }>(`/order-splits/${encodeURIComponent(code)}/cancel`, { method: 'POST' });
+  req<{ liberees: number; remboursees: number }>(
+    `/order-splits/${encodeURIComponent(code)}/cancel`,
+    { method: 'POST' },
+  );
 
 // ─── Helpers ──────────────────────────────────────────────────
 

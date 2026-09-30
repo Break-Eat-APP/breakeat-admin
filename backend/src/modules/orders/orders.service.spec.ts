@@ -8,6 +8,7 @@ import { SlotsService } from '../slots/slots.service';
 import { OrderNotificationsService } from '../notifications/order-notifications.service';
 import { PrismaService } from '../../database/prisma.service';
 import { loyaltyDisabledProvider } from '../loyalty/loyalty.mock';
+import { LoyaltyService, LOYALTY_DISABLED } from '../loyalty/loyalty.service';
 import { liveActivityNoopProvider } from '../live-activity/live-activity.mock';
 
 const USER_ID = 'user-1';
@@ -77,6 +78,12 @@ describe('OrdersService', () => {
   let prisma: jest.Mocked<PrismaService>;
   let realtime: jest.Mocked<RealtimeService>;
   let slotsService: jest.Mocked<SlotsService>;
+  let fidelite: {
+    getConfigForVenue: jest.Mock;
+    discountForPoints: jest.Mock;
+    redeemForOrderTx: jest.Mock;
+    convertHoldToRedeemTx: jest.Mock;
+  };
   const transactionMock = jest.fn();
 
   beforeEach(async () => {
@@ -125,7 +132,8 @@ describe('OrdersService', () => {
               update: jest.fn(),
             },
             supplier: { findMany: jest.fn(), findUnique: jest.fn() },
-            venue: { findMany: jest.fn() },
+            venue: { findMany: jest.fn(), findUnique: jest.fn() },
+            orderSplit: { findUnique: jest.fn() },
             orderAuditTrail: {
               create: jest.fn(),
               findMany: jest.fn(),
@@ -141,6 +149,7 @@ describe('OrdersService', () => {
     prisma = module.get(PrismaService);
     realtime = module.get(RealtimeService);
     slotsService = module.get(SlotsService);
+    fidelite = module.get(LoyaltyService) as unknown as typeof fidelite;
   });
 
   // ─── withPickupGuidance ───────────────────────────────────────
@@ -189,6 +198,181 @@ describe('OrdersService', () => {
     it('ne touche pas la base pour une liste vide', async () => {
       expect(await service.withPickupGuidance([])).toEqual([]);
       expect(prisma.supplier.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── La fidélité, après le paiement ──────────────────────────
+
+  describe('les points d’une commande payée', () => {
+    /** Panier avec 100 points réservés : 1600 c de panier, 1500 c encaissés. */
+    function panierAvecPoints() {
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue({
+        ...mockCart(),
+        redeemedPoints: 100,
+      });
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(null);
+      fidelite.getConfigForVenue.mockResolvedValue({
+        enabled: true,
+        pointsPerEuro: 1,
+        pointValueCents: 1,
+      });
+      fidelite.discountForPoints.mockReturnValue({ pointsUsed: 100, discountCents: 100 });
+
+      transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+        cb({
+          cart: { update: jest.fn() },
+          order: {
+            create: jest
+              .fn()
+              .mockResolvedValue({ id: 'order-1', publicOrderNumber: 'BE-00000001' }),
+          },
+          payment: { upsert: jest.fn() },
+          orderAuditTrail: { create: jest.fn() },
+          stock: {
+            findFirst: jest.fn().mockResolvedValue(null),
+            findUnique: jest.fn(),
+            updateMany: jest.fn(),
+            update: jest.fn(),
+          },
+        }),
+      );
+    }
+
+    afterEach(() => {
+      // La doublure est partagée par tout ce fichier : on la repose désactivée.
+      fidelite.getConfigForVenue.mockResolvedValue(LOYALTY_DISABLED);
+      fidelite.discountForPoints.mockReturnValue({ pointsUsed: 0, discountCents: 0 });
+      fidelite.convertHoldToRedeemTx.mockResolvedValue(0);
+      fidelite.redeemForOrderTx.mockResolvedValue(undefined);
+    });
+
+    it('CONVERTIT la réservation au lieu de redébiter le solde', async () => {
+      // Le débit a eu lieu au départ du paiement. Ici il n'y a plus qu'à
+      // attribuer les points à la commande — une étape qui ne peut pas manquer
+      // de solde, donc qui ne peut pas faire perdre une commande payée.
+      panierAvecPoints();
+      fidelite.convertHoldToRedeemTx.mockResolvedValue(100);
+
+      const order = await service.createFromPaymentIntent(
+        PAYMENT_INTENT_ID,
+        { amount: 1500, currency: 'eur', metadata: { cartId: CART_ID } },
+        { id: 'evt_test' } as never,
+      );
+
+      expect(order.publicOrderNumber).toBe('BE-00000001');
+      expect(fidelite.convertHoldToRedeemTx).toHaveBeenCalledWith(
+        expect.anything(),
+        { cartId: CART_ID, orderId: 'order-1' },
+      );
+      expect(fidelite.redeemForOrderTx).not.toHaveBeenCalled();
+    });
+
+    it('crée la commande MÊME si le débit de secours échoue', async () => {
+      // Panier engagé avant la réservation : on retombe sur l'ancien débit. S'il
+      // échoue — points dépensés ailleurs entre-temps — la commande doit exister
+      // quand même : la carte est débitée, et la refuser ne rendrait rien.
+      panierAvecPoints();
+      fidelite.convertHoldToRedeemTx.mockResolvedValue(0);
+      fidelite.redeemForOrderTx.mockRejectedValue(new BadRequestException('Solde insuffisant'));
+
+      const order = await service.createFromPaymentIntent(
+        PAYMENT_INTENT_ID,
+        { amount: 1500, currency: 'eur', metadata: { cartId: CART_ID } },
+        { id: 'evt_test' } as never,
+      );
+
+      expect(order.publicOrderNumber).toBe('BE-00000001');
+      expect(realtime.emitNewOrder).toHaveBeenCalled();
+    });
+  });
+
+  // ─── createFromSplit — l'ardoise ─────────────────────────────
+
+  describe('createFromSplit — le stock d’une tournée partagée', () => {
+    const unite = (productId: string) => ({
+      productId,
+      productName: 'Bière 50cl',
+      unitPriceCents: 550,
+      vatRateBps: 1000,
+      status: 'PAID',
+    });
+
+    /** Prépare l'ardoise et rend les doublures de stock de la transaction. */
+    function montrerArdoise(quantiteEnStock: number) {
+      (prisma.orderSplit.findUnique as jest.Mock).mockResolvedValue({
+        id: 'split-1',
+        code: 'ABC234',
+        orderId: null,
+        organizationId: ORG_ID,
+        eventId: EVENT_ID,
+        venueId: VENUE_ID,
+        supplierId: SUPPLIER_ID,
+        pickupPointId: PICKUP_POINT_ID,
+        selectedSlotId: null,
+        hostUserId: USER_ID,
+        units: [unite(PRODUCT_ID), unite(PRODUCT_ID), unite('p-frites')],
+        shares: [{ id: 's1', status: 'CAPTURED', stripePaymentIntentId: 'pi_1', amountCents: 1400 }],
+      });
+      (prisma.venue.findUnique as jest.Mock).mockResolvedValue({ timezone: 'Europe/Paris' });
+
+      const stock = {
+        findFirst: jest
+          .fn()
+          .mockResolvedValue({ id: 'stock-1', quantity: quantiteEnStock, isAvailable: true }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ id: 'stock-1', quantity: quantiteEnStock, isAvailable: true }),
+        updateMany: jest.fn().mockResolvedValue({ count: quantiteEnStock > 0 ? 1 : 0 }),
+        update: jest.fn(),
+      };
+      transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+        cb({
+          order: {
+            create: jest
+              .fn()
+              .mockResolvedValue({ id: 'order-ardoise', publicOrderNumber: 'BE-00000009' }),
+          },
+          payment: { create: jest.fn() },
+          orderAuditTrail: { create: jest.fn() },
+          stock,
+        }),
+      );
+      return stock;
+    }
+
+    it('FAIT DESCENDRE le stock — une tournée partagée vend de vrais articles', async () => {
+      // Le défaut : `createFromSplit` créait commande, lignes, paiements et
+      // audit, mais ne touchait pas au stock. Dix bières partagées laissaient
+      // l'étagère intacte, et le comptoir en vendait qu'il n'avait plus.
+      const stock = montrerArdoise(50);
+
+      await service.createFromSplit('split-1');
+
+      // Les unités regroupées : 2 bières en une ligne de quantité 2.
+      expect(stock.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'stock-1', quantity: { gte: 2 } },
+          data: { quantity: { decrement: 2 } },
+        }),
+      );
+      // Et la ligne de frites, séparément.
+      expect(stock.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { quantity: { decrement: 1 } } }),
+      );
+    });
+
+    it('crée la commande MÊME si le stock manque — l’argent est déjà encaissé', async () => {
+      // Même règle que le chemin Stripe : passé le débit, le stock constate.
+      // Refuser ici laisserait des convives débités sans rien en cuisine.
+      const stock = montrerArdoise(0);
+
+      const order = await service.createFromSplit('split-1');
+
+      expect(order.publicOrderNumber).toBe('BE-00000009');
+      expect(stock.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { quantity: 0, isAvailable: false } }),
+      );
     });
   });
 

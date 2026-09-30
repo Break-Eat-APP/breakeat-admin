@@ -75,12 +75,15 @@ export class VenuesService {
    * devient permanent doit pouvoir encaisser une commande dans la seconde, sans
    * qu'on ait pensé à créer quoi que ce soit.
    *
-   * Ne fait rien pour un lieu EVENT_BASED, et ne supprime jamais un contenant
-   * existant si le lieu repasse en événementiel : les commandes déjà passées y
-   * sont rattachées. Il devient simplement dormant.
+   * Ne supprime jamais un contenant existant si le lieu repasse en
+   * événementiel : les commandes déjà passées y sont rattachées. Il est ENDORMI
+   * (voir `endormirContenant`), puis réveillé si le lieu redevient permanent.
    */
   private async ensurePermanentContainer(venue: Venue): Promise<void> {
-    if (venue.operatingMode !== VenueOperatingMode.PERMANENT) return;
+    if (venue.operatingMode !== VenueOperatingMode.PERMANENT) {
+      await this.endormirContenant(venue.id);
+      return;
+    }
 
     // Regarder avant d'écrire. Laisser l'index unique refuser était correct —
     // l'erreur était absorbée plus bas — mais Postgres la journalisait quand
@@ -88,9 +91,21 @@ export class VenuesService {
     // passaient pour une panne dans les journaux de la base.
     const existant = await this.prisma.event.findFirst({
       where: { venueId: venue.id, isPermanentContainer: true },
-      select: { id: true },
+      select: { id: true, status: true },
     });
-    if (existant) return;
+    if (existant) {
+      // Le lieu redevient permanent : on RÉVEILLE son contenant. Sans cela, un
+      // aller-retour EVENT_BASED → PERMANENT laissait un lieu ouvert en continu
+      // incapable de prendre la moindre commande, sans rien afficher d'anormal.
+      if (existant.status !== EventStatus.ACTIVE) {
+        await this.prisma.event.update({
+          where: { id: existant.id },
+          data: { status: EventStatus.ACTIVE },
+        });
+        this.logger.log(`Contenant permanent réveillé pour le lieu ${venue.id}`);
+      }
+      return;
+    }
 
     try {
       await this.prisma.event.create({
@@ -114,6 +129,28 @@ export class VenuesService {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return;
       throw err;
     }
+  }
+
+  /**
+   * Endort le contenant d'un lieu qui n'est plus ouvert en continu.
+   *
+   * Le contenant est CONSERVÉ — les commandes déjà passées y sont rattachées —
+   * mais il repasse en PAUSED. Laissé ACTIVE, il restait commandable : un
+   * ancien lien profond suffisait à ouvrir un panier et à payer dans un lieu
+   * redevenu événementiel, sans qu'aucun écran ne le montre (le contenant est
+   * masqué de toutes les listes). Le panier exige un événement ACTIVE : c'est
+   * ce seul statut qui referme la porte, sur tous les chemins à la fois.
+   */
+  private async endormirContenant(venueId: string): Promise<void> {
+    const { count } = await this.prisma.event.updateMany({
+      where: {
+        venueId,
+        isPermanentContainer: true,
+        status: { notIn: [EventStatus.PAUSED, EventStatus.ENDED, EventStatus.CANCELLED] },
+      },
+      data: { status: EventStatus.PAUSED },
+    });
+    if (count > 0) this.logger.log(`Contenant permanent endormi pour le lieu ${venueId}`);
   }
 
   async findAllByOrg(organizationId: string, userId: string): Promise<Venue[]> {

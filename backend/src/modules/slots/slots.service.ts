@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, SlotSource, SlotStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
-import { requireOrgAccess } from '../../common/helpers/require-org-access';
+import { ALL_ORG_ROLES, requireOrgAccess } from '../../common/helpers/require-org-access';
 import { OrgRole } from '../../common/enums/role.enum';
 import { CreateSlotDto } from './dto/create-slot.dto';
 import { UpdateSlotDto } from './dto/update-slot.dto';
@@ -110,14 +110,19 @@ export class SlotsService {
    * le premier client — sans cela, l'équipier arriverait devant une barre vide
    * jusqu'à ce que quelqu'un ouvre l'application.
    */
-  async findByEvent(eventId: string) {
+  async findByEvent(eventId: string, callerId: string) {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { venueId: true },
+      select: { venueId: true, organizationId: true },
     });
-    if (event) {
-      await this.slotTemplates.ensureTodaySlots(eventId, event.venueId);
-    }
+    if (!event) throw new NotFoundException(`Event ${eventId} not found`);
+
+    // Lecture RÉSERVÉE aux membres du club. Sans ce contrôle, n'importe quel
+    // compte authentifié lisait les créneaux — donc le rythme de service — de
+    // n'importe quel autre club, en devinant un identifiant.
+    await requireOrgAccess(this.prisma, callerId, event.organizationId, ALL_ORG_ROLES);
+
+    await this.slotTemplates.ensureTodaySlots(eventId, event.venueId);
 
     const maintenant = new Date();
     const journee = new Date(
@@ -133,8 +138,27 @@ export class SlotsService {
     });
   }
 
-  async findOne(id: string) {
-    const slot = await this.prisma.slot.findUnique({ where: { id } });
+  /**
+   * Un créneau, lu DANS son événement.
+   *
+   * Le filtre porte sur les deux identifiants : `/events/A/slots/B` ne doit
+   * jamais rendre un créneau de l'événement X. Chercher par identifiant seul
+   * revenait à ouvrir la porte à qui connaît un UUID.
+   */
+  async findOne(eventId: string, id: string, callerId: string) {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { organizationId: true },
+    });
+    if (!event) throw new NotFoundException(`Event ${eventId} not found`);
+    await requireOrgAccess(this.prisma, callerId, event.organizationId, ALL_ORG_ROLES);
+
+    return this.parId(eventId, id);
+  }
+
+  /** Le créneau de CET événement, sans contrôle d'accès — usage interne. */
+  private async parId(eventId: string, id: string) {
+    const slot = await this.prisma.slot.findFirst({ where: { id, eventId } });
     if (!slot) throw new NotFoundException(`Slot ${id} not found`);
     return slot;
   }
@@ -154,8 +178,8 @@ export class SlotsService {
    * Fermer n'annule rien : les commandes déjà placées sur ce créneau restent
    * dues, seule la prise de nouvelles s'arrête.
    */
-  async updateStatus(id: string, status: SlotStatus, callerId: string) {
-    const slot = await this.findOne(id);
+  async updateStatus(eventId: string, id: string, status: SlotStatus, callerId: string) {
+    const slot = await this.parId(eventId, id);
     const event = await this.prisma.event.findUniqueOrThrow({
       where: { id: slot.eventId },
     });
@@ -174,11 +198,12 @@ export class SlotsService {
   }
 
   async update(
+    eventId: string,
     id: string,
     dto: UpdateSlotDto,
     callerId: string,
   ) {
-    const slot = await this.findOne(id);
+    const slot = await this.parId(eventId, id);
     const event = await this.prisma.event.findUniqueOrThrow({
       where: { id: slot.eventId },
     });
@@ -207,8 +232,8 @@ export class SlotsService {
     return this.prisma.slot.update({ where: { id }, data });
   }
 
-  async remove(id: string, callerId: string) {
-    const slot = await this.findOne(id);
+  async remove(eventId: string, id: string, callerId: string) {
+    const slot = await this.parId(eventId, id);
     const event = await this.prisma.event.findUniqueOrThrow({
       where: { id: slot.eventId },
     });

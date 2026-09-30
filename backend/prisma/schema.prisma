@@ -705,6 +705,11 @@ model Cart {
   /// Stocké en points (et non en centimes) : la valeur d'un point peut changer
   /// côté club, le montant de la remise est recalculé au moment du paiement.
   redeemedPoints  Int        @default(0) @map("redeemed_points")
+  /// PHASE 20 — mouvement de fidélité qui RÉSERVE les points de ce panier.
+  ///
+  /// Posé au départ du paiement, il devient le REDEEM de la commande. UNIQUE :
+  /// deux paniers ne peuvent pas se partager la même réservation.
+  loyaltyHoldId   String?    @unique @map("loyalty_hold_id")
   /// Idempotency safeguard for /checkout — same key returns the same PaymentIntent.
   paymentIntentId String?    @map("payment_intent_id")
   expiresAt       DateTime   @map("expires_at")
@@ -1238,8 +1243,16 @@ enum OperatorScreenKind {
 enum OrderSplitStatus {
   /// En cours de règlement : les convives se servent dans la liste.
   OPEN
+  /// Envoi EN COURS : les cartes sont en train d'être encaissées.
+  ///
+  /// Cet état est la REVENDICATION de l'envoi : le passage OPEN → SENDING est
+  /// atomique, donc un seul appel l'obtient. Sans lui, deux appuis simultanés
+  /// sur « envoyer » encaissaient les mêmes parts et créaient deux commandes.
+  SENDING
   /// Tout est réglé et la commande est partie au comptoir.
   SENT
+  /// L'envoi a échoué après encaissement : les convives ont été REMBOURSÉS.
+  FAILED
   /// L'hôte a renoncé — toutes les autorisations ont été libérées.
   CANCELLED
 
@@ -1266,6 +1279,12 @@ enum OrderSplitShareStatus {
   AUTHORIZED
   /// Encaissée au départ de la commande.
   CAPTURED
+  /// Encaissée PUIS rendue : la tournée n'a pas pu partir.
+  ///
+  /// Distinct de CANCELLED, qui décrit une autorisation libérée — donc un
+  /// argent jamais prélevé. Les deux ne se lisent pas de la même façon sur le
+  /// relevé du convive.
+  REFUNDED
   /// Autorisation libérée (abandon, retrait, annulation).
   CANCELLED
 
@@ -1299,8 +1318,10 @@ model OrderSplit {
   /// Le convive qui a composé la tournée. Seul lui peut envoyer ou annuler.
   hostUserId     String           @map("host_user_id")
   status         OrderSplitStatus @default(OPEN)
-  /// Commande créée au moment de l'encaissement.
-  orderId        String?          @map("order_id")
+  /// Commande créée au moment de l'encaissement. UNIQUE : une ardoise ne peut
+  /// pas donner deux tournées, et c'est la base qui le garantit — pas la
+  /// lecture qui précède l'écriture.
+  orderId        String?          @unique @map("order_id")
   createdAt      DateTime         @default(now()) @map("created_at")
   updatedAt      DateTime         @updatedAt @map("updated_at")
   expiresAt      DateTime         @map("expires_at")
@@ -1517,6 +1538,18 @@ enum LoyaltyEntryKind {
   REDEEM
   /// Correction manuelle (geste commercial, litige).
   ADJUST
+  /// Points RÉSERVÉS au départ d'un paiement — déjà retirés du solde.
+  ///
+  /// Le débit avait lieu DANS la transaction de création de commande, donc
+  /// APRÈS que Stripe ait confirmé le paiement. Des points dépensés entre-temps
+  /// sur une autre commande faisaient échouer cette transaction : le client
+  /// était débité de sa carte et n'avait pas de commande.
+  ///
+  /// La réservation déplace ce refus AVANT le paiement, là où il ne coûte
+  /// qu'un message. Devenu REDEEM quand la commande naît.
+  HOLD
+  /// Réservation rendue : le panier a expiré sans être payé.
+  RELEASE
 
   @@map("loyalty_entry_kind")
 }
@@ -1559,6 +1592,10 @@ model LoyaltyTransaction {
   accountId    String           @map("account_id")
   /// Commande à l'origine du mouvement (null pour un ajustement manuel).
   orderId      String?          @map("order_id")
+  /// Panier à l'origine d'une RÉSERVATION, le temps qu'elle devienne une
+  /// commande. Sans lui, un HOLD rendu (RELEASE) ne se rattacherait à rien
+  /// dans le registre.
+  cartId       String?          @map("cart_id")
   kind         LoyaltyEntryKind
   /// Signé : positif pour un gain, négatif pour une utilisation.
   points       Int

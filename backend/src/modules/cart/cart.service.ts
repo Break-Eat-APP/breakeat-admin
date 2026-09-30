@@ -445,6 +445,30 @@ export class CartService {
       );
     }
 
+    // ─── Les points sont RÉSERVÉS avant d'appeler Stripe ───────
+    //
+    // Le débit avait lieu à la création de la commande, donc après le paiement.
+    // Des points dépensés entre-temps sur une autre commande faisaient échouer
+    // cette création : le client était débité de sa carte et n'avait pas de
+    // commande. Ici, un solde insuffisant ne coûte qu'un message.
+    //
+    // Réservé AVANT la page de paiement, jamais après : le montant que Stripe
+    // va encaisser tient compte de la remise, il faut donc que les points
+    // soient à nous au moment où on annonce ce montant.
+    if (view.loyalty.pointsUsed > 0) {
+      const event = await this.prisma.event.findUnique({
+        where: { id: cart.eventId },
+        select: { organizationId: true },
+      });
+      if (!event) throw new NotFoundException('Event not found');
+      await this.loyaltyService.holdForCart({
+        cartId: cart.id,
+        userId: cart.userId,
+        organizationId: event.organizationId,
+        points: view.loyalty.pointsUsed,
+      });
+    }
+
     // Capture the exact unit prices that back the PaymentIntent amount.
     // These get frozen onto the CartItems — but ONLY after Stripe confirms,
     // and atomically with the CHECKOUT_PENDING transition (see below). A

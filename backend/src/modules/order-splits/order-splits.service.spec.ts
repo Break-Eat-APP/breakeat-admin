@@ -16,9 +16,21 @@ describe('OrderSplitsService — l’ardoise', () => {
   let service: OrderSplitsService;
   let prisma: {
     cart: { findUnique: jest.Mock };
-    orderSplit: { findFirst: jest.Mock; findUnique: jest.Mock; create: jest.Mock; update: jest.Mock };
+    orderSplit: {
+      findFirst: jest.Mock;
+      findUnique: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+      updateMany: jest.Mock;
+    };
     orderSplitUnit: { updateMany: jest.Mock; findMany: jest.Mock };
-    orderSplitShare: { create: jest.Mock; update: jest.Mock; findUnique: jest.Mock };
+    orderSplitShare: {
+      create: jest.Mock;
+      update: jest.Mock;
+      findUnique: jest.Mock;
+      findMany: jest.Mock;
+    };
+    order: { findUniqueOrThrow: jest.Mock };
     supplier: { findUnique: jest.Mock };
     organization: { findUnique: jest.Mock };
     $transaction: jest.Mock;
@@ -27,6 +39,7 @@ describe('OrderSplitsService — l’ardoise', () => {
     createHostedCheckout: jest.Mock;
     capturePaymentIntent: jest.Mock;
     cancelPaymentIntent: jest.Mock;
+    refundPaymentIntent: jest.Mock;
   };
   let orders: { createFromSplit: jest.Mock };
   let actif = true;
@@ -68,6 +81,8 @@ describe('OrderSplitsService — l’ardoise', () => {
         findUnique: jest.fn().mockResolvedValue(ardoise()),
         create: jest.fn(),
         update: jest.fn().mockResolvedValue({}),
+        // La revendication de l'envoi réussit par défaut.
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       orderSplitUnit: {
         updateMany: jest.fn().mockResolvedValue({ count: 0 }),
@@ -77,7 +92,10 @@ describe('OrderSplitsService — l’ardoise', () => {
         create: jest.fn().mockResolvedValue({ id: 'share-1' }),
         update: jest.fn().mockResolvedValue({}),
         findUnique: jest.fn(),
+        // Aucune part encaissée à rembourser, sauf test contraire.
+        findMany: jest.fn().mockResolvedValue([]),
       },
+      order: { findUniqueOrThrow: jest.fn().mockResolvedValue({ id: 'o-1' }) },
       supplier: {
         // Buvette SANS compte propre : elle encaisse sur celui du club.
         findUnique: jest.fn().mockResolvedValue({
@@ -100,6 +118,7 @@ describe('OrderSplitsService — l’ardoise', () => {
       createHostedCheckout: jest.fn().mockResolvedValue({ id: 'cs_1', url: 'https://stripe/pay' }),
       capturePaymentIntent: jest.fn().mockResolvedValue({}),
       cancelPaymentIntent: jest.fn().mockResolvedValue({}),
+      refundPaymentIntent: jest.fn().mockResolvedValue({}),
     };
     orders = { createFromSplit: jest.fn().mockResolvedValue({ id: 'o-1', publicOrderNumber: 'BE-1' }) };
 
@@ -293,6 +312,104 @@ describe('OrderSplitsService — l’ardoise', () => {
       prisma.orderSplit.findUnique.mockResolvedValue(ardoise({ units: [] }));
       await expect(service.envoyer('un-convive', CODE)).rejects.toBeInstanceOf(ForbiddenException);
     });
+
+    it('REVENDIQUE l’envoi : le second appui simultané n’encaisse rien', async () => {
+      // Le défaut : deux appuis lisaient tous les deux « OPEN », encaissaient
+      // les mêmes cartes et créaient DEUX commandes pour une seule tournée.
+      prisma.orderSplit.findUnique.mockResolvedValue(
+        ardoise({
+          units: [{ status: OrderSplitUnitStatus.PAID }],
+          shares: [
+            { id: 's1', status: OrderSplitShareStatus.AUTHORIZED, stripePaymentIntentId: 'pi_1' },
+          ],
+        }),
+      );
+      // L'autre appel a déjà pris l'ardoise : la transition OPEN → SENDING ne
+      // touche plus aucune ligne.
+      prisma.orderSplit.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(service.envoyer(HOTE, CODE)).rejects.toBeInstanceOf(BadRequestException);
+      expect(stripe.capturePaymentIntent).not.toHaveBeenCalled();
+      expect(orders.createFromSplit).not.toHaveBeenCalled();
+    });
+
+    it('une ardoise DÉJÀ envoyée rend sa commande, sans réencaisser', async () => {
+      prisma.orderSplit.findUnique.mockResolvedValue(
+        ardoise({
+          status: OrderSplitStatus.SENT,
+          orderId: 'o-deja',
+          units: [{ status: OrderSplitUnitStatus.PAID }],
+        }),
+      );
+      prisma.order.findUniqueOrThrow.mockResolvedValue({ id: 'o-deja' });
+
+      const order = await service.envoyer(HOTE, CODE);
+
+      expect(order.id).toBe('o-deja');
+      expect(stripe.capturePaymentIntent).not.toHaveBeenCalled();
+      expect(orders.createFromSplit).not.toHaveBeenCalled();
+    });
+
+    it('REMBOURSE tout le monde si la commande ne peut pas être créée', async () => {
+      // Le trou de l'audit : l'argent était pris, la commande n'existait pas, et
+      // l'ardoise restait « ouverte » puisque son passage à SENT venait après.
+      prisma.orderSplit.findUnique.mockResolvedValue(
+        ardoise({
+          units: [{ status: OrderSplitUnitStatus.PAID }],
+          shares: [
+            { id: 's1', status: OrderSplitShareStatus.AUTHORIZED, stripePaymentIntentId: 'pi_1' },
+          ],
+        }),
+      );
+      prisma.orderSplitShare.findMany.mockResolvedValue([
+        { id: 's1', stripePaymentIntentId: 'pi_1', amountCents: 850 },
+      ]);
+      orders.createFromSplit.mockRejectedValue(new Error('invariant'));
+
+      await expect(service.envoyer(HOTE, CODE)).rejects.toThrow(/rembours/i);
+
+      expect(stripe.refundPaymentIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ paymentIntentId: 'pi_1' }),
+      );
+      expect(prisma.orderSplitShare.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: OrderSplitShareStatus.REFUNDED } }),
+      );
+      // Et l'ardoise le dit : ni ouverte, ni annulée par l'hôte — échouée.
+      expect(prisma.orderSplit.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({ data: { status: OrderSplitStatus.FAILED } }),
+      );
+    });
+
+    it('ROUVRE l’ardoise quand une carte échoue, et rend ses articles au groupe', async () => {
+      prisma.orderSplit.findUnique.mockResolvedValue(
+        ardoise({
+          units: [{ status: OrderSplitUnitStatus.PAID }],
+          shares: [
+            {
+              id: 's1',
+              status: OrderSplitShareStatus.AUTHORIZED,
+              stripePaymentIntentId: 'pi_1',
+              claimantName: 'Marc',
+            },
+          ],
+        }),
+      );
+      stripe.capturePaymentIntent.mockRejectedValue(new Error('expired'));
+
+      await expect(service.envoyer(HOTE, CODE)).rejects.toThrow(/Marc/);
+
+      // Les articles de Marc retournent au pot commun : il peut les reprendre
+      // et repayer. Sans cela, l'ardoise restait bloquée sur une part morte.
+      expect(prisma.orderSplitUnit.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { status: OrderSplitUnitStatus.FREE, shareId: null, reservedUntil: null },
+        }),
+      );
+      // Et l'hôte retrouve une ardoise ouverte, pas une ardoise en cours d'envoi.
+      expect(prisma.orderSplit.updateMany).toHaveBeenLastCalledWith(
+        expect.objectContaining({ data: { status: OrderSplitStatus.OPEN } }),
+      );
+    });
   });
 
   // ─── Annulation ──────────────────────────────────────────────
@@ -313,6 +430,34 @@ describe('OrderSplitsService — l’ardoise', () => {
       expect(stripe.cancelPaymentIntent).toHaveBeenCalledWith('pi_1');
       expect(stripe.cancelPaymentIntent).toHaveBeenCalledTimes(1);
       expect(res.liberees).toBe(1);
+      expect(stripe.refundPaymentIntent).not.toHaveBeenCalled();
+    });
+
+    it('REND l’argent des parts déjà encaissées — un envoi a pu en laisser', async () => {
+      // Après un envoi où la carte d'un convive a échoué, les autres parts
+      // restent encaissées sur une ardoise rouverte. Y renoncer doit rendre
+      // cet argent, sinon il reste pris pour une tournée que personne ne sert.
+      prisma.orderSplit.findUnique.mockResolvedValue(ardoise({ shares: [] }));
+      prisma.orderSplitShare.findMany.mockResolvedValue([
+        { id: 's1', stripePaymentIntentId: 'pi_1', amountCents: 550 },
+      ]);
+
+      const res = await service.annuler(HOTE, CODE);
+
+      expect(stripe.refundPaymentIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ paymentIntentId: 'pi_1' }),
+      );
+      expect(res.remboursees).toBe(1);
+    });
+
+    it('refuse d’annuler une tournée en cours d’envoi', async () => {
+      // Les cartes sont en train d'être encaissées : annuler ici laisserait
+      // deux chemins écrire l'état final de l'ardoise en même temps.
+      prisma.orderSplit.findUnique.mockResolvedValue(
+        ardoise({ status: OrderSplitStatus.SENDING, shares: [] }),
+      );
+      await expect(service.annuler(HOTE, CODE)).rejects.toBeInstanceOf(BadRequestException);
+      expect(stripe.cancelPaymentIntent).not.toHaveBeenCalled();
     });
   });
 });

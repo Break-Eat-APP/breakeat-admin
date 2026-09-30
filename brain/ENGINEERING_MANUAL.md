@@ -191,6 +191,7 @@ rendrait faux dès la phase suivante. À regénérer quand des phases sont ajout
 | **50** | Phase 50 — Les rapports Flaix, à un clic (21/09/2026) |
 | **51** | Phase 51 — Des chiffres qui ne se recoupent pas (21–23/09/2026) |
 | **52** | Phase 52 — La cloche, le ✓ et les commandes terminées (23/09/2026) |
+| **53** | Phase 53 — Les cinq défauts de l'audit, corrigés (30/09/2026) |
 
 **Deux cas particuliers, à connaître :**
 
@@ -6080,3 +6081,129 @@ coupée en deux (`SectionList`) : « En cours », puis « Terminées ». Les tit
 n'apparaissent que s'il y a les deux — sans commande en cours, la liste n'est
 qu'un historique. Avant, tout arrivait mélangé, la plus récente en tête : une
 commande récupérée hier pouvait passer devant celle qu'on attend au comptoir.
+
+---
+
+## Phase 53 — Les cinq défauts de l'audit, corrigés (30/09/2026)
+
+Un audit technique du dépôt — commit par commit, dossier par dossier — a classé
+cinq défauts en **P1 : à corriger avant production**. Ils sont corrigés ici, dans
+l'ordre recommandé par l'audit. Tous les cinq touchent une frontière : entre deux
+clubs, entre deux états d'un lieu, entre l'argent pris et la commande servie.
+
+Chaque correction porte ses tests, et chacun de ces tests a d'abord été vu
+ÉCHOUER sur le code d'avant — sans quoi il ne prouve rien.
+
+### 1. Les créneaux d'un autre club se lisaient (cloisonnement)
+
+`GET /events/:eventId/slots` et `/slots/:id` étaient authentifiés, mais ne
+vérifiaient ni l'appartenance au club, ni la cohérence entre l'événement de
+l'URL et le créneau demandé : `findOne` cherchait par identifiant SEUL.
+
+Deux conséquences. N'importe quel compte connecté pouvait lire les créneaux —
+donc le rythme de service — d'un autre club, en devinant un UUID. Et
+`/events/A/slots/B` rendait le créneau B même s'il appartenait à l'événement X.
+
+L'événement de l'URL devient **contraignant** : le contrôleur passe `eventId` et
+l'appelant au service, la recherche porte sur `{ id, eventId }`, et
+`requireOrgAccess(..., ALL_ORG_ROLES)` garde la lecture. Une méthode privée
+`parId(eventId, id)` sert les écritures, qui ont déjà leur contrôle de rôle.
+
+### 2. Le conteneur d'un lieu permanent restait commandable
+
+Un lieu ouvert en continu porte un événement invisible qui reçoit ses commandes.
+Quand il repassait en mode événementiel, ce conteneur était CONSERVÉ — les
+commandes déjà passées y sont rattachées — mais **rien ne changeait son état**.
+Il disparaissait de toutes les listes, et restait ACTIVE : un ancien lien profond
+suffisait à ouvrir un panier et à payer dans un lieu qui n'ouvrait plus.
+
+Il est maintenant **ENDORMI** (`PAUSED`) à la sortie du mode permanent, et
+**RÉVEILLÉ** au retour. Le panier exige déjà un événement ACTIVE : c'est ce seul
+statut qui referme la porte, sur tous les chemins à la fois — panier, paiement,
+lien profond — au lieu d'un contrôle à répéter partout.
+
+Le réveil n'est pas un détail : sans lui, un aller-retour
+`EVENT_BASED → PERMANENT` laissait un lieu « ouvert en continu » incapable de
+prendre la moindre commande, sans rien afficher d'anormal.
+
+### 3. L'ardoise : de l'argent pris sans commande, et deux commandes pour une tournée
+
+`envoyer` encaissait les cartes des convives, créait la commande, puis passait
+l'ardoise à `SENT`. Dans cet ordre, deux défauts :
+
+- si la création échouait — un invariant, une base indisponible — **l'argent
+  était pris et il n'y avait pas de commande**. L'ardoise restait « ouverte »,
+  puisque son changement d'état venait après ;
+- deux appuis simultanés sur le bouton lisaient tous les deux `OPEN`,
+  encaissaient les mêmes parts et créaient **deux commandes** pour une seule
+  tournée, la seconde écrasant le lien de la première.
+
+L'envoi devient une **revendication** : un état `SENDING`, obtenu par une
+transition atomique `OPEN → SENDING` que Postgres n'accorde qu'une fois. Les
+autres appels sont refusés, et tant que l'ardoise est `SENDING` aucun convive ne
+peut plus y payer. `OrderSplit.orderId` devient UNIQUE : une seconde tournée
+serait refusée par la base avant d'exister.
+
+Et si la commande ne peut pas naître, **tout le monde est remboursé** —
+`refundPaymentIntent`, qui n'existait nulle part, avec `reverse_transfer` (en
+destination charge, les fonds sont déjà partis vers le club) et une clé
+d'idempotence par part. L'ardoise passe alors à `FAILED` : ni ouverte, ni annulée
+par l'hôte. Un remboursement qui échoue n'est pas masqué : la part reste
+`CAPTURED` sur une ardoise `FAILED`, et le journal nomme le paiement à rendre à
+la main. Mentir en la marquant `REFUNDED` serait pire que l'incident.
+
+Une carte refusée au milieu de l'encaissement, en revanche, **rouvre** l'ardoise
+et rend au pot commun les articles de ce seul convive : les parts déjà encaissées
+le restent et serviront au prochain envoi, qui ne cherche que des parts
+autorisées. Personne n'est prié de repayer parce que la carte d'un autre a
+expiré. Et `annuler` rembourse désormais ces parts encaissées — sans quoi
+l'argent resterait pris pour une tournée que personne ne sert.
+
+### 4. L'ardoise ne décrémentait aucun stock
+
+`createFromSplit` créait la commande, les lignes, les paiements et l'audit. Pas
+le stock. Une tournée de dix bières laissait l'étagère intacte, et le comptoir
+continuait d'en vendre qu'il n'avait plus.
+
+Le décrément du chemin Stripe est devenu une méthode partagée,
+`decrementerStock`, appelée par les deux chemins. Elle garde sa règle : passé le
+débit, **elle ne refuse jamais rien**, elle constate. Le refus a sa place avant
+le règlement, et il y est déjà.
+
+### 5. La fidélité : un paiement confirmé, une commande refusée
+
+Les points étaient débités DANS la transaction de création de commande, donc
+après la confirmation de Stripe. Si le client les avait dépensés entre-temps sur
+une autre commande, cette transaction était annulée : **carte débitée, aucune
+commande**, et un solde qui ne redevenait pas disponible tout seul. Le webhook
+rejouait, et échouait de la même façon.
+
+Les points se **réservent** maintenant au départ du paiement (`HOLD`) : le solde
+est débité tout de suite, avant qu'aucun montant ne soit annoncé à Stripe. Le
+refus pour solde insuffisant arrive alors là où il ne coûte qu'un message. À la
+création de la commande, la réservation est **convertie** en dépense
+(`HOLD → REDEEM`) sans retoucher au solde — une étape qui ne peut pas manquer de
+points, donc qui ne peut plus faire perdre une commande payée.
+
+Convertir plutôt qu'ajouter une seconde ligne garde la somme du registre égale au
+solde. Deux paniers du même client ne peuvent plus dépenser les mêmes points,
+puisque le premier les a déjà retirés.
+
+Le retour des points est assuré par une ronde toutes les cinq minutes sur les
+paniers expirés sans paiement (`RELEASE`). Un paiement qui ÉCHOUE, lui, ne rend
+rien : le client peut reprendre la même page de paiement, la réservation lui sert
+encore. L'expiration du panier, elle, est définitive.
+
+Un chemin de secours reste en place pour les paniers engagés avant cette phase :
+l'ancien débit, mais dont l'échec ne détruit plus la commande — il est journalisé
+comme tel, l'argent étant déjà encaissé.
+
+### Ce que l'audit laisse ouvert
+
+Les neuf sujets **P2** sont notés dans `REPRISE.md` → « SUJETS OUVERTS » :
+portée fournisseur du stock et des créneaux côté opérateur, date de créneau
+locale contre UTC, créneaux récurrents injectés dans tout événement du lieu,
+KPI back-office contre stats d'organisation sur les commandes annulées, absence
+de renouvellement de session au back-office, invitation non transactionnelle,
+course dans l'idempotence des webhooks Stripe, et identifiants Flaix non bornés
+à l'événement de la commande.

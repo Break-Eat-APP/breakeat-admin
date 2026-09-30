@@ -48,8 +48,8 @@ export class SlotsController {
    * List all slots for an event, ordered by startAt asc.
    */
   @Get()
-  findByEvent(@Param('eventId') eventId: string) {
-    return this.slotsService.findByEvent(eventId);
+  findByEvent(@Param('eventId') eventId: string, @CurrentUser() user: JwtUser) {
+    return this.slotsService.findByEvent(eventId, user.sub);
   }
 
   /**
@@ -57,8 +57,12 @@ export class SlotsController {
    * Fetch a single slot.
    */
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.slotsService.findOne(id);
+  findOne(
+    @Param('eventId') eventId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.slotsService.findOne(eventId, id, user.sub);
   }
 
   /**
@@ -67,11 +71,12 @@ export class SlotsController {
    */
   @Patch(':id')
   update(
+    @Param('eventId') eventId: string,
     @Param('id') id: string,
     @Body() dto: UpdateSlotDto,
     @CurrentUser() user: JwtUser,
   ) {
-    return this.slotsService.update(id, dto, user.sub);
+    return this.slotsService.update(eventId, id, dto, user.sub);
   }
 
   /**
@@ -85,11 +90,12 @@ export class SlotsController {
    */
   @Patch(':id/status')
   updateStatus(
+    @Param('eventId') eventId: string,
     @Param('id') id: string,
     @Body() dto: UpdateSlotStatusDto,
     @CurrentUser() user: JwtUser,
   ) {
-    return this.slotsService.updateStatus(id, dto.status, user.sub);
+    return this.slotsService.updateStatus(eventId, id, dto.status, user.sub);
   }
 
   /**
@@ -97,7 +103,11 @@ export class SlotsController {
    * Remove a slot. Blocked if any orders are assigned. MANAGER/ORG_ADMIN only.
    */
   @Delete(':id')
-  remove(@Param('id') id: string, @CurrentUser() user: JwtUser) {
-    return this.slotsService.remove(id, user.sub);
+  remove(
+    @Param('eventId') eventId: string,
+    @Param('id') id: string,
+    @CurrentUser() user: JwtUser,
+  ) {
+    return this.slotsService.remove(eventId, id, user.sub);
   }
 }

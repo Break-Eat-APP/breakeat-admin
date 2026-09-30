@@ -404,7 +404,14 @@ export class OrderSplitsService {
    *
    * L'encaissement précède la création : une commande partie en cuisine sans
    * que l'argent soit pris serait servie gratuitement. L'inverse — encaisser
-   * sans commande — se rattrape, lui, par un remboursement.
+   * sans commande — se rattrape, lui, par un remboursement. Mais ce
+   * remboursement, il faut le FAIRE : c'est tout l'objet de la compensation
+   * plus bas, qui n'existait pas.
+   *
+   * L'envoi est une REVENDICATION. Deux appuis simultanés sur le bouton
+   * lisaient tous les deux « OPEN », encaissaient les mêmes parts et créaient
+   * deux commandes pour une seule tournée. Le passage OPEN → SENDING est
+   * atomique : un seul appel l'obtient, les autres sont refusés.
    */
   async envoyer(userId: string, code: string) {
     this.assertActive();
@@ -417,6 +424,17 @@ export class OrderSplitsService {
     if (split.hostUserId !== userId) {
       throw new ForbiddenException('Seul l’auteur de la tournée peut l’envoyer');
     }
+
+    // Déjà partie : on rend SA commande. Un double appui n'est pas une erreur,
+    // et surtout il ne doit pas produire une seconde tournée.
+    if (split.orderId) {
+      return this.prisma.order.findUniqueOrThrow({ where: { id: split.orderId } });
+    }
+    if (split.status === OrderSplitStatus.SENDING) {
+      throw new BadRequestException(
+        'Cette tournée part déjà. Laisse-lui quelques secondes puis rafraîchis.',
+      );
+    }
     if (split.status !== OrderSplitStatus.OPEN) {
       throw new BadRequestException('Cette ardoise est déjà close');
     }
@@ -428,11 +446,29 @@ export class OrderSplitsService {
       );
     }
 
+    // ─── La revendication ─────────────────────────────────────
+    //
+    // Une seule ligne, une seule condition : `status: OPEN`. Postgres n'en
+    // laissera passer qu'un. Tant que l'ardoise est SENDING, `prendreSaPart`
+    // la voit close — aucun nouveau paiement ne peut plus s'y glisser.
+    const revendiquee = await this.prisma.orderSplit.updateMany({
+      where: { id: split.id, status: OrderSplitStatus.OPEN },
+      data: { status: OrderSplitStatus.SENDING },
+    });
+    if (revendiquee.count === 0) {
+      throw new BadRequestException(
+        'Cette tournée part déjà. Laisse-lui quelques secondes puis rafraîchis.',
+      );
+    }
+
+    // À partir d'ici, l'ardoise est SENDING : tout chemin de sortie doit la
+    // reposer dans un état où l'hôte peut agir — SENT, FAILED, ou OPEN.
     const aEncaisser = split.shares.filter(
-      (s) => s.status === OrderSplitShareStatus.AUTHORIZED && s.stripePaymentIntentId,
+      (sh) => sh.status === OrderSplitShareStatus.AUTHORIZED && sh.stripePaymentIntentId,
     );
 
     const echecs: string[] = [];
+    const partsEnEchec: string[] = [];
     for (const share of aEncaisser) {
       try {
         await this.stripe.capturePaymentIntent(share.stripePaymentIntentId as string);
@@ -445,18 +481,62 @@ export class OrderSplitsService {
         // autres : on encaisse ce qui peut l'être et on nomme ce qui a échoué.
         this.logger.error(`Encaissement échoué pour la part ${share.id}: ${String(e)}`);
         echecs.push(share.claimantName ?? 'un convive');
+        partsEnEchec.push(share.id);
       }
     }
+
     if (echecs.length > 0) {
+      // La tournée ne part pas, mais elle n'est pas perdue : on ROUVRE
+      // l'ardoise et on rend au pot commun les articles du convive dont la
+      // carte a échoué, pour qu'il puisse les reprendre et repayer. Les parts
+      // déjà encaissées le restent — elles serviront au prochain envoi, qui
+      // les ignore puisqu'il ne cherche que des parts AUTORISÉES. Personne
+      // n'est prié de repayer parce que la carte d'un autre a expiré.
+      //
+      // Si l'hôte renonce, `annuler` rembourse ces parts encaissées : aucun
+      // argent ne reste pris pour une tournée qui ne partira pas.
+      for (const shareId of partsEnEchec) await this.libererPart(shareId);
+      await this.prisma.orderSplit.updateMany({
+        where: { id: split.id, status: OrderSplitStatus.SENDING },
+        data: { status: OrderSplitStatus.OPEN },
+      });
       throw new BadRequestException(
         `Le paiement de ${echecs.join(', ')} n’a pas pu être encaissé. Demande-lui de refaire sa part.`,
       );
     }
 
-    const order = await this.orders.createFromSplit(split.id);
+    let order;
+    try {
+      order = await this.orders.createFromSplit(split.id);
+    } catch (e: unknown) {
+      // L'argent est PRIS et il n'y a pas de commande. C'est le seul cas où le
+      // remboursement est la bonne réponse : la tournée ne sera pas servie.
+      //
+      // Sans ce rattrapage, l'ardoise restait « ouverte » — son passage à SENT
+      // n'arrivait qu'après la création — avec les cartes de tout le groupe
+      // déjà débitées et aucune trace de ce qu'elles payaient.
+      this.logger.error(
+        `Ardoise ${split.code} : commande impossible après encaissement (${String(e)}) — remboursement`,
+      );
+      const rendues = await this.rembourserPartsEncaissees(
+        split.id,
+        `ardoise ${split.code} : commande impossible`,
+      );
+      await this.prisma.orderSplit.updateMany({
+        where: { id: split.id, status: OrderSplitStatus.SENDING },
+        data: { status: OrderSplitStatus.FAILED },
+      });
+      throw new BadRequestException(
+        `La commande n’a pas pu être créée. ${rendues} paiement(s) ont été remboursés — ` +
+          'refais la tournée, personne ne reste débité.',
+      );
+    }
 
-    await this.prisma.orderSplit.update({
-      where: { id: split.id },
+    // SENT et `orderId` ensemble, sous condition d'être encore l'envoyeur.
+    // `orderId` est UNIQUE en base : une seconde tournée sur la même ardoise
+    // serait refusée par Postgres avant d'exister.
+    await this.prisma.orderSplit.updateMany({
+      where: { id: split.id, status: OrderSplitStatus.SENDING },
       data: { status: OrderSplitStatus.SENT, orderId: order.id },
     });
 
@@ -464,14 +544,64 @@ export class OrderSplitsService {
     return order;
   }
 
+  /**
+   * Rend l'argent des parts DÉJÀ ENCAISSÉES d'une ardoise.
+   *
+   * Rembourser n'est pas libérer : `annuler` libère des autorisations, où rien
+   * n'avait été prélevé. Ici le convive a été débité, et il faut un mouvement
+   * en sens inverse sur son relevé.
+   *
+   * Un remboursement qui échoue n'arrête pas les autres et ne fait pas échouer
+   * l'appel : la part reste marquée CAPTURED sur une ardoise FAILED, et c'est
+   * précisément le signal qu'un humain doit aller la rendre à la main. Mentir
+   * en la marquant REFUNDED serait pire que l'incident.
+   */
+  private async rembourserPartsEncaissees(splitId: string, motif: string): Promise<number> {
+    const encaissees = await this.prisma.orderSplitShare.findMany({
+      where: {
+        splitId,
+        status: OrderSplitShareStatus.CAPTURED,
+        stripePaymentIntentId: { not: null },
+      },
+    });
+
+    let rendues = 0;
+    for (const share of encaissees) {
+      try {
+        await this.stripe.refundPaymentIntent({
+          paymentIntentId: share.stripePaymentIntentId as string,
+          // Même clé pour la même part : un rejeu ne rembourse pas deux fois.
+          idempotencyKey: `split-refund-${share.id}`,
+          reason: motif,
+        });
+        await this.prisma.orderSplitShare.update({
+          where: { id: share.id },
+          data: { status: OrderSplitShareStatus.REFUNDED },
+        });
+        rendues++;
+      } catch (e: unknown) {
+        this.logger.error(
+          `REMBOURSEMENT À FAIRE À LA MAIN — part ${share.id}, ` +
+            `paiement ${share.stripePaymentIntentId}, ${share.amountCents} c : ${String(e)}`,
+        );
+      }
+    }
+    return rendues;
+  }
+
   // ─── Annulation ─────────────────────────────────────────────
 
   /**
-   * L'hôte renonce : on libère TOUTES les autorisations. Personne n'a été
-   * prélevé, il n'y a donc aucun remboursement — seulement des réserves qui
-   * disparaissent des relevés.
+   * L'hôte renonce : on libère TOUTES les autorisations. Dans le cas normal,
+   * personne n'a été prélevé — il n'y a donc rien à rembourser, seulement des
+   * réserves qui disparaissent des relevés.
+   *
+   * Sauf un cas : un envoi où la carte d'un convive a échoué laisse les autres
+   * parts ENCAISSÉES sur une ardoise rouverte (voir `envoyer`). Si l'hôte
+   * renonce à ce moment-là, ces parts doivent être REMBOURSÉES, sinon l'argent
+   * resterait pris pour une tournée que personne ne servira.
    */
-  async annuler(userId: string, code: string): Promise<{ liberees: number }> {
+  async annuler(userId: string, code: string): Promise<{ liberees: number; remboursees: number }> {
     const split = await this.prisma.orderSplit.findUnique({
       where: { code: code.trim().toUpperCase() },
       include: { shares: true },
@@ -479,6 +609,11 @@ export class OrderSplitsService {
     if (!split) throw new NotFoundException('Ardoise introuvable');
     if (split.hostUserId !== userId) {
       throw new ForbiddenException('Seul l’auteur de la tournée peut l’annuler');
+    }
+    if (split.status === OrderSplitStatus.SENDING) {
+      throw new BadRequestException(
+        'Cette tournée part en ce moment — impossible de l’annuler. Rafraîchis dans quelques secondes.',
+      );
     }
     if (split.status !== OrderSplitStatus.OPEN) {
       throw new BadRequestException('Cette ardoise est déjà close');
@@ -501,10 +636,15 @@ export class OrderSplitsService {
       });
     }
 
+    const remboursees = await this.rembourserPartsEncaissees(
+      split.id,
+      `ardoise ${split.code} annulée par l'hôte`,
+    );
+
     await this.prisma.orderSplit.update({
       where: { id: split.id },
       data: { status: OrderSplitStatus.CANCELLED },
     });
-    return { liberees };
+    return { liberees, remboursees };
   }
 }

@@ -5,6 +5,60 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.75.0] — 2026-09-30 — Les cinq défauts de l'audit
+
+Un audit du dépôt avait classé cinq défauts « à corriger avant production ».
+Tous les cinq touchent une frontière : entre deux clubs, entre deux états d'un
+lieu, ou entre l'argent pris et la commande servie.
+
+**Les créneaux d'un autre club se lisaient.** `GET /events/:eventId/slots` et
+`/slots/:id` étaient authentifiés mais ne vérifiaient ni l'appartenance au club
+ni la cohérence entre l'événement de l'URL et le créneau : `findOne` cherchait
+par identifiant SEUL. Un compte connecté pouvait lire le rythme de service d'un
+autre club en devinant un UUID, et `/events/A/slots/B` rendait le créneau B même
+s'il appartenait à l'événement X. L'événement de l'URL devient contraignant.
+
+**Le conteneur d'un lieu permanent restait commandable.** En repassant en mode
+événementiel, son événement invisible était conservé — les commandes y sont
+rattachées — mais restait ACTIVE, donc payable par un ancien lien profond alors
+qu'il n'apparaissait dans aucune liste. Il est maintenant ENDORMI (`PAUSED`) à
+la sortie du mode permanent, et RÉVEILLÉ au retour — sans ce réveil, un
+aller-retour laissait un lieu ouvert en continu incapable de prendre une
+commande.
+
+**L'ardoise pouvait encaisser sans commande, et créer deux tournées.**
+`envoyer` encaissait, créait la commande, puis fermait l'ardoise : une création
+qui échouait laissait l'argent pris et l'ardoise « ouverte ». Deux appuis
+simultanés lisaient tous les deux `OPEN` et créaient deux commandes. L'envoi
+devient une revendication atomique (`OPEN → SENDING`), `orderId` devient UNIQUE,
+et si la commande ne peut pas naître **tout le monde est remboursé**
+(`refundPaymentIntent`, qui n'existait nulle part, avec `reverse_transfer`).
+`annuler` rembourse aussi les parts déjà encaissées.
+
+**L'ardoise ne décrémentait aucun stock.** Une tournée de dix bières laissait
+l'étagère intacte. Le décrément du chemin Stripe devient une méthode partagée,
+appelée par les deux chemins.
+
+**Fidélité : paiement confirmé, commande refusée.** Les points étaient débités
+dans la transaction de création de commande, donc après Stripe : s'ils avaient
+été dépensés entre-temps, la commande était annulée alors que la carte était
+débitée. Ils se RÉSERVENT maintenant au départ du paiement (`HOLD`), et la
+réservation devient la dépense à la création (`HOLD → REDEEM`) sans retoucher au
+solde — une étape qui ne peut plus échouer. Une ronde toutes les cinq minutes
+rend les réservations des paniers expirés.
+
+`+ prisma/migrations/20260930_ardoise_envoi_atomique`
+`+ prisma/migrations/20260930_fidelite_reservation`
+`+ backend/test/integration/contenant-dormant.int-spec.ts`
+`~ slots.service.ts` `~ slots.controller.ts` `~ venues.service.ts`
+`~ order-splits.service.ts` `~ orders.service.ts` `~ loyalty.service.ts`
+`~ cart.service.ts` `~ stripe.service.ts` `~ schema.prisma`
+`~ apps/mobile/src/screens/split.screen.tsx` `~ src/lib/api/mobile-api.ts`
+645 tests unitaires (24 nouveaux), 12 mobile. Tests d'intégration à relancer
+quand la base de test est disponible.
+
+---
+
 ## [0.74.0] — 2026-09-23 — La cloche, le ✓ et les commandes terminées
 
 **La cloche restait muette.** Le compte des non-lues n'était relu qu'à la

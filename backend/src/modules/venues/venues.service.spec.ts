@@ -15,7 +15,7 @@ describe('VenuesService — mode permanent', () => {
   let service: VenuesService;
   let prisma: {
     venue: { create: jest.Mock; update: jest.Mock; findFirst: jest.Mock };
-    event: { create: jest.Mock; findFirst: jest.Mock };
+    event: { create: jest.Mock; findFirst: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
     organizationMember: { findUnique: jest.Mock };
     user: { findUnique: jest.Mock };
   };
@@ -42,6 +42,10 @@ describe('VenuesService — mode permanent', () => {
       event: {
         create: jest.fn().mockResolvedValue({ id: 'evt-1' }),
         findFirst: jest.fn().mockResolvedValue(null),
+        // Réveil (un contenant retrouvé endormi) et endormissement (le lieu
+        // quitte le mode permanent).
+        update: jest.fn().mockResolvedValue({ id: 'evt-1' }),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
       },
       // requireOrgAccess : l'appelant est ORG_ADMIN dans tous les cas testés.
       organizationMember: {
@@ -123,10 +127,52 @@ describe('VenuesService — mode permanent', () => {
       // en ERROR à chaque réglage du lieu : ces lignes passaient pour une panne.
       prisma.venue.findFirst.mockResolvedValue(mockVenue(VenueOperatingMode.PERMANENT));
       prisma.venue.update.mockResolvedValue(mockVenue(VenueOperatingMode.PERMANENT));
-      prisma.event.findFirst.mockResolvedValue({ id: 'contenant' });
+      prisma.event.findFirst.mockResolvedValue({ id: 'contenant', status: EventStatus.ACTIVE });
 
       await service.update(ORG_ID, VENUE_ID, USER_ID, { name: 'Le Comptoir rénové' });
 
+      expect(prisma.event.create).not.toHaveBeenCalled();
+      expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+
+    it('ENDORT le contenant quand le lieu quitte le mode permanent', async () => {
+      // Le trou trouvé à l'audit : le contenant restait ACTIVE, donc
+      // commandable par un ancien lien profond, alors qu'il n'apparaît dans
+      // aucune liste. Le panier exige un événement ACTIVE : le mettre en PAUSED
+      // referme tous les chemins d'un coup.
+      prisma.venue.findFirst.mockResolvedValue(mockVenue(VenueOperatingMode.PERMANENT));
+      prisma.venue.update.mockResolvedValue(mockVenue(VenueOperatingMode.EVENT_BASED));
+      prisma.event.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.update(ORG_ID, VENUE_ID, USER_ID, {
+        operatingMode: VenueOperatingMode.EVENT_BASED,
+      });
+
+      expect(prisma.event.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ venueId: VENUE_ID, isPermanentContainer: true }),
+          data: { status: EventStatus.PAUSED },
+        }),
+      );
+      // Le contenant n'est jamais supprimé : les commandes passées y tiennent.
+      expect(prisma.event.create).not.toHaveBeenCalled();
+    });
+
+    it('RÉVEILLE un contenant endormi quand le lieu redevient permanent', async () => {
+      // Sans ce réveil, un aller-retour laissait un lieu « ouvert en continu »
+      // incapable de prendre une commande, sans rien afficher d'anormal.
+      prisma.venue.findFirst.mockResolvedValue(mockVenue(VenueOperatingMode.EVENT_BASED));
+      prisma.venue.update.mockResolvedValue(mockVenue(VenueOperatingMode.PERMANENT));
+      prisma.event.findFirst.mockResolvedValue({ id: 'contenant', status: EventStatus.PAUSED });
+
+      await service.update(ORG_ID, VENUE_ID, USER_ID, {
+        operatingMode: VenueOperatingMode.PERMANENT,
+      });
+
+      expect(prisma.event.update).toHaveBeenCalledWith({
+        where: { id: 'contenant' },
+        data: { status: EventStatus.ACTIVE },
+      });
       expect(prisma.event.create).not.toHaveBeenCalled();
     });
 

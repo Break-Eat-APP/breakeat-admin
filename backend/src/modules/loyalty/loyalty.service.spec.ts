@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
-import { LoyaltyEntryKind, Prisma } from '@prisma/client';
+import { CartStatus, LoyaltyEntryKind, Prisma } from '@prisma/client';
 import {
   LoyaltyService,
   LOYALTY_DISABLED,
@@ -31,7 +31,8 @@ describe('LoyaltyService', () => {
       update: jest.Mock;
       updateMany: jest.Mock;
     };
-    loyaltyTransaction: { create: jest.Mock };
+    loyaltyTransaction: { create: jest.Mock; findUnique: jest.Mock; update: jest.Mock };
+    cart: { findUnique: jest.Mock; findMany: jest.Mock; update: jest.Mock };
     order: { update: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -50,7 +51,17 @@ describe('LoyaltyService', () => {
         update: jest.fn(),
         updateMany: jest.fn(),
       },
-      loyaltyTransaction: { create: jest.fn() },
+      loyaltyTransaction: {
+        create: jest.fn().mockResolvedValue({ id: 'mvt-1' }),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+      },
+      cart: {
+        // Aucune réservation en cours, sauf test contraire.
+        findUnique: jest.fn().mockResolvedValue({ loyaltyHoldId: null }),
+        findMany: jest.fn().mockResolvedValue([]),
+        update: jest.fn(),
+      },
       order: { update: jest.fn() },
       // La vraie transaction passe un client au callback : on lui donne le
       // même mock, ce qui suffit pour observer les instructions émises.
@@ -235,6 +246,147 @@ describe('LoyaltyService', () => {
 
       expect(prisma.loyaltyAccount.updateMany).not.toHaveBeenCalled();
       expect(prisma.loyaltyTransaction.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── Réservation avant paiement ───────────────────────────────
+
+  describe('la réservation des points — AVANT le paiement', () => {
+    const tx = () => prisma as unknown as Prisma.TransactionClient;
+
+    it('DÉBITE le solde au départ du paiement, et non à la commande', async () => {
+      // Le défaut : le débit vivait dans la transaction de création de commande,
+      // donc après que Stripe ait confirmé. Des points dépensés entre-temps
+      // faisaient échouer cette transaction — carte débitée, aucune commande.
+      prisma.loyaltyAccount.updateMany.mockResolvedValue({ count: 1 });
+      prisma.loyaltyAccount.findUniqueOrThrow.mockResolvedValue({ balance: 70 });
+
+      const reserves = await service.holdForCart({
+        cartId: 'panier-1', userId: 'u1', organizationId: 'o1', points: 30,
+      });
+
+      expect(reserves).toBe(30);
+      expect(prisma.loyaltyAccount.updateMany).toHaveBeenCalledWith({
+        where: { id: COMPTE.id, balance: { gte: 30 } },
+        data: { balance: { decrement: 30 } },
+      });
+      expect(prisma.loyaltyTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            kind: LoyaltyEntryKind.HOLD, points: -30, cartId: 'panier-1',
+          }),
+        }),
+      );
+      // Le panier garde le lien : c'est par lui que la réservation devient
+      // dépense, ou revient au solde.
+      expect(prisma.cart.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { loyaltyHoldId: 'mvt-1' } }),
+      );
+    });
+
+    it('REFUSE avant le paiement quand le solde ne suit pas', async () => {
+      // Le refus ne coûte qu'un message ici. Après le paiement, il coûtait une
+      // commande perdue.
+      prisma.loyaltyAccount.updateMany.mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.holdForCart({
+          cartId: 'panier-1', userId: 'u1', organizationId: 'o1', points: 500,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(prisma.loyaltyTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('ne réserve pas deux fois : un retour sur l’écran de paiement retrouve SA réservation', async () => {
+      prisma.cart.findUnique.mockResolvedValue({ loyaltyHoldId: 'mvt-deja' });
+      prisma.loyaltyTransaction.findUnique.mockResolvedValue({
+        kind: LoyaltyEntryKind.HOLD, points: -30,
+      });
+
+      const reserves = await service.holdForCart({
+        cartId: 'panier-1', userId: 'u1', organizationId: 'o1', points: 30,
+      });
+
+      expect(reserves).toBe(30);
+      expect(prisma.loyaltyAccount.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('REND les points d’un panier abandonné', async () => {
+      // Sans ce retour, un panier expiré emporterait les points : le client les
+      // verrait disparaître sans avoir rien reçu.
+      prisma.cart.findUnique.mockResolvedValue({ loyaltyHoldId: 'mvt-1' });
+      prisma.loyaltyTransaction.findUnique.mockResolvedValue({
+        id: 'mvt-1', accountId: COMPTE.id, kind: LoyaltyEntryKind.HOLD, points: -30,
+      });
+      prisma.loyaltyAccount.update.mockResolvedValue({ balance: 100 });
+
+      const rendus = await service.releaseHoldForCart('panier-1');
+
+      expect(rendus).toBe(30);
+      expect(prisma.loyaltyAccount.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { balance: { increment: 30 } } }),
+      );
+      expect(prisma.loyaltyTransaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ kind: LoyaltyEntryKind.RELEASE, points: 30 }),
+        }),
+      );
+    });
+
+    it('ne rend PAS une réservation déjà devenue la dépense d’une commande', async () => {
+      prisma.cart.findUnique.mockResolvedValue({ loyaltyHoldId: 'mvt-1' });
+      prisma.loyaltyTransaction.findUnique.mockResolvedValue({
+        id: 'mvt-1', accountId: COMPTE.id, kind: LoyaltyEntryKind.REDEEM, points: -30,
+      });
+
+      expect(await service.releaseHoldForCart('panier-1')).toBe(0);
+      expect(prisma.loyaltyAccount.update).not.toHaveBeenCalled();
+    });
+
+    it('CONVERTIT la réservation en dépense sans retoucher au solde', async () => {
+      // C'est ce qui rend l'étape incapable d'échouer : les points ont déjà
+      // quitté le solde, il ne reste qu'à les attribuer à la commande.
+      prisma.cart.findUnique.mockResolvedValue({ loyaltyHoldId: 'mvt-1' });
+      prisma.loyaltyTransaction.findUnique.mockResolvedValue({
+        id: 'mvt-1', kind: LoyaltyEntryKind.HOLD, points: -30, orderId: null,
+      });
+
+      const points = await service.convertHoldToRedeemTx(tx(), {
+        cartId: 'panier-1', orderId: 'cmd-1',
+      });
+
+      expect(points).toBe(30);
+      expect(prisma.loyaltyTransaction.update).toHaveBeenCalledWith({
+        where: { id: 'mvt-1' },
+        data: { kind: LoyaltyEntryKind.REDEEM, orderId: 'cmd-1' },
+      });
+      // Un seul mouvement par dépense : la somme du registre reste égale au solde.
+      expect(prisma.loyaltyAccount.updateMany).not.toHaveBeenCalled();
+      expect(prisma.loyaltyTransaction.create).not.toHaveBeenCalled();
+    });
+
+    it('rejeu du webhook : la conversion redonne le même nombre de points', async () => {
+      prisma.cart.findUnique.mockResolvedValue({ loyaltyHoldId: 'mvt-1' });
+      prisma.loyaltyTransaction.findUnique.mockResolvedValue({
+        id: 'mvt-1', kind: LoyaltyEntryKind.REDEEM, points: -30, orderId: 'cmd-1',
+      });
+
+      expect(
+        await service.convertHoldToRedeemTx(tx(), { cartId: 'panier-1', orderId: 'cmd-1' }),
+      ).toBe(30);
+      expect(prisma.loyaltyTransaction.update).not.toHaveBeenCalled();
+    });
+
+    it('la ronde des paniers expirés ne regarde jamais un panier devenu commande', async () => {
+      await service.rendreLesReservationsExpirees();
+      expect(prisma.cart.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            loyaltyHoldId: { not: null },
+            status: { not: CartStatus.CONVERTED },
+          }),
+        }),
+      );
     });
   });
 

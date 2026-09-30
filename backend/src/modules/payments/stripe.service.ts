@@ -447,6 +447,41 @@ export class StripeService implements OnModuleInit {
   }
 
   /**
+   * REND l'argent d'un paiement déjà encaissé.
+   *
+   * À ne pas confondre avec `cancelPaymentIntent`, qui libère une autorisation
+   * non capturée : là, rien n'avait été prélevé. Ici le convive a été débité,
+   * et c'est un mouvement en sens inverse qui apparaîtra sur son relevé.
+   *
+   * `reverse_transfer` est indispensable à notre montage : en destination
+   * charge, les fonds sont DÉJÀ partis vers le compte du club. Sans lui,
+   * Break Eat rendrait l'argent de sa propre poche tout en laissant celui du
+   * club sur son solde. `refund_application_fee` fait de même pour la
+   * commission, nulle aujourd'hui mais pas pour toujours.
+   *
+   * La clé d'idempotence est obligatoire : ce chemin est celui d'une
+   * compensation, appelé quand quelque chose vient d'échouer. Un rejeu ne doit
+   * pas rembourser deux fois.
+   */
+  async refundPaymentIntent(params: {
+    paymentIntentId: string;
+    idempotencyKey: string;
+    reason?: string;
+  }): Promise<Stripe.Refund> {
+    return this.appeler('remboursement', () =>
+      this.stripe.refunds.create(
+        {
+          payment_intent: params.paymentIntentId,
+          reverse_transfer: true,
+          refund_application_fee: true,
+          metadata: params.reason ? { motif: params.reason.slice(0, 200) } : undefined,
+        },
+        { idempotencyKey: params.idempotencyKey },
+      ),
+    );
+  }
+
+  /**
    * Retrieves a PaymentIntent. Used by webhook handlers and reconciliation jobs.
    */
   async retrievePaymentIntent(paymentIntentId: string): Promise<Stripe.PaymentIntent> {
