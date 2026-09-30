@@ -468,7 +468,7 @@ export class OrderSplitsService {
     );
 
     const echecs: string[] = [];
-    const partsEnEchec: string[] = [];
+    const partsEnEchec: { id: string; paiement: string | null }[] = [];
     for (const share of aEncaisser) {
       try {
         await this.stripe.capturePaymentIntent(share.stripePaymentIntentId as string);
@@ -481,7 +481,7 @@ export class OrderSplitsService {
         // autres : on encaisse ce qui peut l'être et on nomme ce qui a échoué.
         this.logger.error(`Encaissement échoué pour la part ${share.id}: ${String(e)}`);
         echecs.push(share.claimantName ?? 'un convive');
-        partsEnEchec.push(share.id);
+        partsEnEchec.push({ id: share.id, paiement: share.stripePaymentIntentId });
       }
     }
 
@@ -495,7 +495,21 @@ export class OrderSplitsService {
       //
       // Si l'hôte renonce, `annuler` rembourse ces parts encaissées : aucun
       // argent ne reste pris pour une tournée qui ne partira pas.
-      for (const shareId of partsEnEchec) await this.libererPart(shareId);
+      for (const part of partsEnEchec) {
+        // L'autorisation de ce convive est LIBÉRÉE avant d'abandonner sa part.
+        // Le plus souvent elle a déjà expiré — c'est pourquoi la capture a
+        // échoué — mais si elle tient encore, la laisser garderait son argent
+        // bloqué sur une part que personne ne paiera. L'échec est attendu ici,
+        // et n'empêche pas de rendre les articles.
+        if (part.paiement) {
+          try {
+            await this.stripe.cancelPaymentIntent(part.paiement);
+          } catch (e: unknown) {
+            this.logger.warn(`Autorisation ${part.paiement} non libérée : ${String(e)}`);
+          }
+        }
+        await this.libererPart(part.id);
+      }
       await this.prisma.orderSplit.updateMany({
         where: { id: split.id, status: OrderSplitStatus.SENDING },
         data: { status: OrderSplitStatus.OPEN },

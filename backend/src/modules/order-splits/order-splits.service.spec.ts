@@ -409,6 +409,9 @@ describe('OrderSplitsService — l’ardoise', () => {
       expect(prisma.orderSplit.updateMany).toHaveBeenLastCalledWith(
         expect.objectContaining({ data: { status: OrderSplitStatus.OPEN } }),
       );
+      // L'autorisation de Marc est LIBÉRÉE : si elle tenait encore, la laisser
+      // garderait son argent bloqué sur une part que personne ne paiera.
+      expect(stripe.cancelPaymentIntent).toHaveBeenCalledWith('pi_1');
     });
   });
 
