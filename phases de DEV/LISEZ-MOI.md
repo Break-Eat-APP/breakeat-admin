@@ -1,7 +1,8 @@
 # Dossier historique — arrêté le 07/06/2026
 
-**Ce dossier ne contient que les 14 premières phases du projet. Il n'est plus
-alimenté, et le projet en compte 52 au 30/09/2026.**
+**Les documents Word de ce dossier ne couvrent que les 14 premières phases du
+projet ; le projet en compte 52 au 30/09/2026.** Les suivantes sont dans
+`phases generees/`, fabriquées depuis le manuel (voir plus bas).
 
 ## Ce qu'il y a ici
 
@@ -11,6 +12,26 @@ AVANT construction, entre le 25/05 et le 07/06/2026, plus les scripts
 
 C'était la méthode des premières semaines : un document par phase, rédigé
 d'avance. Elle s'est arrêtée à la phase 14.
+
+## Les phases 15 et suivantes, en Word
+
+Elles sont dans **`phases generees/`** — 35 documents, un par phase, **fabriqués
+depuis `brain/ENGINEERING_MANUAL.md`** et non écrits à la main.
+
+```
+node "phases de DEV/generer-phases-depuis-manuel.js"
+```
+
+Chaque document porte sa date de génération en pied de page. **Ne les modifiez
+pas** : une correction se fait dans le manuel, puis on relance la commande —
+sinon le document dirait autre chose que le code, et la prochaine génération
+effacerait la correction.
+
+La commande a besoin de `node_modules/` dans ce dossier (bibliothèque `docx`,
+non suivie par git) : `npm install docx` ici si elle manque.
+
+> Ces documents-là décrivent ce qui a été **construit**. Les quatorze Word
+> d'origine, eux, décrivaient ce qui était **prévu** — la nuance compte.
 
 ## Où est la suite
 
