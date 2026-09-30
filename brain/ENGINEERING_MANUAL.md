@@ -124,6 +124,90 @@ If these questions cannot be answered, the implementation task is not finished.
 
 ---
 
+## Sommaire des phases — où trouver quoi
+
+Ce manuel a connu **deux formats de titre** : les premières entrées s'écrivent
+`## [2026-05-25] Phase 1 — …`, les récentes `## Phase 46 — …`. Une phase peut
+aussi être couverte par une entrée qui ne porte pas son numéro (« Phase mobile
+16→18 », « Phases 24-25 »), ou n'avoir qu'un audit. Chercher « Phase 16 » ne
+suffit donc pas : d'où ce sommaire.
+
+Il est **généré depuis les titres réels** du fichier — le réécrire à la main le
+rendrait faux dès la phase suivante. À regénérer quand des phases sont ajoutées.
+
+| Phase | Entrée(s) du manuel |
+|---|---|
+| **1** | Phase 1 — Project Foundation _(audit : Codex Audit Corrections — Phase 1 & 2 · Audit Global — Phases 1→10)_ |
+| **2** | Phase 2 — Auth + Organizations _(audit : Codex Audit Corrections — Phase 2 & 3 · Audit Global — Phases 1→10)_ |
+| **3** | Phase 3 — Events, Venues, Suppliers, Pickup Points _(audit : Audit Global — Phases 1→10)_ |
+| **4** | Phase 4 — Products, Categories, Stock _(audit : Codex Audit Phase 4 — UUID Fix + Stock/Product validations + Categories tests · Audit Global — Phases 1→10)_ |
+| **5** | Phase 5 — Cart, Checkout, Stripe Connect, Orders _(audit : Codex Audit P1/P2/P3 — Phase 5 Hardening · Codex Audit Phase 5 (2e passe) — SOURCE DE VÉRITÉ pipeline + checkout · Audit Global — Phases 1→10)_ |
+| **6** | — _(audit : Audit Phase 6 — Findings & Corrections · Audit Global — Phases 1→10)_ |
+| **7** | Phase 7 — Slots + Flaix Foundation _(audit : Audit Global — Phases 1→10)_ |
+| **8** | Phase 8 — Dashboards + Public Screens _(audit : Audit Global — Phases 1→10)_ |
+| **9** | Phase 9 — CMS basique + Feature Flags _(audit : Audit Global — Phases 1→10)_ |
+| **10** | Phase 10 — QA, Rush Tests, Déploiement _(audit : Audit Global — Phases 1→10)_ |
+| **11** | Phase 11 — Admin Panel (Next.js 15) · Phase 11 — Écrans opérateur configurables (fondation backend : schéma + module) _(audit : Audit Phase 11 & 12 — P1 Security Fix + P2 Branding Fix)_ |
+| **11.3** | Phase 11.3 — UI admin : écrans opérateur configurables (templates + application par événement) |
+| **11.4** | Phase 11.4 — Board opérateur : rendu des écrans configurables (onglets + filtrage + Récap produits) |
+| **11.4c** | Phase 11.4c — Board opérateur : regroupement visuel « X commandes similaires » |
+| **12** | Phase 12 — Blocs 12.7 · 12.8 · 12.9 — Admin Panel complet · Phase 12 — Admin Panel V1 Complet + Operator Home V2 |
+| **13** | Phase 13 — Mobile V1 — Parcours Client Complet |
+| **14** | Phase 14 — Groupes, accès privé aux événements & Back Office (SUPER_ADMIN) |
+| **15** | Phase 15 — Dashboard Manager (analytics org/événement, lecture seule) |
+| **16** | Phase mobile 16→18 — Découverte lieux, Backoffice, Vercel, EAS, Plan buvettes |
+| **17** | Phase mobile 16→18 — Découverte lieux, Backoffice, Vercel, EAS, Plan buvettes |
+| **18** | Fondation push Expo (Phase 18) · Phase mobile 16→18 — Découverte lieux, Backoffice, Vercel, EAS, Plan buvettes |
+| **19** | Phase 19 — État live des commandes + « Je suis arrivé » |
+| **20** | Phase 20 — Programme de fidélité (gain + utilisation) |
+| **21** | Phase 21 — Live Activity iOS (socle backend + extension native) |
+| **22** | Phase 22 — Lieux ouverts en continu (`Venue.operatingMode`) |
+| **24** | Phases 24-25 — Le plan de la bonne buvette, l'ardoise partagée, et le passage au paiement réel |
+| **25** | Phases 24-25 — Le plan de la bonne buvette, l'ardoise partagée, et le passage au paiement réel |
+| **26** | Phase 26 — La TVA par produit (2026-09-01) |
+| **27** | Phase 27 — Le retour de paiement (2026-09-02) |
+| **28** | Phase 28 — Un seul compte Stripe, celui du club (2026-09-02) |
+| **29** | Phase 29 — La journée où une commande payée n'arrivait nulle part (06/09/2026) |
+| **30** | Phase 30 — Un poste, une buvette (06/09/2026) |
+| **31** | Phase 31 — Le reçu (06/09/2026) |
+| **32** | Phase 32 — La cloche, et l'inscription par Apple (07/09/2026) |
+| **33** | Phase 33 — Le dashboard qui « sautait » au clic (16/09/2026) |
+| **34** | Phase 34 — Archivés, supprimés, démonstration : plus rien ne bloque (17/09/2026) |
+| **35** | Phase 35 — Produits manquants (17/09/2026) |
+| **36** | Phase 36 — L'alerte « produit manquant », lisible (17/09/2026) |
+| **37** | Phase 37 — Suspendre un club suspend vraiment (18/09/2026) |
+| **38** | Phase 38 — Revenir dans l'app après avoir payé (18/09/2026) |
+| **39** | Phase 39 — Payer dans l'app, pour de bon (18/09/2026) |
+| **40** | Phase 40 — Apple Pay : ne pas le proposer tant qu'il ne marche pas (18/09/2026) |
+| **41** | Phase 41 — Les clubs lisent leurs données eux-mêmes (18/09/2026) |
+| **42** | Phase 42 — Trois verrous de sécurité (18/09/2026) |
+| **43** | Phase 43 — Ce qu'un club sait de ses clients (19/09/2026) |
+| **44** | Phase 44 — Dire au client qu'il a été remboursé (19/09/2026) |
+| **45** | Phase 45 — La carte, entre les mains du comptoir (19/09/2026) |
+| **46** | Phase 46 — Le contrat signé, lisible sans le télécharger (19/09/2026) |
+| **47** | Phase 47 — Une barre du bas à cinq places (19/09/2026) |
+| **48** | Phase 48 — L'anneau de suivi, et l'éclair qui change de couleur (21/09/2026) |
+| **49** | Phase 49 — Deux compteurs qui mentaient (21/09/2026) |
+| **50** | Phase 50 — Les rapports Flaix, à un clic (21/09/2026) |
+| **51** | Phase 51 — Des chiffres qui ne se recoupent pas (21–23/09/2026) |
+| **52** | Phase 52 — La cloche, le ✓ et les commandes terminées (23/09/2026) |
+
+**Deux cas particuliers, à connaître :**
+
+- **Phase 6 — commandes en temps réel et outbox.** Elle a été construite avant
+  que ce manuel ne prenne le relais : seul son **audit** du 01/06/2026 y figure.
+  Ce qu'elle a produit se lit dans `brain/ORDER_STATE_MACHINE.md`, le module
+  `backend/src/modules/realtime/`, et le document d'origine
+  `phases de DEV/PHASE_6_ORDERS_REALTIME_OUTBOX.docx`.
+- **Phase 23 — n'existe pas.** La numérotation passe de 22 à 24 : un numéro
+  sauté, rien de perdu. Ne pas le réattribuer, il rendrait l'historique illisible.
+
+**Les phases 1 à 14 ont aussi un document Word d'origine** dans `phases de DEV/`
+(le cahier des charges écrit avant construction). Cette méthode s'est arrêtée le
+07/06/2026 : depuis, ce manuel est le seul récit tenu à jour.
+
+---
+
 ## [2026-05-25] Phase 1 — Project Foundation
 
 ### What Was Built
