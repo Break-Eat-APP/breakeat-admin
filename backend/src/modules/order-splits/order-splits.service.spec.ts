@@ -18,6 +18,7 @@ describe('OrderSplitsService — l’ardoise', () => {
     cart: { findUnique: jest.Mock };
     orderSplit: {
       findFirst: jest.Mock;
+      findMany: jest.Mock;
       findUnique: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
@@ -78,6 +79,7 @@ describe('OrderSplitsService — l’ardoise', () => {
       cart: { findUnique: jest.fn().mockResolvedValue(panier()) },
       orderSplit: {
         findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
         findUnique: jest.fn().mockResolvedValue(ardoise()),
         create: jest.fn(),
         update: jest.fn().mockResolvedValue({}),
@@ -461,6 +463,49 @@ describe('OrderSplitsService — l’ardoise', () => {
       );
       await expect(service.annuler(HOTE, CODE)).rejects.toBeInstanceOf(BadRequestException);
       expect(stripe.cancelPaymentIntent).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── Envois interrompus ──────────────────────────────────────
+
+  describe('la ronde des envois interrompus', () => {
+    it('REND l’argent d’une ardoise restée en cours d’envoi', async () => {
+      // Le défaut : si le serveur tombe entre l'encaissement et la création de
+      // la commande, l'ardoise reste en SENDING. Personne ne la reprenait :
+      // l'hôte lisait « la tournée part déjà » indéfiniment, et ses amis
+      // étaient débités pour rien.
+      prisma.orderSplit.findMany.mockResolvedValue([{ id: SPLIT, code: CODE }]);
+      prisma.orderSplitShare.findMany.mockResolvedValue([
+        { id: 's1', stripePaymentIntentId: 'pi_1', amountCents: 850 },
+      ]);
+
+      await service.rattraperEnvoisInterrompus();
+
+      expect(stripe.refundPaymentIntent).toHaveBeenCalledWith(
+        expect.objectContaining({ paymentIntentId: 'pi_1' }),
+      );
+      // Marquée en échec : l'hôte peut en ouvrir une nouvelle.
+      expect(prisma.orderSplit.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: OrderSplitStatus.FAILED } }),
+      );
+    });
+
+    it('ne touche QUE les envois vieux de plus de dix minutes, et SANS commande', async () => {
+      // Rembourser une tournée en train de partir serait bien pire que
+      // l'incident réparé. Et une ardoise qui porte déjà une commande est
+      // partie : la commande et le lien sont écrits ensemble.
+      await service.rattraperEnvoisInterrompus();
+
+      const filtre = prisma.orderSplit.findMany.mock.calls[0][0].where;
+      expect(filtre.status).toBe(OrderSplitStatus.SENDING);
+      expect(filtre.orderId).toBeNull();
+      expect(filtre.updatedAt.lt).toBeInstanceOf(Date);
+      expect(Date.now() - filtre.updatedAt.lt.getTime()).toBeGreaterThanOrEqual(10 * 60 * 1000);
+    });
+
+    it('ne rembourse rien quand aucune ardoise n’est bloquée', async () => {
+      await service.rattraperEnvoisInterrompus();
+      expect(stripe.refundPaymentIntent).not.toHaveBeenCalled();
     });
   });
 });

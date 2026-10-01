@@ -120,6 +120,8 @@ describe('OrdersService', () => {
           useValue: {
             payment: {
               findUnique: jest.fn(),
+              findMany: jest.fn(),
+              update: jest.fn(),
               upsert: jest.fn(),
             },
             cart: { findUnique: jest.fn() },
@@ -198,6 +200,112 @@ describe('OrdersService', () => {
     it('ne touche pas la base pour une liste vide', async () => {
       expect(await service.withPickupGuidance([])).toEqual([]);
       expect(prisma.supplier.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── Remboursements ──────────────────────────────────────────
+
+  describe('recordRefund — dire au client qu’il a été remboursé', () => {
+    beforeEach(() => {
+      transactionMock.mockImplementation(async (ops: unknown) => ops);
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue({
+        status: OrderStatus.PICKED_UP,
+        paymentStatus: PaymentStatus.SUCCEEDED,
+        publicOrderNumber: 'BE-00000001',
+      });
+    });
+
+    it('marque REFUNDED quand tout a été rendu', async () => {
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue({
+        id: 'pay-1',
+        orderId: ORDER_ID,
+        amountCents: 1500,
+      });
+      (prisma.payment.findMany as jest.Mock).mockResolvedValue([
+        { status: PaymentStatus.REFUNDED },
+      ]);
+
+      await service.recordRefund(PAYMENT_INTENT_ID, { rembourseCents: 1500, totalCents: 1500 }, {});
+
+      expect(prisma.payment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: PaymentStatus.REFUNDED }),
+        }),
+      );
+      expect(prisma.order.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { paymentStatus: PaymentStatus.REFUNDED } }),
+      );
+    });
+
+    it('une seule part rendue sur une TOURNÉE ne rembourse pas la commande', async () => {
+      // Une ardoise porte une ligne de paiement par convive. Rendre la part
+      // d'un seul ne rend pas la commande : l'état se recalcule depuis TOUTES
+      // les lignes, pas depuis le remboursement reçu.
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue({
+        id: 'pay-1',
+        orderId: ORDER_ID,
+        amountCents: 850,
+      });
+      (prisma.payment.findMany as jest.Mock).mockResolvedValue([
+        { status: PaymentStatus.REFUNDED },
+        { status: PaymentStatus.SUCCEEDED },
+      ]);
+
+      await service.recordRefund(PAYMENT_INTENT_ID, { rembourseCents: 850, totalCents: 850 }, {});
+
+      expect(prisma.order.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { paymentStatus: PaymentStatus.PARTIALLY_REFUNDED } }),
+      );
+    });
+
+    it('un remboursement PARTIEL est annoncé comme tel', async () => {
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue({
+        id: 'pay-1',
+        orderId: ORDER_ID,
+        amountCents: 1500,
+      });
+      (prisma.payment.findMany as jest.Mock).mockResolvedValue([
+        { status: PaymentStatus.PARTIALLY_REFUNDED },
+      ]);
+
+      await service.recordRefund(PAYMENT_INTENT_ID, { rembourseCents: 500, totalCents: 1500 }, {});
+
+      expect(prisma.payment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: PaymentStatus.PARTIALLY_REFUNDED }),
+        }),
+      );
+    });
+
+    it('REJEU : le même remboursement n’ajoute pas un second mouvement', async () => {
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue({
+        id: 'pay-1',
+        orderId: ORDER_ID,
+        amountCents: 1500,
+      });
+      (prisma.payment.findMany as jest.Mock).mockResolvedValue([
+        { status: PaymentStatus.REFUNDED },
+      ]);
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue({
+        status: OrderStatus.PICKED_UP,
+        paymentStatus: PaymentStatus.REFUNDED,
+        publicOrderNumber: 'BE-00000001',
+      });
+
+      await service.recordRefund(PAYMENT_INTENT_ID, { rembourseCents: 1500, totalCents: 1500 }, {});
+
+      expect(transactionMock).not.toHaveBeenCalled();
+    });
+
+    it('un paiement INCONNU ne fait pas échouer le webhook', async () => {
+      // Une autorisation d'ardoise jamais devenue commande, par exemple.
+      // Lever ici ferait rejouer Stripe indéfiniment sur un cas normal.
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.recordRefund('pi_inconnu', { rembourseCents: 100, totalCents: 100 }, {}),
+      ).resolves.toBeUndefined();
+      expect(prisma.order.update).not.toHaveBeenCalled();
     });
   });
 
@@ -298,8 +406,12 @@ describe('OrdersService', () => {
       status: 'PAID',
     });
 
+    /** Écritures observées sur l'ardoise pendant la transaction. */
+    let ardoiseClose: jest.Mock;
+
     /** Prépare l'ardoise et rend les doublures de stock de la transaction. */
     function montrerArdoise(quantiteEnStock: number) {
+      ardoiseClose = jest.fn();
       (prisma.orderSplit.findUnique as jest.Mock).mockResolvedValue({
         id: 'split-1',
         code: 'ABC234',
@@ -336,6 +448,9 @@ describe('OrdersService', () => {
           payment: { create: jest.fn() },
           orderAuditTrail: { create: jest.fn() },
           stock,
+          // L'ardoise est close DANS cette transaction : la commande et le lien
+          // vers elle ne peuvent plus exister l'un sans l'autre.
+          orderSplit: { updateMany: ardoiseClose },
         }),
       );
       return stock;
@@ -359,6 +474,16 @@ describe('OrdersService', () => {
       // Et la ligne de frites, séparément.
       expect(stock.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({ data: { quantity: { decrement: 1 } } }),
+      );
+
+      // L'ardoise est close DANS la même transaction. Écrit après, un arrêt du
+      // serveur entre les deux laissait une commande bien réelle et une ardoise
+      // « en cours d'envoi » sans lien vers elle — que la ronde de rattrapage
+      // aurait remboursée alors que les convives étaient servis.
+      expect(ardoiseClose).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { status: 'SENT', orderId: 'order-ardoise' },
+        }),
       );
     });
 

@@ -1,7 +1,7 @@
 # Dossier historique — arrêté le 07/06/2026
 
 **Les documents Word de ce dossier ne couvrent que les 14 premières phases du
-projet ; le projet en compte 54 au 01/10/2026.** Les suivantes sont dans
+projet ; le projet en compte 55 au 01/10/2026.** Les suivantes sont dans
 `phases generees/`, fabriquées depuis le manuel (voir plus bas).
 
 ## Ce qu'il y a ici
@@ -15,7 +15,7 @@ d'avance. Elle s'est arrêtée à la phase 14.
 
 ## Les phases 15 et suivantes, en Word
 
-Elles sont dans **`phases generees/`** — 37 documents, un par phase, **fabriqués
+Elles sont dans **`phases generees/`** — 38 documents, un par phase, **fabriqués
 depuis `brain/ENGINEERING_MANUAL.md`** et non écrits à la main.
 
 ```

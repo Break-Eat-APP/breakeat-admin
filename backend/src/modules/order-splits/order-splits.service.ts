@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { randomInt } from 'crypto';
 import {
   CartStatus,
@@ -51,6 +52,16 @@ const ESSAIS_MAX = 5;
 
 /** Une ardoise vaut pour un service. */
 const DUREE_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Au-delà de ce délai, un envoi « en cours » est considéré comme INTERROMPU.
+ *
+ * Un envoi normal dure quelques secondes : le temps d'encaisser les cartes et
+ * d'écrire la commande. Dix minutes laissent une marge confortable à un service
+ * lent ou à une reprise de Stripe, sans quoi la ronde rembourserait une tournée
+ * en train de partir — bien pire que l'incident qu'elle répare.
+ */
+const PATIENCE_ENVOI_MS = 10 * 60 * 1000;
 
 /**
  * Combien de temps une case cochée reste réservée pendant que le convive paie.
@@ -546,16 +557,61 @@ export class OrderSplitsService {
       );
     }
 
-    // SENT et `orderId` ensemble, sous condition d'être encore l'envoyeur.
-    // `orderId` est UNIQUE en base : une seconde tournée sur la même ardoise
-    // serait refusée par Postgres avant d'exister.
-    await this.prisma.orderSplit.updateMany({
-      where: { id: split.id, status: OrderSplitStatus.SENDING },
-      data: { status: OrderSplitStatus.SENT, orderId: order.id },
-    });
-
+    // Rien à écrire ici : `createFromSplit` a posé SENT et `orderId` DANS la
+    // transaction de la commande. Les séparer laissait une fenêtre où une
+    // commande existait sans que l'ardoise le sache.
     this.logger.log(`Ardoise ${split.code} envoyée — commande ${order.publicOrderNumber}`);
     return order;
+  }
+
+  /**
+   * Rattrape les envois INTERROMPUS.
+   *
+   * `envoyer` encaisse les cartes, puis crée la commande. Si le serveur tombe
+   * entre les deux — redéploiement, coupure, processus tué — l'ardoise reste en
+   * SENDING avec de l'argent déjà pris et aucune commande. Personne ne la
+   * reprend : l'hôte voit « la tournée part déjà » indéfiniment, et ses amis
+   * sont débités pour rien.
+   *
+   * La ronde rend donc l'argent et marque l'ardoise FAILED, ce qui permet à
+   * l'hôte d'en ouvrir une nouvelle. Elle ne touche que les ardoises SENDING
+   * depuis plus de {@link PATIENCE_ENVOI_MS} : un envoi normal dure quelques
+   * secondes, et il ne faut jamais rembourser une tournée en cours de départ.
+   *
+   * Une ardoise qui porte déjà une commande n'est jamais remboursée : la
+   * commande et le lien sont écrits ensemble, donc `orderId` rempli prouve que
+   * la tournée est partie.
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async rattraperEnvoisInterrompus(): Promise<void> {
+    const bloquees = await this.prisma.orderSplit.findMany({
+      where: {
+        status: OrderSplitStatus.SENDING,
+        orderId: null,
+        updatedAt: { lt: new Date(Date.now() - PATIENCE_ENVOI_MS) },
+      },
+      select: { id: true, code: true },
+      take: 50,
+    });
+
+    for (const ardoise of bloquees) {
+      try {
+        const rendues = await this.rembourserPartsEncaissees(
+          ardoise.id,
+          `ardoise ${ardoise.code} : envoi interrompu`,
+        );
+        await this.prisma.orderSplit.updateMany({
+          where: { id: ardoise.id, status: OrderSplitStatus.SENDING, orderId: null },
+          data: { status: OrderSplitStatus.FAILED },
+        });
+        this.logger.error(
+          `Ardoise ${ardoise.code} : envoi interrompu, ${rendues} paiement(s) remboursé(s). ` +
+            'La tournée est marquée en échec — l’hôte peut en ouvrir une nouvelle.',
+        );
+      } catch (e: unknown) {
+        this.logger.error(`Ardoise ${ardoise.code} : rattrapage impossible — ${String(e)}`);
+      }
+    }
   }
 
   /**

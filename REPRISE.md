@@ -16,7 +16,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-10-01 (audit soldé : les 5 P1 — phase 53 — et les 9 P2 — phase 54. Reste à lancer les tests d'intégration et à passer les deux migrations sur la base cible)_
+_Dernière mise à jour : 2026-10-01 (second passage d'audit traité — phase 55 : envoi d'ardoise interrompu, remboursements enregistrés, contenant dormant invisible au public. Reste à passer les deux migrations sur la base cible)_
 
 ## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
@@ -87,7 +87,10 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Liens Flaix** | Carte en place sur chaque fiche d'événement | Les coller à la main, un par match. Se remplira tout seul quand Flaix sera branché |
 | **Envoi EAS bloqué** | Builds 19, 20, 21 : l'envoi AUTOMATIQUE reste en file d'attente | Lancer `eas submit` à la main après chaque build — c'est ce qui passe. À signaler à Expo si ça continue |
 | **Builds 20 et 21** | Chez Apple | Pas encore validés sur un vrai téléphone : cloche, ✓ « prête », liste En cours / Terminées |
-| **Audit — les 5 P1** | ✅ Corrigés le 30/09 (phase 53) : créneaux cross-tenant, conteneur dormant, ardoise (verrou + remboursement), stock de l'ardoise, réservation des points | Les **tests d'intégration** de ces corrections n'ont pas pu tourner : le moteur Docker ne répondait plus. Relancer `docker start breakeat_audit` puis `pnpm test:integration` — et faire passer les deux migrations sur la base cible avant tout déploiement |
+| **Audit — les 5 P1** | ✅ Corrigés le 30/09 (phase 53) : créneaux cross-tenant, conteneur dormant, ardoise (verrou + remboursement), stock de l'ardoise, réservation des points | **Les deux migrations restent à passer sur la base cible** avant tout déploiement (`20260930_ardoise_envoi_atomique`, `20260930_fidelite_reservation`) |
+| **Audit — second passage (phase 55)** | ✅ Corrigés le 01/10 : l'envoi d'ardoise interrompu ne reste plus bloqué en SENDING (lien écrit dans la transaction + ronde de rattrapage qui rembourse), `charge.refunded` est enfin traité (le bandeau bleu de l'app pouvait s'afficher, rien n'écrivait jamais `REFUNDED`), et le contenant dormant disparaît aussi des LECTURES publiques | — |
+| **Tests d'intégration** | La passe d'audit du 01/10 les annonce verts : 9 suites / 94 tests. **Non revérifié ici** : le moteur Docker de cette machine ne répond pas (CLI vivant, canal du démon absent, WSL redémarré sans effet), et `contenant-dormant.int-spec.ts` n'a donc jamais tourné | Redémarrer le moteur depuis l'interface Docker Desktop, puis `cd backend` et `pnpm test:integration` |
+| **Flaix — le cœur décisionnel** | STUB assumé : `requestSlotDecision`, `assessRush` et `requestRecommendations` rendent `null` et **n'ont aucun appelant**. Ce qui marche avec Flaix vit ailleurs : le webhook signé (Live Activity) et le lien vers le rapport d'événement | Rien à faire tant que l'API Flaix n'existe pas. Le jour venu : un appelant doit traiter `null` comme « pas d'avis » et poursuivre — un parcours de commande qui ATTEND Flaix s'arrêterait le jour où Flaix tombe |
 | **Audit — les 9 P2** | ✅ Corrigés le 01/10 (phase 54) : portée buvette du stock et des créneaux, journée locale contre UTC, modèles récurrents bornés au conteneur permanent, périmètre du chiffre d'affaires unifié, session du back-office renouvelable, invitation transactionnelle, journal webhook réclamé en une instruction, identifiants Flaix bornés à la commande | Comme pour les P1 : les tests d'intégration restent à lancer. Le détail est dans `brain/audits/AUDIT_2026-09-30_par-phase.md` |
 | **Audit — les P3** | Non traités | Le plus rentable : **aucun test automatisé** sur admin, operator et back-office (et un seul fichier côté mobile). Vient ensuite la CI, qui ne lance pas `test:integration` |
 | **Dette : `visites`** | L'API calcule encore les passages | Plus aucun écran ne les affiche. À retirer si rien ne les reprend |
@@ -976,8 +979,16 @@ garde ses commandes (comptabilité) et rend son adresse — le back-office
 l'affiche avec « Adresse rendue ». Même chose pour le slug d'une organisation
 suspendue. Détail et raisons : `brain/ENGINEERING_MANUAL.md`, phase 34.
 
-Suite d'intégration sur vraie base : `pnpm test:integration` (backend), avec
-`DATABASE_URL_TEST` — voir la phase 34 pour monter la base d'essai.
+Suite d'intégration sur vraie base — **depuis `backend/`**, le script n'existe
+pas à la racine du dépôt :
+
+```
+cd backend
+pnpm test:integration
+```
+
+Elle a besoin de `DATABASE_URL_TEST` et d'une base Postgres joignable (le
+conteneur `breakeat_audit`, port 55432) — voir la phase 34 pour la monter.
 
 ## 🍏 Ajouter une capability iOS — l'ordre compte
 

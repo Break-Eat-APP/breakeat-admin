@@ -49,6 +49,7 @@ describe('StripeWebhooksService', () => {
           useValue: {
             createFromPaymentIntent: jest.fn(),
             recordFailedPayment: jest.fn(),
+            recordRefund: jest.fn(),
           },
         },
         {
@@ -247,5 +248,55 @@ describe('StripeWebhooksService', () => {
     expect(updateCall.data.stripeAccountStatus).toBe('ACTIVE');
     // First-time onboarded timestamp must be set
     expect(updateCall.data.stripeOnboardedAt).toBeInstanceOf(Date);
+  });
+
+  // ─── Remboursements ──────────────────────────────────────────
+
+  describe('charge.refunded', () => {
+    it('ENREGISTRE le remboursement sur la commande', async () => {
+      // Le défaut : l'app savait AFFICHER un remboursement (bandeau bleu,
+      // anneau bleu), l'API renvoyait déjà `paymentStatus`, et rien n'écrivait
+      // jamais `REFUNDED`. Un remboursement fait depuis le tableau de bord
+      // Stripe ne se voyait nulle part : le client lisait « Récupérée » et nous
+      // écrivait pour savoir où était son argent.
+      const event = makeEvent('charge.refunded', {
+        id: 'ch_1',
+        payment_intent: PAYMENT_INTENT_ID,
+        amount: 1500,
+        amount_refunded: 1500,
+      });
+
+      await service.handleEvent(event);
+
+      expect(orders.recordRefund).toHaveBeenCalledWith(
+        PAYMENT_INTENT_ID,
+        { rembourseCents: 1500, totalCents: 1500 },
+        expect.anything(),
+      );
+    });
+
+    it('transmet le CUMUL rendu : c’est ce qui distingue un partiel', async () => {
+      const event = makeEvent('charge.refunded', {
+        id: 'ch_2',
+        payment_intent: PAYMENT_INTENT_ID,
+        amount: 1500,
+        amount_refunded: 500,
+      });
+
+      await service.handleEvent(event);
+
+      expect(orders.recordRefund).toHaveBeenCalledWith(
+        PAYMENT_INTENT_ID,
+        { rembourseCents: 500, totalCents: 1500 },
+        expect.anything(),
+      );
+    });
+
+    it('ignore une charge sans paiement rattaché, sans faire echouer le webhook', async () => {
+      const event = makeEvent('charge.refunded', { id: 'ch_3', amount: 1500, amount_refunded: 1500 });
+
+      await expect(service.handleEvent(event)).resolves.toBeUndefined();
+      expect(orders.recordRefund).not.toHaveBeenCalled();
+    });
   });
 });

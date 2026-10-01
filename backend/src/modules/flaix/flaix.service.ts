@@ -56,6 +56,23 @@ export type FlaixDecisionPayload =
  *
  * Integration allowed from: orders → flaix, slots → flaix, dashboards → flaix,
  *                            products → flaix (recommendations only).
+ *
+ * ─── ÉTAT AU 01/10/2026 : AUCUN APPELANT ──────────────────────
+ *
+ * `requestSlotDecision`, `assessRush` et `requestRecommendations` ne sont
+ * appelées par PERSONNE. Elles décrivent un contrat (`FLAIX_CONTRACT.md`) dont
+ * l'API n'existe pas encore : les écrire sans contrat réel, c'est écrire du code
+ * qu'il faudra réécrire. Elles rendent donc `null`, et c'est VOULU.
+ *
+ * Ce qui marche aujourd'hui avec Flaix est ailleurs et bien vivant : le webhook
+ * signé (`live-activity/flaix-webhook.service.ts`, qui met à jour la Live
+ * Activity du client) et le lien vers le rapport d'un événement
+ * (`events/lien-flaix.ts`). Ce service-ci est la place réservée du jour où
+ * Flaix décidera pour nous.
+ *
+ * ⚠️ Avant de brancher le premier appel : un appelant doit traiter `null`
+ * comme « pas d'avis » et poursuivre normalement. Un parcours de commande qui
+ * ATTEND une réponse de Flaix s'arrêterait le jour où Flaix tombe.
  */
 @Injectable()
 export class FlaixService {

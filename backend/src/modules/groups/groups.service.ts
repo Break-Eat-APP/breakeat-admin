@@ -10,7 +10,7 @@ import {
   MANAGE_ROLES,
   ALL_ORG_ROLES,
 } from '../../common/helpers/require-org-access';
-import { GroupMemberSource, EventVisibility } from '@prisma/client';
+import { GroupMemberSource, EventVisibility, VenueOperatingMode } from '@prisma/client';
 import type { Group, GroupMember } from '@prisma/client';
 import type { CreateGroupDto } from './dto/create-group.dto';
 import type { UpdateGroupDto } from './dto/update-group.dto';
@@ -249,9 +249,32 @@ export class GroupsService {
   async canAccessEvent(eventId: string, userId: string | null): Promise<boolean> {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
-      select: { visibility: true },
+      select: {
+        visibility: true,
+        isPermanentContainer: true,
+        venue: { select: { operatingMode: true } },
+      },
     });
     if (!event) return false;
+
+    // ─── LE CONTENANT D'UN LIEU QUI N'EST PLUS OUVERT EN CONTINU ───
+    //
+    // Un lieu permanent porte un événement INVISIBLE qui reçoit ses commandes.
+    // Quand le lieu repasse en mode événementiel, ce contenant est conservé —
+    // les commandes passées y sont rattachées — et endormi (PAUSED) : le panier
+    // le refuse donc. Mais la LECTURE publique ne regardait pas son statut : un
+    // ancien lien affichait encore le lieu, ses buvettes et ses produits, avec
+    // un bouton qui échouait au moment de commander.
+    //
+    // Ici plutôt que dans chaque route : cette fonction est déjà le passage
+    // obligé des lectures publiques ET du panier.
+    if (
+      event.isPermanentContainer &&
+      event.venue?.operatingMode !== VenueOperatingMode.PERMANENT
+    ) {
+      return false;
+    }
+
     if (event.visibility === EventVisibility.PUBLIC) return true;
     if (!userId) return false;
 

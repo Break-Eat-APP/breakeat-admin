@@ -5,6 +5,45 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.77.0] — 2026-10-01 — Second passage d'audit
+
+Trois défauts, dont **un ouvert par la correction précédente** — le cas le plus
+instructif.
+
+**L'envoi d'ardoise pouvait rester bloqué « en cours ».** La phase 53 avait fait
+de l'envoi une revendication (`OPEN → SENDING`) ; elle a donc créé un état dont
+personne ne sortait. Serveur tombé entre l'encaissement et la création de la
+commande, l'ardoise restait en SENDING avec de l'argent pris et aucune commande.
+Deux corrections : le lien vers la commande est écrit DANS la transaction de la
+commande (sinon une panne entre les deux laissait une commande que l'ardoise
+ignorait — et la ronde aurait remboursé des convives déjà servis), et une ronde
+de cinq minutes rembourse les ardoises SENDING depuis plus de dix minutes et sans
+commande, puis les marque FAILED.
+
+**Les remboursements n'étaient jamais enregistrés.** L'app savait les AFFICHER
+depuis la phase 44, l'API renvoyait déjà `paymentStatus`, et aucun code n'écrivait
+jamais `REFUNDED` : un remboursement fait depuis Stripe ne se voyait nulle part.
+`charge.refunded` est traité ; l'état de la commande est recalculé depuis TOUTES
+ses lignes de paiement (une tournée partagée en compte une par convive), et le
+STATUT de la commande ne bouge pas — une commande remboursée a bien été servie.
+
+**Le contenant dormant restait lisible publiquement.** La phase 53 l'endort, ce
+qui ferme le panier ; mais la lecture publique ne regardait pas son statut. Un
+ancien lien affichait encore le lieu et ses produits, avec un bouton qui échouait
+au moment de commander. La règle est posée dans `canAccessEvent`, passage obligé
+des lectures publiques et du panier — qui gagne au passage ses sept premiers
+tests.
+
+**Flaix** reste un stub assumé : les trois fonctions signalées n'ont aucun
+appelant, et l'en-tête du service le dit maintenant noir sur blanc.
+
+`~ order-splits.service.ts` `~ orders.service.ts` `~ stripe-webhooks.service.ts`
+`~ groups.service.ts` `~ flaix.service.ts`
+`+ groups.service.spec.ts`
+684 tests unitaires (18 nouveaux), 12 mobile.
+
+---
+
 ## [0.76.0] — 2026-10-01 — Les neuf défauts P2 de l'audit
 
 Trois familles : du cloisonnement entre équipes, des règles écrites deux fois

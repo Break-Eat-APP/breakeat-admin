@@ -8,6 +8,7 @@ import {
 import {
   CartStatus,
   OrderActorType,
+  OrderSplitStatus,
   OrderStatus,
   PaymentStatus,
   SlotKind,
@@ -564,6 +565,22 @@ export class OrdersService {
       // comptoir continuait d'en vendre qu'il n'avait plus.
       await this.decrementerStock(tx, pickupPointId, itemSnapshots);
 
+      // ─── L'ARDOISE EST CLOSE DANS LA MÊME TRANSACTION ─────────
+      //
+      // Ce passage à SENT vivait APRÈS la transaction, dans le service de
+      // l'ardoise. Entre les deux, une panne du serveur laissait une commande
+      // bien réelle et une ardoise restée « en cours d'envoi », sans lien vers
+      // elle : plus personne ne pouvait retrouver la commande depuis l'ardoise,
+      // et la ronde de rattrapage aurait remboursé des convives DÉJÀ servis.
+      //
+      // Écrit ici, le lien ne peut plus manquer : soit la commande et le lien
+      // existent, soit ni l'un ni l'autre. `orderId` est UNIQUE en base — une
+      // seconde tournée sur la même ardoise serait refusée avant d'exister.
+      await tx.orderSplit.updateMany({
+        where: { id: split.id, status: { in: [OrderSplitStatus.OPEN, OrderSplitStatus.SENDING] } },
+        data: { status: OrderSplitStatus.SENT, orderId: createdOrder.id },
+      });
+
       // Créneau : on ESSAIE, sans faire échouer la commande.
       //
       // Ailleurs, un créneau fermé annule la transaction — c'est voulu, mieux
@@ -626,6 +643,114 @@ export class OrdersService {
     });
 
     this.logger.warn(`Payment failed: ${paymentIntentId} — ${failureReason}`);
+  }
+
+  /**
+   * ENREGISTRE un remboursement Stripe sur la commande.
+   *
+   * L'application savait DÉJÀ afficher un remboursement — bandeau bleu, anneau
+   * bleu de la pastille — et l'API renvoyait déjà `paymentStatus`. Mais aucun
+   * code n'écrivait jamais `REFUNDED` : un remboursement fait depuis le tableau
+   * de bord Stripe, ou par notre propre compensation d'ardoise, ne se voyait
+   * nulle part côté client. Il voyait « Récupérée », comme si de rien n'était,
+   * et nous écrivait pour savoir où était son argent.
+   *
+   * L'état de la COMMANDE est recalculé depuis TOUTES ses lignes de paiement,
+   * pas depuis le seul remboursement reçu : une tournée partagée en compte une
+   * par convive, et rendre la part d'un seul ne rembourse pas la commande.
+   *
+   * Idempotent : un rejeu du webhook réécrit le même état et n'ajoute pas de
+   * second mouvement.
+   */
+  async recordRefund(
+    paymentIntentId: string,
+    montants: { rembourseCents: number; totalCents: number },
+    rawEvent: Prisma.InputJsonValue,
+  ): Promise<void> {
+    const paiement = await this.prisma.payment.findUnique({
+      where: { stripePaymentIntentId: paymentIntentId },
+      select: { id: true, orderId: true, amountCents: true },
+    });
+    if (!paiement) {
+      // Un remboursement sur un paiement que nous ne connaissons pas : une
+      // autorisation d'ardoise jamais devenue commande, par exemple. Rien à
+      // écrire, mais la trace reste utile si quelqu'un cherche la somme.
+      this.logger.warn(
+        `Remboursement de ${montants.rembourseCents} c sur le paiement inconnu ${paymentIntentId}`,
+      );
+      return;
+    }
+
+    const total = montants.rembourseCents >= montants.totalCents;
+    const etatPaiement = total ? PaymentStatus.REFUNDED : PaymentStatus.PARTIALLY_REFUNDED;
+
+    await this.prisma.payment.update({
+      where: { id: paiement.id },
+      data: { status: etatPaiement, rawStripeEvent: rawEvent },
+    });
+
+    if (!paiement.orderId) {
+      this.logger.warn(`Paiement ${paymentIntentId} remboursé — aucune commande rattachée`);
+      return;
+    }
+
+    const paiements = await this.prisma.payment.findMany({
+      where: { orderId: paiement.orderId },
+      select: { status: true },
+    });
+    const rembourses = paiements.filter(
+      (p) =>
+        p.status === PaymentStatus.REFUNDED || p.status === PaymentStatus.PARTIALLY_REFUNDED,
+    );
+    // Tout rendu, ou seulement une partie ? C'est ce que le client lit.
+    const etatCommande =
+      rembourses.length === paiements.length &&
+      rembourses.every((p) => p.status === PaymentStatus.REFUNDED)
+        ? PaymentStatus.REFUNDED
+        : PaymentStatus.PARTIALLY_REFUNDED;
+
+    const commande = await this.prisma.order.findUnique({
+      where: { id: paiement.orderId },
+      select: { status: true, paymentStatus: true, publicOrderNumber: true },
+    });
+    if (!commande) return;
+    if (commande.paymentStatus === etatCommande) {
+      // Rejeu : rien de neuf à écrire, et surtout pas un second mouvement au
+      // journal d'audit.
+      return;
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.order.update({
+        where: { id: paiement.orderId },
+        data: { paymentStatus: etatCommande },
+      }),
+      // Le STATUT de la commande ne bouge pas : une commande remboursée a bien
+      // été servie, ou annulée, et c'est une autre information. On trace le
+      // mouvement d'argent à côté.
+      this.prisma.orderAuditTrail.create({
+        data: {
+          orderId: paiement.orderId,
+          actorType: OrderActorType.SYSTEM,
+          previousState: commande.status,
+          nextState: commande.status,
+          reason:
+            etatCommande === PaymentStatus.REFUNDED
+              ? 'Remboursement TOTAL enregistré depuis Stripe'
+              : 'Remboursement PARTIEL enregistré depuis Stripe',
+          metadata: {
+            paymentIntentId,
+            rembourseCents: montants.rembourseCents,
+            totalCents: montants.totalCents,
+          },
+        },
+      }),
+    ]);
+
+    this.logger.log(
+      `Commande ${commande.publicOrderNumber} : ${etatCommande} ` +
+        `(${montants.rembourseCents} c sur ${montants.totalCents} c)`,
+    );
   }
 
   // ─── Operator transitions ─────────────────────────────────────

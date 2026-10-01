@@ -193,6 +193,7 @@ rendrait faux dès la phase suivante. À regénérer quand des phases sont ajout
 | **52** | Phase 52 — La cloche, le ✓ et les commandes terminées (23/09/2026) |
 | **53** | Phase 53 — Les cinq défauts de l'audit, corrigés (30/09/2026) |
 | **54** | Phase 54 — Les neuf défauts P2 de l'audit (30/09–01/10/2026) |
+| **55** | Phase 55 — Second passage d'audit : ce que la correction précédente avait ouvert (01/10/2026) |
 
 **Deux cas particuliers, à connaître :**
 
@@ -6349,3 +6350,99 @@ Les tests d'intégration des phases 53 et 54 n'ont pas pu tourner : le moteur
 Docker ne répondait plus sur cette machine. Les deux migrations de la phase 53
 restent à passer sur la base cible. Le back-office et le panneau d'admin n'ont
 toujours aucun test automatisé — c'est le P3 le plus rentable qui reste.
+
+---
+
+## Phase 55 — Second passage d'audit : ce que la correction précédente avait ouvert (01/10/2026)
+
+Un second passage d'audit, après les phases 53 et 54. Trois défauts réels, dont
+**un ouvert par la correction précédente** — c'est le cas le plus instructif.
+
+### 1. L'envoi d'ardoise pouvait rester bloqué « en cours »
+
+La phase 53 a fait de l'envoi une revendication : `OPEN → SENDING`, atomique, un
+seul gagnant. Elle a donc créé un état dont personne ne sortait. Si le serveur
+tombe entre l'encaissement des cartes et la création de la commande —
+redéploiement, coupure, processus tué — l'ardoise reste en `SENDING` avec de
+l'argent déjà pris et aucune commande. L'hôte lit « la tournée part déjà »
+indéfiniment, et ses amis sont débités pour rien.
+
+**Deux corrections, pas une.**
+
+D'abord, le lien vers la commande est écrit **DANS la transaction de la
+commande** (`createFromSplit`), et non plus après par le service de l'ardoise.
+Sans cela, une panne entre les deux écritures laissait une commande bien réelle
+et une ardoise qui l'ignorait : la ronde de rattrapage ci-dessous aurait
+remboursé des convives **déjà servis**. Désormais, soit la commande et le lien
+existent, soit ni l'un ni l'autre.
+
+Ensuite, une ronde toutes les cinq minutes reprend les ardoises `SENDING` depuis
+plus de **dix minutes** et **sans commande** : elle rembourse les parts
+encaissées et marque l'ardoise `FAILED`, ce qui rend à l'hôte le droit d'en
+ouvrir une nouvelle. Dix minutes, parce qu'un envoi normal dure quelques
+secondes : rembourser une tournée en train de partir serait bien pire que
+l'incident réparé.
+
+### 2. Les remboursements n'étaient jamais enregistrés
+
+L'application savait **afficher** un remboursement depuis la phase 44 — bandeau
+bleu, anneau bleu de la pastille — et l'API renvoyait déjà `paymentStatus`. Mais
+**aucun code n'écrivait jamais `REFUNDED`**. Un remboursement fait depuis le
+tableau de bord Stripe, ou par notre propre compensation d'ardoise (phase 53), ne
+se voyait donc nulle part : le client lisait « Récupérée », comme si de rien
+n'était, et nous écrivait pour savoir où était son argent.
+
+`charge.refunded` est maintenant traité. Deux choix de fond :
+
+- l'état de la **COMMANDE** est recalculé depuis TOUTES ses lignes de paiement,
+  pas depuis le remboursement reçu : une tournée partagée en compte une par
+  convive, et rendre la part d'un seul ne rembourse pas la commande ;
+- le **STATUT** de la commande ne bouge pas. Une commande remboursée a bien été
+  servie, ou annulée — c'est une autre information. Le mouvement d'argent est
+  tracé à côté, au journal d'audit.
+
+Un paiement inconnu (une autorisation d'ardoise jamais devenue commande) est
+journalisé sans lever : lever ferait rejouer Stripe indéfiniment sur un cas
+normal.
+
+### 3. Le contenant dormant restait LISIBLE publiquement
+
+La phase 53 l'endort (`PAUSED`), ce qui ferme le panier et le paiement — le
+panier exige un événement `ACTIVE`. Mais la lecture publique ne regardait pas le
+statut : un ancien lien affichait encore le lieu, ses buvettes et ses produits,
+avec un bouton qui échouait au moment de commander. Le pire des deux mondes :
+visible mais inutilisable, sans explication.
+
+La règle est posée dans `GroupsService.canAccessEvent` — déjà le passage obligé
+des lectures publiques ET du panier : un événement `isPermanentContainer` dont le
+lieu n'est plus `PERMANENT` devient introuvable, comme un événement privé auquel
+on n'est pas invité. Un match dans un stade événementiel, lui, n'est pas touché :
+la règle ne vise que les contenants.
+
+Ce service n'avait aucun test ; il en a sept, dont les deux frontières du
+contenant.
+
+### 4. Flaix : un stub assumé, et dit comme tel
+
+L'audit relève que le cœur décisionnel de Flaix rend toujours `null`. C'est
+exact, et ce n'est pas un défaut : ces trois fonctions **n'ont aucun appelant**.
+Elles décrivent un contrat (`FLAIX_CONTRACT.md`) dont l'API n'existe pas encore —
+les écrire sans contrat réel, c'est écrire du code qu'il faudra réécrire.
+
+Ce qui marche avec Flaix est ailleurs, et bien vivant : le **webhook signé** qui
+met à jour la Live Activity du client (phase 21), et le **lien vers le rapport**
+d'un événement (phase 50). L'en-tête du service le dit maintenant noir sur
+blanc, avec l'avertissement qui compte pour la suite : un appelant devra traiter
+`null` comme « pas d'avis » et poursuivre, sans quoi un parcours de commande
+s'arrêterait le jour où Flaix tombe.
+
+### Ce qui reste
+
+Les **tests d'intégration** n'ont pas pu être relancés ici : le moteur Docker de
+cette machine ne répond pas. Le CLI est vivant (`docker --version`,
+`docker context ls`), mais le canal du démon n'existe pas ; redémarrer WSL et
+Docker Desktop n'y a rien changé, et aucune machine WSL ne tourne. La passe
+d'audit du jour, elle, les annonce verts (9 suites / 94 tests) — un résultat
+qu'on garde comme tel, sans se l'approprier.
+
+Les **deux migrations de la phase 53** restent à passer sur la base cible.

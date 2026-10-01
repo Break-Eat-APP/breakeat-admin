@@ -87,6 +87,10 @@ export class StripeWebhooksService {
           await this.onPaymentIntentFailed(event);
           break;
 
+        case 'charge.refunded':
+          await this.onChargeRefunded(event);
+          break;
+
         default:
           this.logger.log(`Unhandled Stripe event type: ${event.type}`);
       }
@@ -105,6 +109,37 @@ export class StripeWebhooksService {
   }
 
   // ─── Handlers ────────────────────────────────────────────────
+
+  /**
+   * Un remboursement a été exécuté chez Stripe — d'où qu'il vienne.
+   *
+   * Trois origines possibles, et le client doit le voir dans les trois cas :
+   * notre compensation d'ardoise, un geste commercial fait à la main depuis le
+   * tableau de bord Stripe, ou une contestation. L'application savait déjà
+   * AFFICHER un remboursement ; rien ne l'écrivait jamais.
+   *
+   * `charge.refunded` porte le cumul (`amount_refunded`) et le montant total de
+   * la charge : c'est ce qui distingue un remboursement partiel d'un complet,
+   * sans avoir à additionner les remboursements nous-mêmes.
+   */
+  private async onChargeRefunded(event: Stripe.Event): Promise<void> {
+    const charge = event.data.object as Stripe.Charge;
+    const paymentIntentId =
+      typeof charge.payment_intent === 'string'
+        ? charge.payment_intent
+        : (charge.payment_intent?.id ?? '');
+
+    if (!paymentIntentId) {
+      this.logger.warn(`charge.refunded sans payment_intent : ${charge.id}`);
+      return;
+    }
+
+    await this.orders.recordRefund(
+      paymentIntentId,
+      { rembourseCents: charge.amount_refunded ?? 0, totalCents: charge.amount ?? 0 },
+      event as unknown as Prisma.InputJsonValue,
+    );
+  }
 
   /**
    * Stripe a modifié un compte connecté — c'est celui d'un CLUB.
