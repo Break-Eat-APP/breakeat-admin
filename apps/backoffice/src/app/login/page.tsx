@@ -35,7 +35,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const { user, accessToken } = await apiLogin(email.trim(), password);
+      const { user, accessToken, refreshToken } = await apiLogin(email.trim(), password);
 
       // The back office is SUPER_ADMIN only. Reject anyone else BEFORE
       // persisting the session (the backend also enforces this on every route).
@@ -45,7 +45,7 @@ export default function LoginPage() {
         return;
       }
 
-      setSession(accessToken, user);
+      setSession(accessToken, user, refreshToken);
       router.replace('/overview');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de connexion');

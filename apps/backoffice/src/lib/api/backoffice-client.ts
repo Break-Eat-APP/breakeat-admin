@@ -6,8 +6,9 @@
  * stored in localStorage. A 401 auto-redirects to /login and clears credentials.
  *
  * localStorage keys (namespaced to avoid clashing with the admin panel):
- *   backoffice_token — JWT access token
- *   backoffice_user  — JSON-serialised BackofficeUser
+ *   backoffice_token   — jeton d'accès (15 minutes)
+ *   backoffice_refresh — jeton de renouvellement (7 jours)
+ *   backoffice_user    — BackofficeUser sérialisé
  */
 
 const LOCAL_PAR_DEFAUT = 'http://localhost:3000/api/v1';
@@ -51,13 +52,34 @@ export function getStoredUser(): BackofficeUser | null {
   }
 }
 
-export function setSession(token: string, user: BackofficeUser): void {
+/** Jeton de renouvellement (7 jours) — prolonge la session sans ressaisie. */
+export function getRefreshToken(): string {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem('backoffice_refresh') ?? '';
+}
+
+export function setSession(
+  token: string,
+  user: BackofficeUser,
+  refreshToken?: string,
+): void {
   localStorage.setItem('backoffice_token', token);
   localStorage.setItem('backoffice_user', JSON.stringify(user));
+  // Le serveur en renvoyait un depuis toujours ; personne ne le gardait. Le
+  // jeton d'accès vivant quinze minutes, le back-office renvoyait au login dès
+  // qu'on quittait l'écran un quart d'heure — pour aller voir Stripe, par
+  // exemple — et le geste avait l'air d'un bug.
+  if (refreshToken) localStorage.setItem('backoffice_refresh', refreshToken);
+}
+
+export function setAccessToken(token: string, refreshToken?: string): void {
+  localStorage.setItem('backoffice_token', token);
+  if (refreshToken) localStorage.setItem('backoffice_refresh', refreshToken);
 }
 
 export function clearSession(): void {
   localStorage.removeItem('backoffice_token');
+  localStorage.removeItem('backoffice_refresh');
   localStorage.removeItem('backoffice_user');
 }
 
@@ -68,23 +90,101 @@ export function isSuperAdmin(user: BackofficeUser | null): boolean {
 
 // ─── Base fetch ────────────────────────────────────────────────────────────────
 
+/**
+ * Le renouvellement en cours, PARTAGÉ par toutes les requêtes.
+ *
+ * Le serveur fait tourner le jeton de renouvellement : le premier usage le
+ * consomme, un second usage du même jeton est refusé. Or un écran lance
+ * plusieurs requêtes à la fois. Jeton d'accès expiré, chacune recevait son 401
+ * et lançait SON renouvellement avec le même jeton : la première réussissait,
+ * les autres étaient refusées, et ce refus passait pour une session morte.
+ *
+ * Un seul renouvellement part donc ; les requêtes qui arrivent pendant ce
+ * temps en attendent le résultat. (Même mécanique que le panneau d'admin, où
+ * le défaut avait déjà été payé une fois.)
+ */
+let renouvellementEnCours: Promise<boolean> | null = null;
+
+function renouvelerSession(): Promise<boolean> {
+  if (!renouvellementEnCours) {
+    renouvellementEnCours = renouveler().finally(() => {
+      renouvellementEnCours = null;
+    });
+  }
+  return renouvellementEnCours;
+}
+
+async function renouveler(): Promise<boolean> {
+  const refresh = getRefreshToken();
+  if (!refresh) return false;
+  try {
+    const res = await fetch(`${API_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: refresh }),
+    });
+    if (!res.ok) {
+      // Un AUTRE onglet a pu consommer ce jeton pendant l'aller-retour : le
+      // serveur refuse le nôtre, mais la session vit encore si le jeton stocké
+      // a changé. L'effacer déconnecterait les deux onglets.
+      return getRefreshToken() !== refresh && Boolean(getToken());
+    }
+    const data = (await res.json()) as { accessToken?: string; refreshToken?: string };
+    if (!data.accessToken) return false;
+    setAccessToken(data.accessToken, data.refreshToken);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function req<T>(
   method: string,
   path: string,
   body?: unknown,
   noAuth = false,
+  /**
+   * Vrai quand la session a DÉJÀ été renouvelée pour cette requête. Sans ce
+   * drapeau, un 401 qui persiste après renouvellement relancerait la reprise
+   * indéfiniment — des dizaines d'appels par clic.
+   */
+  dejaRenouvele = false,
 ): Promise<T> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (!noAuth) {
-    const token = getToken();
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-  }
+  const jetonEnvoye = noAuth ? '' : getToken();
+  if (jetonEnvoye) headers['Authorization'] = `Bearer ${jetonEnvoye}`;
 
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
+
+  // 401 : on RENOUVELLE avant de déconnecter.
+  //
+  // Le jeton d'accès ne vit que 15 minutes, le jeton de renouvellement 7 jours.
+  // Sans cette reprise, le back-office renvoyait au login dès qu'on laissait
+  // l'écran un quart d'heure, et il fallait tout ressaisir.
+  //
+  // Une seule tentative, et jamais sur la route de renouvellement elle-même :
+  // un jeton mort relancerait sinon la reprise à l'infini.
+  if (res.status === 401 && !noAuth && !dejaRenouvele && !path.startsWith('/auth/refresh')) {
+    // Le jeton a changé pendant que cette requête voyageait : une voisine l'a
+    // déjà renouvelé. On rejoue avec le neuf, sans en consommer un de plus.
+    const courant = getToken();
+    if (courant && courant !== jetonEnvoye) return req<T>(method, path, body, noAuth, true);
+
+    if (await renouvelerSession()) return req<T>(method, path, body, noAuth, true);
+  }
+
+  // 401 APRÈS un renouvellement réussi : le jeton est bon, c'est l'ACTION qui
+  // est refusée. Déconnecter serait trompeur — on le dit tel quel.
+  if (res.status === 401 && dejaRenouvele) {
+    throw new Error(
+      "Ton compte n'a pas le droit d'effectuer cette action — le back-office est " +
+        'réservé aux super-administrateurs.',
+    );
+  }
 
   // Un 401 sur une route SANS session (la connexion elle-même) n'est pas une
   // session expirée : c'est un refus, et le serveur dit lequel. Le traiter

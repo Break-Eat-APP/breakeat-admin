@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { OrderStatus, PaymentStatus } from '@prisma/client';
+import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { perimetreCa } from '../../common/helpers/perimetre-ca';
 import {
   requireOrgAccess,
   MANAGE_ROLES,
@@ -142,7 +143,7 @@ export class StatsService {
 
     const [agg, events, perEvent] = await Promise.all([
       this.prisma.order.aggregate({
-        where: { organizationId: orgId, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } },
+        where: perimetreCa({ organizationId: orgId }),
         _sum: { totalCents: true },
         _count: { _all: true },
       }),
@@ -157,7 +158,7 @@ export class StatsService {
       }),
       this.prisma.order.groupBy({
         by: ['eventId'],
-        where: { organizationId: orgId, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } },
+        where: perimetreCa({ organizationId: orgId }),
         _sum: { totalCents: true },
         _count: { _all: true },
       }),
@@ -237,12 +238,10 @@ export class StatsService {
     const granularity = options.granularity ?? 'day';
     const { from, to } = this.resolveRange(options.from, options.to, granularity);
 
-    const revenueWhere = {
+    const revenueWhere = perimetreCa({
       organizationId: orgId,
-      paymentStatus: PaymentStatus.SUCCEEDED,
-      status: { not: OrderStatus.CANCELLED },
       createdAt: { gte: from, lte: to },
-    };
+    });
 
     const [orders, topItems] = await Promise.all([
       // Les commandes brutes, pas un groupBy SQL : PostgreSQL grouperait en UTC
@@ -393,18 +392,18 @@ export class StatsService {
 
     const [agg, byStatus, topItems] = await Promise.all([
       this.prisma.order.aggregate({
-        where: { eventId, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } },
+        where: perimetreCa({ eventId }),
         _sum: { totalCents: true },
         _count: { _all: true },
       }),
       this.prisma.order.groupBy({
         by: ['status'],
-        where: { eventId, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } },
+        where: perimetreCa({ eventId }),
         _count: { _all: true },
       }),
       this.prisma.orderItem.groupBy({
         by: ['productId', 'productNameSnapshot'],
-        where: { order: { eventId, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } } },
+        where: { order: perimetreCa({ eventId }) },
         _sum: { quantity: true, lineTotalCents: true },
         orderBy: { _sum: { quantity: 'desc' } },
         take: 10,
@@ -427,7 +426,7 @@ export class StatsService {
     const ordersCount = agg._count._all;
     const ventilation = await ventilationCommandes(
       this.prisma,
-      { eventId, paymentStatus: PaymentStatus.SUCCEEDED, status: { not: OrderStatus.CANCELLED } },
+      perimetreCa({ eventId }),
       caTtcCents,
     );
 
@@ -488,6 +487,9 @@ export class StatsService {
          AND o.payment_status::text = 'SUCCEEDED'
          AND o.status::text <> 'CANCELLED'
        GROUP BY 1, 2
+       -- Meme perimetre que perimetreCa, ecrit en SQL faute de pouvoir
+       -- exprimer cette somme par taux de TVA en Prisma. Voir PERIMETRE_CA_SQL,
+       -- garde a cote pour qu'on corrige les deux ensemble.
     `;
 
     const parEvenement = new Map<string, LigneTva[]>();

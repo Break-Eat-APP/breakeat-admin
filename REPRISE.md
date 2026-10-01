@@ -16,7 +16,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-09-30 (les 5 défauts P1 de l'audit corrigés : cloisonnement des créneaux, conteneur dormant, ardoise verrouillée et remboursée, stock de l'ardoise, réservation des points avant paiement — phase 53)_
+_Dernière mise à jour : 2026-10-01 (audit soldé : les 5 P1 — phase 53 — et les 9 P2 — phase 54. Reste à lancer les tests d'intégration et à passer les deux migrations sur la base cible)_
 
 ## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
@@ -71,7 +71,7 @@ clients ; **Facebook ne le sera pas** — son jeton ne certifie pas l'adresse, e
 rattacher une inscription rapide à un compte existant sur une adresse non
 certifiée donnerait le compte d'un client à qui saurait en déclarer l'adresse.
 
-## 🔓 SUJETS OUVERTS — à reprendre (liste tenue au 30/09/2026)
+## 🔓 SUJETS OUVERTS — à reprendre (liste tenue au 01/10/2026)
 
 Ce qui a été décidé mais pas fait, ou fait mais pas encore éprouvé. **Tenir
 cette liste à jour : elle est le premier endroit à relire en reprenant.**
@@ -88,7 +88,8 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Envoi EAS bloqué** | Builds 19, 20, 21 : l'envoi AUTOMATIQUE reste en file d'attente | Lancer `eas submit` à la main après chaque build — c'est ce qui passe. À signaler à Expo si ça continue |
 | **Builds 20 et 21** | Chez Apple | Pas encore validés sur un vrai téléphone : cloche, ✓ « prête », liste En cours / Terminées |
 | **Audit — les 5 P1** | ✅ Corrigés le 30/09 (phase 53) : créneaux cross-tenant, conteneur dormant, ardoise (verrou + remboursement), stock de l'ardoise, réservation des points | Les **tests d'intégration** de ces corrections n'ont pas pu tourner : le moteur Docker ne répondait plus. Relancer `docker start breakeat_audit` puis `pnpm test:integration` — et faire passer les deux migrations sur la base cible avant tout déploiement |
-| **Audit — les 9 P2** | Identifiés, non corrigés. Par ordre de l'audit : 1) stock opérateur non limité à SA buvette, 2) statut de créneau opérateur idem, 3) date des créneaux locale à l'écriture / UTC à la lecture, 4) créneaux récurrents injectés dans tout événement du lieu, 5) KPI back-office contre stats d'organisation sur les commandes ANNULÉES, 6) back-office sans renouvellement de session (15 min puis retour au login), 7) invitation non transactionnelle, 8) course dans l'idempotence des webhooks Stripe, 9) `slotId`/`pickupPointId` de Flaix non bornés à l'événement de la commande | À traiter dans cet ordre. `brain/audits/AUDIT_2026-09-30_par-phase.md` porte le détail et les lignes exactes |
+| **Audit — les 9 P2** | ✅ Corrigés le 01/10 (phase 54) : portée buvette du stock et des créneaux, journée locale contre UTC, modèles récurrents bornés au conteneur permanent, périmètre du chiffre d'affaires unifié, session du back-office renouvelable, invitation transactionnelle, journal webhook réclamé en une instruction, identifiants Flaix bornés à la commande | Comme pour les P1 : les tests d'intégration restent à lancer. Le détail est dans `brain/audits/AUDIT_2026-09-30_par-phase.md` |
+| **Audit — les P3** | Non traités | Le plus rentable : **aucun test automatisé** sur admin, operator et back-office (et un seul fichier côté mobile). Vient ensuite la CI, qui ne lance pas `test:integration` |
 | **Dette : `visites`** | L'API calcule encore les passages | Plus aucun écran ne les affiche. À retirer si rien ne les reprend |
 | **Dette : PDF en base** | Contrats en `BYTEA`, 10 Mo max | Tenable à ce volume. À déplacer vers un stockage objet si les clubs en déposent beaucoup |
 

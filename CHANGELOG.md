@@ -5,6 +5,74 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.76.0] — 2026-10-01 — Les neuf défauts P2 de l'audit
+
+Trois familles : du cloisonnement entre équipes, des règles écrites deux fois
+qui avaient divergé, et des écritures qui laissaient des traces en cas de refus.
+Un fil conducteur : **chaque règle devient une fonction partagée**.
+
+**Un poste épinglé à une buvette agissait sur les autres.** L'opératrice du Nord
+pouvait retirer de la carte un produit du Sud ou fermer ses créneaux : elle est
+membre du club, et son rôle l'autorise. Pas une intrusion — il faut un compte du
+club — mais le service d'une autre équipe qui s'arrête en pleine mi-temps.
+`requirePorteeBuvette` porte la règle, déjà appliquée au temps réel, désormais
+au stock, aux créneaux et aux produits. Un créneau PARTAGÉ échappe aussi à un
+poste épinglé : il déciderait pour tout le lieu.
+
+**La journée des créneaux se calculait de deux façons** : jour local du lieu à
+l'écriture, jour UTC à la lecture. Entre minuit et 2h, les créneaux qui venaient
+d'être créés étaient invisibles et ceux de la veille remontaient.
+`ensureTodaySlots` renvoie maintenant LA journée employée — il n'y a plus deux
+formules à faire coïncider.
+
+**Les modèles récurrents étaient matérialisés dans tout événement du lieu.** Le
+soir d'un match, la liste du club se garnissait d'heures qu'il n'avait pas
+saisies et qu'il ne pouvait pas faire disparaître. Seul le conteneur permanent
+est servi.
+
+**Deux chiffres d'affaires pour le même mois.** Les stats du club, le fichier
+client et la fréquentation excluaient les commandes annulées ; le back-office les
+comptait. `perimetreCa()` porte la règle, et sa signature interdit à l'appelant
+d'écraser `status` ou `paymentStatus`.
+
+**Le back-office perdait la session au bout de quinze minutes.** Le serveur
+renvoyait un jeton de renouvellement depuis toujours, personne ne le gardait. Le
+mécanisme du panneau d'admin est repris tel quel, avec ses deux corrections déjà
+payées (un seul renouvellement partagé, et l'onglet voisin qui ne déconnecte pas
+les autres).
+
+**L'invitation laissait un compte orphelin.** Le compte était créé avant les
+contrôles : un refus laissait en base un compte avec un mot de passe provisoire
+choisi par quelqu'un d'autre, sans appartenance. Tout ce qui peut refuser passe
+avant, et le compte et l'appartenance naissent dans la même transaction.
+
+**La course du journal des webhooks Stripe.** Deux livraisons du même
+encaissement tentaient toutes deux l'insertion ; la seconde recevait une
+violation d'unicité et le webhook répondait 500 pour un doublon EMPÊCHÉ.
+`createMany` + `skipDuplicates` laisse la base trancher — et le chemin normal ne
+fait plus qu'une requête au lieu de deux.
+
+**Le webhook Flaix écrivait des identifiants non vérifiés.** La signature HMAC
+prouve l'origine du message, pas la cohérence de son contenu : un `slotId` ou un
+`pickupPointId` d'un autre événement déplaçait silencieusement le retrait d'un
+client. Les contrôles du panier deviennent partagés
+(`assertCreneauCompatible`, `assertPointDeRetraitCompatible`).
+
+`+ backend/src/common/helpers/portee-buvette.ts`
+`+ backend/src/common/helpers/perimetre-ca.ts` (+ son spec)
+`+ backend/src/common/helpers/retrait-compatible.ts`
+`~ jour-de-service.ts` `~ stock.service.ts` `~ slots.service.ts`
+`~ slot-templates.service.ts` `~ public-events.controller.ts`
+`~ products.service.ts` `~ backoffice.service.ts` `~ stats.service.ts`
+`~ clients.service.ts` `~ frequentation.service.ts`
+`~ organizations.service.ts` `~ stripe-webhooks.service.ts`
+`~ flaix-webhook.service.ts` `~ cart.service.ts`
+`~ apps/backoffice/src/lib/api/backoffice-client.ts` `~ app/login/page.tsx`
+666 tests unitaires (21 nouveaux, ceux du cloisonnement, de l'invitation et de
+Flaix vus échouer sur le code d'avant), 12 mobile.
+
+---
+
 ## [0.75.0] — 2026-09-30 — Les cinq défauts de l'audit
 
 Un audit du dépôt avait classé cinq défauts « à corriger avant production ».

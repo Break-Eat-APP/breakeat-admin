@@ -9,6 +9,9 @@ import { LiveActivityService } from './live-activity.service';
 
 const SECRET = 'test-secret';
 const ORDER_ID = '11111111-1111-4111-8111-111111111111';
+const EVT_ID = 'evt-du-match';
+const LIEU_ID = 'lieu-1';
+const BUVETTE_ID = 'buvette-nord';
 
 function sign(body: Buffer): string {
   return createHmac('sha256', SECRET).update(body).digest('hex');
@@ -30,13 +33,36 @@ describe('FlaixWebhookService', () => {
   let prisma: {
     flaixWebhookEvent: { create: jest.Mock; update: jest.Mock };
     order: { findUnique: jest.Mock };
+    slot: { findUnique: jest.Mock };
+    pickupPoint: { findUnique: jest.Mock };
   };
   let liveActivity: { applyOperationalUpdate: jest.Mock };
 
   beforeEach(async () => {
     prisma = {
       flaixWebhookEvent: { create: jest.fn().mockResolvedValue({}), update: jest.fn().mockResolvedValue({}) },
-      order: { findUnique: jest.fn().mockResolvedValue({ id: ORDER_ID }) },
+      // La commande porte son événement, son lieu et sa buvette : c'est contre
+      // eux que les identifiants envoyés par Flaix sont vérifiés.
+      order: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: ORDER_ID,
+          eventId: EVT_ID,
+          venueId: LIEU_ID,
+          supplierId: BUVETTE_ID,
+        }),
+      },
+      slot: {
+        findUnique: jest
+          .fn()
+          .mockResolvedValue({ eventId: EVT_ID, status: 'OPEN', supplierId: BUVETTE_ID }),
+      },
+      pickupPoint: {
+        findUnique: jest.fn().mockResolvedValue({
+          venueId: LIEU_ID,
+          eventId: EVT_ID,
+          supplierId: BUVETTE_ID,
+        }),
+      },
     };
     liveActivity = { applyOperationalUpdate: jest.fn().mockResolvedValue(undefined) };
 
@@ -182,6 +208,42 @@ describe('FlaixWebhookService', () => {
         expect.objectContaining({ slotId: 'slot-9' }),
         undefined,
       );
+    });
+
+    it('REFUSE un créneau qui n’appartient pas à l’événement de la commande', async () => {
+      // La signature HMAC prouve que le message vient de Flaix ; elle ne dit
+      // rien de la cohérence de son contenu. Cet identifiant était écrit tel
+      // quel sur la commande : le retrait d'un client se déplaçait vers un
+      // créneau d'un autre événement, sans aucune trace.
+      prisma.slot.findUnique.mockResolvedValue({
+        eventId: 'un-autre-evenement',
+        status: 'OPEN',
+        supplierId: BUVETTE_ID,
+      });
+
+      await expect(
+        service.handle(
+          makePayload({ event: 'PICKUP_SLOT_CHANGED', eventId: 'evt-slot-etranger', slotId: 'slot-ailleurs' }),
+        ),
+      ).rejects.toThrow();
+
+      expect(liveActivity.applyOperationalUpdate).not.toHaveBeenCalled();
+    });
+
+    it('REFUSE un comptoir d’un autre lieu', async () => {
+      prisma.pickupPoint.findUnique.mockResolvedValue({
+        venueId: 'un-autre-lieu',
+        eventId: null,
+        supplierId: null,
+      });
+
+      await expect(
+        service.handle(
+          makePayload({ eventId: 'evt-comptoir-etranger', pickupPointId: 'pp-ailleurs' }),
+        ),
+      ).rejects.toThrow();
+
+      expect(liveActivity.applyOperationalUpdate).not.toHaveBeenCalled();
     });
 
     it('une nouvelle estimation est transmise telle quelle', async () => {

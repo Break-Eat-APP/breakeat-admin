@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
-import { PaymentStatus, OrgStatus, GlobalRole } from '@prisma/client';
+import { OrderStatus, PaymentStatus, OrgStatus, GlobalRole } from '@prisma/client';
 import { BackofficeService } from './backoffice.service';
 import { PrismaService } from '../../database/prisma.service';
 import { ExpoPushService } from '../notifications/expo-push.service';
@@ -87,9 +87,14 @@ describe('BackofficeService', () => {
 
       const kpis = await service.getGlobalKpis();
 
-      // Only SUCCEEDED payments count toward CA.
+      // Le MÊME périmètre que les statistiques du club : payé ET non annulé.
+      // Cet écran agrégeait toutes les commandes payées, annulations comprises :
+      // le même mois affichait deux chiffres d'affaires selon la page ouverte.
       expect(prisma.order.aggregate).toHaveBeenCalledWith({
-        where: { paymentStatus: PaymentStatus.SUCCEEDED },
+        where: {
+          paymentStatus: PaymentStatus.SUCCEEDED,
+          status: { not: OrderStatus.CANCELLED },
+        },
         _sum: { totalCents: true },
         _count: { _all: true },
       });

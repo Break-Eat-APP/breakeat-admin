@@ -12,7 +12,7 @@ import { GlobalRole, OrgRole } from '../../common/enums/role.enum';
 import type { CreateOrganizationDto } from './dto/create-organization.dto';
 import type { UpdateOrgBrandingDto } from './dto/update-org-branding.dto';
 import type { Organization, OrganizationMember } from '@prisma/client';
-import { StripeAccountStatus } from '@prisma/client';
+import { Prisma, StripeAccountStatus } from '@prisma/client';
 import { StripeService } from '../payments/stripe.service';
 import {
   ALL_ORG_ROLES,
@@ -498,41 +498,34 @@ export class OrganizationsService {
       this.assertRoleDelegable(role);
     }
 
-    // Find user by email — ou le créer si un mot de passe provisoire est fourni.
+    // ─── TOUT CE QUI PEUT REFUSER, AVANT TOUTE ÉCRITURE ───────
+    //
+    // Le compte était créé en premier, puis venaient les contrôles. Un refus
+    // au contrôle suivant — déjà membre, buvette d'un autre club — laissait
+    // donc en base un compte avec un mot de passe provisoire CHOISI PAR
+    // QUELQU'UN D'AUTRE, sans appartenance, que rien ne rattachait à personne.
+    // L'invitation affichait une erreur, et l'invité pouvait se connecter.
     const normalizedEmail = email.toLowerCase().trim();
-    let targetUser = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
-    let accountCreated = false;
+    const existant = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
 
-    if (!targetUser) {
-      if (!temporaryPassword) {
-        throw new NotFoundException(
-          `Aucun compte trouvé pour "${email}". Fournissez un mot de passe provisoire pour créer le compte, ou demandez-lui de s'inscrire d'abord.`,
-        );
-      }
-      // Compte créé avec le rôle global le plus faible : les droits viennent
-      // UNIQUEMENT de l'appartenance à l'organisation, jamais d'un rôle global.
-      targetUser = await this.prisma.user.create({
-        data: {
-          email: normalizedEmail,
-          passwordHash: await argon2.hash(temporaryPassword),
-          displayName: normalizedEmail.split('@')[0] ?? 'Membre',
-          globalRole: GlobalRole.CUSTOMER,
-          isActive: true,
-        },
+    if (!existant && !temporaryPassword) {
+      throw new NotFoundException(
+        `Aucun compte trouvé pour "${email}". Fournissez un mot de passe provisoire pour créer le compte, ou demandez-lui de s'inscrire d'abord.`,
+      );
+    }
+
+    // Déjà membre ? La question ne se pose que pour un compte qui existe.
+    if (existant) {
+      const dejaMembre = await this.prisma.organizationMember.findUnique({
+        where: { userId_organizationId: { userId: existant.id, organizationId } },
       });
-      accountCreated = true;
-      this.logger.log(`Compte créé à l'invitation : ${normalizedEmail}`);
+      if (dejaMembre) {
+        throw new ConflictException('Cet utilisateur est déjà membre de cette organisation');
+      }
     }
 
-    // Prevent duplicate membership
-    const existing = await this.prisma.organizationMember.findUnique({
-      where: { userId_organizationId: { userId: targetUser.id, organizationId } },
-    });
-    if (existing) {
-      throw new ConflictException('Cet utilisateur est déjà membre de cette organisation');
-    }
-
-    // Validate supplier exists (if provided)
+    // La buvette, vérifiée AVANT de créer quoi que ce soit : ce contrôle ne
+    // dépend pas du compte, il n'a aucune raison de venir après.
     if (supplierId) {
       const supplier = await this.prisma.supplier.findUnique({ where: { id: supplierId } });
       if (!supplier || supplier.organizationId !== organizationId) {
@@ -540,21 +533,54 @@ export class OrganizationsService {
       }
     }
 
-    const member = await this.prisma.organizationMember.create({
-      data: {
-        userId: targetUser.id,
-        organizationId,
-        orgRole: role,
-        supplierId: supplierId ?? null,
-      },
-      include: {
-        user: { select: { id: true, email: true, displayName: true, globalRole: true } },
-        supplier: { select: { id: true, name: true, status: true } },
-      },
+    // L'empreinte du mot de passe est calculée HORS transaction : argon2 prend
+    // volontairement du temps, et une transaction ouverte pendant ce calcul
+    // garderait un verrou pour rien.
+    const empreinte = existant ? null : await argon2.hash(temporaryPassword as string);
+
+    // ─── Le compte et l'appartenance naissent ENSEMBLE ────────
+    const { member, accountCreated } = await this.prisma.$transaction(async (tx) => {
+      const user =
+        existant ??
+        // Rôle global le plus faible : les droits viennent UNIQUEMENT de
+        // l'appartenance à l'organisation, jamais d'un rôle global.
+        (await tx.user.create({
+          data: {
+            email: normalizedEmail,
+            passwordHash: empreinte as string,
+            displayName: normalizedEmail.split('@')[0] ?? 'Membre',
+            globalRole: GlobalRole.CUSTOMER,
+            isActive: true,
+          },
+        }));
+
+      const cree = await tx.organizationMember.create({
+        data: {
+          userId: user.id,
+          organizationId,
+          orgRole: role,
+          supplierId: supplierId ?? null,
+        },
+        include: {
+          user: { select: { id: true, email: true, displayName: true, globalRole: true } },
+          supplier: { select: { id: true, name: true, status: true } },
+        },
+      });
+
+      return { member: cree, accountCreated: !existant };
+    }).catch((e: unknown) => {
+      // Deux invitations simultanées pour la même adresse : la contrainte
+      // d'unicité a tranché, et la transaction perdante n'a rien laissé
+      // derrière elle. Un doublon empêché n'est pas une panne.
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException('Cet utilisateur est déjà membre de cette organisation');
+      }
+      throw e;
     });
 
+    if (accountCreated) this.logger.log(`Compte créé à l'invitation : ${normalizedEmail}`);
     this.logger.log(
-      `Member invited: ${targetUser.email} → org ${organizationId} as ${role}${supplierId ? ` (supplier ${supplierId})` : ''} (by ${callerId})`,
+      `Member invited: ${member.user.email} → org ${organizationId} as ${role}${supplierId ? ` (supplier ${supplierId})` : ''} (by ${callerId})`,
     );
 
     return { ...(member as MemberWithDetails), accountCreated };

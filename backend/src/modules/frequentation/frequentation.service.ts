@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { perimetreCa } from '../../common/helpers/perimetre-ca';
 import { jourDeService } from '../../common/helpers/jour-de-service';
 import { requireOrgAccess } from '../../common/helpers/require-org-access';
 import { OrgRole } from '../../common/enums/role.enum';
@@ -165,11 +166,11 @@ export class FrequentationService {
         : {}),
     };
 
-    // Le même périmètre que la comptabilité : payé, et non annulé.
-    const whereCommandes: Prisma.OrderWhereInput = {
+    // Le même périmètre que la comptabilité : payé, et non annulé — la règle
+    // vit dans `perimetreCa`, employée par tous les écrans qui montrent un
+    // chiffre d'affaires.
+    const whereCommandes: Prisma.OrderWhereInput = perimetreCa({
       organizationId: orgId,
-      paymentStatus: PaymentStatus.SUCCEEDED,
-      status: { not: OrderStatus.CANCELLED },
       ...(filtre.venueId ? { venueId: filtre.venueId } : {}),
       ...(filtre.eventId ? { eventId: filtre.eventId } : {}),
       ...(filtre.du || filtre.au
@@ -180,7 +181,7 @@ export class FrequentationService {
             },
           }
         : {}),
-    };
+    });
 
     // Le même périmètre, mais SANS borne de date : la première commande d'un
     // client chez ce club ne dépend pas de la période qu'on regarde.

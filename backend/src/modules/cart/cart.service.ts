@@ -10,7 +10,6 @@ import {
   EventStatus,
   PickupPointStatus,
   ProductStatus,
-  SlotStatus,
   SupplierStatus,
 } from '@prisma/client';
 import {
@@ -28,6 +27,10 @@ import type { UpdateCartDto } from './dto/update-cart.dto';
 import type { AddCartItemDto } from './dto/add-cart-item.dto';
 import type { UpdateCartItemDto } from './dto/update-cart-item.dto';
 import { assertOrganisationOuverte } from '../../common/helpers/organisation-ouverte';
+import {
+  assertCreneauCompatible,
+  assertPointDeRetraitCompatible,
+} from '../../common/helpers/retrait-compatible';
 
 /** Cart TTL — 30 minutes from creation. */
 const CART_TTL_MS = 30 * 60 * 1000;
@@ -794,23 +797,9 @@ export class CartService {
     const cart = await this.requireOwnership(cartId, userId);
 
     if (slotId) {
-      const creneau = await this.prisma.slot.findUnique({
-        where: { id: slotId },
-        select: { eventId: true, status: true, supplierId: true },
-      });
-      if (!creneau || creneau.eventId !== cart.eventId) {
-        throw new BadRequestException('Ce créneau n’appartient pas à cet événement.');
-      }
-      if (creneau.status !== SlotStatus.OPEN) {
-        throw new BadRequestException('Ce créneau vient d’être fermé. Choisissez-en un autre.');
-      }
-      // Un créneau rattaché à une buvette ne vaut que pour elle. Sans ce
-      // contrôle, on pourrait réserver « Mi-temps » au comptoir Sud pour une
-      // commande passée au Nord — et se présenter devant un stand qui n'attend
-      // rien.
-      if (creneau.supplierId && creneau.supplierId !== cart.supplierId) {
-        throw new BadRequestException('Ce créneau appartient à une autre buvette.');
-      }
+      // Le créneau doit être OUVERT : c'est un CHOIX du client, pas un
+      // rattachement décidé au comptoir.
+      await assertCreneauCompatible(this.prisma, slotId, cart, true);
     }
 
     await this.prisma.cart.update({ where: { id: cartId }, data: { selectedSlotId: slotId } });
@@ -1033,19 +1022,12 @@ export class CartService {
     supplierId: string,
     venueId: string,
   ): Promise<void> {
-    const pp = await this.prisma.pickupPoint.findUnique({
-      where: { id: pickupPointId },
+    // La règle vit dans `retrait-compatible.ts`, partagée avec le webhook
+    // Flaix — qui écrivait ces mêmes identifiants sans rien vérifier.
+    await assertPointDeRetraitCompatible(this.prisma, pickupPointId, {
+      eventId,
+      supplierId,
+      venueId,
     });
-    if (!pp) throw new NotFoundException('Pickup point not found');
-
-    if (pp.venueId !== venueId) {
-      throw new BadRequestException('Pickup point is in a different venue than the event');
-    }
-    if (pp.eventId !== null && pp.eventId !== eventId) {
-      throw new BadRequestException('Pickup point is scoped to a different event');
-    }
-    if (pp.supplierId !== null && pp.supplierId !== supplierId) {
-      throw new BadRequestException('Pickup point is scoped to a different supplier');
-    }
   }
 }

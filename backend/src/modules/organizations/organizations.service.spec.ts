@@ -70,7 +70,10 @@ describe('OrganizationsService', () => {
               create: jest.fn(),
             },
             user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
-            $transaction: jest.fn(),
+            supplier: { findUnique: jest.fn() },
+            // La vraie transaction passe un client au rappel : on lui donne la
+            // même doublure, ce qui suffit à observer les écritures émises.
+            $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(prisma)),
           },
         },
       ],
@@ -277,6 +280,62 @@ describe('OrganizationsService', () => {
       );
 
       expect(result.accountCreated).toBe(true);
+    });
+
+    it('ne crée AUCUN compte quand la buvette appartient à un autre club', async () => {
+      // Le défaut : le compte était créé d'abord, les contrôles ensuite. Un
+      // refus ici laissait en base un compte avec un mot de passe provisoire
+      // choisi par quelqu'un d'autre, sans appartenance, que rien ne rattachait
+      // à personne — et l'invité pouvait s'y connecter.
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.supplier.findUnique as jest.Mock).mockResolvedValue({
+        id: 'sup-autre-club',
+        organizationId: 'org-2',
+      });
+
+      await expect(
+        service.inviteByEmail(
+          ORG_ID, CALLER_ID, 'SUPER_ADMIN', EMAIL, OrgRole.OPERATOR, 'sup-autre-club', 'mdp-provisoire',
+        ),
+      ).rejects.toThrow(NotFoundException);
+
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      expect(prisma.organizationMember.create).not.toHaveBeenCalled();
+    });
+
+    it('ne crée AUCUN compte quand la personne est déjà membre', async () => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        id: TARGET_ID,
+        email: EMAIL.toLowerCase(),
+      });
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(
+        mockInvitedMember(TARGET_ID),
+      );
+
+      await expect(
+        service.inviteByEmail(
+          ORG_ID, CALLER_ID, 'SUPER_ADMIN', EMAIL, OrgRole.MANAGER, undefined, 'mdp-provisoire',
+        ),
+      ).rejects.toThrow(ConflictException);
+
+      expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+
+    it('le compte et l’appartenance naissent dans la MÊME transaction', async () => {
+      // Séparés, un échec de l'appartenance laissait le compte derrière lui.
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.user.create as jest.Mock).mockResolvedValue({ id: TARGET_ID });
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.organizationMember.create as jest.Mock).mockResolvedValue(mockInvitedMember(TARGET_ID));
+
+      await service.inviteByEmail(
+        ORG_ID, CALLER_ID, 'SUPER_ADMIN', EMAIL, OrgRole.MANAGER, undefined, 'mdp-provisoire',
+      );
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect((prisma.user.create as jest.Mock).mock.invocationCallOrder[0]).toBeGreaterThan(
+        (prisma.$transaction as jest.Mock).mock.invocationCallOrder[0],
+      );
     });
 
     it('refuse un e-mail inconnu sans mot de passe provisoire', async () => {

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { perimetreCa } from '../../common/helpers/perimetre-ca';
 import { requireOrgAccess } from '../../common/helpers/require-org-access';
 import { OrgRole } from '../../common/enums/role.enum';
 import { dateCourte, euros, versCsv } from '../../common/helpers/csv';
@@ -42,10 +43,8 @@ export class ClientsService {
    * produit.
    */
   private perimetre(orgId: string, filtre: FiltreClients): Prisma.OrderWhereInput {
-    return {
+    return perimetreCa({
       organizationId: orgId,
-      paymentStatus: PaymentStatus.SUCCEEDED,
-      status: { not: OrderStatus.CANCELLED },
       ...(filtre.venueId ? { venueId: filtre.venueId } : {}),
       ...(filtre.du || filtre.au
         ? {
@@ -55,7 +54,7 @@ export class ClientsService {
             },
           }
         : {}),
-    };
+    });
   }
 
   /** Les clients du club, du plus dépensier au moins dépensier. */

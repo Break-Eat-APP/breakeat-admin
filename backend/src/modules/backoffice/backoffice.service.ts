@@ -5,8 +5,9 @@ import {
   NotFoundException,
   Logger,
 } from '@nestjs/common';
-import { PaymentStatus, OrgStatus, GlobalRole } from '@prisma/client';
+import { OrgStatus, GlobalRole } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { perimetreCa } from '../../common/helpers/perimetre-ca';
 import { ExpoPushService } from '../notifications/expo-push.service';
 import { PushTokensService } from '../notifications/push-tokens.service';
 import { ScheduledPushService } from '../notifications/scheduled-push.service';
@@ -70,13 +71,19 @@ export class BackofficeService {
   // ─── KPIs ─────────────────────────────────────────────────────
 
   /**
-   * Aggregates platform-wide KPIs over PAID orders (paymentStatus = SUCCEEDED).
-   * Returns CA HT/TTC, order count, average basket HT/TTC, account & org counts.
+   * Les chiffres de la plateforme : CA HT/TTC, nombre de commandes, panier
+   * moyen, comptes et clubs.
+   *
+   * Le périmètre financier est celui de `perimetreCa` — payé ET non annulé —
+   * comme les statistiques du club, le fichier client et la fréquentation. Cet
+   * écran agrégeait TOUTES les commandes payées, annulations comprises : le
+   * même mois affichait deux chiffres d'affaires selon la page ouverte, et
+   * l'écart grandissait avec le nombre d'annulations.
    */
   async getGlobalKpis(): Promise<GlobalKpis> {
     const [agg, accountsCount, organizationsCount] = await Promise.all([
       this.prisma.order.aggregate({
-        where: { paymentStatus: PaymentStatus.SUCCEEDED },
+        where: perimetreCa(),
         _sum: { totalCents: true },
         _count: { _all: true },
       }),
@@ -86,11 +93,7 @@ export class BackofficeService {
 
     const caTtcCents = agg._sum.totalCents ?? 0;
     const ordersCount = agg._count._all;
-    const ventilation = await ventilationCommandes(
-      this.prisma,
-      { paymentStatus: PaymentStatus.SUCCEEDED },
-      caTtcCents,
-    );
+    const ventilation = await ventilationCommandes(this.prisma, perimetreCa(), caTtcCents);
     const caHtCents = ventilation.htCents;
 
     const avgBasketTtcCents = ordersCount > 0 ? Math.round(caTtcCents / ordersCount) : 0;

@@ -192,6 +192,7 @@ rendrait faux dès la phase suivante. À regénérer quand des phases sont ajout
 | **51** | Phase 51 — Des chiffres qui ne se recoupent pas (21–23/09/2026) |
 | **52** | Phase 52 — La cloche, le ✓ et les commandes terminées (23/09/2026) |
 | **53** | Phase 53 — Les cinq défauts de l'audit, corrigés (30/09/2026) |
+| **54** | Phase 54 — Les neuf défauts P2 de l'audit (30/09–01/10/2026) |
 
 **Deux cas particuliers, à connaître :**
 
@@ -6207,3 +6208,144 @@ KPI back-office contre stats d'organisation sur les commandes annulées, absence
 de renouvellement de session au back-office, invitation non transactionnelle,
 course dans l'idempotence des webhooks Stripe, et identifiants Flaix non bornés
 à l'événement de la commande.
+
+---
+
+## Phase 54 — Les neuf défauts P2 de l'audit (30/09–01/10/2026)
+
+Après les cinq P1 (phase 53), les neuf sujets classés **P2 : à corriger avant
+exploitation réelle**. Trois familles : du cloisonnement entre équipes, des
+règles écrites deux fois qui avaient divergé, et des écritures qui laissaient
+des traces derrière elles en cas de refus.
+
+Un fil conducteur : **chaque règle devient une fonction partagée**. Les quatre
+défauts de divergence venaient tous de la même cause — la même règle écrite à
+deux endroits, corrigée à un seul.
+
+### 1 et 2. Un poste épinglé agissait sur les autres buvettes
+
+`requireOrgAccess` vérifie le club et le rôle. Il ne regarde pas
+`OrganizationMember.supplierId` — le comptoir auquel un opérateur est rattaché.
+L'opératrice du Nord pouvait donc retirer de la carte un produit du Sud
+(`stock.updateAvailability`) ou fermer ses créneaux (`slots.updateStatus`) : elle
+est bien membre du club, et son rôle l'autorise.
+
+Ce n'est pas une faille d'intrusion — il faut déjà un compte du club — mais un
+défaut de cloisonnement qui **coupe le service d'une autre équipe en pleine
+mi-temps**, sans que personne comprenne pourquoi.
+
+La règle existait déjà pour le TEMPS RÉEL (salons `supplier:*`, phase 42) et,
+écrite à la main, dans `products.changerDisponibilite`. Elle devient
+`requirePorteeBuvette` : le stock, les créneaux et les produits l'appellent.
+
+Un créneau **PARTAGÉ** (`supplierId` nul, valable pour toutes les buvettes de
+l'événement) échappe aussi à un poste épinglé : le fermer depuis un seul
+comptoir couperait le retrait de tout le lieu. Un manager, lui, le peut.
+
+### 3. La journée des créneaux se calculait de deux façons
+
+La matérialisation posait `serviceDate` sur le **jour local du lieu** ; les deux
+lectures filtraient sur le **jour UTC**. Entre minuit et 2h — deux heures en été
+— les créneaux qui venaient d'être créés étaient invisibles, et ceux de la veille
+remontaient.
+
+`jourCalendaireLocal` rejoint `jourDeService` dans les aides partagées, mais
+surtout : **`ensureTodaySlots` RENVOIE la journée qu'elle a employée**, et les
+lectures filtrent sur celle-là. Deux formules ne peuvent plus diverger, parce
+qu'il n'y en a plus qu'une.
+
+> Le jour de service (bascule à 4h) reste distinct : un créneau porte l'heure
+> murale de son libellé (« 01:30 »), donc la date de cette heure-là.
+
+### 4. Les modèles récurrents étaient matérialisés partout
+
+Ils décrivent le rythme quotidien d'un lieu ouvert en continu — « 17h45 »,
+« 18h15 ». `ensureTodaySlots` était appelée pour N'IMPORTE QUEL événement du
+lieu : le soir d'un match, la liste du club se garnissait d'heures qu'il n'avait
+pas saisies, et qu'il ne pouvait pas faire disparaître — elles revenaient à la
+lecture suivante.
+
+Seul le **conteneur permanent** du lieu est désormais servi. La journée est
+rendue dans tous les cas : c'est le filtre de date, un événement ponctuel en a
+besoin comme les autres.
+
+### 5. Deux chiffres d'affaires pour le même mois
+
+Les statistiques du club, le fichier client et la fréquentation excluaient les
+commandes ANNULÉES. Le back-office les comptait. Le même périmètre affichait donc
+deux chiffres selon la page ouverte, et l'écart grandissait avec le nombre
+d'annulations — sans que rien, à l'écran, dise lequel croire.
+
+`perimetreCa()` porte la règle, et sa signature **interdit** à l'appelant de
+passer `status` ou `paymentStatus` (`Omit<…>`) : un commentaire se contourne par
+distraction, une signature non. La formulation SQL équivalente
+(`PERIMETRE_CA_SQL`) vit dans le même fichier, pour qu'on corrige les deux
+ensemble.
+
+Pourquoi exclure les annulées : une commande annulée a bien été payée, mais elle
+n'a rien vendu. La compter ferait payer au club une commission sur une vente qui
+n'a pas eu lieu.
+
+### 6. Le back-office perdait la session au bout de quinze minutes
+
+Le serveur renvoyait un jeton de renouvellement depuis toujours ; **personne ne
+le gardait**. Le jeton d'accès vivant quinze minutes, il suffisait de quitter
+l'écran le temps d'aller voir Stripe pour être renvoyé au login.
+
+Le mécanisme du panneau d'admin est repris tel quel, y compris ses deux
+corrections déjà payées : **un seul renouvellement** part même si plusieurs
+requêtes reçoivent un 401 en même temps (le serveur fait tourner le jeton — un
+second usage est refusé, et ce refus passait pour une session morte), et un
+onglet voisin qui a déjà renouvelé ne déconnecte pas les autres.
+
+### 7. L'invitation laissait un compte orphelin
+
+Le compte était créé en premier, les contrôles venaient ensuite. Un refus au
+contrôle suivant — déjà membre, buvette d'un autre club — laissait donc en base
+un compte avec **un mot de passe provisoire choisi par quelqu'un d'autre**, sans
+appartenance, que rien ne rattachait à personne. L'invitation affichait une
+erreur, et l'invité pouvait s'y connecter.
+
+Tout ce qui peut refuser passe maintenant AVANT toute écriture, et le compte et
+l'appartenance naissent dans la **même transaction**. L'empreinte argon2 est
+calculée hors transaction : elle prend volontairement du temps, et un verrou
+ouvert pendant ce calcul ne servirait à rien. Deux invitations simultanées pour
+la même adresse se résolvent par la contrainte d'unicité, absorbée en conflit.
+
+### 8. La course du journal des webhooks Stripe
+
+C'était « chercher, puis créer ». Stripe livre le même encaissement sous deux
+événements à quelques millisecondes d'intervalle
+(`checkout.session.completed` et `payment_intent.succeeded`) : les deux
+constataient l'absence de ligne, puis tentaient tous les deux de l'écrire. Le
+second recevait une violation d'unicité, et le webhook répondait **500 à Stripe
+pour un doublon EMPÊCHÉ** — qui n'est pas une panne.
+
+`createMany` + `skipDuplicates` laisse la base trancher
+(`INSERT … ON CONFLICT DO NOTHING`) : un seul gagne, personne n'échoue. Au
+passage, le chemin normal ne fait plus qu'une requête au lieu de deux.
+
+Un événement déjà inscrit mais **non traité** continue d'être rejoué : perdre un
+événement de paiement coûte infiniment plus cher que de le traiter deux fois, et
+les gestionnaires en aval sont idempotents pour cela.
+
+### 9. Le webhook Flaix écrivait des identifiants non vérifiés
+
+La signature HMAC prouve que le message vient de Flaix ; **elle ne dit rien de la
+cohérence de son contenu**. `slotId` et `pickupPointId` étaient écrits tels quels
+sur la commande : un créneau ou un comptoir d'un autre événement — une erreur de
+configuration suffit — déplaçait silencieusement le retrait d'un client vers un
+stand qui ne l'attendait pas.
+
+Le panier vérifiait déjà tout cela pour les choix du CLIENT. Les deux contrôles
+deviennent `assertCreneauCompatible` et `assertPointDeRetraitCompatible`
+(`retrait-compatible.ts`), partagés. Une nuance conservée : le créneau doit être
+OUVERT pour un choix du client, pas pour un rattachement décidé au comptoir — qui
+a le droit de poser une commande sur un créneau qu'il vient de fermer.
+
+### Ce qui reste
+
+Les tests d'intégration des phases 53 et 54 n'ont pas pu tourner : le moteur
+Docker ne répondait plus sur cette machine. Les deux migrations de la phase 53
+restent à passer sur la base cible. Le back-office et le panneau d'admin n'ont
+toujours aucun test automatisé — c'est le P3 le plus rentable qui reste.

@@ -30,22 +30,43 @@ export class StripeWebhooksService {
   ) {}
 
   async handleEvent(event: Stripe.Event): Promise<void> {
-    // Idempotency log — atomic insert prevents double-processing
-    const existing = await this.prisma.webhookEvent.findUnique({
-      where: { stripeEventId: event.id },
-    });
-    if (existing?.processedAt) {
-      this.logger.debug(`Duplicate webhook ${event.id} (${event.type}) — already processed`);
-      return;
-    }
-    if (!existing) {
-      await this.prisma.webhookEvent.create({
-        data: {
+    // ─── Le journal d'idempotence, réclamé en UNE instruction ──
+    //
+    // C'était « chercher, puis créer ». Stripe livre le même événement deux
+    // fois de suite — `checkout.session.completed` et `payment_intent.succeeded`
+    // décrivent le même encaissement et arrivent à quelques millisecondes
+    // d'intervalle, et une livraison peut être rejouée. Les deux appels
+    // constataient donc l'absence de ligne, puis tentaient tous les deux de
+    // l'écrire : le second recevait une violation d'unicité, et le webhook
+    // répondait 500 à Stripe pour un doublon EMPÊCHÉ — qui n'est pas une panne.
+    //
+    // `createMany` + `skipDuplicates` laisse la base trancher
+    // (`INSERT … ON CONFLICT DO NOTHING`) : un seul gagne, personne n'échoue.
+    // Au passage, le chemin normal ne fait plus qu'une requête au lieu de deux.
+    const { count } = await this.prisma.webhookEvent.createMany({
+      data: [
+        {
           stripeEventId: event.id,
           eventType: event.type,
           rawPayload: event as unknown as Prisma.InputJsonValue,
         },
+      ],
+      skipDuplicates: true,
+    });
+
+    if (count === 0) {
+      // La ligne existait déjà. Traitée ? On s'arrête. Pas traitée ? C'est un
+      // rejeu après un traitement interrompu : on continue, parce que perdre
+      // un événement de PAIEMENT coûte infiniment plus cher que de le traiter
+      // deux fois — les gestionnaires en aval sont idempotents pour cela.
+      const deja = await this.prisma.webhookEvent.findUnique({
+        where: { stripeEventId: event.id },
+        select: { processedAt: true },
       });
+      if (deja?.processedAt) {
+        this.logger.debug(`Duplicate webhook ${event.id} (${event.type}) — already processed`);
+        return;
+      }
     }
 
     try {

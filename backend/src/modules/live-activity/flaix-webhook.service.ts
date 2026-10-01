@@ -4,6 +4,10 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { LiveActivityService, type WidgetStatus } from './live-activity.service';
+import {
+  assertCreneauCompatible,
+  assertPointDeRetraitCompatible,
+} from '../../common/helpers/retrait-compatible';
 
 /**
  * Événements métier envoyés par Flaix.
@@ -178,10 +182,28 @@ export class FlaixWebhookService {
   private async apply(payload: FlaixWebhookPayload): Promise<void> {
     const order = await this.prisma.order.findUnique({
       where: { id: payload.orderId },
-      select: { id: true },
+      select: { id: true, eventId: true, venueId: true, supplierId: true },
     });
     if (!order) {
       throw new BadRequestException(`Commande ${payload.orderId} introuvable`);
+    }
+
+    // ─── Le contenu signé reste du CONTENU ────────────────────
+    //
+    // La signature HMAC prouve que le message vient de Flaix ; elle ne dit rien
+    // de la cohérence de ce qu'il contient. Ces deux identifiants étaient
+    // écrits tels quels sur la commande : un créneau ou un comptoir d'un autre
+    // événement — une erreur de configuration suffit — déplaçait le retrait
+    // d'un client vers un stand qui ne l'attendait pas, sans aucune trace.
+    //
+    // Mêmes contrôles que pour les choix du client (`retrait-compatible.ts`),
+    // au créneau près : le comptoir a le droit de rattacher une commande à un
+    // créneau qu'il vient de fermer.
+    if (payload.slotId) {
+      await assertCreneauCompatible(this.prisma, payload.slotId, order);
+    }
+    if (payload.pickupPointId) {
+      await assertPointDeRetraitCompatible(this.prisma, payload.pickupPointId, order);
     }
 
     const widgetStatus = this.resolveWidgetStatus(payload);

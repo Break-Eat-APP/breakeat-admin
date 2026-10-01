@@ -31,7 +31,9 @@ describe('StripeWebhooksService', () => {
           useValue: {
             webhookEvent: {
               findUnique: jest.fn(),
-              create: jest.fn(),
+              // La réclamation du journal : `count: 1` = cet appel a gagné la
+              // ligne. `count: 0` = elle existait déjà.
+              createMany: jest.fn().mockResolvedValue({ count: 1 }),
               update: jest.fn(),
             },
             // `account.updated` suit desormais le compte du CLUB : c'est le
@@ -63,6 +65,8 @@ describe('StripeWebhooksService', () => {
   });
 
   it('skips already-processed events (idempotency)', async () => {
+    // La ligne existait déjà (count 0) et porte une date de traitement.
+    (prisma.webhookEvent.createMany as jest.Mock).mockResolvedValue({ count: 0 });
     (prisma.webhookEvent.findUnique as jest.Mock).mockResolvedValue({
       stripeEventId: STRIPE_EVENT_ID,
       processedAt: new Date(),
@@ -72,8 +76,37 @@ describe('StripeWebhooksService', () => {
     await service.handleEvent(event);
 
     expect(orders.createFromPaymentIntent).not.toHaveBeenCalled();
-    // No new insert needed when event already known
-    expect(prisma.webhookEvent.create).not.toHaveBeenCalled();
+  });
+
+  it('RÉCLAME le journal en une instruction — deux livraisons simultanées ne se heurtent plus', async () => {
+    // Le défaut : « chercher, puis créer ». Deux livraisons du même événement
+    // constataient l'absence de ligne, puis tentaient tous deux de l'écrire. Le
+    // second recevait une violation d'unicité, et le webhook répondait 500 à
+    // Stripe pour un doublon EMPÊCHÉ — qui n'est pas une panne.
+    const event = makeEvent('payment_intent.succeeded', { id: PAYMENT_INTENT_ID });
+    await service.handleEvent(event);
+
+    expect(prisma.webhookEvent.createMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skipDuplicates: true }),
+    );
+    // Le chemin normal ne lit même plus le journal : une seule requête.
+    expect(prisma.webhookEvent.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('REJOUE un événement dont le traitement n’avait pas abouti', async () => {
+    // Ligne présente mais sans date de traitement : une tentative précédente
+    // est morte en route. Perdre un événement de PAIEMENT coûte infiniment
+    // plus cher que de le traiter deux fois.
+    (prisma.webhookEvent.createMany as jest.Mock).mockResolvedValue({ count: 0 });
+    (prisma.webhookEvent.findUnique as jest.Mock).mockResolvedValue({
+      stripeEventId: STRIPE_EVENT_ID,
+      processedAt: null,
+    });
+
+    const event = makeEvent('payment_intent.succeeded', { id: PAYMENT_INTENT_ID });
+    await service.handleEvent(event);
+
+    expect(orders.createFromPaymentIntent).toHaveBeenCalled();
   });
 
   it('dispatches payment_intent.succeeded to OrdersService and marks event processed', async () => {
@@ -89,7 +122,7 @@ describe('StripeWebhooksService', () => {
 
     await service.handleEvent(event);
 
-    expect(prisma.webhookEvent.create).toHaveBeenCalled();
+    expect(prisma.webhookEvent.createMany).toHaveBeenCalled();
     expect(orders.createFromPaymentIntent).toHaveBeenCalledWith(
       PAYMENT_INTENT_ID,
       expect.objectContaining({ amount: 1500, currency: 'eur' }),
