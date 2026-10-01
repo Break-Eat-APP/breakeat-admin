@@ -6436,13 +6436,35 @@ blanc, avec l'avertissement qui compte pour la suite : un appelant devra traiter
 `null` comme « pas d'avis » et poursuivre, sans quoi un parcours de commande
 s'arrêterait le jour où Flaix tombe.
 
-### Ce qui reste
+### Les tests d'intégration, enfin lancés — et mis en CI
 
-Les **tests d'intégration** n'ont pas pu être relancés ici : le moteur Docker de
-cette machine ne répond pas. Le CLI est vivant (`docker --version`,
-`docker context ls`), mais le canal du démon n'existe pas ; redémarrer WSL et
-Docker Desktop n'y a rien changé, et aucune machine WSL ne tourne. La passe
-d'audit du jour, elle, les annonce verts (9 suites / 94 tests) — un résultat
-qu'on garde comme tel, sans se l'approprier.
+Le moteur Docker de la machine a d'abord refusé de démarrer (CLI vivant, canal
+du démon absent, aucune machine WSL en route). Une fois relancé, la suite passe
+sur une vraie base, et les deux migrations de la phase 53 ont été appliquées sur
+la base cible.
 
-Les **deux migrations de la phase 53** restent à passer sur la base cible.
+**Trois nouveaux fichiers d'intégration** sont venus avec, sur les propriétés
+que des doublures ne peuvent pas démontrer — celles que PostgreSQL tient :
+
+- `ardoise-envoi.int-spec.ts` : l'index unique refuse une seconde commande sur
+  la même ardoise, les ardoises OUVERTES ne se gênent pas (les `order_id` nuls
+  sont distincts), la revendication `OPEN → SENDING` n'est gagnée **qu'une
+  fois** sur deux appels simultanés réels, et la ronde rattrape un envoi
+  interrompu sans jamais toucher une tournée en train de partir ni une ardoise
+  qui porte déjà sa commande ;
+- `fidelite-reservation.int-spec.ts` : l'invariant du registre — **la somme des
+  mouvements égale toujours le solde** — vérifié après chaque opération
+  (réserver, refuser, rendre, convertir), et deux paniers du même client qui ne
+  peuvent pas dépenser les mêmes points ;
+- deux cas ajoutés à `contenant-dormant.int-spec.ts` pour la lecture publique.
+
+Et surtout : **la CI les lance**. Elle ne lançait que `turbo test`, donc les
+tests d'intégration ne tournaient que quand quelqu'un y pensait — c'était le P3
+le plus rentable de l'audit. Le nouveau job monte un Postgres 16, applique les
+**migrations de production** (et non `db push` : c'est leur SQL qu'on veut
+éprouver) puis lance la suite. Détail qui compte : sans `DATABASE_URL_TEST`, la
+suite s'IGNORE au lieu d'échouer — elle ne touche jamais une base qu'on ne lui a
+pas désignée. Cette variable est donc ce qui fait exister le job.
+
+**11 suites d'intégration / 110 tests** sur base réelle, 684 unitaires,
+12 mobile.

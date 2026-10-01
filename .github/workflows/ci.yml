@@ -74,6 +74,64 @@ jobs:
       - name: Run tests
         run: pnpm turbo test
 
+  integration:
+    name: Tests d'integration (base reelle)
+    runs-on: ubuntu-latest
+    # Les regles de suppression (CASCADE, RESTRICT, SET NULL), les index uniques
+    # et les contraintes CHECK vivent dans le SQL des migrations : une doublure
+    # ne les voit pas. Ces tests tournaient a la main depuis toujours, donc
+    # seulement quand quelqu'un y pensait — c'est le P3 le plus rentable de
+    # l'audit du 30/09.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: audit
+          POSTGRES_PASSWORD: audit
+          POSTGRES_DB: audit
+        ports:
+          - 5432:5432
+        # Sans ce controle, les migrations partent avant que Postgres accepte
+        # les connexions, et l'echec ressemble a un bug applicatif.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Les MIGRATIONS de production, pas `db push` : c'est leur SQL qu'on veut
+      # eprouver, y compris les contraintes que le schema Prisma n'exprime pas.
+      - name: Appliquer les migrations
+        working-directory: backend
+        # Le script du depot, pas un appel direct : si la commande change un
+        # jour, elle change a UN endroit.
+        run: pnpm db:migrate:prod
+        env:
+          DATABASE_URL: postgresql://audit:audit@localhost:5432/audit
+
+      - name: Suite d'integration
+        working-directory: backend
+        run: pnpm test:integration
+        env:
+          # Sans cette variable, la suite s'IGNORE au lieu d'echouer : elle ne
+          # touche jamais une base qu'on ne lui a pas designee. La ligne
+          # ci-dessous est donc ce qui fait exister ce job.
+          DATABASE_URL_TEST: postgresql://audit:audit@localhost:5432/audit
+
   build:
     name: Build
     runs-on: ubuntu-latest

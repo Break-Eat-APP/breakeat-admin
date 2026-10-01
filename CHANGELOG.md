@@ -5,6 +5,42 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.78.0] — 2026-10-01 — Les tests d'intégration, lancés et mis en CI
+
+Le moteur Docker relancé, la suite d'intégration passe sur une vraie base — et
+la CI la lance désormais elle-même. Elle ne lançait que `turbo test` : les tests
+d'intégration ne tournaient que quand quelqu'un y pensait, alors que c'est
+précisément là que vivent les règles de suppression, les index uniques et les
+contraintes CHECK qu'une doublure ne voit pas.
+
+Le nouveau job monte un Postgres 16, applique les **migrations de production**
+(et non `db push` : c'est leur SQL qu'on veut éprouver) puis lance la suite.
+
+**Trois ajouts**, sur ce que seule la base peut démontrer :
+
+- **l'ardoise** : l'index unique refuse une seconde commande sur la même
+  tournée, les ardoises ouvertes ne se gênent pas, la revendication
+  `OPEN → SENDING` n'est gagnée qu'une fois sur deux appels **simultanés
+  réels**, et la ronde rattrape un envoi interrompu sans jamais rembourser une
+  tournée en train de partir ni une ardoise qui porte déjà sa commande ;
+- **la fidélité** : l'invariant du registre — la somme des mouvements égale
+  toujours le solde — vérifié après chaque opération, et deux paniers du même
+  client qui ne peuvent pas dépenser les mêmes points ;
+- **le contenant dormant** : invisible aussi aux lectures publiques.
+
+Deux doublures devenues fausses ont été corrigées au passage : elles rendaient
+un tableau là où `ensureTodaySlots` renvoie maintenant `{ journee, creneaux }`,
+ce qui désactivait silencieusement le filtre de date dans deux tests.
+
+`+ .github/workflows/ci.yml` (job `integration`)
+`+ backend/test/integration/ardoise-envoi.int-spec.ts`
+`+ backend/test/integration/fidelite-reservation.int-spec.ts`
+`~ contenant-dormant.int-spec.ts` `~ cloisonnement.int-spec.ts`
+`~ statut-organisation.int-spec.ts`
+11 suites d'intégration / 110 tests, 684 unitaires, 12 mobile.
+
+---
+
 ## [0.77.0] — 2026-10-01 — Second passage d'audit
 
 Trois défauts, dont **un ouvert par la correction précédente** — le cas le plus

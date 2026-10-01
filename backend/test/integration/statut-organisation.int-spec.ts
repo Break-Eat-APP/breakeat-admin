@@ -31,7 +31,12 @@ decrire('statut d’organisation (base réelle)', () => {
   const groups = { canAccessEvent: async () => true };
   const lieux = url ? new PublicVenuesController(s.prisma) : (null as never);
   const evenements = url
-    ? new PublicEventsController(s.prisma, groups as never, { ensureTodaySlots: async () => [] } as never)
+    ? new PublicEventsController(s.prisma, groups as never, {
+        // La matérialisation rend LA journée employée — c'est elle qui sert de
+        // filtre de date aux lectures. Rendre un tableau, comme avant, laissait
+        // le filtre silencieusement désactivé dans ce test.
+        ensureTodaySlots: async () => ({ journee: new Date(), creneaux: [] }),
+      } as never)
     : (null as never);
   const paniers = url
     ? new CartService(

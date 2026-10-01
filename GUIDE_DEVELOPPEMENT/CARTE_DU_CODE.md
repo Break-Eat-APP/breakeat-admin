@@ -139,7 +139,7 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
 - `backend/test/integration/*.int-spec.ts` — 89 tests sur une **vraie base**
   Postgres construite par `prisma migrate deploy` : c'est le seul endroit où les
   règles de suppression, les contraintes `CHECK` et les index uniques sont
-  vérifiés. Lancés à la main : `pnpm test:integration` avec `DATABASE_URL_TEST`
+  vérifiés. Lancés par la **CI** (job `integration` : Postgres 16 + migrations de production) et à la main depuis `backend/` avec `DATABASE_URL_TEST`
   (voir `brain/ENGINEERING_MANUAL.md`, phase 34).
 - `backend/scripts/api-essai-local.js` — lance l'API compilée contre cette base
   d'essai, services extérieurs neutralisés, pour voir les écrans réagir.

@@ -13,6 +13,7 @@
  */
 import { EventStatus, VenueOperatingMode } from '@prisma/client';
 import { CartService } from '../../src/modules/cart/cart.service';
+import { GroupsService } from '../../src/modules/groups/groups.service';
 import { VenuesService } from '../../src/modules/venues/venues.service';
 import { monterServices, unique, creerOrganisationComplete } from './banc';
 
@@ -22,6 +23,8 @@ const decrire = url ? describe : describe.skip;
 decrire('contenant d’un lieu ouvert en continu (base réelle)', () => {
   const s = url ? monterServices(url) : (null as never);
   const lieux = url ? new VenuesService(s.prisma) : (null as never);
+  // Le vrai service : c'est lui qui décide ce qu'un visiteur peut LIRE.
+  const acces = url ? new GroupsService(s.prisma) : (null as never);
   const paniers = url
     ? new CartService(
         s.prisma,
@@ -109,6 +112,45 @@ decrire('contenant d’un lieu ouvert en continu (base réelle)', () => {
     await expect(
       paniers.create(client, { eventId: o.contenant.id, supplierId: o.supplier.id }),
     ).rejects.toThrow(/not active/i);
+  });
+
+  it('un ancien lien ne permet PLUS DE LIRE le lieu non plus', async () => {
+    // Le panier était bien refusé — l'événement n'est plus ACTIVE — mais la
+    // LECTURE publique ne regardait pas son statut : l'ancien lien affichait
+    // encore le lieu, ses buvettes et ses produits, avec un bouton qui échouait
+    // au moment de commander. Visible mais inutilisable, sans explication.
+    const o = await lieuPermanent();
+    expect(await acces.canAccessEvent(o.contenant.id, client)).toBe(true);
+
+    await lieux.update(o.org.id, o.venue.id, sa, {
+      operatingMode: VenueOperatingMode.EVENT_BASED,
+    });
+
+    expect(await acces.canAccessEvent(o.contenant.id, client)).toBe(false);
+    // Et pour un visiteur sans compte, c'est pareil.
+    expect(await acces.canAccessEvent(o.contenant.id, null)).toBe(false);
+  });
+
+  it('un événement PONCTUEL du même lieu reste lisible', async () => {
+    // La règle ne vise que les CONTENANTS : un match dans un stade qui n'ouvre
+    // pas tous les jours est un événement parfaitement normal.
+    const o = await lieuPermanent();
+    const match = await s.prisma.event.create({
+      data: {
+        organizationId: o.org.id,
+        venueId: o.venue.id,
+        name: 'Match de samedi',
+        status: 'ACTIVE',
+        startAt: new Date(),
+        endAt: new Date('2099-12-31'),
+      },
+    });
+
+    await lieux.update(o.org.id, o.venue.id, sa, {
+      operatingMode: VenueOperatingMode.EVENT_BASED,
+    });
+
+    expect(await acces.canAccessEvent(match.id, null)).toBe(true);
   });
 
   it('le contenant se RÉVEILLE si le lieu redevient permanent', async () => {

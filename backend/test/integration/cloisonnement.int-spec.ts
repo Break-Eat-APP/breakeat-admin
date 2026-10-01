@@ -29,7 +29,12 @@ decrire('cloisonnement des données par club et par lieu (base réelle)', () => 
   // La matérialisation des créneaux récurrents ne joue aucun rôle ici : ces
   // essais portent sur la FRONTIÈRE entre clubs, pas sur le contenu.
   const creneaux = url
-    ? new SlotsService(s.prisma, { ensureTodaySlots: async () => [] } as never)
+    ? new SlotsService(s.prisma, {
+        // La matérialisation rend LA journée employée — c'est elle qui sert de
+        // filtre de date aux lectures. Rendre un tableau, comme avant, laissait
+        // le filtre silencieusement désactivé dans ce test.
+        ensureTodaySlots: async () => ({ journee: new Date(), creneaux: [] }),
+      } as never)
     : (null as never);
   const campagnes = url
     ? new ScheduledPushService(
