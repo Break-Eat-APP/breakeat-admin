@@ -16,7 +16,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-10-01 (audit soldé et éprouvé : 11 suites d'intégration / 110 tests sur base réelle, lancées par la CI. Migrations passées sur la base cible)_
+_Dernière mise à jour : 2026-10-05 (réponse à la demande de clôture d'audit : `brain/audits/REPONSE_CLOTURE_2026-10-05.md`. **Les 8 commits ne sont pas poussés** — la CI n'a donc jamais exécuté ces corrections)_
 
 ## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
@@ -89,7 +89,9 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Builds 20 et 21** | Chez Apple | Pas encore validés sur un vrai téléphone : cloche, ✓ « prête », liste En cours / Terminées |
 | **Audit — les 5 P1** | ✅ Corrigés le 30/09 (phase 53) et migrations passées sur la base cible le 01/10 | — |
 | **Audit — second passage (phase 55)** | ✅ Corrigés le 01/10 : l'envoi d'ardoise interrompu ne reste plus bloqué en SENDING (lien écrit dans la transaction + ronde de rattrapage qui rembourse), `charge.refunded` est enfin traité (le bandeau bleu de l'app pouvait s'afficher, rien n'écrivait jamais `REFUNDED`), et le contenant dormant disparaît aussi des LECTURES publiques | — |
-| **Tests d'intégration** | ✅ **11 suites / 110 tests** verts sur base réelle le 01/10, et **lancés par la CI** (job `integration` : Postgres 16 + migrations de production). Trois fichiers ajoutés : index unique et revendication de l'ardoise, invariant du registre de fidélité, lecture publique du contenant dormant | Pour les relancer à la main : démarrer `breakeat_audit`, puis depuis `backend/` → `DATABASE_URL_TEST=postgresql://audit:audit@localhost:55432/audit pnpm test:integration` |
+| **À POUSSER** | ⛔ **8 commits sont en local et jamais poussés** (`main` en avance sur `origin/main`) : les phases 53, 54, 55 et la clôture. La CI n'a donc **jamais** exécuté ces corrections, et aucun déploiement ne les porte | Décision du propriétaire : un `git push` déclenche la CI **et** les déploiements automatiques (Vercel). À faire en connaissance de cause, puis lire le résultat du job `integration` — ce sera sa première exécution réelle |
+| **Tests d'intégration** | ✅ **12 suites / 117 tests** verts sur base réelle le 05/10 — trois passages consécutifs — et **lancés par la CI** (job `integration` : Postgres 16 + migrations de production). Quatre fichiers ajoutés : ardoise (index unique, revendication, reprise après interruption), invariant du registre de fidélité, lecture publique du contenant dormant, et remboursements | Pour les relancer à la main : démarrer `breakeat_audit`, puis depuis `backend/` → `DATABASE_URL_TEST=postgresql://audit:audit@localhost:15432/audit pnpm test:integration` (port 15432 depuis le 05/10, voir plus bas) |
+| **À éprouver sur la CIBLE** | Les scénarios sensibles sont couverts sur PostgreSQL réel, **pas** sur Railway | Après déploiement : un remboursement en mode test Stripe, et une interruption d'envoi d'ardoise provoquée |
 | **Flaix — le cœur décisionnel** | STUB assumé : `requestSlotDecision`, `assessRush` et `requestRecommendations` rendent `null` et **n'ont aucun appelant**. Ce qui marche avec Flaix vit ailleurs : le webhook signé (Live Activity) et le lien vers le rapport d'événement | Rien à faire tant que l'API Flaix n'existe pas. Le jour venu : un appelant doit traiter `null` comme « pas d'avis » et poursuivre — un parcours de commande qui ATTEND Flaix s'arrêterait le jour où Flaix tombe |
 | **Audit — les 9 P2** | ✅ Corrigés le 01/10 (phase 54) : portée buvette du stock et des créneaux, journée locale contre UTC, modèles récurrents bornés au conteneur permanent, périmètre du chiffre d'affaires unifié, session du back-office renouvelable, invitation transactionnelle, journal webhook réclamé en une instruction, identifiants Flaix bornés à la commande | Comme pour les P1 : les tests d'intégration restent à lancer. Le détail est dans `brain/audits/AUDIT_2026-09-30_par-phase.md` |
 | **Audit — les P3** | La CI lance maintenant les tests d'intégration (c'était le plus rentable) | Reste : **aucun test automatisé** sur admin, operator et back-office, et un seul fichier côté mobile |
@@ -988,7 +990,15 @@ pnpm test:integration
 ```
 
 Elle a besoin de `DATABASE_URL_TEST` et d'une base Postgres joignable (le
-conteneur `breakeat_audit`, port 55432) — voir la phase 34 pour la monter.
+conteneur `breakeat_audit`, **port 15432**) — voir la phase 34 pour la monter.
+
+⚠️ **Si les douze fichiers échouent d'un coup** avec
+`PrismaClientInitializationError`, ce n'est pas le code : c'est le conteneur qui
+n'a pas pu prendre son port. Windows réserve des plages dynamiques pour WSL, et
+l'ancien port (55432) est tombé dans l'une d'elles le 05/10. Les plages se
+voient avec `netsh interface ipv4 show excludedportrange protocol=tcp` et
+**changent au redémarrage** — en cas de récidive, recréer le conteneur sur un
+port hors de ces plages.
 
 ## 🍏 Ajouter une capability iOS — l'ordre compte
 

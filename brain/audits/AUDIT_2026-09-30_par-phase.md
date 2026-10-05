@@ -1,5 +1,27 @@
 # Audit technique Break Eat — audit par phase
 
+> ## ⚠️ DOCUMENT HISTORIQUE — lire d'abord ceci
+>
+> **Ce rapport décrit le dépôt du 30 septembre 2026, AVANT corrections.** Tout
+> ce qu'il signale comme défaut a depuis été traité : les **5 P1** en phase 53,
+> les **9 P2** en phase 54, et les **3 défauts du second passage** en phase 55
+> (dont deux ouverts par les corrections elles-mêmes).
+>
+> Il est conservé parce qu'il dit d'où l'on part et pourquoi chaque correction a
+> été faite — pas pour décrire l'état actuel. **Ne pas s'en servir comme liste
+> de travail** : on retraiterait d'anciens défauts comme s'ils étaient toujours
+> là, ce que le dossier de clôture du 04/10 demande explicitement d'éviter.
+>
+> | Pour savoir… | Lire |
+> |---|---|
+> | ce qui a été corrigé, et comment | `brain/ENGINEERING_MANUAL.md`, phases 53 à 55 |
+> | l'état courant et ce qui reste ouvert | `REPRISE.md` → « SUJETS OUVERTS » |
+> | ce qui reste à valider avant exploitation | `brain/audits/DOSSIER_AUDIT_CLOUD_CODE_2026-10-04.docx` |
+>
+> Seule la section « Qualité et vérification » est périmée sur les chiffres :
+> au 01/10/2026 la suite compte **684 tests unitaires** et **12 suites
+> d'intégration / 117 tests** sur PostgreSQL réel, lancées par la CI.
+
 Date de l’audit : 30 septembre 2026  
 Périmètre : code présent dans le dépôt, phases 1 à 14 documentées dans `phases de DEV`, phases 15 à 23 décrites dans `DEVELOPMENT_LOG.md` / `CHANGELOG.md`, puis modules ajoutés ensuite.
 

@@ -40,8 +40,23 @@ export function monterServices(url: string) {
   return { prisma, users, auth, backoffice, apple };
 }
 
+/**
+ * Un identifiant unique — y compris entre FICHIERS de test.
+ *
+ * Le compteur seul ne suffisait pas : Jest donne à chaque fichier son propre
+ * registre de modules, donc son propre compteur repartant de zéro. Deux fichiers
+ * démarrant dans la même milliseconde produisaient alors la même valeur, et
+ * `archives.int-spec.ts` — qui teste la réinscription par ADRESSE E-MAIL —
+ * échouait sur une adresse déjà prise. Un échec sans rapport avec ce qu'il
+ * teste, et qui ne se reproduit pas à l'exécution suivante : le pire des
+ * échecs, surtout maintenant que la CI lance cette suite.
+ *
+ * Le fragment aléatoire ferme la porte : il ne dépend ni de l'horloge, ni du
+ * fichier, ni de l'ordre d'exécution.
+ */
 let compteur = 0;
-export const unique = (prefixe: string) => `${prefixe}-${Date.now().toString(36)}-${++compteur}`;
+export const unique = (prefixe: string) =>
+  `${prefixe}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}-${++compteur}`;
 
 /** Une organisation réaliste : lieu permanent, contenant, buvette, point de retrait, produit. */
 export async function creerOrganisationComplete(

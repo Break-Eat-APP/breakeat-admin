@@ -5109,13 +5109,30 @@ Vérifié dans l'interface sur la base d'essai : chiffre d'affaires 153,50 € �
 ### Relancer la suite d'intégration
 
 ```
-docker run -d --name breakeat_audit -e POSTGRES_USER=audit -e POSTGRES_PASSWORD=audit -e POSTGRES_DB=audit -p 55432:5432 postgres:16-alpine
-DATABASE_URL=postgresql://audit:audit@localhost:55432/audit npx prisma migrate deploy
-DATABASE_URL_TEST=postgresql://audit:audit@localhost:55432/audit pnpm test:integration
+docker run -d --name breakeat_audit -e POSTGRES_USER=audit -e POSTGRES_PASSWORD=audit -e POSTGRES_DB=audit -p 15432:5432 postgres:16-alpine
+DATABASE_URL=postgresql://audit:audit@localhost:15432/audit npx prisma migrate deploy
+DATABASE_URL_TEST=postgresql://audit:audit@localhost:15432/audit pnpm test:integration
 ```
 
 Sans `DATABASE_URL_TEST`, la suite est ignorée : elle ne touche jamais une base
-qu'on ne lui a pas désignée. `scripts/api-essai-local.js` lance l'API compilée
+qu'on ne lui a pas désignée.
+
+> **Le port a changé le 05/10/2026 : 55432 → 15432.** Windows réserve des plages
+> de ports dynamiques pour Hyper-V et WSL, et 55432 est tombé dans l'une d'elles
+> (`55397-55496`). Le conteneur refusait alors de démarrer — ou, pire, perdait sa
+> liaison en cours de route : la suite échouait d'un coup sur les douze fichiers
+> avec un `PrismaClientInitializationError`, ce qui ressemble à une panne de
+> code et n'en est pas. Le message à reconnaître :
+>
+> ```
+> bind: An attempt was made to access a socket in a way forbidden by its access permissions
+> ```
+>
+> Les plages se voient avec
+> `netsh interface ipv4 show excludedportrange protocol=tcp`, et **elles changent
+> au redémarrage**. En cas de récidive, choisir un port hors de ces plages plutôt
+> que de libérer celui-ci : c'est l'affaire d'une ligne, et la CI n'est pas
+> concernée — elle tourne sous Linux. `scripts/api-essai-local.js` lance l'API compilée
 sur cette même base, services extérieurs neutralisés, pour voir les tableaux de
 bord réagir.
 
@@ -6346,10 +6363,20 @@ a le droit de poser une commande sur un créneau qu'il vient de fermer.
 
 ### Ce qui reste
 
-Les tests d'intégration des phases 53 et 54 n'ont pas pu tourner : le moteur
-Docker ne répondait plus sur cette machine. Les deux migrations de la phase 53
-restent à passer sur la base cible. Le back-office et le panneau d'admin n'ont
-toujours aucun test automatisé — c'est le P3 le plus rentable qui reste.
+> **Mise à jour du 01/10/2026.** Cette section disait que les tests
+> d'intégration n'avaient pas pu tourner et que les migrations restaient à
+> passer : les deux sont faits. Le moteur Docker a été relancé, la suite passe
+> sur une vraie base, les migrations ont été appliquées sur la base cible, et la
+> **CI lance désormais la suite** (voir la fin de la phase 55). La phrase est
+> gardée ici plutôt que réécrite : elle décrit l'état du jour où la phase a été
+> livrée, et un manuel qui se corrige en silence ne se relit plus avec confiance.
+
+Au moment de la livraison, les tests d'intégration des phases 53 et 54 n'avaient
+pas pu tourner — le moteur Docker ne répondait plus sur cette machine — et les
+deux migrations de la phase 53 restaient à passer sur la base cible.
+
+Ce qui reste VRAIMENT ouvert : le back-office, le panneau d'admin et le poste
+opérateur n'ont toujours aucun test automatisé. C'est le P3 le plus rentable.
 
 ---
 

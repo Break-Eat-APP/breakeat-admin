@@ -5,6 +5,60 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.79.0] — 2026-10-05 — Réponse à la demande de clôture d'audit
+
+Un dossier de clôture (Codex, 04/10) demande de confirmer six points avant de
+considérer l'audit comme soldé. Chacun est **vérifié**, pas affirmé, et la
+réponse est écrite dans `brain/audits/REPONSE_CLOTURE_2026-10-05.md`.
+
+**Deux points ne sont pas acquis**, et le premier commande les autres :
+
+- **les commits ne sont pas poussés.** `main` est en avance de huit commits sur
+  `origin/main` : les phases 53, 54, 55 et cette clôture. La CI n'a donc jamais
+  exécuté une seule de ces corrections, et aucun déploiement ne les porte. Un
+  `git push` déclenchera la CI **et** les déploiements automatiques — c'est une
+  décision, pas une formalité ;
+- **les scénarios sensibles ne sont pas éprouvés sur la cible.** Ils le sont sur
+  PostgreSQL réel avec les migrations de production ; Railway, non.
+
+**Ce qui est acquis et prouvé :** le job de CI est conforme (migrations avant
+tests, Postgres 16 avec attente de disponibilité, aucun `needs` qui le
+court-circuite), et la suite **ne peut pas** tourner sur une base non désignée —
+sans `DATABASE_URL_TEST`, les 12 suites s'ignorent (117 tests sautés, aucune
+connexion ouverte).
+
+**Le remboursement n'avait que des tests unitaires** : il a maintenant les siens
+sur base réelle. Rendre la part d'UN convive ne rembourse pas la tournée ; quand
+tous le sont, elle l'est ; le statut de la commande ne bouge pas — une commande
+remboursée a bien été servie ; un rejeu du webhook n'inscrit qu'un mouvement.
+
+**Textes périmés synchronisés**, comme demandé. Méthode retenue : les documents
+d'ÉTAT (`REPRISE.md`) se réécrivent, les documents de RÉCIT (le manuel)
+s'annotent — la phrase périmée de la phase 54 est gardée au passé sous un
+encadré daté. Un manuel qui se corrige en silence cesse d'être relisible.
+L'ancien rapport d'audit porte désormais un en-tête « DOCUMENT HISTORIQUE »,
+pour qu'on ne retraite pas d'anciens défauts comme s'ils étaient toujours là.
+
+**Deux faux échecs corrigés au passage**, trouvés en relançant la suite cinq
+fois. Le port du conteneur d'essai (55432) était tombé dans une plage réservée
+par Windows pour WSL : le conteneur perdait sa liaison et les douze fichiers
+échouaient d'un coup sur un `PrismaClientInitializationError` — ça ressemble à
+une panne de code et n'en est pas. Base recréée sur le port **15432**, cause
+documentée (ces plages changent au redémarrage). Et les identifiants uniques des
+tests pouvaient collisionner **entre fichiers** — Jest donne à chacun son propre
+compteur repartant de zéro — ce qui faisait échouer la réinscription par e-mail
+d'`archives.int-spec.ts` sur une adresse déjà prise. Trois passages consécutifs
+à 117/117 depuis.
+
+`+ brain/audits/REPONSE_CLOTURE_2026-10-05.md`
+`+ brain/audits/DOSSIER_AUDIT_CLOUD_CODE_2026-10-04.docx`
+`+ backend/test/integration/remboursement.int-spec.ts`
+`~ brain/audits/AUDIT_2026-09-30_par-phase.md` `~ brain/ENGINEERING_MANUAL.md`
+`~ REPRISE.md`
+12 suites d'intégration / 117 tests, 684 unitaires, 12 mobile.
+
+---
+
 ## [0.78.0] — 2026-10-01 — Les tests d'intégration, lancés et mis en CI
 
 Le moteur Docker relancé, la suite d'intégration passe sur une vraie base — et
