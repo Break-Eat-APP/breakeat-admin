@@ -5,6 +5,51 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.80.0] — 2026-10-09 — Les apps web ont enfin des tests
+
+Le dossier de clôture nommait ce P3 en premier : admin, operator et back-office
+n'avaient **aucun** test automatisé. On commence par les deux endroits où le
+risque est concentré — la session et son renouvellement.
+
+**Pourquoi là.** Une session qui casse ne produit pas d'erreur visible : elle
+renvoie au login, ça ressemble à un problème d'identifiants, et on cherche du
+côté des comptes. Les deux défauts déjà payés sur ce terrain le disent assez :
+le back-office ne gardait pas son jeton de renouvellement (phase 54), et le
+panneau d'admin renouvelait en parallèle — le serveur consomme le jeton au
+premier usage, donc la seconde requête recevait un refus qui effaçait toute la
+session, organisation choisie comprise. Les deux correctifs tenaient ; rien ne
+les gardait.
+
+**22 tests**, dans l'ordre des priorités demandées (connexion, renouvellement,
+permissions) : le jeton de renouvellement conservé, `clearSession` qui emporte
+toutes les clés — dont l'organisation choisie côté admin, qui était oubliée —, un
+401 qui renouvelle puis rejoue avec le jeton neuf, **un seul** renouvellement
+pour plusieurs 401 simultanés, un 401 persistant annoncé comme un refus d'action
+et non une expiration, un onglet voisin qui ne déconnecte pas celui-ci, et une
+connexion refusée qui n'est pas une session expirée.
+
+**Preuve du filet, pas confiance.** En retirant la conservation du jeton de
+renouvellement, six des douze tests du back-office tombent ; en retirant le
+partage du renouvellement de l'admin, le test des 401 simultanés tombe, et lui
+seul.
+
+**Ce qui explique le trou** : les deux apps n'avaient pas de script `test`, donc
+`turbo test` les sautait **en silence**. Une suite absente ne fait pas rougir une
+CI. Elle lançait deux tâches, elle en lance quatre.
+
+Et un test écrit en chemin ne prouvait rien — sa doublure répondait 200 au
+premier appel, donc aucun 401 et aucun renouvellement. Seule l'assertion sur le
+jeton l'a révélé. À retenir : un test qui passe du premier coup sur un chemin
+d'erreur mérite qu'on vérifie qu'il emprunte bien ce chemin.
+
+`+ apps/backoffice/jest.config.js` `+ apps/backoffice/src/lib/api/backoffice-client.spec.ts`
+`+ apps/admin/jest.config.js` `+ apps/admin/src/lib/api/admin-client.spec.ts`
+`~ apps/backoffice/package.json` `~ apps/admin/package.json` `~ pnpm-lock.yaml`
+718 tests : 684 backend, 12 mobile, 12 back-office, 10 admin. Plus 12 suites
+d'intégration / 117 tests sur base réelle.
+
+---
+
 ## [0.79.0] — 2026-10-05 — Réponse à la demande de clôture d'audit
 
 Un dossier de clôture (Codex, 04/10) demande de confirmer six points avant de

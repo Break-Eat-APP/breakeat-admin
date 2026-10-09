@@ -194,6 +194,7 @@ rendrait faux dès la phase suivante. À regénérer quand des phases sont ajout
 | **53** | Phase 53 — Les cinq défauts de l'audit, corrigés (30/09/2026) |
 | **54** | Phase 54 — Les neuf défauts P2 de l'audit (30/09–01/10/2026) |
 | **55** | Phase 55 — Second passage d'audit : ce que la correction précédente avait ouvert (01/10/2026) |
+| **56** | Phase 56 — Les premiers tests des apps web (09/10/2026) |
 
 **Deux cas particuliers, à connaître :**
 
@@ -6495,3 +6496,87 @@ pas désignée. Cette variable est donc ce qui fait exister le job.
 
 **11 suites d'intégration / 110 tests** sur base réelle, 684 unitaires,
 12 mobile.
+
+---
+
+## Phase 56 — Les premiers tests des apps web (09/10/2026)
+
+Le dossier de clôture nommait ce P3 en premier : **admin, operator et
+back-office n'avaient aucun test automatisé**. On commence par les deux endroits
+où le risque est concentré — la session et son renouvellement.
+
+### Pourquoi là, et pas ailleurs
+
+Une session qui casse ne produit pas d'erreur visible : elle renvoie au login. Ça
+ressemble à un problème d'identifiants, et on cherche du côté des comptes. Les
+deux défauts déjà payés sur ce terrain en témoignent :
+
+- **le back-office ne gardait pas son jeton de renouvellement** (corrigé phase
+  54). Le serveur en renvoyait un depuis toujours ; quitter l'écran un quart
+  d'heure suffisait à perdre sa session ;
+- **le panneau d'admin renouvelait en parallèle.** Le serveur fait tourner le
+  jeton — le premier usage le consomme. La page Campagnes lançant deux requêtes
+  à la fois, la seconde recevait un refus qui passait pour une session morte :
+  tout était effacé, organisation choisie comprise, et « le dashboard sautait au
+  clic ».
+
+Les deux correctifs tenaient. **Rien ne les gardait.**
+
+### Ce que couvrent les 22 tests
+
+Dans l'ordre des priorités demandées par l'audit — connexion, renouvellement,
+permissions :
+
+| Propriété | Back-office | Admin |
+|---|---|---|
+| Le jeton de renouvellement est conservé | ✅ | ✅ |
+| `clearSession` emporte TOUTES les clés | ✅ (3) | ✅ (5, dont l'organisation choisie) |
+| Un compte stocké illisible ne fait rien tomber | ✅ | ✅ |
+| Un 401 renouvelle puis rejoue, avec le jeton NEUF | ✅ | ✅ |
+| **UN SEUL** renouvellement pour plusieurs 401 simultanés | ✅ | ✅ |
+| Un 401 persistant = refus d'ACTION, pas expiration | ✅ | ✅ |
+| Un onglet voisin ne déconnecte pas celui-ci | ✅ | ✅ |
+| Une connexion refusée n'est pas une session expirée | ✅ | ✅ |
+| `isSuperAdmin` refuse un administrateur de club | ✅ | — |
+
+**Preuve du filet, pas confiance :** en retirant la conservation du jeton de
+renouvellement, **six** des douze tests du back-office tombent. En retirant le
+partage du renouvellement de l'admin, le test des 401 simultanés tombe — et lui
+seul. C'est exactement ce qu'on attend d'un test de non-régression : il désigne
+le défaut, pas tout le fichier.
+
+### Deux choix de harnais
+
+**`jsdom` et non `node`**, parce que c'est `localStorage` qu'on éprouve. Et
+**aucune bibliothèque de rendu** : la logique testée est celle du client d'API,
+qui n'en a pas besoin — les histoires Storybook couvrent déjà les composants de
+l'admin. Ajouter `@testing-library` serait du poids pour rien à ce stade.
+
+**La même configuration dans les deux apps**, volontairement. Deux harnais qui
+divergent, c'est une suite qu'on finit par ne plus lancer.
+
+### Ce qui les lance
+
+Rien à changer dans la CI : `turbo test` prend tout paquet qui déclare un script
+`test`. Elle en lançait deux (backend, mobile), elle en lance **quatre** — 684 +
+12 + 12 + 10 = **718 tests**.
+
+C'est aussi ce qui explique le trou : le back-office et l'admin n'avaient pas de
+script `test`, donc `turbo test` les **sautait en silence**. Une suite absente ne
+fait pas rougir la CI.
+
+### Un test qui ne prouvait rien
+
+Écrit en chemin, et attrapé par son voisin : le test du « conflit d'onglets »
+passait pour la mauvaise raison — sa doublure répondait 200 au premier appel,
+donc aucun 401 et aucun renouvellement. Seule l'assertion sur le jeton l'a
+révélé. Il compte maintenant les appels métier pour que le rejeu soit visible.
+
+**À retenir** : un test qui passe du premier coup sur un chemin d'erreur mérite
+qu'on vérifie qu'il emprunte bien ce chemin.
+
+### Ce qui reste
+
+Le **poste opérateur** n'a toujours aucun test. Son risque est ailleurs — le
+temps réel et la portée buvette — et demande un harnais différent (un faux
+serveur Socket.IO). C'est le prochain morceau de ce P3.
