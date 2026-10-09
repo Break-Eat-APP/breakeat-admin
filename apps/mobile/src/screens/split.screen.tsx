@@ -64,7 +64,7 @@ const BANDEAU: Record<
   SENDING: {
     icone: 'time-outline',
     couleur: THEME.orange,
-    texte: 'La tournée part — encaissement en cours.',
+    texte: 'L’addition part — encaissement en cours.',
   },
   SENT: {
     icone: 'checkmark-circle',
@@ -79,7 +79,7 @@ const BANDEAU: Record<
   CANCELLED: {
     icone: 'close-circle',
     couleur: THEME.grey,
-    texte: 'Cette tournée a été annulée. Aucune carte n’a été débitée.',
+    texte: 'Cette addition a été annulée. Aucune carte n’a été débitée.',
   },
 };
 
@@ -103,7 +103,7 @@ export function SplitScreen({ route, navigation }: Props) {
       setSplit(await apiGetSplit(code));
       setErreur(null);
     } catch (e: unknown) {
-      setErreur(e instanceof Error ? e.message : 'Ardoise introuvable');
+      setErreur(e instanceof Error ? e.message : 'Addition introuvable');
     } finally {
       setChargement(false);
     }
@@ -203,7 +203,7 @@ export function SplitScreen({ route, navigation }: Props) {
 
   const annuler = () => {
     confirmAction(
-      'Annuler la tournée ?',
+      'Annuler l’addition partagée ?',
       "Les sommes bloquées sur les cartes de tes amis seront libérées. Personne n'a été débité.",
       () => {
         void (async () => {
@@ -221,7 +221,7 @@ export function SplitScreen({ route, navigation }: Props) {
   if (chargement) {
     return (
       <View style={styles.root}>
-        <PageHeader title="Ardoise partagée" />
+        <PageHeader title="Addition partagée" />
         <View style={styles.centre}>
           <ActivityIndicator color={THEME.orange} />
         </View>
@@ -232,9 +232,9 @@ export function SplitScreen({ route, navigation }: Props) {
   if (erreur || !split) {
     return (
       <View style={styles.root}>
-        <PageHeader title="Ardoise partagée" />
+        <PageHeader title="Addition partagée" />
         <View style={styles.centre}>
-          <Text style={styles.vide}>{erreur ?? 'Ardoise introuvable.'}</Text>
+          <Text style={styles.vide}>{erreur ?? 'Addition introuvable.'}</Text>
         </View>
       </View>
     );
@@ -244,7 +244,7 @@ export function SplitScreen({ route, navigation }: Props) {
 
   return (
     <View style={styles.root}>
-      <PageHeader title={split.supplierName ?? 'Ardoise partagée'} />
+      <PageHeader title={split.supplierName ?? 'Addition partagée'} />
 
       <ScrollView
         contentContainerStyle={styles.liste}
@@ -388,7 +388,7 @@ export function SplitScreen({ route, navigation }: Props) {
               </Pressable>
 
               <Pressable onPress={annuler} hitSlop={8}>
-                <Text style={styles.annuler}>Annuler la tournée</Text>
+                <Text style={styles.annuler}>Annuler l’addition</Text>
               </Pressable>
             </>
           ) : (

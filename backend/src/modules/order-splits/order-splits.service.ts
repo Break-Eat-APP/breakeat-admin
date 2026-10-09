@@ -185,7 +185,7 @@ export class OrderSplitsService {
         if (!collision) throw e;
       }
     }
-    throw new BadRequestException('Impossible de générer un code d’ardoise');
+    throw new BadRequestException('Impossible de générer un code de partage');
   }
 
   // ─── Consultation ───────────────────────────────────────────
@@ -202,7 +202,7 @@ export class OrderSplitsService {
       where: { code: code.trim().toUpperCase() },
       select: { id: true },
     });
-    if (!split) throw new NotFoundException('Ardoise introuvable');
+    if (!split) throw new NotFoundException('Addition introuvable');
     return this.decrire(split.id);
   }
 
@@ -216,7 +216,7 @@ export class OrderSplitsService {
       where: { id: splitId },
       include: { units: { include: { share: { select: { claimantName: true } } } } },
     });
-    if (!split) throw new NotFoundException('Ardoise introuvable');
+    if (!split) throw new NotFoundException('Addition introuvable');
 
     const buvette = await this.prisma.supplier.findUnique({
       where: { id: split.supplierId },
@@ -282,12 +282,12 @@ export class OrderSplitsService {
     const split = await this.prisma.orderSplit.findUnique({
       where: { code: params.code.trim().toUpperCase() },
     });
-    if (!split) throw new NotFoundException('Ardoise introuvable');
+    if (!split) throw new NotFoundException('Addition introuvable');
     if (split.status !== OrderSplitStatus.OPEN) {
-      throw new BadRequestException('Cette ardoise est close');
+      throw new BadRequestException('Cette addition est close');
     }
     if (split.expiresAt.getTime() <= Date.now()) {
-      throw new BadRequestException('Cette ardoise a expiré');
+      throw new BadRequestException('Cette addition a expiré');
     }
 
     await this.libererReservationsExpirees(split.id);
@@ -431,9 +431,9 @@ export class OrderSplitsService {
       where: { code: code.trim().toUpperCase() },
       include: { units: true, shares: true },
     });
-    if (!split) throw new NotFoundException('Ardoise introuvable');
+    if (!split) throw new NotFoundException('Addition introuvable');
     if (split.hostUserId !== userId) {
-      throw new ForbiddenException('Seul l’auteur de la tournée peut l’envoyer');
+      throw new ForbiddenException('Seul celui qui a lancé l’addition peut l’envoyer');
     }
 
     // Déjà partie : on rend SA commande. Un double appui n'est pas une erreur,
@@ -443,11 +443,11 @@ export class OrderSplitsService {
     }
     if (split.status === OrderSplitStatus.SENDING) {
       throw new BadRequestException(
-        'Cette tournée part déjà. Laisse-lui quelques secondes puis rafraîchis.',
+        'Cette addition part déjà. Laisse-lui quelques secondes puis rafraîchis.',
       );
     }
     if (split.status !== OrderSplitStatus.OPEN) {
-      throw new BadRequestException('Cette ardoise est déjà close');
+      throw new BadRequestException('Cette addition est déjà close');
     }
 
     const nonPayees = split.units.filter((u) => u.status !== OrderSplitUnitStatus.PAID);
@@ -468,7 +468,7 @@ export class OrderSplitsService {
     });
     if (revendiquee.count === 0) {
       throw new BadRequestException(
-        'Cette tournée part déjà. Laisse-lui quelques secondes puis rafraîchis.',
+        'Cette addition part déjà. Laisse-lui quelques secondes puis rafraîchis.',
       );
     }
 
@@ -553,7 +553,7 @@ export class OrderSplitsService {
       });
       throw new BadRequestException(
         `La commande n’a pas pu être créée. ${rendues} paiement(s) ont été remboursés — ` +
-          'refais la tournée, personne ne reste débité.',
+          'refais le partage, personne ne reste débité.',
       );
     }
 
@@ -606,7 +606,7 @@ export class OrderSplitsService {
         });
         this.logger.error(
           `Ardoise ${ardoise.code} : envoi interrompu, ${rendues} paiement(s) remboursé(s). ` +
-            'La tournée est marquée en échec — l’hôte peut en ouvrir une nouvelle.',
+            'L’addition est marquée en échec — l’hôte peut en relancer une.',
         );
       } catch (e: unknown) {
         this.logger.error(`Ardoise ${ardoise.code} : rattrapage impossible — ${String(e)}`);
@@ -676,17 +676,17 @@ export class OrderSplitsService {
       where: { code: code.trim().toUpperCase() },
       include: { shares: true },
     });
-    if (!split) throw new NotFoundException('Ardoise introuvable');
+    if (!split) throw new NotFoundException('Addition introuvable');
     if (split.hostUserId !== userId) {
-      throw new ForbiddenException('Seul l’auteur de la tournée peut l’annuler');
+      throw new ForbiddenException('Seul celui qui a lancé l’addition peut l’annuler');
     }
     if (split.status === OrderSplitStatus.SENDING) {
       throw new BadRequestException(
-        'Cette tournée part en ce moment — impossible de l’annuler. Rafraîchis dans quelques secondes.',
+        'Cette addition part en ce moment — impossible de l’annuler. Rafraîchis dans quelques secondes.',
       );
     }
     if (split.status !== OrderSplitStatus.OPEN) {
-      throw new BadRequestException('Cette ardoise est déjà close');
+      throw new BadRequestException('Cette addition est déjà close');
     }
 
     let liberees = 0;
