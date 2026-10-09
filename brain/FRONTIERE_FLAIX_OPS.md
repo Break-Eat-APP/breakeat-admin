@@ -200,6 +200,18 @@ Hypothèse posée le 09/10 : Break Eat garde **l'accès client et la découverte
 lieux** (géoloc, image, paramètres), et **au clic sur un lieu, Flaix prend tout
 le reste**. Break Eat ne serait plus que le support visible.
 
+### Le cadre, précisé par le client le 09/10
+
+Ces quatre faits changent l'analyse, et tranchent la question que les sections
+précédentes laissaient ouverte :
+
+| Fait | Conséquence |
+|---|---|
+| **Flaix est en marque blanche, et fait PARTIE de Break Eat** — c'est son cerveau | Ce n'est pas une frontière avec un partenaire mais un partage interne. Les craintes « on perd le client, on perd la donnée » tombent : c'est la même maison |
+| **Flaix fonctionne en WEB** pour le moment | Le relais est une page web dans l'app, pas un écran natif à réécrire |
+| **Flaix a son dashboard** : données client, ventes, et le reste | Les statistiques, le fichier client et la fréquentation de Break Eat deviennent un DOUBLON — voir « deux dashboards » plus bas |
+| **Flaix fait le paiement Stripe** | ✅ **La question « qui encaisse » est tranchée.** Le « 50 % » est donc un chiffre réaliste, pas optimiste |
+
 ### Bonne nouvelle : c'est déjà le plan du projet, et l'interrupteur existe
 
 ```prisma
@@ -216,7 +228,23 @@ Et il est câblé **de bout en bout** :
 | Case à cocher dans le panneau d'admin | ✅ existe |
 | Champ stocké sur le lieu | ✅ existe |
 | Renvoyé à l'app par l'API publique des lieux | ✅ existe |
-| **L'app branche sur Flaix quand c'est vrai** | ⬜ **le seul maillon manquant** |
+| **L'app AIGUILLE déjà sur Flaix** (`venue-discovery.screen.tsx`) | ✅ **existe, et c'est livré** |
+| L'écran d'arrivée `FlaixOrder`, enregistré dans `App.expo.tsx` | ✅ existe |
+| **Le CONTENU de cet écran** | ⬜ le seul maillon manquant |
+
+Le code vivant, aujourd'hui, dans la build que portent tes clients :
+
+```ts
+// venue-discovery.screen.tsx — « Ouvre un lieu : Flaix > événement actif > Bientôt »
+if (v.flaixEnabled) {
+  navigation.navigate('FlaixOrder', { venueId: v.id, flaixVenueId: v.flaixVenueId });
+}
+```
+
+Et l'écran d'arrivée dit : *« Ce lieu utilise Flaix pour la commande.
+L'intégration arrive bientôt. »* — 34 lignes, un logo et un message d'attente.
+
+**Il n'y a donc pas un parcours à construire : il y a un écran à remplir.**
 
 Conséquence directe pour la question posée : **oui, ce chemin se développe seul,
 en parallèle, sans rien supprimer.** Un lieu avec `flaixEnabled = false` garde le
@@ -228,27 +256,72 @@ d'un chantier de démolition.
 > personne** aujourd'hui. Ce n'est pas du code mort oublié — c'est une décision
 > de la phase 16.3 en attente de l'API Flaix, comme le stub décisionnel.
 
-### La question qui décide de tout : QUI PREND L'ARGENT
+### Qui encaisse : tranché — c'est Flaix
 
-« 50 % » n'est atteignable que si **Flaix encaisse**. Sinon le compte est faux :
+Le « 50 % » tient donc. Mais trois choses changent de main, et ce ne sont pas
+des fonctionnalités :
 
-| Si… | Ce que Break Eat DOIT garder | Volume réel |
-|---|---|---|
-| **Flaix encaisse** | comptes, lieux, relais, notifications | ~50 % — l'hypothèse tient |
-| **Break Eat encaisse** | + catalogue (les prix), panier, commandes, empreintes de prix/TVA, reçus, remboursements, Stripe Connect, périmètre de CA | ~70 % — ce n'est plus l'hypothèse |
-
-Parce qu'on ne peut pas encaisser ce qu'on ne connaît pas : le montant vient du
-catalogue, et la comptabilité vient des lignes de commande figées.
-
-Et si Flaix encaisse, trois choses tombent qui ne sont pas des fonctionnalités :
-
-- **la facturation des clubs.** La commission est calculée sur des commandes que
-  Break Eat voit. Si elles ne passent plus par lui, le modèle de revenu est à
-  réécrire — pas à adapter ;
+- **la facturation des clubs.** La commission était calculée sur des commandes
+  que Break Eat voyait passer (`perimetreCa` : payé, non annulé). Elle se
+  calculera désormais sur les données **du dashboard Flaix**. Ce n'est pas une
+  adaptation, c'est un changement de source — à vérifier avant la première
+  facture, pas après ;
 - **l'onboarding Stripe Connect des clubs**, construit et qui marche, devient
-  inutile ;
-- **les reçus et les remboursements** changent de main. Le bandeau bleu que l'app
-  sait afficher dépendrait alors d'un webhook Flaix.
+  inutile pour les lieux en Flaix. Il reste nécessaire pour les autres ;
+- **les reçus et les remboursements** changent de main. Le bandeau bleu que
+  l'app sait afficher dépend alors d'un webhook Flaix — voir le point 2 du
+  contrat ci-dessous.
+
+### Les trois points à spécifier dans le contrat d'API
+
+Le reste est du travail d'exécution. Ces trois-là, non : mal posés, ils se
+paient en retard et en reprise.
+
+**1. L'AUTHENTIFICATION UNIQUE — le piège numéro un de la marque blanche.**
+
+Le client est connecté à Break Eat. Il ne doit **pas** se reconnecter en
+arrivant sur Flaix : une marque blanche qui redemande un mot de passe n'est plus
+une marque blanche. Deux voies possibles, à trancher :
+
+- Break Eat signe un **jeton court** (le client, le lieu, une expiration de
+  quelques minutes) que Flaix vérifie à l'ouverture de la page ;
+- ou Flaix accepte directement le **JWT Break Eat** et interroge son
+  `/auth/me`.
+
+La première est préférable : elle ne confie pas le jeton de session long à une
+page web, et elle expire d'elle-même.
+
+**2. LE RETOUR DE LA COMMANDE — c'est lui qui conditionne les notifications.**
+
+Pour que l'app puisse afficher « Mes commandes », pousser « ta commande est
+prête » et animer la Live Activity, Break Eat doit savoir qu'une commande existe
+et où elle en est. Le **webhook signé existe déjà** (HMAC, anti-rejeu,
+idempotence, journal) — mais il attend un `orderId` **de Break Eat**, et une
+commande passée chez Flaix n'en a pas.
+
+Deux voies, à trancher :
+
+- Flaix **crée une trace légère** côté Break Eat à la commande (référence,
+  lieu, montant, état) et le webhook existant fonctionne tel quel ;
+- ou le webhook porte **ses propres identifiants** Flaix, et Break Eat tient une
+  table de correspondance.
+
+⚠️ Sans l'un des deux, l'app devient une vitrine **muette** : le client commande
+et n'est plus jamais prévenu. C'est aussi ce qui soutient l'argument App Store
+(voir plus bas) — donc ce point n'est pas optionnel.
+
+**3. LA WEBVIEW EST UNE DÉPENDANCE NATIVE.**
+
+`react-native-webview` **n'est pas installé**. L'ajouter, c'est :
+
+- un **nouveau build EAS** (une dépendance native ne passe pas par une mise à
+  jour over-the-air) ;
+- et le moment exact où le piège des **deux copies de React** peut ressortir —
+  les singletons forcés dans `metro.config.js` sont là pour ça, **ne pas y
+  toucher** (voir le crash iOS « useState of null »).
+
+À prévoir dans le planning : ce n'est pas « une page web dans l'app », c'est une
+livraison complète avec passage en revue Apple.
 
 ### Ce qu'on oublie, et qui se paie
 
@@ -257,17 +330,36 @@ Et si Flaix encaisse, trois choses tombent qui ne sont pas des fonctionnalités 
    commande, c'est Break Eat qui doit dire « ta commande est prête » — donc le
    module notifications et le webhook signé **restent**. Sans cela, la vitrine est
    muette : le client ne sait jamais que sa commande l'attend.
-2. **Le fichier client devient aveugle.** « Mes clients », l'export, la fidélité
-   et la fréquentation vivent des commandes. Si Flaix les prend, Break Eat perd la
-   donnée qu'il vend aux clubs — **sauf si le contrat d'API prévoit qu'elle soit
-   restituée**. À écrire noir sur blanc, pas à supposer.
-3. **Le risque App Store est réel.** Une application dont la seule fonction est
-   de lister des lieux et d'ouvrir une page externe tombe sous la règle **4.2
-   « minimum functionality »** d'Apple. L'app actuelle passe largement ; une
-   coquille se fait refuser. Le « 50 % » décrit ici — comptes, découverte,
-   favoris, historique, notifications — est justement ce qui lui donne sa
-   substance. C'est jouable, mais à surveiller à la soumission, et c'est un
-   argument pour garder le relais DANS l'app plutôt qu'en navigateur externe.
+2. **DEUX DASHBOARDS POUR UN CLUB = deux chiffres qui ne se recoupent pas.**
+   Flaix a le sien (données client, ventes) ; le panneau d'admin Break Eat
+   affiche aussi des statistiques, un fichier client et une fréquentation, tous
+   calculés sur **ses** commandes. Pour un lieu passé en Flaix, ces écrans
+   deviennent faux — ils ne verront plus rien passer, et un club lira « 0 € »
+   là où il a vendu.
+
+   C'est **exactement** le défaut P2 corrigé le 01/10 entre le back-office et
+   les stats d'organisation : deux périmètres pour un même chiffre. La leçon
+   vaut ici : soit l'admin Break Eat cesse d'afficher des chiffres pour un lieu
+   Flaix et **pointe vers le dashboard Flaix** (le lien existe déjà, phase 50),
+   soit il lit les chiffres de Flaix par API. **Jamais les deux sources en
+   parallèle.**
+3. **Le risque App Store, et pourquoi la décision du client est la bonne.**
+   Une application dont la seule fonction est de lister des lieux et d'ouvrir
+   une page externe tombe sous la règle **4.2 « minimum functionality »**
+   d'Apple. Garder les notifications, l'historique, les comptes et la
+   découverte — ce qui est décidé — lui donne sa substance. Deux précisions
+   utiles :
+
+   - **le paiement externe est autorisé ici.** L'achat intégré d'Apple ne
+     s'impose que pour du contenu numérique ; pour de la nourriture, le paiement
+     par Stripe dans une page web ne pose pas de problème de règle ;
+   - **Sign in with Apple est déjà en place** (`expo-apple-authentication`,
+     `usesAppleSignIn`), ce qui retire l'autre motif de refus classique quand
+     une app propose une connexion.
+
+   Le relais doit rester **DANS** l'app (webview) et non ouvrir le navigateur :
+   une app qui éjecte vers Safari pour sa fonction principale est bien plus
+   exposée à 4.2.
 4. **Ce qui part au placard** : partager l'addition, la fidélité, le stock, les
    créneaux, le poste opérateur, le temps réel, les statistiques. Ce sont les
    fonctions qui différencient Break Eat d'un annuaire. Elles ne disparaissent pas
