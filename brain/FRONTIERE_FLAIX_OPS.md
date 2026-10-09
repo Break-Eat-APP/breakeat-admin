@@ -192,6 +192,108 @@ Sans ces réponses, aucune suppression ne peut être décidée :
 
 ---
 
+---
+
+## 7. Le scénario « 50 % » : Break Eat vitrine, Flaix derrière
+
+Hypothèse posée le 09/10 : Break Eat garde **l'accès client et la découverte des
+lieux** (géoloc, image, paramètres), et **au clic sur un lieu, Flaix prend tout
+le reste**. Break Eat ne serait plus que le support visible.
+
+### Bonne nouvelle : c'est déjà le plan du projet, et l'interrupteur existe
+
+```prisma
+/// PHASE 16.3 — Quand flaixEnabled, l'app passe le relais à Flaix au lieu du
+/// parcours Break Eat natif ; flaixVenueId = identifiant du lieu côté Flaix.
+flaixEnabled  Boolean  @default(false)
+flaixVenueId  String?
+```
+
+Et il est câblé **de bout en bout** :
+
+| Maillon | État |
+|---|---|
+| Case à cocher dans le panneau d'admin | ✅ existe |
+| Champ stocké sur le lieu | ✅ existe |
+| Renvoyé à l'app par l'API publique des lieux | ✅ existe |
+| **L'app branche sur Flaix quand c'est vrai** | ⬜ **le seul maillon manquant** |
+
+Conséquence directe pour la question posée : **oui, ce chemin se développe seul,
+en parallèle, sans rien supprimer.** Un lieu avec `flaixEnabled = false` garde le
+parcours Break Eat complet ; à `true`, il passe le relais. On bascule **un club à
+la fois**, et on revient en arrière d'un clic si ça ne tient pas. C'est l'inverse
+d'un chantier de démolition.
+
+> ⚠️ Pour un auditeur : `flaixEnabled` est stocké et exposé mais **lu par
+> personne** aujourd'hui. Ce n'est pas du code mort oublié — c'est une décision
+> de la phase 16.3 en attente de l'API Flaix, comme le stub décisionnel.
+
+### La question qui décide de tout : QUI PREND L'ARGENT
+
+« 50 % » n'est atteignable que si **Flaix encaisse**. Sinon le compte est faux :
+
+| Si… | Ce que Break Eat DOIT garder | Volume réel |
+|---|---|---|
+| **Flaix encaisse** | comptes, lieux, relais, notifications | ~50 % — l'hypothèse tient |
+| **Break Eat encaisse** | + catalogue (les prix), panier, commandes, empreintes de prix/TVA, reçus, remboursements, Stripe Connect, périmètre de CA | ~70 % — ce n'est plus l'hypothèse |
+
+Parce qu'on ne peut pas encaisser ce qu'on ne connaît pas : le montant vient du
+catalogue, et la comptabilité vient des lignes de commande figées.
+
+Et si Flaix encaisse, trois choses tombent qui ne sont pas des fonctionnalités :
+
+- **la facturation des clubs.** La commission est calculée sur des commandes que
+  Break Eat voit. Si elles ne passent plus par lui, le modèle de revenu est à
+  réécrire — pas à adapter ;
+- **l'onboarding Stripe Connect des clubs**, construit et qui marche, devient
+  inutile ;
+- **les reçus et les remboursements** changent de main. Le bandeau bleu que l'app
+  sait afficher dépendrait alors d'un webhook Flaix.
+
+### Ce qu'on oublie, et qui se paie
+
+1. **Les notifications et la Live Activity appartiennent à l'APP.** Le jeton de
+   push est celui de l'appareil, enregistré par Break Eat. Même si Flaix tient la
+   commande, c'est Break Eat qui doit dire « ta commande est prête » — donc le
+   module notifications et le webhook signé **restent**. Sans cela, la vitrine est
+   muette : le client ne sait jamais que sa commande l'attend.
+2. **Le fichier client devient aveugle.** « Mes clients », l'export, la fidélité
+   et la fréquentation vivent des commandes. Si Flaix les prend, Break Eat perd la
+   donnée qu'il vend aux clubs — **sauf si le contrat d'API prévoit qu'elle soit
+   restituée**. À écrire noir sur blanc, pas à supposer.
+3. **Le risque App Store est réel.** Une application dont la seule fonction est
+   de lister des lieux et d'ouvrir une page externe tombe sous la règle **4.2
+   « minimum functionality »** d'Apple. L'app actuelle passe largement ; une
+   coquille se fait refuser. Le « 50 % » décrit ici — comptes, découverte,
+   favoris, historique, notifications — est justement ce qui lui donne sa
+   substance. C'est jouable, mais à surveiller à la soumission, et c'est un
+   argument pour garder le relais DANS l'app plutôt qu'en navigateur externe.
+4. **Ce qui part au placard** : partager l'addition, la fidélité, le stock, les
+   créneaux, le poste opérateur, le temps réel, les statistiques. Ce sont les
+   fonctions qui différencient Break Eat d'un annuaire. Elles ne disparaissent pas
+   du dépôt — elles dorment derrière le drapeau, et se rallument par lieu.
+5. **Les données ne se suppriment jamais.** Les commandes déjà passées portent la
+   comptabilité. Un lieu qui bascule chez Flaix garde son historique.
+6. **L'altitude n'existe pas** dans le modèle : le lieu porte `latitude`,
+   `longitude`, `searchTerms` et son image. Si le positionnement en a besoin,
+   c'est une colonne à ajouter — une migration, pas un chantier.
+
+### La méthode
+
+1. Implémenter **le branchement**, pas une seconde app : au clic sur un lieu, si
+   `flaixEnabled`, aller chez Flaix avec `flaixVenueId`.
+2. Garder les deux chemins vivants derrière le drapeau. **Aucune suppression.**
+3. Éprouver sur **un club**, un vrai service, et comparer : ce que le client vit,
+   ce que le comptoir vit, ce que la comptabilité voit.
+4. Décider ensuite — et seulement ensuite — ce qu'on retire.
+
+### Ce qui n'est pas une question technique
+
+Si Break Eat n'est que la vitrine, son levier auprès des clubs devient le
+référencement et les comptes. C'est une position plus mince que « le système qui
+encaisse et qui mesure ». Ce choix-là est économique, pas technique : il se prend
+en sachant que le code, lui, est prêt à faire les deux.
+
 ## En un mot
 
 Le dépôt a été construit avec cette frontière en tête, donc **il n'y a pas de
