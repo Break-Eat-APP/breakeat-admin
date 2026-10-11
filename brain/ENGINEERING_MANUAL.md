@@ -195,6 +195,7 @@ rendrait faux dès la phase suivante. À regénérer quand des phases sont ajout
 | **54** | Phase 54 — Les neuf défauts P2 de l'audit (30/09–01/10/2026) |
 | **55** | Phase 55 — Second passage d'audit : ce que la correction précédente avait ouvert (01/10/2026) |
 | **56** | Phase 56 — Les premiers tests des apps web (09/10/2026) |
+| **57** | Phase 57 — Les réglages qui promettaient ce qui n'existe pas (10–11/10/2026) |
 
 **Deux cas particuliers, à connaître :**
 
@@ -6580,3 +6581,143 @@ qu'on vérifie qu'il emprunte bien ce chemin.
 Le **poste opérateur** n'a toujours aucun test. Son risque est ailleurs — le
 temps réel et la portée buvette — et demande un harnais différent (un faux
 serveur Socket.IO). C'est le prochain morceau de ce P3.
+
+---
+
+## Phase 57 — Les réglages qui promettaient ce qui n'existe pas (10–11/10/2026)
+
+Un audit chirurgical du 10/10, sur la révision `22e02a4`, attaque un angle que
+les précédents n'avaient pas vu. Il ne cherche pas des erreurs de logique : il
+cherche **des réglages activables dont le parcours n'est pas livré**.
+
+> Un bouton qui promet ce qui n'existe pas est un défaut, même si aucune ligne
+> de code n'est « cassée ».
+
+C'est la bonne lecture, et elle a trouvé quatre choses.
+
+### 1. « Mes commandes » ne faisait rien
+
+L'accueil configurable (white-label) propose une action `orders`, libellée
+« Mes commandes ». Dans l'app, elle était un **no-op**, avec ce commentaire :
+
+```ts
+// 'orders' : pas encore d'écran liste de commandes côté app → no-op pour l'instant.
+```
+
+Or l'écran EXISTE — route `Commandes`, `order-history.screen.tsx`. Le
+commentaire disait le contraire du code, et un club pouvait poser dans son
+interface un bouton mort sans que rien ne le lui signale. **Une ligne.**
+
+### 2. Flaix activable, parcours non livré
+
+`flaixEnabled` sans `flaixVenueId` envoyait le client sur un écran
+« l'intégration arrive bientôt », **sans retour** vers la commande normale du
+lieu. Deux corrections : un réglage à moitié rempli ne change plus le parcours
+(on retombe sur l'événement du lieu), et l'écran d'attente dit la vérité avec un
+bouton de retour. *Un écran sans issue est un écran cassé.*
+
+### 3. `flaixTakeover` — le plus dangereux des deux
+
+Ce **second** interrupteur, dans la page d'apparence de l'admin, REMPLAÇAIT tout
+l'accueil du lieu par « Intégration Flaix — à venir (Phase 11.5) ». Un club qui
+cochait la case **éteignait son propre parcours de commande** : ses clients
+n'avaient plus ni carte, ni buvette, ni panier.
+
+L'app l'ignore désormais, et l'interrupteur est **DÉSARMÉ** dans l'admin —
+visible, pour annoncer ce qui arrive ; impossible à armer. Le composant `Toggle`
+a gagné un état désactivé pour cela. Désarmer plutôt que masquer : le club sait
+ce qui se prépare, et ne peut pas l'allumer dans le vide.
+
+### 4. Flaix ne DÉPASSE plus le comptoir
+
+Le défaut le plus coûteux pour un client. `buildContentState` prenait le statut
+de Flaix tel quel :
+
+```ts
+const status = overrideStatus ?? this.mapWidgetStatus(order.status);
+```
+
+Si Flaix annonçait `READY` avant que l'équipier n'ait appuyé, la Live Activity
+affichait **« prête »** et le client se présentait devant un comptoir qui ne
+l'attendait pas. Deux écrans, deux vérités, et c'est le client qui payait.
+
+La décision « qui dit prête » appartient au produit (voir
+`brain/FRONTIERE_FLAIX_OPS.md`). En attendant, on retient la réponse la moins
+coûteuse : **ne jamais annoncer au client un état plus avancé que celui du
+service**. Flaix reste libre d'annoncer un RETARD ou une ANNULATION — elle seule
+les connaît — et de rester en arrière, auquel cas elle affine le libellé.
+
+Six tests. En remettant le défaut, **un seul tombe** : exactement celui qui garde
+la règle.
+
+> Le jour où la décision tombe à « Flaix fait foi », il n'y a qu'une ligne à
+> supprimer. Mais ce jour-là, Flaix devra écrire le VRAI statut de la commande —
+> `OrderActorType.FLAIX` et la transition `PREPARING → READY` existent déjà pour
+> ça — et pas seulement l'affichage, sinon le comptoir resterait dans le noir.
+
+### Le poste opérateur a enfin des tests
+
+C'était le dernier des cinq paquets sans aucun test, et son risque n'est pas
+celui des autres : c'est l'écran qu'une équipière tient pendant trois heures de
+service, les mains occupées. **12 tests**, dont les deux défauts déjà payés en
+production :
+
+- **la boucle de déconnexion** : un `window.location.reload()` sur 401. Le
+  tableau lance plusieurs appels au montage ; le premier 401 rechargeait la
+  page, qui relançait les mêmes appels, qui rechargeaient encore. L'écran « se
+  connectait puis sautait » ;
+- **la course au renouvellement**, comme sur l'admin et le back-office.
+
+Plus ce qui lui est propre : le **numéro crié au comptoir** (« 18 » et non
+« BE-00000023 », avec son repli — et le cas du numéro **zéro**, qu'un `||`
+aurait écarté), et les **transitions**, chacune sur sa route (une inversion
+changerait l'état du comptoir sans rien dire).
+
+`turbo test` lance maintenant **cinq** tâches : 690 + 12 + 12 + 12 + 10 =
+**736 tests**.
+
+### L'export web entre en CI
+
+Le `build` du paquet mobile n'est qu'un `tsc --noEmit` : la CI ne construisait
+donc **jamais** le livrable web, alors que c'est lui que Vercel publie pour les
+clients sans application installée. Un export cassé ne se voyait qu'au
+déploiement — trop tard, et sur la branche principale.
+
+Un job à part (l'export prend des minutes ; le mettre dans `turbo build`
+finirait par faire désactiver le tout), avec les **mêmes variables que
+`vercel.json`** pour éprouver l'export tel qu'il est publié. Et un contrôle qui
+compte : `test -f dist/index.html`. L'audit avait justement observé un export
+qui s'interrompt à 84,6 % **sans rien écrire** — un code de sortie ne suffit
+donc pas, on exige le fichier. L'artefact est conservé sept jours.
+
+### Lint entièrement propre
+
+Les 12 avertissements restants sont traités, `src` **et** `test`, dans les cinq
+paquets : cinq désactivations ESLint devenues inutiles, et les assertions
+non-nulles remplacées par des gardes explicites ou des lectures qui lèvent
+(`findFirstOrThrow`). Un test qui échoue sur « introuvable » se diagnostique ;
+un test qui plante sur `undefined.id` fait perdre dix minutes.
+
+### Deux erreurs de ma part, en chemin
+
+Dignes d'être écrites, parce qu'elles se reproduiront :
+
+- **`eslint --fix` laisse des lignes blanches à espaces.** En voulant les
+  nettoyer, un script lisant les fichiers avec `newline=''` a `rstrip()`-é des
+  lignes dont le `\r` faisait partie : **201 lignes converties de CRLF en LF**
+  dans un seul fichier. Restauré par `git checkout`, puis refait ligne par
+  ligne. Sur ce dépôt, les fins de ligne sont mélangées d'un fichier à
+  l'autre — un traitement global les abîme ;
+- **un accent perdu dans le shell.** Une recherche contenant « Bière » passée
+  par un heredoc bash n'a rien trouvé, le caractère étant mangé en route. Les
+  scripts de modification s'écrivent dans un fichier, pas dans la ligne de
+  commande.
+
+### Ce qui reste, et qui n'est pas de mon ressort
+
+**Les mentions légales et la confidentialité** affichent encore « Disponible
+prochainement » dans le profil, alors que les CGU, elles, pointent sur
+`breakeat.fr/conditions-generales`. C'est un **manque de conformité au moment de
+publier** : Apple attend une politique de confidentialité atteignable. Le
+mécanisme est prêt (même chemin que les CGU) ; il manque les deux adresses, et
+elles ne s'inventent pas.

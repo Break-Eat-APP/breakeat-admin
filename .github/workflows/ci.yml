@@ -132,6 +132,59 @@ jobs:
           # ci-dessous est donc ce qui fait exister ce job.
           DATABASE_URL_TEST: postgresql://audit:audit@localhost:5432/audit
 
+  export-web:
+    name: Export web de l'app client
+    # Le `build` du paquet mobile n'est qu'un `tsc --noEmit` : la CI ne
+    # construisait donc JAMAIS le livrable web, alors que c'est lui que Vercel
+    # publie pour les clients sans application installee. Un export casse ne se
+    # voyait qu'au deploiement — trop tard, et sur la branche principale.
+    #
+    # Job a part plutot que dans `turbo build` : l'export prend des minutes, et
+    # le ralentir pour tout le monde a chaque tache ferait qu'on finirait par
+    # le desactiver.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Exporter le web
+        working-directory: apps/mobile
+        run: pnpm build:web
+        env:
+          # Memes valeurs que `apps/mobile/vercel.json` : on verifie l'export
+          # TEL QU'IL EST PUBLIE, pas une variante de developpement. Rien de
+          # secret ici — une adresse d'API publique.
+          APP_ENV: production
+          EXPO_PUBLIC_API_URL: https://breakeat-admin-production.up.railway.app/api/v1
+          # Metro tient tout le graphe en memoire ; le defaut de Node suffit
+          # rarement sur un projet de cette taille.
+          NODE_OPTIONS: --max-old-space-size=6144
+
+      - name: Verifier que le livrable existe vraiment
+        working-directory: apps/mobile
+        # Un export peut « reussir » sans rien ecrire : c'est exactement ce que
+        # l'audit du 10/10 a observe (processus interrompu a 84,6 %, aucun
+        # dossier `dist/`). On exige donc la page d'entree, pas un code de sortie.
+        run: test -f dist/index.html
+
+      - name: Conserver l'export
+        uses: actions/upload-artifact@v4
+        with:
+          name: export-web-mobile
+          path: apps/mobile/dist
+          retention-days: 7
+
   build:
     name: Build
     runs-on: ubuntu-latest

@@ -5,6 +5,55 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.81.0] — 2026-10-11 — Les réglages qui promettaient ce qui n'existe pas
+
+Un audit chirurgical du 10/10 cherche autre chose que des erreurs de logique :
+**des réglages activables dont le parcours n'est pas livré**. Un bouton qui
+promet ce qui n'existe pas est un défaut, même si aucune ligne n'est « cassée ».
+
+**« Mes commandes » ne faisait rien.** L'action de l'accueil white-label était un
+no-op, avec un commentaire affirmant que l'écran n'existait pas — alors qu'il
+existe. Un club pouvait poser un bouton mort dans son interface.
+
+**Flaix activable, parcours non livré.** `flaixEnabled` sans `flaixVenueId`
+envoyait le client dans un cul-de-sac, sans retour vers la commande du lieu. Un
+réglage à moitié rempli ne change plus le parcours, et l'écran d'attente offre
+une sortie.
+
+**`flaixTakeover` éteignait le lieu.** Ce second interrupteur remplaçait tout
+l'accueil par « à venir » : un club qui cochait la case privait ses clients de
+carte, de buvette et de panier. L'app l'ignore, et l'interrupteur est DÉSARMÉ
+dans l'admin — visible pour annoncer ce qui arrive, impossible à armer.
+
+**Flaix ne dépasse plus le comptoir.** Le statut de Flaix écrasait celui du
+service sans condition : annoncée « prête » trop tôt, la commande envoyait le
+client devant un comptoir qui ne l'attendait pas. En attendant la décision
+produit, la règle la moins coûteuse s'applique — ne jamais annoncer un état plus
+avancé que le service. Flaix garde le retard et l'annulation, qu'elle seule
+connaît.
+
+**Le poste opérateur a enfin des tests** (12) : la boucle de déconnexion
+(`reload()` sur 401, qui faisait « sauter » l'écran au montage), la course au
+renouvellement, le numéro crié au comptoir avec son repli et le cas du zéro, et
+chaque transition sur sa route.
+
+**L'export web entre en CI.** Le `build` du mobile n'étant qu'un `tsc --noEmit`,
+la CI ne construisait jamais le livrable que Vercel publie. Job dédié, mêmes
+variables que `vercel.json`, et un contrôle qui compte : `test -f
+dist/index.html` — l'audit avait observé un export qui s'arrête à 84,6 % sans
+rien écrire, donc un code de sortie ne suffit pas.
+
+**Lint entièrement propre**, `src` et `test`, dans les cinq paquets.
+
+`+ apps/operator/jest.config.js` `+ apps/operator/src/lib/api/orders-client.spec.ts`
+`~ .github/workflows/ci.yml` `~ live-activity.service.ts` (+ spec)
+`~ event-home.screen.tsx` `~ venue-discovery.screen.tsx` `~ flaix-order.screen.tsx`
+`~ appearance/page.tsx` `~ api-essai-local.js` `~ REPRISE.md`
+736 tests : 690 backend, 12 mobile, 12 back-office, 12 operator, 10 admin.
+Plus 12 suites / 117 tests d'intégration sur base réelle.
+
+---
+
 ## [0.80.0] — 2026-10-09 — Les apps web ont enfin des tests
 
 Le dossier de clôture nommait ce P3 en premier : admin, operator et back-office
