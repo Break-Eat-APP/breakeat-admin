@@ -1,8 +1,15 @@
 /**
- * Sentry client-side configuration — operator app (Phase 10)
+ * Sentry, cote NAVIGATEUR — poste operateur.
  *
- * Loaded by apps/operator/instrumentation.ts on the browser runtime.
- * No-op when NEXT_PUBLIC_SENTRY_DSN_OPERATOR is not set (local dev).
+ * Nomme `instrumentation-client.ts` depuis le 11/10/2026 : c'est le nom que
+ * Next.js (>= 15.3) charge de lui-meme au demarrage du client. L'ancien
+ * `sentry.client.config.ts` dependait d'une injection de `withSentryConfig`,
+ * que Turbopack ne fait plus — le build le signalait a chaque passage, et le
+ * jour ou le projet passera a Turbopack, les erreurs du navigateur auraient
+ * cesse de remonter SANS que rien ne le dise.
+ *
+ * Inoperant quand `NEXT_PUBLIC_SENTRY_DSN_OPERATOR` est absente (dev local, CI
+ * sans secret).
  *
  * @see https://docs.sentry.io/platforms/javascript/guides/nextjs/
  */
@@ -37,3 +44,14 @@ Sentry.init({
     return event;
   },
 });
+
+/**
+ * LES NAVIGATIONS, elles aussi, sont mesurees.
+ *
+ * Sans ce crochet, Sentry ne voit que le premier chargement : chaque passage
+ * d'un ecran a l'autre — justement ce que fait une equipiere pendant trois
+ * heures — n'apparait dans aucune trace. Le SDK le reclame explicitement au
+ * build (« ACTION REQUIRED »), et c'est la suite du meme demenagement que
+ * `onRequestError` cote serveur.
+ */
+export const onRouterTransitionStart = Sentry.captureRouterTransitionStart;

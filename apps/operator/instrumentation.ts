@@ -6,6 +6,8 @@
  *
  * @see https://nextjs.org/docs/app/building-your-application/optimizing/instrumentation
  */
+import * as Sentry from '@sentry/nextjs';
+
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     await import('./sentry.server.config');
@@ -17,7 +19,15 @@ export async function register() {
 }
 
 /**
- * Sentry client-side init is triggered via next.config.ts (withSentryConfig)
- * which injects an import of sentry.client.config.ts into the client bundle.
- * No explicit call needed here for the browser runtime.
+ * LES ERREURS DE RENDU SERVEUR REMONTENT, ELLES AUSSI.
+ *
+ * Sans ce crochet, Next.js avale les erreurs survenues pendant le rendu côté
+ * serveur : elles s'affichent dans les journaux de la plateforme et n'arrivent
+ * JAMAIS dans Sentry. Autrement dit, la seule catégorie d'erreur qu'on ne voit
+ * pas est celle qui casse une page entière — et le build le signalait à chaque
+ * passage (« missing onRequestError hook »).
+ *
+ * `captureRequestError` est fourni par le SDK : on ne réécrit pas la mise en
+ * forme du contexte de requête, elle change avec les versions de Next.
  */
+export const onRequestError = Sentry.captureRequestError;

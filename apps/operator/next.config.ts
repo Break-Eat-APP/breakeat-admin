@@ -14,13 +14,14 @@ const nextConfig: NextConfig = {
   transpilePackages: ['@break-eat/brand'],
 
   // Expose NEXT_PUBLIC_* env vars to the client bundle
-  // (NEXT_PUBLIC_SENTRY_DSN_OPERATOR is read by sentry.client.config.ts)
+  // (NEXT_PUBLIC_SENTRY_DSN_OPERATOR is read by instrumentation-client.ts)
   // Nothing else needed here — Next.js auto-exposes NEXT_PUBLIC_* at build time.
 };
 
 // withSentryConfig enhances the Next.js build to:
 //   - Upload source maps to Sentry (only when SENTRY_AUTH_TOKEN is present)
-//   - Inject sentry.client.config.ts into the client bundle
+//   - Charger instrumentation-client.ts dans le bundle client (Next >= 15.3 :
+//     ce nom remplace sentry.client.config.ts, renomme le 11/10/2026)
 //   - Auto-instrument server components / route handlers
 export default withSentryConfig(nextConfig, {
   // Sentry organisation + project (set these in CI / Vercel env vars)

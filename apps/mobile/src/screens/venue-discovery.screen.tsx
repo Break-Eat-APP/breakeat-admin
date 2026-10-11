@@ -20,6 +20,7 @@ import { useUserLocation } from '@lib/hooks/use-user-location';
 import { useNotifStore } from '@store/notif.store';
 import { apiSearchVenues, type PublicVenue } from '@lib/api/mobile-api';
 import { showAlert } from '@lib/alert';
+import { cheminDeCommande, ouvertALaCommande } from '@lib/ouverture-lieu';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
@@ -106,20 +107,17 @@ export function VenueDiscoveryScreen() {
     return () => clearTimeout(t);
   }, [query, coords, loadVenues]);
 
-  // Ouvre un lieu : Flaix (si le relais est vraiment prêt) > événement actif >
-  // « Bientôt ».
+  // Ouvre un lieu par LE chemin que `cheminDeCommande` désigne.
   //
-  // `flaixEnabled` sans `flaixVenueId` ne mène à RIEN : l'écran d'arrivée n'a
-  // aucune adresse à ouvrir et affiche « l'intégration arrive bientôt ». Le
-  // client cliquait sur un lieu et tombait dans un cul-de-sac, sans retour
-  // possible vers la commande normale du lieu.
-  //
-  // Un réglage à moitié rempli ne doit pas changer le parcours : on retombe sur
-  // l'événement du lieu, comme si Flaix n'était pas activé.
+  // La règle est partagée avec l'affichage de la carte (`ouvertALaCommande`) :
+  // écrite deux fois, elle avait divergé — la navigation exigeait l'identifiant
+  // Flaix, l'affichage non, et un lieu à moitié configuré s'annonçait
+  // « Ouvert » puis refusait au doigt.
   const openVenue = (v: PublicVenue) => {
-    if (v.flaixEnabled && v.flaixVenueId) {
+    const chemin = cheminDeCommande(v);
+    if (chemin === 'flaix') {
       navigation.navigate('FlaixOrder', { venueId: v.id, flaixVenueId: v.flaixVenueId });
-    } else if (v.currentEventId) {
+    } else if (chemin === 'evenement' && v.currentEventId) {
       navigation.navigate('EventHome', { eventId: v.currentEventId });
     } else {
       showAlert('Bientôt', `${v.name} n'a pas encore d'événement ouvert à la commande.`);
@@ -203,7 +201,7 @@ export function VenueDiscoveryScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
             {venues.map((v) => {
               const plan = v.buvettePlanUrl;
-              const open = v.flaixEnabled || v.currentEventId != null;
+              const open = ouvertALaCommande(v);
               const status =
                 v.distanceKm != null
                   ? `${v.distanceKm.toFixed(1).replace('.', ',')} km`
