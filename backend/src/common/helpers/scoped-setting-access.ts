@@ -51,7 +51,13 @@ export async function requireScopedAccess(
     throw new ForbiddenException('Accès refusé : la configuration GLOBALE est réservée au SUPER_ADMIN.');
   }
   const orgId = await orgIdForScope(prisma, scope, scopeId);
-  await requireOrgAccess(prisma, userId, orgId!, mode === 'write' ? MANAGE_ROLES : ALL_ORG_ROLES);
+  if (!orgId) {
+    // Inatteignable aujourd'hui : `orgIdForScope` ne rend `null` que pour la
+    // portée GLOBAL, traitée juste au-dessus. Écrit quand même, parce qu'une
+    // garde dit l'invariant là où une assertion ne faisait que le supposer.
+    throw new BadRequestException('Portée invalide : aucune organisation à contrôler.');
+  }
+  await requireOrgAccess(prisma, userId, orgId, mode === 'write' ? MANAGE_ROLES : ALL_ORG_ROLES);
 }
 
 /**

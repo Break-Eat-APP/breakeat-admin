@@ -13,7 +13,14 @@
 Object.assign(process.env, {
   NODE_ENV: 'development',
   PORT: '3000',
-  DATABASE_URL: 'postgresql://audit:audit@localhost:55432/audit',
+  // Le port suit la base d'essai, et se laisse surcharger : il est passé de
+  // 55432 à 15432 le 05/10 (Windows réserve 55397-55496 pour WSL, le conteneur
+  // ne pouvait plus s'y lier). Codé en dur, ce script échouait alors que la
+  // base tournait.
+  DATABASE_URL:
+    process.env.DATABASE_URL_TEST ??
+    process.env.DATABASE_URL ??
+    'postgresql://audit:audit@localhost:15432/audit',
   JWT_SECRET: 'essai-local-uniquement',
   CORS_ORIGINS: 'http://localhost:8091,http://localhost:3002,http://localhost:3011,http://localhost:3013',
   REDIS_URL: '',

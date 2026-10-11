@@ -40,11 +40,13 @@ decrire('duplication d’une buvette (base réelle)', () => {
     const o = await creerOrganisationComplete(s.prisma, unique('club'), sa);
     // Un second produit, à un autre taux : c'est justement ce qu'on ne veut
     // pas ressaisir quatre fois, et c'est là qu'une erreur coûte cher.
-    const categorie = await s.prisma.category.findFirst({ where: { supplierId: o.supplier.id } });
+    const categorie = await s.prisma.category.findFirstOrThrow({
+      where: { supplierId: o.supplier.id },
+    });
     await s.prisma.product.create({
       data: {
         supplierId: o.supplier.id,
-        categoryId: categorie!.id,
+        categoryId: categorie.id,
         name: 'Sandwich',
         price: 550,
         vatRateBps: 1000,
@@ -75,10 +77,12 @@ decrire('duplication d’une buvette (base réelle)', () => {
     const o = await creerOrganisationComplete(s.prisma, unique('club'), sa);
     const copie = await buvettes.dupliquer(o.org.id, sa, o.supplier.id, 'Buvette Sud');
 
-    const surLaCopie = await s.prisma.product.findFirst({ where: { supplierId: copie.id } });
-    await produits.changerDisponibilite(o.org.id, copie.id, surLaCopie!.id, sa, false);
+    const surLaCopie = await s.prisma.product.findFirstOrThrow({
+      where: { supplierId: copie.id },
+    });
+    await produits.changerDisponibilite(o.org.id, copie.id, surLaCopie.id, sa, false);
 
-    const apres = await s.prisma.product.findUnique({ where: { id: surLaCopie!.id } });
+    const apres = await s.prisma.product.findUnique({ where: { id: surLaCopie.id } });
     const original = await s.prisma.product.findUnique({ where: { id: o.product.id } });
     expect(apres?.status).toBe(ProductStatus.OUT_OF_STOCK);
     expect(original?.status).toBe(ProductStatus.ACTIVE);

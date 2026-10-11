@@ -212,6 +212,52 @@ export class LiveActivityService {
     }
   }
 
+  /**
+   * Flaix INFORME, mais ne DÉPASSE PAS le comptoir.
+   *
+   * `buildContentState` prenait le statut de Flaix tel quel :
+   * `overrideStatus ?? mapWidgetStatus(order.status)`. Flaix écrasait donc le
+   * comptoir sans condition — et si elle annonçait « prête » avant que
+   * l'équipier n'ait appuyé, le client lisait « prête » et se présentait devant
+   * un comptoir qui ne l'attendait pas. Deux écrans, deux vérités, et c'est le
+   * client qui en paie le prix.
+   *
+   * Tant que la question « qui dit prête » n'est pas tranchée (décision produit,
+   * voir `brain/FRONTIERE_FLAIX_OPS.md`), on retient la réponse la moins
+   * coûteuse : **ne jamais annoncer au client un état plus avancé que celui du
+   * service**. Dans l'autre sens, Flaix est libre — c'est elle qui sait qu'une
+   * commande prend du retard.
+   *
+   * ⚠️ Si la décision tombe à « Flaix fait foi », il n'y a qu'une chose à
+   * faire : supprimer cet appel dans `buildContentState`. Et ce jour-là, Flaix
+   * devra écrire le VRAI statut de la commande (`OrderActorType.FLAIX` et la
+   * transition `PREPARING → READY` existent déjà pour ça), pas seulement
+   * l'affichage — sinon le comptoir, lui, resterait dans le noir.
+   */
+  private statutAffiche(
+    duService: WidgetStatus,
+    deFlaix: WidgetStatus | undefined,
+  ): WidgetStatus {
+    if (!deFlaix) return duService;
+
+    // Ces deux-là ne sont pas une « avance » : ils décrivent autre chose, et
+    // Flaix est la mieux placée pour les dire.
+    if (deFlaix === 'DELAYED' || deFlaix === 'CANCELLED') return deFlaix;
+
+    const avancement: Record<WidgetStatus, number> = {
+      CREATED: 0,
+      PREPARING: 1,
+      DELAYED: 1,
+      READY: 2,
+      COLLECTED: 3,
+      CANCELLED: 4,
+    };
+
+    // À égalité ou en retrait, Flaix passe (elle affine le libellé). En avance
+    // sur le comptoir, on garde le comptoir.
+    return avancement[deFlaix] > avancement[duService] ? duService : deFlaix;
+  }
+
   /** Assemble l'état affichable d'une commande (créneau + buvette + estimation). */
   async buildContentState(
     orderId: string,
@@ -243,7 +289,7 @@ export class LiveActivityService {
       select: { name: true },
     });
 
-    const status = overrideStatus ?? this.mapWidgetStatus(order.status);
+    const status = this.statutAffiche(this.mapWidgetStatus(order.status), overrideStatus);
     // `?? []` : les doublures de test ne portent pas toujours les lignes.
     const missingItems = (order.items ?? []).map(
       (l) => `${l.missingQuantity}× ${l.productNameSnapshot}`,

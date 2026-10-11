@@ -181,7 +181,6 @@ function verifierConfigurationProduction(logger: LoggerService): void {
  * source : il évite qu'un oubli ne coûte une soirée.
  */
 process.on('unhandledRejection', (raison) => {
-  // eslint-disable-next-line no-console
   console.error('[Break Eat] Promesse rejetée sans gestionnaire :', raison);
 });
 

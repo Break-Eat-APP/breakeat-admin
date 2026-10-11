@@ -108,7 +108,11 @@ export function EventHomeScreen({ route, navigation }: Props) {
     if (a.type === 'supplier' && a.supplierId) { handleSelectSupplier(a.supplierId); return; }
     if (a.type === 'scan') { navigation.navigate('QRScanner'); return; }
     if (a.type === 'url' && a.url) { void Linking.openURL(a.url); return; }
-    // 'orders' : pas encore d'écran liste de commandes côté app → no-op pour l'instant.
+    // 'orders' : l'écran EXISTE (route « Commandes »). Le commentaire d'origine
+    // disait le contraire du code et le bouton ne faisait rien : un club
+    // pouvait donc poser dans son interface un bouton mort, sans rien pour le
+    // lui signaler. Le pire défaut d'un réglage : promettre ce qui n'existe pas.
+    if (a.type === 'orders') { navigation.navigate('Commandes'); return; }
   };
 
   if (loading) {
@@ -138,25 +142,17 @@ export function EventHomeScreen({ route, navigation }: Props) {
     );
   }
 
-  // Mode Flaix : l'interface du lieu est désactivée, Flaix gère la suite.
-  if (event.appearance?.flaixTakeover) {
-    return (
-      <View style={styles.root}>
-        <PageHeader />
-        <View style={styles.centered}>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: THEME.ink, textAlign: 'center', marginBottom: 8 }}>
-            Plan du lieu
-          </Text>
-          <Text style={{ fontSize: 14, color: THEME.inkSoft, textAlign: 'center', maxWidth: 260, lineHeight: 20 }}>
-            L'intégration Flaix est active. Sélectionne ton emplacement sur le plan du stade pour commander.
-          </Text>
-          <Text style={{ fontSize: 11, color: '#a8a29e', marginTop: 24 }}>
-            Intégration Flaix — à venir (Phase 11.5)
-          </Text>
-        </View>
-      </View>
-    );
-  }
+  // ─── `flaixTakeover` est IGNORÉ tant que le relais n'existe pas ───
+  //
+  // Ce réglage remplaçait tout l'accueil du lieu par un écran annonçant
+  // « Intégration Flaix — à venir ». Autrement dit : un club qui cochait la
+  // case dans son admin ÉTEIGNAIT son propre parcours de commande, et ses
+  // clients n'avaient plus rien — ni carte, ni buvette, ni panier.
+  //
+  // Un réglage dont le parcours n'est pas livré ne doit rien changer. Le lieu
+  // garde donc son interface normale, et l'interrupteur est désarmé dans
+  // l'admin (voir `appearance/page.tsx`). Le jour où le relais existe, c'est
+  // ICI qu'il s'ouvre — avec l'adresse Flaix du lieu, pas avec un message.
 
   // Écran d'accueil configurable (white-label) si le club a défini une apparence.
   if (event.appearance && Array.isArray(event.appearance.cards) && event.appearance.cards.length > 0) {

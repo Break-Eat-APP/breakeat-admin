@@ -28,7 +28,6 @@ export function installGeolocationPolyfill(): void {
 
   try {
     // Require paresseux : le module ne doit être évalué que sur natif.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const geolocation = require('@react-native-community/geolocation');
     const impl = geolocation.default ?? geolocation;
 

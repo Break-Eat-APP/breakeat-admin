@@ -317,13 +317,14 @@ export default function AppearancePage() {
               </div>
             </Card>
 
-            {/* Intégration Flaix */}
+            {/* Intégration Flaix — DÉSARMÉE jusqu'à la livraison du relais */}
             <Card title="Intégration Flaix">
               <Toggle
                 value={appearance.flaixTakeover}
                 onChange={patchFlaix}
+                disabled
                 label="Désactiver l'interface standard — Flaix prend le dessus"
-                description="Lorsqu'activé, l'app masque l'interface de commande et affiche le plan du lieu via Flaix. Le client choisit son emplacement, puis Flaix gère la suite. Requiert l'intégration Flaix (à venir — Phase 11.5)."
+                description="Pas encore disponible. Ce réglage masquera l'interface de commande au profit de Flaix quand le relais sera livré. Il reste désarmé d'ici là : activé, il laissait le lieu SANS parcours de commande — ni carte, ni buvette, ni panier."
               />
             </Card>
 
@@ -684,19 +685,35 @@ function arrowBtn(disabled: boolean): CSSProperties {
 }
 
 // ─── Toggle component ─────────────────────────────────────────────────────────────
-function Toggle({ value, onChange, label, description }: {
+function Toggle({ value, onChange, label, description, disabled }: {
   value: boolean;
   onChange: (v: boolean) => void;
   label: string;
   description?: string;
+  /**
+   * Désarmé : l'interrupteur se voit mais ne s'actionne pas.
+   *
+   * Préféré au masquage pour un réglage qui ARRIVE : le club sait ce qui se
+   * prépare, et ne peut pas armer un parcours qui n'existe pas encore.
+   */
+  disabled?: boolean;
 }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, cursor: 'pointer' }} onClick={() => onChange(!value)}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 14,
+        cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.55 : 1,
+      }}
+      onClick={() => { if (!disabled) onChange(!value); }}
+    >
       {/* Pill visuel */}
       <div style={{
         width: 44, height: 24, borderRadius: 12, flexShrink: 0, marginTop: 2,
         background: value ? BRAND.orange : BRAND.border,
-        position: 'relative', cursor: 'pointer',
+        position: 'relative', cursor: disabled ? 'default' : 'pointer',
         transition: 'background 0.18s',
       }}>
         <div style={{

@@ -80,7 +80,7 @@ Sa carte sera identique à celle de « ${nom} », ` +
 
     setDuplicatingId(id);
     try {
-      await apiDupliquerSupplier(orgId!, id, propose.trim());
+      await apiDupliquerSupplier(orgId, id, propose.trim());
       await load();
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : 'Duplication impossible.');

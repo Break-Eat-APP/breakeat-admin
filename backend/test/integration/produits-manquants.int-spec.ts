@@ -146,8 +146,11 @@ decrire('produits manquants (base réelle)', () => {
         },
       });
     }
-    const biere = commande.items.find((l) => l.productNameSnapshot === 'Bière')!;
-    const ligneFrites = commande.items.find((l) => l.productNameSnapshot === 'Frites')!;
+    // Deux lignes attendues : si l'une manque, c'est le banc d'essai qui est
+    // faux, et il vaut mieux le dire que planter plus loin sur `undefined.id`.
+    const biere = commande.items.find((l) => l.productNameSnapshot === 'Bière');
+    const ligneFrites = commande.items.find((l) => l.productNameSnapshot === 'Frites');
+    if (!biere || !ligneFrites) throw new Error('Commande d’essai incomplète');
     return { client, o, commande, biere, ligneFrites, frites };
   }
 

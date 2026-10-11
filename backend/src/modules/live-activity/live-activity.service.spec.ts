@@ -297,4 +297,81 @@ describe('LiveActivityService', () => {
       expect(service.mapWidgetStatus(status)).toBe(expected);
     });
   });
+
+  // ─── Flaix informe, mais ne dépasse pas le comptoir ──────────
+
+  describe('ce que le client voit quand Flaix et le comptoir divergent', () => {
+    /** Prépare une commande dans l'état du SERVICE donné. */
+    function commandeDansEtat(status: OrderStatus) {
+      prisma.order.findUnique.mockResolvedValue({
+        id: ORDER_A,
+        publicOrderNumber: 'BE-00000001',
+        dailyNumber: 7,
+        status,
+        estimatedReadyAt: null,
+        pickupPointId: 'pp-1',
+        customerArrivedAt: null,
+        slot: null,
+        items: [],
+      });
+      prisma.pickupPoint.findUnique.mockResolvedValue({ name: 'Comptoir' });
+    }
+
+    it('REFUSE d’annoncer « prête » si le comptoir prépare encore', async () => {
+      // Le défaut : `overrideStatus ?? …` laissait Flaix écraser le comptoir
+      // sans condition. Le client lisait « prête », se présentait, et le
+      // comptoir ne l'attendait pas. Deux écrans, deux vérités, et c'est le
+      // client qui en paie le prix.
+      commandeDansEtat(OrderStatus.PREPARING);
+
+      const etat = await service.buildContentState(ORDER_A, 'READY');
+
+      expect(etat?.status).toBe('PREPARING');
+    });
+
+    it('laisse passer « prête » quand le comptoir l’a dit', async () => {
+      commandeDansEtat(OrderStatus.READY);
+
+      const etat = await service.buildContentState(ORDER_A, 'READY');
+
+      expect(etat?.status).toBe('READY');
+    });
+
+    it('laisse Flaix annoncer un RETARD — elle seule le sait', async () => {
+      // Un retard n'est pas une avance : c'est une information que le comptoir
+      // n'a pas, et la refuser priverait le client du seul signal utile.
+      commandeDansEtat(OrderStatus.PREPARING);
+
+      const etat = await service.buildContentState(ORDER_A, 'DELAYED');
+
+      expect(etat?.status).toBe('DELAYED');
+    });
+
+    it('laisse Flaix annuler', async () => {
+      commandeDansEtat(OrderStatus.PREPARING);
+
+      const etat = await service.buildContentState(ORDER_A, 'CANCELLED');
+
+      expect(etat?.status).toBe('CANCELLED');
+    });
+
+    it('n’empêche pas Flaix de rester EN ARRIÈRE du comptoir', async () => {
+      // Le comptoir a fini, Flaix croit encore préparer : on affiche ce que
+      // Flaix dit, parce qu'elle affine le libellé et qu'on ne promet rien de
+      // plus que le service. L'inverse seul est dangereux.
+      commandeDansEtat(OrderStatus.READY);
+
+      const etat = await service.buildContentState(ORDER_A, 'PREPARING');
+
+      expect(etat?.status).toBe('PREPARING');
+    });
+
+    it('sans avis de Flaix, le comptoir fait foi', async () => {
+      commandeDansEtat(OrderStatus.READY);
+
+      const etat = await service.buildContentState(ORDER_A);
+
+      expect(etat?.status).toBe('READY');
+    });
+  });
 });

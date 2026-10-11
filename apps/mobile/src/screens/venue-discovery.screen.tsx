@@ -106,9 +106,18 @@ export function VenueDiscoveryScreen() {
     return () => clearTimeout(t);
   }, [query, coords, loadVenues]);
 
-  // Ouvre un lieu : Flaix > événement actif > « Bientôt ».
+  // Ouvre un lieu : Flaix (si le relais est vraiment prêt) > événement actif >
+  // « Bientôt ».
+  //
+  // `flaixEnabled` sans `flaixVenueId` ne mène à RIEN : l'écran d'arrivée n'a
+  // aucune adresse à ouvrir et affiche « l'intégration arrive bientôt ». Le
+  // client cliquait sur un lieu et tombait dans un cul-de-sac, sans retour
+  // possible vers la commande normale du lieu.
+  //
+  // Un réglage à moitié rempli ne doit pas changer le parcours : on retombe sur
+  // l'événement du lieu, comme si Flaix n'était pas activé.
   const openVenue = (v: PublicVenue) => {
-    if (v.flaixEnabled) {
+    if (v.flaixEnabled && v.flaixVenueId) {
       navigation.navigate('FlaixOrder', { venueId: v.id, flaixVenueId: v.flaixVenueId });
     } else if (v.currentEventId) {
       navigation.navigate('EventHome', { eventId: v.currentEventId });

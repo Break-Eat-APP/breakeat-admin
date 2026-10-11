@@ -21,7 +21,6 @@ if (
   BASE === LOCAL_PAR_DEFAUT &&
   !['localhost', '127.0.0.1'].includes(window.location.hostname)
 ) {
-  // eslint-disable-next-line no-console
   console.error(
     `[Break Eat] NEXT_PUBLIC_API_URL est absente de cette build : l'app vise ` +
       `${LOCAL_PAR_DEFAUT}, injoignable depuis ${window.location.hostname}. ` +
