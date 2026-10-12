@@ -164,4 +164,38 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
 
     expect(res).toEqual([]);
   });
+
+  // La PHOTO du lieu et le LOGO du club sont deux champs distincts, et l'app
+  // ne les cadre pas pareil (voir `visuel-lieu.ts`). Les confondre — ce que
+  // faisait l'API, qui ne renvoyait que le logo sous le nom `imageUrl` —
+  // affichait un ecusson etire sur toute la largeur de la carte.
+  it('renvoie la photo du lieu ET le logo du club, separement', async () => {
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      {
+        ...PUBLIC_VENUE,
+        photoUrl: 'https://img/stade.jpg',
+        organization: { name: 'Org', logoUrl: 'https://img/ecusson.png', primaryColor: null },
+      },
+    ]);
+
+    const [v] = await makeController().search(undefined, 'stade');
+
+    expect(v.photoUrl).toBe('https://img/stade.jpg');
+    expect(v.imageUrl).toBe('https://img/ecusson.png');
+  });
+
+  it('un lieu sans photo renvoie null — a l’app de retomber sur le logo', async () => {
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      {
+        ...PUBLIC_VENUE,
+        photoUrl: null,
+        organization: { name: 'Org', logoUrl: 'https://img/ecusson.png', primaryColor: null },
+      },
+    ]);
+
+    const [v] = await makeController().search(undefined, 'stade');
+
+    expect(v.photoUrl).toBeNull();
+    expect(v.imageUrl).toBe('https://img/ecusson.png');
+  });
 });

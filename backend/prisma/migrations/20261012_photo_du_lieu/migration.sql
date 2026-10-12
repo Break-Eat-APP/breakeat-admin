@@ -1,0 +1,11 @@
+-- LA PHOTO D'UN LIEU.
+--
+-- Ce que l'app montrait sur la carte d'un lieu venait de `organizations.logo_url`
+-- : le logo du CLUB. Agrandi et recadre pour remplir une carte, un logo se
+-- retrouve tronque — et c'est une photo du stade que le client reconnait dans
+-- une liste, pas un ecusson.
+--
+-- Nullable, et sans contrainte de forme : comme le logo du club et les photos
+-- de produits, le club colle un lien (le projet n'a pas de depot de fichier).
+-- Vide, l'app retombe sur le logo, puis sur l'initiale du nom.
+ALTER TABLE "venues" ADD COLUMN "photo_url" TEXT;

@@ -86,6 +86,7 @@ export default function OrganizationDetailPage() {
   const [venueAddress, setVenueAddress] = useState('');
   const [venueTimezone, setVenueTimezone] = useState('');
   const [venueSearchTerms, setVenueSearchTerms] = useState('');
+  const [venuePhotoUrl, setVenuePhotoUrl] = useState('');
   const [venueBuvettePlanUrl, setVenueBuvettePlanUrl] = useState('');
   // Phase 22 — un lieu ouvert en continu n'a aucun événement à créer.
   const [venueMode, setVenueMode] = useState<VenueOperatingMode>('EVENT_BASED');
@@ -128,6 +129,7 @@ export default function OrganizationDetailPage() {
       setVenueAddress(primary?.address ?? '');
       setVenueTimezone(primary?.timezone ?? '');
       setVenueSearchTerms(primary?.searchTerms ?? '');
+      setVenuePhotoUrl(primary?.photoUrl ?? '');
       setVenueBuvettePlanUrl(primary?.buvettePlanUrl ?? '');
       setVenueMode(primary?.operatingMode ?? 'EVENT_BASED');
       setFlaixEnabled(primary?.flaixEnabled ?? false);
@@ -221,6 +223,7 @@ export default function OrganizationDetailPage() {
         address: venueAddress.trim(),
         timezone: venueTimezone.trim() || 'Europe/Paris',
         searchTerms: venueSearchTerms.trim() || null,
+        photoUrl: venuePhotoUrl.trim() || null,
         buvettePlanUrl: venueBuvettePlanUrl.trim() || null,
         operatingMode: venueMode,
         flaixEnabled,
@@ -394,6 +397,18 @@ export default function OrganizationDetailPage() {
               />
               <span style={{ color: BRAND.grey, fontSize: 12 }}>
                 Termes que les clients peuvent taper pour trouver ton club (séparés par des virgules).
+              </span>
+            </div>
+            <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={venueFieldLabel}>Photo du lieu (URL de l’image)</label>
+              <input
+                value={venuePhotoUrl}
+                onChange={(e) => setVenuePhotoUrl(e.target.value)}
+                placeholder="https://…/mon-stade.jpg"
+                style={venueFieldInput}
+              />
+              <span style={{ color: BRAND.grey, fontSize: 12 }}>
+                Photo du stade ou de la salle, telle que les clients la verront en haut de ta carte dans l’app. C’est elle qui fait reconnaître le lieu d’un coup d’œil. Sans photo, l’app affiche le logo du club.
               </span>
             </div>
             <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4 }}>

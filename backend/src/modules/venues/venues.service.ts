@@ -52,6 +52,7 @@ export class VenuesService {
         searchTerms: dto.searchTerms,
         flaixEnabled: dto.flaixEnabled,
         flaixVenueId: dto.flaixVenueId,
+        photoUrl: dto.photoUrl,
         buvettePlanUrl: dto.buvettePlanUrl,
         loyaltyEnabled: dto.loyaltyEnabled,
         loyaltyPointsPerEuro: dto.loyaltyPointsPerEuro,
@@ -223,6 +224,7 @@ export class VenuesService {
         ...(dto.searchTerms !== undefined && { searchTerms: dto.searchTerms }),
         ...(dto.flaixEnabled !== undefined && { flaixEnabled: dto.flaixEnabled }),
         ...(dto.flaixVenueId !== undefined && { flaixVenueId: dto.flaixVenueId }),
+        ...(dto.photoUrl !== undefined && { photoUrl: dto.photoUrl }),
         ...(dto.buvettePlanUrl !== undefined && { buvettePlanUrl: dto.buvettePlanUrl }),
         ...(dto.loyaltyEnabled !== undefined && { loyaltyEnabled: dto.loyaltyEnabled }),
         ...(dto.loyaltyPointsPerEuro !== undefined && {

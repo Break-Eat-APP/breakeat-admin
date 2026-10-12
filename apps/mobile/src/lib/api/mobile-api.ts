@@ -452,6 +452,15 @@ export interface PublicVenue {
   address: string;
   latitude: number | null;
   longitude: number | null;
+  /**
+   * La PHOTO du lieu — ce que la carte montre en grand.
+   *
+   * Distincte de `imageUrl`, qui est le LOGO du club : une photo se cadre en
+   * plein (`cover`), un logo se centre sans être rogné (`contain`). Les
+   * confondre tronque l'écusson ou étire la photo.
+   */
+  photoUrl: string | null;
+  /** Le logo du club — repli quand le lieu n'a pas encore de photo. */
   imageUrl: string | null;
   primaryColor: string | null;
   /** Intégration Flaix : si true, la sélection du lieu passe le relais à Flaix. */

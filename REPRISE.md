@@ -16,7 +16,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-10-11 (audit chirurgical du 10/10 traité — phase 57 : les réglages qui promettaient ce qui n'existe pas. Les CINQ paquets ont des tests, 736 au total. Reste : les deux adresses légales)_
+_Dernière mise à jour : 2026-10-12 (phase 58 : la carte d'un lieu — barre du bas à encoche, recherche dans le bandeau, grandes cartes, et le champ `Venue.photoUrl` qui manquait. 755 tests. Reste : les deux adresses légales, et la migration `20261012_photo_du_lieu` à passer AVANT de déployer l'API)_
 
 ## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
@@ -516,6 +516,11 @@ cherchant une chaîne distinctive dans le `.js` servi ; une route serveur en
 l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
 
 ## ⏭️ REPRISE IMMÉDIATE
+
+0000000. **Passer `20261012_photo_du_lieu` sur la base AVANT de déployer l'API.**
+     Elle ajoute `venues.photo_url`, que la recherche de lieux demande
+     désormais. Déployer l'API sans la migration fait échouer **l'écran
+     d'accueil** de l'app (colonne absente). `pnpm db:migrate:prod`.
 
 000. **Purger la démonstration** — back-office → **Vue d'ensemble**. Un encart
      rouge liste les commandes `DEMO-…` par organisation (elles sont comptées

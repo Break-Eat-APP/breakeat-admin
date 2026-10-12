@@ -72,6 +72,7 @@ export class PublicVenuesController {
         address: true,
         latitude: true,
         longitude: true,
+        photoUrl: true,
         flaixEnabled: true,
         flaixVenueId: true,
         buvettePlanUrl: true,
@@ -124,6 +125,9 @@ export class PublicVenuesController {
           address: v.address,
           latitude: v.latitude,
           longitude: v.longitude,
+          // La photo du lieu d'abord ; le logo du club ensuite. L'app
+          // cadre l'une en plein et centre l'autre : voir `carte-lieu`.
+          photoUrl: v.photoUrl ?? null,
           imageUrl: v.organization?.logoUrl ?? null,
           primaryColor: v.organization?.primaryColor ?? null,
           flaixEnabled: v.flaixEnabled,

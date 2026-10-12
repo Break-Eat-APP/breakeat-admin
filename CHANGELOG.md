@@ -5,6 +5,54 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.82.0] — 2026-10-12 — La carte d'un lieu, et la photo qui n'existait pas
+
+**Le bouton central se décroche de la barre.** La barre du bas est dessinée en
+vecteur, avec un creux concave sous la pastille — impossible à obtenir avec des
+bordures arrondies. L'ombre est peinte dans le tracé : une ombre de plateforme
+exige un fond opaque, et ce fond est une forme trouée.
+
+**La recherche monte dans le bandeau orange**, avec l'avatar. L'en-tête devient
+un bloc plein, la liste commence plus haut.
+
+**Des cartes qu'on voit de loin** : 272 px de large, photo de 168, distance et
+cœur posés sur l'image, nom et adresse en pied.
+
+**Le lieu a enfin une photo.** Ce que la carte montrait était le LOGO du club
+(`organization.logoUrl`) : invisible en 92 px, tronqué dès qu'on l'agrandit.
+Nouveau champ `Venue.photoUrl`, saisissable dans les deux consoles, validé comme
+le plan des buvettes (URL http(s), vide → null).
+
+**Une photo se remplit, un logo se centre** — `lib/visuel-lieu.ts`, fonction
+pure partagée par la carte et la tuile de favori, qui inversent volontairement
+l'ordre : dans 56 px, un écusson se reconnaît, un bout de pelouse non.
+
+⚠️ **Avant de déployer** : passer `20261012_photo_du_lieu`. Sans la colonne, la
+recherche de lieux échoue — c'est l'écran d'accueil.
+
+12 tests (10 mobile, 2 backend). **755 au total.**
+
+```
++ apps/mobile/src/lib/visuel-lieu.ts
++ apps/mobile/src/lib/__tests__/visuel-lieu.test.ts
++ backend/prisma/migrations/20261012_photo_du_lieu/migration.sql
+~ apps/mobile/src/components/app-bottom-bar.tsx
+~ apps/mobile/src/screens/venue-discovery.screen.tsx
+~ apps/mobile/src/lib/api/mobile-api.ts
+~ backend/prisma/schema.prisma
+~ backend/src/modules/venues/public-venues.controller.ts
+~ backend/src/modules/venues/public-venues.controller.spec.ts
+~ backend/src/modules/venues/venues.service.ts
+~ backend/src/modules/venues/dto/create-venue.dto.ts
+~ backend/src/modules/venues/dto/update-venue.dto.ts
+~ apps/admin/src/app/(admin)/organizations/[id]/page.tsx
+~ apps/admin/src/lib/api/admin-client.ts
+~ apps/backoffice/src/app/(backoffice)/organizations/[id]/page.tsx
+~ apps/backoffice/src/lib/api/backoffice-client.ts
+```
+
+---
+
 ## [0.81.0] — 2026-10-11 — Les réglages qui promettaient ce qui n'existe pas
 
 Un audit chirurgical du 10/10 cherche autre chose que des erreurs de logique :

@@ -370,6 +370,8 @@ export interface Venue {
   latitude?: number | null;
   longitude?: number | null;
   searchTerms?: string | null;
+  /** La PHOTO du lieu, affichée en grand sur sa carte dans l'app mobile. */
+  photoUrl?: string | null;
   buvettePlanUrl?: string | null;
   flaixEnabled?: boolean;
   flaixVenueId?: string | null;
@@ -421,6 +423,7 @@ export interface VenueInput {
   latitude?: number | null;
   longitude?: number | null;
   searchTerms?: string | null;
+  photoUrl?: string | null;
   buvettePlanUrl?: string | null;
   flaixEnabled?: boolean;
   flaixVenueId?: string | null;

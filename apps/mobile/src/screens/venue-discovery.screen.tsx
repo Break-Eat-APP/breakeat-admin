@@ -21,6 +21,7 @@ import { useNotifStore } from '@store/notif.store';
 import { apiSearchVenues, type PublicVenue } from '@lib/api/mobile-api';
 import { showAlert } from '@lib/alert';
 import { cheminDeCommande, ouvertALaCommande } from '@lib/ouverture-lieu';
+import { visuelDeLieu } from '@lib/visuel-lieu';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
@@ -31,7 +32,9 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null;
 
-type Fav = { id: string; name: string; imageUrl: string | null };
+// Un favori retient les DEUX visuels : la tuile montre le logo, mais si le
+// club n'en a pas, c'est la photo qui prend le relais (voir `visuelDeLieu`).
+type Fav = { id: string; name: string; photoUrl: string | null; imageUrl: string | null };
 type Up = { id: string; title: string; date: string; venue: string; image: string };
 
 /**
@@ -134,30 +137,47 @@ export function VenueDiscoveryScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Bandeau orange */}
+      {/*
+        LE BANDEAU PORTE LA RECHERCHE.
+
+        Elle flottait en dessous, sur le blanc : le bandeau ne contenait que
+        le logo et occupait un cinquième de l'écran pour rien. Rentrée
+        dedans, elle rend la tête utile et le contenu commence plus haut.
+      */}
       <View style={[styles.band, { paddingTop: insets.top + 10 }]}>
         <View style={styles.headerRow}>
           <Image source={LOGO_FULL_WHITE} style={styles.lockup} resizeMode="contain" />
+          <Pressable
+            style={styles.avatar}
+            onPress={() => navigation.navigate('Profile')}
+            hitSlop={8}
+            accessibilityLabel="Mon profil"
+          >
+            <Ionicons name="person" size={20} color="#fff" />
+          </Pressable>
         </View>
-      </View>
 
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: espaceBas }]} showsVerticalScrollIndicator={false}>
-        {/* Recherche */}
-        <View style={[styles.searchBox, shadowCard]}>
-          <Ionicons name="search" size={18} color={THEME.grey} />
+        <View style={styles.searchBox}>
+          <Ionicons name="search" size={19} color={THEME.grey} />
           <TextInput
             style={[styles.searchInput, NO_OUTLINE]}
-            placeholder="Rechercher une ville, un lieu ou un club"
+            placeholder="Rechercher une ville, un lieu ou un club…"
             placeholderTextColor={THEME.grey}
             value={query}
             onChangeText={setQuery}
             autoCapitalize="none"
             returnKeyType="search"
           />
-          <Pressable onPress={() => requestLocation()} hitSlop={10}>
-            <Ionicons name="locate" size={20} color={granted ? THEME.orange : THEME.ink} />
+          {/* Le viseur se détache sur un rond teinté : sur fond blanc dans
+              l'orange, une icône nue se perdait. */}
+          <Pressable onPress={() => requestLocation()} hitSlop={10} style={styles.viseur}>
+            <Ionicons name="locate" size={19} color={granted ? THEME.orange : THEME.inkSoft} />
           </Pressable>
         </View>
+      </View>
+
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: espaceBas }]} showsVerticalScrollIndicator={false}>
+
 
         {/* Invite géolocalisation (si désactivée) */}
         {!granted && (
@@ -202,6 +222,7 @@ export function VenueDiscoveryScreen() {
             {venues.map((v) => {
               const plan = v.buvettePlanUrl;
               const open = ouvertALaCommande(v);
+              const visuel = visuelDeLieu(v);
               const status =
                 v.distanceKm != null
                   ? `${v.distanceKm.toFixed(1).replace('.', ',')} km`
@@ -210,31 +231,70 @@ export function VenueDiscoveryScreen() {
                     : 'Bientôt';
               return (
                 <Pressable key={v.id} style={[styles.nearbyCard, shadowCard]} onPress={() => openVenue(v)}>
-                  <View style={styles.nearbyPhoto}>
-                    {v.imageUrl ? (
-                      <Image source={{ uri: v.imageUrl }} style={styles.logoImg} resizeMode="contain" />
+                  {/* La photo porte la carte : elle occupe les deux tiers. */}
+                  <View style={styles.cardPhoto}>
+                    {visuel.type === 'image' ? (
+                      <Image
+                        source={{ uri: visuel.uri }}
+                        // Une photo remplit le cadre ; un logo reste entier et
+                        // respire sur le fond. Le style suit le cadrage, sinon
+                        // l'écusson touche les bords.
+                        style={visuel.cadrage === 'cover' ? styles.fillImg : styles.logoCarte}
+                        resizeMode={visuel.cadrage}
+                      />
                     ) : (
-                      <Text style={styles.logoFallback}>{v.name.charAt(0).toUpperCase()}</Text>
+                      <Text style={styles.logoFallback}>{visuel.lettre}</Text>
                     )}
-                  </View>
-                  <Text style={styles.nearbyName} numberOfLines={2}>{v.name}</Text>
-                  <View style={styles.nearbyMeta}>
-                    <Ionicons
-                      name={v.distanceKm != null ? 'navigate-outline' : 'time-outline'}
-                      size={12}
-                      color={THEME.inkSoft}
-                    />
-                    <Text style={styles.nearbyMetaText} numberOfLines={1}>{status}</Text>
-                    <Pressable onPress={() => toggleFav({ id: v.id, name: v.name, imageUrl: v.imageUrl })} hitSlop={8}>
-                      <Ionicons name={isFav(v.id) ? 'heart' : 'heart-outline'} size={17} color={THEME.orange} />
+
+                    {/* Distance et cœur POSÉS sur la photo : ils ne volent
+                        plus de place au nom, et se lisent d'un coup d'œil. */}
+                    <View style={styles.badgeDistance}>
+                      <Ionicons
+                        name={v.distanceKm != null ? 'navigate' : 'time-outline'}
+                        size={12}
+                        color="#fff"
+                      />
+                      <Text style={styles.badgeDistanceText} numberOfLines={1}>{status}</Text>
+                    </View>
+                    <Pressable
+                      onPress={() =>
+                        toggleFav({
+                          id: v.id,
+                          name: v.name,
+                          photoUrl: v.photoUrl,
+                          imageUrl: v.imageUrl,
+                        })
+                      }
+                      hitSlop={10}
+                      style={styles.badgeCoeur}
+                      accessibilityLabel={isFav(v.id) ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                    >
+                      <Ionicons
+                        name={isFav(v.id) ? 'heart' : 'heart-outline'}
+                        size={18}
+                        color={isFav(v.id) ? THEME.orange : '#fff'}
+                      />
                     </Pressable>
                   </View>
-                  {plan ? (
-                    <Pressable onPress={() => openPlan(v.name, plan)} style={styles.planBtn} hitSlop={4}>
-                      <Ionicons name="map-outline" size={13} color={THEME.orange} />
-                      <Text style={styles.planBtnText} numberOfLines={1}>Plan des buvettes</Text>
-                    </Pressable>
-                  ) : null}
+
+                  <View style={styles.cardPied}>
+                    <View style={styles.cardTextes}>
+                      <Text style={styles.cardNom} numberOfLines={1}>{v.name}</Text>
+                      <View style={styles.cardLieuRow}>
+                        <Ionicons name="location" size={13} color={THEME.inkSoft} />
+                        <Text style={styles.cardAdresse} numberOfLines={1}>{v.address}</Text>
+                      </View>
+                    </View>
+                    {/* Le plan reste accessible, en second rôle. */}
+                    {plan ? (
+                      <Pressable onPress={() => openPlan(v.name, plan)} hitSlop={8} style={styles.cardPlan}>
+                        <Ionicons name="map-outline" size={17} color={THEME.orange} />
+                      </Pressable>
+                    ) : null}
+                    <View style={styles.cardFleche}>
+                      <Ionicons name="chevron-forward" size={18} color={THEME.orange} />
+                    </View>
+                  </View>
                 </Pressable>
               );
             })}
@@ -247,13 +307,21 @@ export function VenueDiscoveryScreen() {
           <EmptyHint icon="heart-outline" text="Touche le cœur d'un lieu pour l'ajouter à tes favoris." />
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
-            {favorites.map((v) => (
+            {favorites.map((v) => {
+              // Dans 56 px, un écusson se reconnaît ; un bout de pelouse
+              // recadré, non. D'où l'ordre inversé par rapport à la carte.
+              const visuel = visuelDeLieu(v, 'logo');
+              return (
               <View key={v.id} style={[styles.favCard, shadowCard]}>
                 <View style={styles.favLogo}>
-                  {v.imageUrl ? (
-                    <Image source={{ uri: v.imageUrl }} style={styles.logoImg} resizeMode="contain" />
+                  {visuel.type === 'image' ? (
+                    <Image
+                      source={{ uri: visuel.uri }}
+                      style={visuel.cadrage === 'cover' ? styles.fillImg : styles.logoImg}
+                      resizeMode={visuel.cadrage}
+                    />
                   ) : (
-                    <Text style={styles.favLogoFallback}>{v.name.charAt(0).toUpperCase()}</Text>
+                    <Text style={styles.favLogoFallback}>{visuel.lettre}</Text>
                   )}
                 </View>
                 <Text style={styles.favName} numberOfLines={2}>{v.name}</Text>
@@ -261,7 +329,8 @@ export function VenueDiscoveryScreen() {
                   <Ionicons name="heart" size={18} color={THEME.orange} />
                 </Pressable>
               </View>
-            ))}
+              );
+            })}
           </ScrollView>
         )}
 
@@ -346,17 +415,38 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
   scroll: {},
 
-  band: { backgroundColor: THEME.orange, paddingBottom: 16, paddingHorizontal: 16 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 6 },
+  // Le bandeau descend plus bas : il porte le logo, le profil ET la
+  // recherche. Les coins du bas sont arrondis pour qu'il se lise comme une
+  // surface posée, et non comme une bande qui coupe l'écran.
+  band: {
+    backgroundColor: THEME.orange,
+    paddingBottom: 18,
+    paddingHorizontal: 16,
+    borderBottomLeftRadius: 26,
+    borderBottomRightRadius: 26,
+  },
+  headerRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingBottom: 4,
+  },
   lockup: { width: 150, height: 150 * (212 / 760) },
+  avatar: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+  },
 
   searchBox: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: THEME.surface, borderRadius: THEME.radius.pill,
-    borderWidth: 1, borderColor: THEME.border,
-    paddingHorizontal: 18, marginHorizontal: 16, marginTop: 16,
+    paddingLeft: 18, paddingRight: 6, marginTop: 10,
   },
-  searchInput: { flex: 1, paddingVertical: 14, fontSize: 15, color: THEME.ink, fontFamily: HEAD.medium },
+  searchInput: { flex: 1, paddingVertical: 15, fontSize: 15, color: THEME.ink, fontFamily: HEAD.medium },
+  viseur: {
+    width: 40, height: 40, borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: THEME.orangeTint,
+  },
 
   geoBanner: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -394,19 +484,47 @@ const styles = StyleSheet.create({
   },
   emptyHintText: { flex: 1, color: THEME.grey, fontSize: 13, fontFamily: HEAD.medium, lineHeight: 18 },
 
+  // Une carte qu'on voit de loin : la photo d'abord, le texte ensuite.
+  // L'ancienne (158 x 210, photo de 92) montrait surtout du blanc.
   nearbyCard: {
-    width: 158, height: 210, backgroundColor: THEME.surface, borderRadius: 16, padding: 10, gap: 6,
+    width: 272, backgroundColor: THEME.surface, borderRadius: 20, padding: 8, gap: 2,
   },
-  nearbyPhoto: {
-    height: 92, borderRadius: 12, backgroundColor: '#fff', borderWidth: 1, borderColor: THEME.border,
-    overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: 8,
+  cardPhoto: {
+    height: 168, borderRadius: 14, backgroundColor: THEME.orangeTint,
+    overflow: 'hidden', alignItems: 'center', justifyContent: 'center',
   },
-  planBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
-    backgroundColor: THEME.orangeTint, borderRadius: 8, paddingVertical: 8, marginTop: 'auto',
+  // Pastilles posées sur la photo : fond sombre translucide, lisible sur
+  // n'importe quelle image — un fond blanc disparaitrait sur un ciel clair.
+  badgeDistance: {
+    position: 'absolute', top: 10, left: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(28, 25, 23, 0.55)', borderRadius: THEME.radius.pill,
+    paddingHorizontal: 10, paddingVertical: 6,
   },
-  planBtnText: { color: THEME.orange, fontSize: 11.5, fontFamily: HEAD.bold },
+  badgeDistanceText: { color: '#fff', fontSize: 11.5, fontFamily: HEAD.bold },
+  badgeCoeur: {
+    position: 'absolute', top: 10, right: 10,
+    width: 34, height: 34, borderRadius: 17,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(28, 25, 23, 0.45)',
+  },
+
+  cardPied: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 6, paddingTop: 10, paddingBottom: 4 },
+  cardTextes: { flex: 1, gap: 3 },
+  cardNom: { color: THEME.ink, fontSize: 16.5, fontFamily: HEAD.bold },
+  cardLieuRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  cardAdresse: { flex: 1, color: THEME.inkSoft, fontSize: 12.5, fontFamily: HEAD.medium },
+  cardPlan: {
+    width: 34, height: 34, borderRadius: 17,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.orangeTint,
+  },
+  cardFleche: {
+    width: 34, height: 34, borderRadius: 17,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.orangeTint,
+  },
   fillImg: { width: '100%', height: '100%' },
+  // Un logo dans le grand cadre de la carte : entier, et de l'air autour.
+  logoCarte: { width: '72%', height: '72%' },
   logoImg: { width: '92%', height: '92%' },
   logoFallback: { fontSize: 30, fontFamily: HEAD.bold, color: THEME.orange },
   nearbyName: { color: THEME.ink, fontSize: 13.5, fontFamily: HEAD.bold, lineHeight: 17, height: 34 },

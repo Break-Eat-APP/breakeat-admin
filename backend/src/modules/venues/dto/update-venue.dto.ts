@@ -52,6 +52,21 @@ export class UpdateVenueDto {
   @MaxLength(200)
   flaixVenueId?: string;
 
+  /**
+   * La PHOTO du lieu, affichée en grand sur la carte de l'app. Vide → null.
+   *
+   * À ne pas confondre avec le logo du club : la photo remplit le cadre,
+   * le logo s'y centre. Voir `visuel-lieu.ts` côté app.
+   */
+  @IsOptional()
+  @Transform(({ value }) => (value === '' ? null : value))
+  @IsUrl(
+    { protocols: ['http', 'https'], require_protocol: true },
+    { message: 'photoUrl doit être une URL http(s) valide' },
+  )
+  @MaxLength(1000)
+  photoUrl?: string | null;
+
   /** URL de l'image du plan des buvettes (affichée dans l'app). Vide → null. */
   @IsOptional()
   @Transform(({ value }) => (value === '' ? null : value))

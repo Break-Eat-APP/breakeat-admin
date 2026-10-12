@@ -1,9 +1,10 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
-import { THEME, shadowSoft, HEAD } from '@lib/theme';
+import { THEME, HEAD } from '@lib/theme';
 import { useCartStore } from '@store/cart.store';
 import { useNotifStore } from '@store/notif.store';
 import { navigateTo } from '@navigation/nav-ref';
@@ -75,6 +76,46 @@ export function useFloatingBarBottom(ecart = 12): number {
   return useBottomBarSpace() + ecart;
 }
 
+/**
+ * LE CREUX SOUS LA PASTILLE.
+ *
+ * La barre était un rectangle blanc arrondi, et la pastille posée dessus :
+ * elle avait l'air COLLÉE. Le creux la détache — le fond de la barre
+ * s'écarte autour d'elle, et on voit passer l'écran entre les deux.
+ *
+ * Dessiné en vecteur plutôt qu'avec des `View` : une encoche concave ne
+ * s'obtient pas avec des bordures arrondies, quel que soit l'empilement.
+ * `react-native-svg` est déjà embarqué (l'anneau de suivi s'en sert).
+ */
+const RAYON_BARRE = HAUTEUR_BARRE / 2;
+/**
+ * Rayon du creux : l'anneau de la pastille fait 80 px (40 de rayon), et on
+ * lui laisse 6 px d'air tout autour. Trop serré, le creux disparaît sous
+ * l'anneau ; trop large, la barre se coupe en deux.
+ */
+const RAYON_ENCOCHE = 46;
+
+/** Le contour de la barre : deux bouts ronds, et un creux centré. */
+function traceBarre(largeur: number): string {
+  const h = HAUTEUR_BARRE;
+  const r = RAYON_BARRE;
+  const cx = largeur / 2;
+  const e = RAYON_ENCOCHE;
+
+  // Bord haut gauche → début du creux → ARC qui plonge dans la barre →
+  // bord haut droit → bout rond droit → bord bas → bout rond gauche.
+  return [
+    `M ${r} 0`,
+    `H ${cx - e}`,
+    `A ${e} ${e} 0 0 0 ${cx + e} 0`,
+    `H ${largeur - r}`,
+    `A ${r} ${r} 0 0 1 ${largeur - r} ${h}`,
+    `H ${r}`,
+    `A ${r} ${r} 0 0 1 ${r} 0`,
+    'Z',
+  ].join(' ');
+}
+
 /** Écrans où la barre est masquée (plein écran / parcours bloquant). */
 const HIDDEN_ON: Array<keyof RootStackParamList> = ['Login', 'QRScanner'];
 
@@ -130,6 +171,10 @@ export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
   const nonLues = useNotifStore((e) => e.nonLues);
   // Appele AVANT le retour anticipe ci-dessous : un hook ne se saute pas.
   const etatPastille = useEtatPastille(currentRoute);
+  // La barre est tendue entre deux marges de 14 px : sa largeur se mesure,
+  // elle ne se devine pas (un petit écran la rétrécirait sous le tracé).
+  const { width: largeurEcran } = useWindowDimensions();
+  const largeurBarre = largeurEcran - 28;
 
   if (!currentRoute || HIDDEN_ON.includes(currentRoute as keyof RootStackParamList)) {
     return null;
@@ -145,7 +190,23 @@ export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
 
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: insets.bottom + 16 }]}>
-      <View style={[styles.bar, shadowSoft]}>
+      <View style={styles.bar}>
+        {/*
+          Le FOND, derrière les onglets. L'ombre est peinte DANS le tracé
+          (un second contour décalé, très pâle) plutôt que posée sur la vue :
+          une ombre de plateforme a besoin d'un fond opaque, et ce fond-ci
+          est une forme trouée. Peinte, elle rend pareil sur iOS, Android et
+          web — et c'est le web qui sert l'app aux clients sans installation.
+        */}
+        <Svg
+          width={largeurBarre}
+          height={HAUTEUR_BARRE + 6}
+          style={styles.fond}
+          pointerEvents="none"
+        >
+          <Path d={traceBarre(largeurBarre)} fill="rgba(45, 41, 38, 0.10)" translateY={3} />
+          <Path d={traceBarre(largeurBarre)} fill={THEME.surface} />
+        </Svg>
         <Onglet
           libelle="Lieux"
           actif={isLieux}
@@ -217,14 +278,15 @@ const styles = StyleSheet.create({
     left: 14,
     right: 14,
   },
+  // Le fond est dessiné (voir `traceBarre`) : cette vue ne porte plus ni
+  // couleur ni rayon, seulement la disposition des onglets.
   bar: {
     flexDirection: 'row',
     alignItems: 'center',
     height: 70,
-    borderRadius: 35,
-    backgroundColor: THEME.surface,
     paddingHorizontal: 4,
   },
+  fond: { position: 'absolute', top: 0, left: 0 },
 
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 6 },
   tabLabel: {
@@ -244,9 +306,10 @@ const styles = StyleSheet.create({
   // Largeur FIXE, et non `flex` : la pastille ne doit pas retrecir sur un
   // petit ecran au point de mordre sur « Panier ».
   fabWrap: { width: 82, alignItems: 'center', justifyContent: 'center' },
-  // L'anneau deborde de 8 px autour du disque : on remonte le cadre d'autant
-  // de plus, pour que le disque ne bouge pas d'un pixel.
-  fabCadre: { marginTop: -32 },
+  // L'anneau deborde de 8 px autour du disque. On remonte de 38 au lieu de
+  // 32 : la pastille doit se loger DANS le creux et le dépasser, sinon le
+  // creux se voit sans que le bouton paraisse détaché — le pire des deux.
+  fabCadre: { marginTop: -38 },
   fabLabel: {
     fontSize: 10,
     fontFamily: HEAD.bold,

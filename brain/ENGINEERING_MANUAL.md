@@ -196,6 +196,7 @@ rendrait faux dès la phase suivante. À regénérer quand des phases sont ajout
 | **55** | Phase 55 — Second passage d'audit : ce que la correction précédente avait ouvert (01/10/2026) |
 | **56** | Phase 56 — Les premiers tests des apps web (09/10/2026) |
 | **57** | Phase 57 — Les réglages qui promettaient ce qui n'existe pas (10–11/10/2026) |
+| **58** | Phase 58 — La carte d'un lieu, et la photo qui n'existait pas (11–12/10/2026) |
 
 **Deux cas particuliers, à connaître :**
 
@@ -6721,3 +6722,92 @@ prochainement » dans le profil, alors que les CGU, elles, pointent sur
 publier** : Apple attend une politique de confidentialité atteignable. Le
 mécanisme est prêt (même chemin que les CGU) ; il manque les deux adresses, et
 elles ne s'inventent pas.
+
+---
+
+## Phase 58 — La carte d'un lieu, et la photo qui n'existait pas (11–12/10/2026)
+
+Une demande d'interface, qui a buté sur un manque de modèle.
+
+### Le bouton central, décroché de la barre
+
+La barre du bas était un rectangle blanc arrondi avec la pastille POSÉE dessus :
+elle avait l'air collée. La référence montrait un **creux** — le fond s'écarte
+autour du bouton, et on voit passer l'écran entre les deux.
+
+Une encoche **concave** ne s'obtient pas avec des bordures arrondies, quel que
+soit l'empilement de vues : il a fallu dessiner le contour de la barre en
+vecteur (`react-native-svg`, déjà embarqué pour l'anneau de suivi). Deux
+tracés : l'ombre d'abord, peinte DANS la forme (un contour décalé de 3 px, très
+pâle), le fond blanc par-dessus.
+
+> L'ombre est peinte, pas posée. Une ombre de plateforme (`shadowColor`,
+> `elevation`) a besoin d'un fond opaque — or ce fond-ci est une forme trouée.
+> Peinte, elle rend pareil sur iOS, Android **et** web, et c'est le web qui sert
+> l'app aux clients sans installation.
+
+La largeur se **mesure** (`useWindowDimensions`) : codée en dur, le tracé se
+décalerait du contenu sur un petit écran.
+
+### La recherche est montée dans le bandeau
+
+Le bandeau orange ne portait que le logo, la recherche flottait en dessous sur
+le fond clair. Elle est maintenant DANS le bandeau, avec l'avatar : l'en-tête
+devient un bloc plein, et la liste commence plus haut.
+
+### Les cartes, et ce qu'elles montraient vraiment
+
+Les cartes passent de 158 × 210 (photo de 92 px) à **272 de large, photo de
+168**, badges de distance et cœur posés SUR l'image, nom et adresse en pied.
+C'est en les agrandissant que le vrai défaut est apparu.
+
+**Le modèle n'a pas de photo de lieu.** Ce que la carte affichait venait de
+`organization.logoUrl` — le **logo du club**. Tant que l'image faisait 92 px,
+personne ne s'en apercevait. Agrandi et recadré en `cover` pour remplir une
+carte, un écusson perd son contour : exactement ce qui le rend reconnaissable.
+La maquette était donc **irréalisable** sans un champ de plus.
+
+`Venue.photoUrl` (migration `20261012_photo_du_lieu`). Nullable, sans contrainte
+de forme : comme le logo du club et les photos de produits, le club colle un
+lien — le projet n'a pas de dépôt de fichiers.
+
+### Une photo se remplit, un logo se centre
+
+La règle de repli vivait dans le JSX, réduite à
+`imageUrl ? <Image/> : <Text/>`. Elle est désormais une fonction pure,
+`lib/visuel-lieu.ts`, employée par la carte ET par la tuile de favori :
+
+| | Grande carte | Petite tuile (favori) |
+|---|---|---|
+| 1er choix | la photo, en `cover` | le logo, en `contain` |
+| 2e choix | le logo, en `contain` | la photo, en `cover` |
+| sinon | l'initiale du nom | l'initiale du nom |
+
+L'ordre s'inverse volontairement : dans 56 px, un écusson se reconnaît, un bout
+de pelouse recadré non.
+
+**10 tests**, dont deux qui ne sautent pas aux yeux : une URL **vide** (`''`)
+passe un simple test de présence et affiche un carré cassé — c'est la même
+famille d'écart que l'identifiant Flaix vide de la phase 57 ; et un **nom vide**
+donnerait une pastille vide, qu'on prendrait pour un chargement qui n'aboutit
+pas (on affiche `?`).
+
+### Le champ se saisit, sinon il est mort
+
+Un champ qu'aucun écran ne remplit est un réglage qui promet ce qui n'existe
+pas — le défaut même de la phase 57. La photo est donc ouverte **aux deux
+consoles** (admin du club et back-office), avec la validation du plan des
+buvettes mot pour mot : URL `http(s)` obligatoire, vide → `null`. Une URL
+relative s'afficherait en carré gris sur le téléphone du client, loin de celui
+qui l'a saisie.
+
+Deux tests de contrat sur l'API publique : la photo et le logo sont deux champs
+**distincts**, et un lieu sans photo renvoie `null` — à l'app de retomber.
+
+### À faire avant de déployer
+
+`20261012_photo_du_lieu` doit passer sur la base **avant** la mise en ligne de
+l'API : le `select` demande `photo_url`, et une colonne absente fait échouer la
+recherche de lieux — c'est-à-dire l'écran d'accueil.
+
+755 tests (692 + 29 + 12 + 12 + 10).

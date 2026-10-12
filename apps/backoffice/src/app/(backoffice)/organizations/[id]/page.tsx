@@ -139,6 +139,7 @@ export default function OrganizationDetailPage({
   const [vTerms, setVTerms] = useState('');
   const [vFlaixOn, setVFlaixOn] = useState(false);
   const [vFlaixId, setVFlaixId] = useState('');
+  const [vPhotoUrl, setVPhotoUrl] = useState('');
   const [vPlanUrl, setVPlanUrl] = useState('');
   const [vMode, setVMode] = useState<VenueOperatingMode>('EVENT_BASED');
   const [vLoyaltyOn, setVLoyaltyOn] = useState(false);
@@ -171,6 +172,7 @@ export default function OrganizationDetailPage({
       setVTerms(venue.searchTerms ?? '');
       setVFlaixOn(!!venue.flaixEnabled);
       setVFlaixId(venue.flaixVenueId ?? '');
+      setVPhotoUrl(venue.photoUrl ?? '');
       setVPlanUrl(venue.buvettePlanUrl ?? '');
       setVMode(venue.operatingMode ?? 'EVENT_BASED');
       setVLoyaltyOn(!!venue.loyaltyEnabled);
@@ -207,6 +209,7 @@ export default function OrganizationDetailPage({
         latitude: lat,
         longitude: lng,
         searchTerms: vTerms.trim() || null,
+        photoUrl: vPhotoUrl.trim() || null,
         buvettePlanUrl: vPlanUrl.trim() || null,
         operatingMode: vMode,
         flaixEnabled: vFlaixOn,
@@ -474,6 +477,19 @@ export default function OrganizationDetailPage({
                   <input value={vFlaixId} onChange={(e) => setVFlaixId(e.target.value)} placeholder="flx_..." style={inputStyle} />
                 </Field>
               )}
+
+              <Field label="Photo du lieu (URL de l’image)">
+                <input
+                  value={vPhotoUrl}
+                  onChange={(e) => setVPhotoUrl(e.target.value)}
+                  placeholder="https://…/mon-stade.jpg"
+                  style={inputStyle}
+                />
+                <span style={{ fontSize: 12, color: BRAND.grey, marginTop: 2 }}>
+                  La photo que les clients voient en haut de la carte du lieu, dans l’app. Sans
+                  elle, l’app retombe sur le logo du club — qui se reconnaît moins vite.
+                </span>
+              </Field>
 
               <Field label="Plan des buvettes (URL de l’image)">
                 <input

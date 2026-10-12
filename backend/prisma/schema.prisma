@@ -391,6 +391,15 @@ model Venue {
   /// côté Flaix (utilisé par les appels API Flaix, à brancher au contrat Flaix).
   flaixEnabled           Boolean            @default(false) @map("flaix_enabled")
   flaixVenueId           String?            @map("flaix_venue_id")
+  /// La PHOTO du lieu, telle que le client la voit sur sa carte dans l'app.
+  ///
+  /// À ne pas confondre avec le logo du club (`Organization.logoUrl`), qui
+  /// servait de pis-aller : un logo recadré en pleine carte se retrouve
+  /// tronqué. Une photo de stade, elle, remplit le cadre et se reconnaît d'un
+  /// coup d'œil — c'est ce qui fait choisir un lieu dans une liste.
+  ///
+  /// Nullable : l'app retombe sur le logo du club, puis sur l'initiale du nom.
+  photoUrl               String?            @map("photo_url")
   /// PHASE 18 — plan des buvettes (image uploadée via Canva puis hébergée). URL
   /// affichée dans l'app (carte du lieu + confirmation de commande) pour aider le
   /// client à localiser la/les buvette(s). Nullable : tous les lieux n'en ont pas.
