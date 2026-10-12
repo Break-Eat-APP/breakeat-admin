@@ -416,14 +416,17 @@ const styles = StyleSheet.create({
   scroll: {},
 
   // Le bandeau descend plus bas : il porte le logo, le profil ET la
-  // recherche. Les coins du bas sont arrondis pour qu'il se lise comme une
-  // surface posée, et non comme une bande qui coupe l'écran.
+  // recherche.
+  //
+  // UN SEUL coin arrondi, en bas a GAUCHE. L'asymetrie est voulue : elle donne
+  // au bandeau le sens de lecture, de la gauche vers la droite, au lieu de la
+  // tuile centree que donnent deux coins egaux. Le cote droit reste d'equerre
+  // avec le bord de l'ecran.
   band: {
     backgroundColor: THEME.orange,
     paddingBottom: 18,
     paddingHorizontal: 16,
     borderBottomLeftRadius: 26,
-    borderBottomRightRadius: 26,
   },
   headerRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
