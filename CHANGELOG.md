@@ -5,6 +5,43 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.88.0] — 2026-10-16 — Zéro geste le jour du match
+
+Objection du client, et elle était juste : *« si je dois activer l'événement à
+chaque fois, ça revient au même que de coller un lien chaque jour. »*
+
+Exact. Le relais exigeait un événement **ACTIF**, ce qui obligeait à toucher
+chaque match le jour même — précisément le geste qu'on voulait supprimer.
+
+**L'erreur était de raisonnement** : j'avais appliqué au relais Flaix la règle
+du parcours Break Eat. Elles n'ont pas le même sens.
+
+| | Ce que « prêt » veut dire |
+|---|---|
+| Parcours **Break Eat** | carte, prix, créneaux et points de retrait saisis → un brouillon protège d'une vente lancée trop tôt. **Inchangé** |
+| Relais **Flaix** | Break Eat ne tient ni carte ni prix : c'est Flaix qui vend. **Le lien EST la configuration** — s'il est collé, le match est prêt |
+
+Un **brouillon avec son lien s'ouvre donc tout seul**, à l'heure dite, le jour
+dit. Ce qui ferme reste ce qui veut dire STOP, et qu'un humain a choisi :
+**suspendu**, **annulé**, **archivé** — plus la date, qui ferme le reste.
+
+L'avertissement de l'admin suit : il ne parle plus des brouillons (ce serait un
+faux avertissement, et un avertissement qu'on apprend à ignorer ne protège plus
+de rien), seulement des trois états qui ferment vraiment.
+
+**Audit de saison rejoué** : 15 380 vérifications, aucun écart — et les
+ouvertures passent de 564 à 592, ce sont les brouillons.
+
+**759 tests backend, 842 au total.**
+
+```
+~ backend/src/common/helpers/fenetre-commande.ts (+ spec)
+~ backend/scripts/audit-saison.cjs
+~ apps/admin/src/lib/alertes-liens.ts (+ spec)
+```
+
+---
+
 ## [0.87.0] — 2026-10-16 — Apple et Google donnaient le nom, on le jetait
 
 Suite de la personnalisation du lien Flaix : et les clients connectés par

@@ -57,14 +57,36 @@ export type FenetreCommande<T extends EvenementCommandable = EvenementCommandabl
   | { etat: 'aucun' };
 
 /**
- * Un événement qui n'accepte PAS de commande, quelle que soit l'heure.
+ * Un événement qui accepte la commande — pour le relais FLAIX.
  *
- * `DRAFT` n'est pas publié, `PAUSED` a été suspendu par le club (c'est le geste
- * qu'on fait quand la buvette est débordée), `ENDED` et `CANCELLED` sont
- * terminés. Les laisser passer, c'est encaisser pour un match qui n'a pas lieu.
+ * ── Pourquoi `DRAFT` passe ici, alors qu'il bloque le parcours Break Eat ──
+ *
+ * Les deux parcours n'ont pas la même idée de « prêt ».
+ *
+ * Dans le parcours Break Eat, un brouillon protège d'une vente lancée avant
+ * que la carte, les prix, les créneaux et les points de retrait ne soient
+ * saisis. Il reste donc exigé là-bas (`currentEventId`).
+ *
+ * Dans le relais Flaix, Break Eat ne tient NI carte, NI prix, NI créneaux :
+ * c'est Flaix qui vend. La seule configuration qui existe, c'est le lien — et
+ * s'il est collé, le match EST prêt. Exiger en plus une activation manuelle
+ * obligerait le club à toucher chaque match le jour même, ce qui ruine tout
+ * l'intérêt de coller sa saison d'avance.
+ *
+ * Ce qui ferme reste ce qui veut dire STOP, et que seul un humain décide :
+ *
+ *   · `PAUSED`    — le club suspend en plein service (buvette débordée) ;
+ *   · `CANCELLED` — le match n'a pas lieu ;
+ *   · `ENDED`     — il est archivé.
+ *
+ * Et la date ferme le reste : rien n'ouvre avant l'heure, rien après la fin.
  */
 function ouvrable(ev: EvenementCommandable): boolean {
-  return ev.status === EventStatus.ACTIVE;
+  return (
+    ev.status !== EventStatus.PAUSED &&
+    ev.status !== EventStatus.CANCELLED &&
+    ev.status !== EventStatus.ENDED
+  );
 }
 
 /** « HH:MM » → minutes depuis minuit, ou `null` si la saisie est illisible. */

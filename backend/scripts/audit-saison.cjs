@@ -99,8 +99,9 @@ async function semer() {
       const start = instantParisien(jour, horaire.h, horaire.min);
       const end = new Date(start.getTime() + 4 * 3600000);
 
-      // Trois contrôles négatifs par lieu : un brouillon, un annulé, un
-      // suspendu — avec un lien, pour qu'ils soient tentants.
+      // Contrôles par lieu, avec un lien pour qu'ils soient tentants :
+      //  · un BROUILLON, qui doit s'ouvrir quand même (la date décide) ;
+      //  · un ANNULÉ et un SUSPENDU, qui doivent rester fermés.
       let status = 'ACTIVE';
       if (j === 5) status = 'DRAFT';
       else if (j === 11) status = 'CANCELLED';
@@ -173,8 +174,12 @@ function controler(lieu, evenements, instant) {
 
   if (f.etat === 'ouvert') {
     const e = f.evenement;
-    // P1
-    verifier('P1', e.status === 'ACTIVE', `${lieu} : lien rendu sur un événement ${e.status}`);
+    // P1 — un BROUILLON s'ouvre (la date decide) ; ce qui veut dire STOP, non.
+    verifier(
+      'P1',
+      !['PAUSED', 'CANCELLED', 'ENDED'].includes(e.status),
+      `${lieu} : lien rendu sur un événement ${e.status}`,
+    );
     verifier('P1', !!e.flaixOrderUrl, `${lieu} : lien rendu sans adresse`);
     // P2
     const ouv = heureDOuverture(e, REGLAGE).getTime();
@@ -185,7 +190,7 @@ function controler(lieu, evenements, instant) {
     // P4 — le premier commencé parmi tous les ouverts
     const ouverts = evenements.filter(
       (x) =>
-        x.status === 'ACTIVE' &&
+        !['PAUSED', 'CANCELLED', 'ENDED'].includes(x.status) &&
         x.flaixOrderUrl &&
         t >= heureDOuverture(x, REGLAGE).getTime() &&
         t <= x.endAt.getTime(),
@@ -219,7 +224,7 @@ function controler(lieu, evenements, instant) {
     // Et personne d'autre ne devait être ouvert.
     const ouverts = evenements.filter(
       (x) =>
-        x.status === 'ACTIVE' &&
+        !['PAUSED', 'CANCELLED', 'ENDED'].includes(x.status) &&
         x.flaixOrderUrl &&
         t >= heureDOuverture(x, REGLAGE).getTime() &&
         t <= x.endAt.getTime(),
@@ -230,7 +235,10 @@ function controler(lieu, evenements, instant) {
 
   // 'aucun' : il ne doit rester aucun match ouvrable à venir.
   const restants = evenements.filter(
-    (x) => x.status === 'ACTIVE' && x.flaixOrderUrl && x.endAt.getTime() > t,
+    (x) =>
+      !['PAUSED', 'CANCELLED', 'ENDED'].includes(x.status) &&
+      x.flaixOrderUrl &&
+      x.endAt.getTime() > t,
   );
   verifier(
     'Aucun',

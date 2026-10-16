@@ -35,9 +35,17 @@ export interface AlerteLien {
   message: string;
 }
 
-/** Le statut d'un match, dit comme le club le lit dans sa liste. */
-const LIBELLE_STATUT: Record<string, string> = {
-  DRAFT: 'brouillon',
+/**
+ * Les statuts qui FERMENT la commande, et leur nom tel que le club le lit.
+ *
+ * Le brouillon n'en fait PAS partie : un match préparé d'avance, avec son
+ * lien, s'ouvre tout seul le jour venu (voir `fenetre-commande.ts`). Exiger
+ * une activation manuelle rendrait inutile le fait de coller la saison à
+ * l'avance — c'est justement le geste qu'on supprime.
+ *
+ * Ceux-ci veulent dire STOP, et c'est un humain qui les a choisis.
+ */
+const STATUTS_FERMES: Record<string, string> = {
   PAUSED: 'suspendu',
   ENDED: 'terminé',
   CANCELLED: 'annulé',
@@ -52,25 +60,21 @@ export function alertesDeSaisie(matchs: readonly MatchAVerifier[]): AlerteLien[]
   const alertes: AlerteLien[] = [];
   const avecLien = matchs.filter((m) => renseigne(m.url));
 
-  // ── 0. Un match qui n'est pas ACTIF n'ouvrira rien.
+  // ── 0. Un match SUSPENDU, ANNULÉ ou ARCHIVÉ n'ouvrira rien.
   //
-  // Le cas vécu : un lien collé sur un BROUILLON, un « Liens enregistrés » en
-  // vert, et l'application qui répond « aucun événement ouvert ». Tout était
-  // correct — sauf que personne ne disait que le match n'était pas publié.
-  //
-  // On ne refuse pas : coller les liens d'une saison AVANT de publier les
-  // matchs est exactement l'usage prévu. On prévient, pour que l'absence
-  // d'ouverture le jour J ne soit jamais une surprise.
-  const inactifs = avecLien.filter((m) => m.status && m.status !== 'ACTIVE');
-  if (inactifs.length > 0) {
+  // Un brouillon, lui, s'ouvre tout seul le jour venu : c'est la date qui
+  // décide, pas une activation manuelle. Le signaler serait un faux
+  // avertissement — et un avertissement qu'on apprend à ignorer ne protège
+  // plus de rien.
+  const fermes = avecLien.filter((m) => m.status && STATUTS_FERMES[m.status]);
+  if (fermes.length > 0) {
     alertes.push({
       type: 'pas-actif',
-      ids: inactifs.map((m) => m.id),
+      ids: fermes.map((m) => m.id),
       message:
-        `${inactifs.length === 1 ? 'Ce match n’est pas actif' : `Ces ${inactifs.length} matchs ne sont pas actifs`} : ` +
-        `${inactifs.map((m) => `${m.name} (${LIBELLE_STATUT[m.status as string] ?? m.status})`).join(', ')}. ` +
-        `Le lien est bien enregistré, mais l’application n’ouvrira rien tant que le match reste dans cet état. ` +
-        `Passe-le en « Actif » dans sa fiche le moment venu.`,
+        `${fermes.length === 1 ? 'Ce match ne prendra pas de commande' : `Ces ${fermes.length} matchs ne prendront pas de commande`} : ` +
+        `${fermes.map((m) => `${m.name} (${STATUTS_FERMES[m.status as string]})`).join(', ')}. ` +
+        `Le lien est bien enregistré, mais l’application n’ouvrira rien tant que le match reste dans cet état.`,
     });
   }
 

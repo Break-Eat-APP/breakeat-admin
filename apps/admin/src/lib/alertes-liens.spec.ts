@@ -136,19 +136,14 @@ describe('les alertes de saisie des liens', () => {
 });
 
 describe('un match qui n’ouvrira rien', () => {
-  it('un lien sur un BROUILLON est signalé', () => {
-    // Le cas vécu : lien collé, « Liens enregistrés » en vert, et
-    // l'application qui répond « aucun événement ouvert ». Tout était
-    // correct — sauf que rien ne disait que le match n'était pas publié.
-    const [a] = alertesDeSaisie([m({ id: 'test', name: 'test', status: 'DRAFT' })]);
-
-    expect(a.type).toBe('pas-actif');
-    expect(a.ids).toEqual(['test']);
-    expect(a.message).toContain('brouillon');
-    expect(a.message).toContain('Actif');
+  it('un BROUILLON n’est PAS signalé — il s’ouvrira tout seul', () => {
+    // Un match préparé d'avance, avec son lien, s'ouvre le jour venu : c'est
+    // la date qui décide. Le signaler serait un faux avertissement, et un
+    // avertissement qu'on apprend à ignorer ne protège plus de rien.
+    expect(alertesDeSaisie([m({ id: 'test', name: 'test', status: 'DRAFT' })])).toEqual([]);
   });
 
-  it('suspendu, terminé et annulé le sont aussi, chacun nommé', () => {
+  it('suspendu, terminé et annulé sont signalés, chacun nommé', () => {
     const alertes = alertesDeSaisie([
       m({ id: 'a', name: 'A', status: 'PAUSED' }),
       m({ id: 'b', name: 'B', status: 'ENDED', startAt: J(21, 18), endAt: J(21, 22), url: 'https://commande.flaix.bo.synertic.net/o/b' }),
@@ -166,10 +161,9 @@ describe('un match qui n’ouvrira rien', () => {
     expect(alertesDeSaisie([m({ status: 'ACTIVE' })])).toEqual([]);
   });
 
-  it('un brouillon SANS lien n’alerte pas', () => {
-    // Coller la saison avant de publier les matchs est l'usage prévu : on ne
-    // reproche rien tant qu'aucun lien n'attend.
-    expect(alertesDeSaisie([m({ status: 'DRAFT', url: '' })])).toEqual([]);
+  it('un match suspendu SANS lien n’alerte pas', () => {
+    // Rien n'attend : il n'y a rien à signaler.
+    expect(alertesDeSaisie([m({ status: 'PAUSED', url: '' })])).toEqual([]);
   });
 
   it('un statut absent ne déclenche rien', () => {

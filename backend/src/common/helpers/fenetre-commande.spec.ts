@@ -151,19 +151,33 @@ describe('quel événement est ouvert à la commande', () => {
     expect(fenetreDeCommande([ev({ flaixOrderUrl: null })], midi, PARIS).etat).toBe('aucun');
   });
 
-  it('un lien sur un BROUILLON n’ouvre rien', () => {
-    // Le lien se colle des mois à l'avance : il vit donc longtemps sur un
-    // événement non publié. Il ne doit pas ouvrir la vente pour autant.
+  it('un BROUILLON avec son lien s’ouvre quand même — c’est la DATE qui décide', () => {
+    // Le club colle sa saison des mois à l'avance et ne touche plus à rien.
+    // Exiger en plus une activation manuelle le jour du match reviendrait au
+    // geste qu'on supprime : coller un lien à chaque match.
+    //
+    // Dans le relais Flaix, Break Eat ne tient ni carte ni prix : le lien EST
+    // la configuration. S'il est là, le match est prêt. (Le parcours Break Eat
+    // natif, lui, continue d'exiger ACTIVE — voir `currentEventId`.)
     const midi = new Date('2026-07-17T10:00:00.000Z');
 
-    expect(fenetreDeCommande([ev({ status: EventStatus.DRAFT })], midi, PARIS).etat).toBe(
-      'aucun',
+    const f = fenetreDeCommande([ev({ status: EventStatus.DRAFT })], midi, PARIS);
+
+    expect(f.etat).toBe('ouvert');
+  });
+
+  it('… mais pas avant son heure, brouillon ou pas', () => {
+    const aube = new Date('2026-07-17T04:00:00.000Z');
+
+    expect(fenetreDeCommande([ev({ status: EventStatus.DRAFT })], aube, PARIS).etat).toBe(
+      'bientot',
     );
   });
 
   it('un événement SUSPENDU ferme la commande', () => {
-    // `PAUSED`, c'est le geste du club quand la buvette est débordée. Si la
-    // fenêtre l'ignorait, le bouton continuerait d'encaisser.
+    // Les trois statuts qui ferment sont ceux qui veulent dire STOP, et qu'un
+    // humain a choisis. `PAUSED`, c'est le geste du club quand la buvette est
+    // débordée : si la fenêtre l'ignorait, le bouton continuerait d'encaisser.
     const midi = new Date('2026-07-17T10:00:00.000Z');
 
     expect(fenetreDeCommande([ev({ status: EventStatus.PAUSED })], midi, PARIS).etat).toBe(
@@ -175,6 +189,14 @@ describe('quel événement est ouvert à la commande', () => {
     const midi = new Date('2026-07-17T10:00:00.000Z');
 
     expect(fenetreDeCommande([ev({ status: EventStatus.CANCELLED })], midi, PARIS).etat).toBe(
+      'aucun',
+    );
+  });
+
+  it('un événement ARCHIVÉ ferme la commande', () => {
+    const midi = new Date('2026-07-17T10:00:00.000Z');
+
+    expect(fenetreDeCommande([ev({ status: EventStatus.ENDED })], midi, PARIS).etat).toBe(
       'aucun',
     );
   });
