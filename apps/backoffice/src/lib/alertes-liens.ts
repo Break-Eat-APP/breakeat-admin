@@ -1,0 +1,137 @@
+/**
+ * ⚠️ CE FICHIER EXISTE EN DOUBLE — `apps/admin` ET `apps/backoffice`.
+ *
+ * Les deux consoles saisissent les mêmes liens, sur les mêmes routes, et
+ * doivent donc appliquer EXACTEMENT les mêmes règles : un avertissement qui
+ * n'apparaîtrait que d'un côté ferait croire qu'il n'y a rien à signaler.
+ * Le dépôt n'a pas de bibliothèque d'interface partagée (même situation que
+ * `coords.ts`). **Toute correction vaut pour les deux fichiers**, et les
+ * tests sont dupliqués avec, pour que l'oubli se voie.
+ */
+/**
+ * CE QUI CLOCHE DANS UNE SAISIE DE LIENS — avant que le public le découvre.
+ *
+ * On colle vingt liens Flaix d'affilée, en copiant-collant. Deux erreurs
+ * passent alors sans bruit, et aucune ne se voit avant le jour du match :
+ *
+ *  1. LE MÊME LIEN SUR DEUX MATCHS. Le second envoie son public sur la page du
+ *     premier. Flaix refusera la commande — sa page est liée à SON match — et
+ *     le client lira un refus qu'il ne comprendra pas, sans savoir quoi faire ;
+ *  2. DEUX MATCHS QUI SE CHEVAUCHENT sur le même lieu. L'app sert alors celui
+ *     qui a commencé le premier, et l'autre reste invisible. Deux matchs qui
+ *     s'ENCHAÎNENT ne posent aucun problème (le relais bascule tout seul à la
+ *     fin du premier) : seul le vrai chevauchement est signalé.
+ *
+ * On avertit, on ne refuse pas. Un tournoi de trois jours peut légitimement
+ * n'avoir qu'une page de commande, et c'est au club de le savoir — pas à nous
+ * de le lui interdire. Mais il doit le VOIR.
+ */
+
+export interface MatchAVerifier {
+  id: string;
+  name: string;
+  startAt: string;
+  endAt: string;
+  /** Le lien saisi, tel qu'il est à l'écran (saisie en cours comprise). */
+  url: string;
+  /** DRAFT, ACTIVE, PAUSED… Seul un match ACTIF ouvre sa commande. */
+  status?: string;
+}
+
+export interface AlerteLien {
+  type: 'lien-partage' | 'chevauchement' | 'pas-actif';
+  /** Les matchs concernés, pour les mettre en évidence dans la liste. */
+  ids: string[];
+  message: string;
+}
+
+/**
+ * Les statuts qui FERMENT la commande, et leur nom tel que le club le lit.
+ *
+ * Le brouillon n'en fait PAS partie : un match préparé d'avance, avec son
+ * lien, s'ouvre tout seul le jour venu (voir `fenetre-commande.ts`). Exiger
+ * une activation manuelle rendrait inutile le fait de coller la saison à
+ * l'avance — c'est justement le geste qu'on supprime.
+ *
+ * Ceux-ci veulent dire STOP, et c'est un humain qui les a choisis.
+ */
+const STATUTS_FERMES: Record<string, string> = {
+  PAUSED: 'suspendu',
+  ENDED: 'terminé',
+  CANCELLED: 'annulé',
+};
+
+/** Un lien vide n'est pas une saisie : on ne l'analyse pas. */
+function renseigne(url: string): boolean {
+  return url.trim().length > 0;
+}
+
+export function alertesDeSaisie(matchs: readonly MatchAVerifier[]): AlerteLien[] {
+  const alertes: AlerteLien[] = [];
+  const avecLien = matchs.filter((m) => renseigne(m.url));
+
+  // ── 0. Un match SUSPENDU, ANNULÉ ou ARCHIVÉ n'ouvrira rien.
+  //
+  // Un brouillon, lui, s'ouvre tout seul le jour venu : c'est la date qui
+  // décide, pas une activation manuelle. Le signaler serait un faux
+  // avertissement — et un avertissement qu'on apprend à ignorer ne protège
+  // plus de rien.
+  const fermes = avecLien.filter((m) => m.status && STATUTS_FERMES[m.status]);
+  if (fermes.length > 0) {
+    alertes.push({
+      type: 'pas-actif',
+      ids: fermes.map((m) => m.id),
+      message:
+        `${fermes.length === 1 ? 'Ce match ne prendra pas de commande' : `Ces ${fermes.length} matchs ne prendront pas de commande`} : ` +
+        `${fermes.map((m) => `${m.name} (${STATUTS_FERMES[m.status as string]})`).join(', ')}. ` +
+        `Le lien est bien enregistré, mais l’application n’ouvrira rien tant que le match reste dans cet état.`,
+    });
+  }
+
+  // ── 1. Le même lien sur plusieurs matchs.
+  const parLien = new Map<string, MatchAVerifier[]>();
+  for (const m of avecLien) {
+    const cle = m.url.trim();
+    const liste = parLien.get(cle);
+    if (liste) liste.push(m);
+    else parLien.set(cle, [m]);
+  }
+  for (const [, partages] of parLien) {
+    if (partages.length < 2) continue;
+    alertes.push({
+      type: 'lien-partage',
+      ids: partages.map((m) => m.id),
+      message:
+        `Le même lien est collé sur ${partages.length} matchs : ` +
+        `${partages.map((m) => m.name).join(', ')}. ` +
+        `Chacun doit avoir SON adresse Flaix, sinon le public du second arrive sur la page du premier.`,
+    });
+  }
+
+  // ── 2. Deux matchs qui se chevauchent VRAIMENT.
+  //
+  // On compare les horaires des matchs, pas les fenêtres d'ouverture : deux
+  // matchs du même jour partagent forcément leur matinée, et c'est normal —
+  // le relais bascule du premier au second dès que le premier se termine.
+  const tries = [...avecLien].sort(
+    (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+  );
+  for (let i = 0; i < tries.length - 1; i += 1) {
+    const a = tries[i];
+    const b = tries[i + 1];
+    const finA = new Date(a.endAt).getTime();
+    const debutB = new Date(b.startAt).getTime();
+    if (Number.isNaN(finA) || Number.isNaN(debutB)) continue;
+    if (debutB < finA) {
+      alertes.push({
+        type: 'chevauchement',
+        ids: [a.id, b.id],
+        message:
+          `« ${a.name} » et « ${b.name} » se chevauchent. ` +
+          `Pendant ce temps, l'application ouvrira « ${a.name} » — celui qui a commencé le premier.`,
+      });
+    }
+  }
+
+  return alertes;
+}

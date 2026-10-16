@@ -131,6 +131,7 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
   l'impose : la réponse du tableau porte la buvette réellement appliquée, et
   l'écran s'aligne dessus. Le sélecteur a existé — il permettait d'afficher un
   comptoir et d'en recevoir un autre. Ne pas le réintroduire.
+- **`alertes-liens.ts` et `components/liens-commande-flaix.tsx` existent en DOUBLE** — `apps/admin` et `apps/backoffice`. Les deux consoles saisissent les mêmes liens Flaix, sur les mêmes routes : un avertissement qui n'apparaîtrait que d'un côté ferait croire qu'il n'y a rien à signaler. **Toute correction vaut pour les deux**, tests compris.
 - **`src/lib/coords.ts` existe en DOUBLE** — `apps/admin` et `apps/backoffice`. Pas de paquet d'utilitaires partagé dans le monorepo. Il convertit DMS ↔ décimal et répartit une paire collée. **Toute correction vaut pour les deux fichiers.**
 - **Remise à zéro et suppressions** vivent dans le back-office : `organizations/[id]/page.tsx` (vider un club) et `users/page.tsx` (supprimer un compte). Voir `REPRISE.md` pour ce qui est conservé.
 - **Le lieu s'édite depuis TROIS écrans** — back-office, page Organisation du dashboard manager, et wizard. Trois occasions de diverger : à resserrer.

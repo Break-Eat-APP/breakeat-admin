@@ -105,7 +105,40 @@ const ETIQUETTE = /\[#([^\]]*)\]/g;
  * Le client non connecté obtient donc l'adresse nue : Flaix lui demandera ses
  * coordonnées, ce qui est le repli correct.
  */
-export function personnaliserLien(url: string, client: ClientConnecte | null): string {
+/**
+ * À DÉFAUT DE PRÉNOM ET DE NOM, ON LES TIRE DU NOM D'AFFICHAGE.
+ *
+ * Un compte ouvert par Apple ou Google n'a longtemps porté qu'un
+ * `displayName` — « Rémi Notta » — et pas les deux champs séparés. Sans ce
+ * repli, ces clients voient Flaix leur redemander un prénom que Break Eat
+ * connaît pourtant.
+ *
+ * On ne découpe QUE s'il y a un espace. Un nom d'affichage d'un seul mot est
+ * le plus souvent la partie gauche d'une adresse e-mail (« remi.notta »), et
+ * l'écrire dans un champ « Prénom » serait pire que de le laisser vide.
+ *
+ * Le premier mot est le prénom, TOUT le reste est le nom : « Jean-Pierre De
+ * La Tour » donne « Jean-Pierre » et « De La Tour ».
+ */
+function complete(client: ClientConnecte | null): ClientConnecte | null {
+  if (!client) return null;
+  const aPrenom = !!client.firstName?.trim();
+  const aNom = !!client.lastName?.trim();
+  if (aPrenom && aNom) return client;
+
+  const affiche = client.displayName?.trim() ?? '';
+  const mots = affiche.split(/\s+/).filter(Boolean);
+  if (mots.length < 2) return client;
+
+  return {
+    ...client,
+    firstName: aPrenom ? client.firstName : mots[0],
+    lastName: aNom ? client.lastName : mots.slice(1).join(' '),
+  };
+}
+
+export function personnaliserLien(url: string, brut: ClientConnecte | null): string {
+  const client = complete(brut);
   const coupure = url.indexOf('?');
   if (coupure === -1) return url;
 

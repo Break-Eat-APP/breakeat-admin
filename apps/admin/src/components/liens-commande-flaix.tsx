@@ -30,12 +30,20 @@ export function LiensCommandeFlaix({
 }) {
   // Les matchs à venir ou en cours, du plus proche au plus lointain. Un match
   // terminé n'a plus de commande à prendre : l'afficher noierait les autres.
+  //
+  // Le contenant d'un lieu OUVERT EN CONTINU (restaurant) passe en tête : il
+  // n'a ni date ni fin, et son unique lien vaut tous les jours.
   const aVenir = useMemo(() => {
     const maintenant = Date.now();
     return events
-      .filter((e) => new Date(e.endAt).getTime() > maintenant)
+      .filter((e) => e.isPermanentContainer || new Date(e.endAt).getTime() > maintenant)
       .filter((e) => e.status !== 'CANCELLED')
-      .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+      .sort((a, b) => {
+        if (a.isPermanentContainer !== b.isPermanentContainer) {
+          return a.isPermanentContainer ? -1 : 1;
+        }
+        return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
+      });
   }, [events]);
 
   const [saisies, setSaisies] = useState<Record<string, string>>({});
@@ -138,15 +146,19 @@ export function LiensCommandeFlaix({
               }}
             >
               <div style={{ minWidth: 190, flex: '0 0 auto' }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: BRAND.ink }}>{e.name}</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: BRAND.ink }}>
+                  {e.isPermanentContainer ? 'Ouvert en continu' : e.name}
+                </div>
                 <div style={{ fontSize: 12, color: BRAND.grey, marginTop: 2 }}>
-                  {new Date(e.startAt).toLocaleString('fr-FR', {
-                    weekday: 'short',
-                    day: 'numeric',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {e.isPermanentContainer
+                    ? 'Un seul lien, valable tous les jours'
+                    : new Date(e.startAt).toLocaleString('fr-FR', {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
                 </div>
               </div>
               <input

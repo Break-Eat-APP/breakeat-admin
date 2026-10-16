@@ -3,7 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, Building2, Users, UserCircle, Bell, type LucideIcon } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Building2,
+  Users,
+  UserCircle,
+  Bell,
+  Link2,
+  type LucideIcon,
+} from 'lucide-react';
 import { BRAND, BreakEatLogo } from '@break-eat/brand';
 import {
   getToken,
@@ -17,6 +25,7 @@ const NAV_ITEMS: { href: string; icon: LucideIcon; label: string }[] = [
   { href: '/organizations', icon: Building2, label: 'Organisations' },
   { href: '/users', icon: UserCircle, label: 'Utilisateurs' },
   { href: '/groups', icon: Users, label: 'Groupes & accès' },
+  { href: '/liens-flaix', icon: Link2, label: 'Liens Flaix' },
   { href: '/notifications', icon: Bell, label: 'Notifications' },
 ];
 

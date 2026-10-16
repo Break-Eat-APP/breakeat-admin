@@ -310,10 +310,48 @@ export interface GroupListItem {
   _count: { members: number; events: number };
 }
 
+/** Un événement d'un club, tel que la route d'organisation le rend. */
+export interface EvenementDuClub {
+  id: string;
+  name: string;
+  startAt: string;
+  endAt: string;
+  status: string;
+  flaixOrderUrl?: string | null;
+  /** Contenant unique d'un lieu ouvert en continu : son lien vaut tous les jours. */
+  isPermanentContainer?: boolean;
+}
+
 // ─── Auth ──────────────────────────────────────────────────────────────────────
 
 export async function apiLogin(email: string, password: string): Promise<AuthResponse> {
   return req<AuthResponse>('POST', '/auth/login', { email, password }, true);
+}
+
+// ─── Liens de commande Flaix (routes d'ORGANISATION) ─────────────────────────
+//
+// Ce ne sont pas des routes `/backoffice/…` : ce sont celles du dashboard du
+// club, appelées ici avec un jeton SUPER_ADMIN — qui franchit la garde d'accès
+// de n'importe quelle organisation (`require-org-access.ts`). Même route, même
+// validation, mêmes règles : les deux consoles ne peuvent pas diverger.
+
+/**
+ * Les événements d'un club, CONTENANT PERMANENT COMPRIS.
+ *
+ * Un lieu ouvert en continu (restaurant) porte un contenant unique et
+ * invisible, masqué des listes d'événements où il n'aurait aucun sens. Mais
+ * c'est lui qui porte le lien Flaix d'un tel lieu : l'omettre priverait ces
+ * lieux de toute saisie.
+ */
+export async function apiEvenementsDuClub(orgId: string): Promise<EvenementDuClub[]> {
+  return req<EvenementDuClub[]>('GET', `/organizations/${orgId}/events?includePermanent=true`);
+}
+
+export async function apiDefinirLiensCommandeFlaix(
+  orgId: string,
+  liens: { eventId: string; url: string | null }[],
+): Promise<{ id: string; flaixOrderUrl: string | null }[]> {
+  return req('PATCH', `/organizations/${orgId}/events/flaix/liens-commande`, { liens });
 }
 
 // ─── KPIs ────────────────────────────────────────────────────────────────────

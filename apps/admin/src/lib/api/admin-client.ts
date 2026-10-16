@@ -319,6 +319,11 @@ export interface AdminEvent {
    * l'événement qui décide lequel s'ouvre.
    */
   flaixOrderUrl?: string | null;
+  /**
+   * Vrai pour le contenant unique d'un lieu OUVERT EN CONTINU (restaurant).
+   * Il n'a ni date ni fin : son lien Flaix vaut tous les jours.
+   */
+  isPermanentContainer?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -510,8 +515,21 @@ export async function apiRemoveMember(orgId: string, memberId: string): Promise<
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
-export async function apiGetEvents(orgId: string): Promise<AdminEvent[]> {
-  return req<AdminEvent[]>('GET', `/organizations/${orgId}/events`);
+/**
+ * Les événements d'un club.
+ *
+ * `avecContenantPermanent` : un lieu OUVERT EN CONTINU (restaurant) porte un
+ * contenant unique et invisible, masqué par défaut — il n'a aucun sens dans
+ * une liste d'événements. Mais c'est LUI qui porte le lien Flaix d'un tel
+ * lieu : sans ce drapeau, un restaurant basculé en Flaix n'aurait nulle part
+ * où coller son adresse, et resterait « Bientôt » pour toujours.
+ */
+export async function apiGetEvents(
+  orgId: string,
+  avecContenantPermanent = false,
+): Promise<AdminEvent[]> {
+  const suffixe = avecContenantPermanent ? '?includePermanent=true' : '';
+  return req<AdminEvent[]>('GET', `/organizations/${orgId}/events${suffixe}`);
 }
 
 export async function apiGetEvent(orgId: string, id: string): Promise<AdminEvent> {

@@ -60,7 +60,9 @@ export default function EventsPage() {
     setLoading(true);
     setError('');
     try {
-      const [evs, vns] = await Promise.all([apiGetEvents(orgId), apiGetVenues(orgId)]);
+      // `true` : le contenant d'un lieu ouvert en continu porte SON lien
+      // Flaix. Sans lui, un restaurant n'aurait nulle part où le coller.
+      const [evs, vns] = await Promise.all([apiGetEvents(orgId, true), apiGetVenues(orgId)]);
       setEvents(Array.isArray(evs) ? evs : []);
       setVenues(Array.isArray(vns) ? vns : []);
     } catch (err) {
@@ -79,6 +81,12 @@ export default function EventsPage() {
     }
   }, [venues, form.venueId]);
 
+
+  // Le contenant d'un lieu OUVERT EN CONTINU n'est pas un événement : personne
+  // ne l'a créé, personne ne le modifie. Il n'apparaît donc pas dans la liste
+  // — mais il reste dans `events`, car c'est lui qui porte le lien Flaix d'un
+  // tel lieu (section plus bas).
+  const evenementsVisibles = events.filter((e) => !e.isPermanentContainer);
 
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -173,7 +181,7 @@ ${msg}`);
             créneaux, points de retrait, écrans opérateur et statistiques — tout se configure depuis sa fiche.
           </p>
           <p style={{ color: BRAND.grey, fontSize: 12.5, margin: '7px 0 0' }}>
-            {events.length} événement{events.length !== 1 ? 's' : ''}
+            {evenementsVisibles.length} événement{evenementsVisibles.length !== 1 ? 's' : ''}
           </p>
         </div>
         <button
@@ -332,7 +340,7 @@ ${msg}`);
       {/* List */}
       {loading ? (
         <div style={{ color: BRAND.grey, fontSize: 14 }}>Chargement…</div>
-      ) : events.length === 0 ? (
+      ) : evenementsVisibles.length === 0 ? (
         <div
           style={{
             background: BRAND.bg,
@@ -350,7 +358,7 @@ ${msg}`);
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {events.map((ev) => {
+          {evenementsVisibles.map((ev) => {
             const st = STATUS_STYLE[ev.status] ?? { bg: BRAND.bgSubtle, color: BRAND.inkSoft };
             return (
               <Link

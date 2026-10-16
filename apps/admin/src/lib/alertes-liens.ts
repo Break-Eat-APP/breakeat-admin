@@ -1,4 +1,14 @@
 /**
+ * ⚠️ CE FICHIER EXISTE EN DOUBLE — `apps/admin` ET `apps/backoffice`.
+ *
+ * Les deux consoles saisissent les mêmes liens, sur les mêmes routes, et
+ * doivent donc appliquer EXACTEMENT les mêmes règles : un avertissement qui
+ * n'apparaîtrait que d'un côté ferait croire qu'il n'y a rien à signaler.
+ * Le dépôt n'a pas de bibliothèque d'interface partagée (même situation que
+ * `coords.ts`). **Toute correction vaut pour les deux fichiers**, et les
+ * tests sont dupliqués avec, pour que l'oubli se voie.
+ */
+/**
  * CE QUI CLOCHE DANS UNE SAISIE DE LIENS — avant que le public le découvre.
  *
  * On colle vingt liens Flaix d'affilée, en copiant-collant. Deux erreurs

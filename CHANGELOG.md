@@ -5,6 +5,58 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.89.0] — 2026-10-16 — Deux portes pour la saisie, et le cas « ouvert en continu »
+
+**Une page « Liens Flaix » dans le back-office**, avec un sélecteur de club.
+Décision du client : certains clubs sont autonomes, d'autres non — il faut donc
+les deux portes. Un club colle ses liens dans son dashboard ; pour les autres,
+on les dépose ici sans changer de session.
+
+Aucune ligne de backend : un SUPER_ADMIN franchit déjà la garde d'accès de
+n'importe quelle organisation, donc la page appelle **exactement les mêmes
+routes** que le dashboard du club. Même validation, mêmes avertissements — deux
+écrans qui écriraient le même champ avec deux comportements, c'est la panne
+qu'on évite depuis le début.
+
+Ce qu'on n'a pas fait : lister les 400 matchs de tous les clubs. Ce n'est pas
+plus simple que de choisir un club, c'est seulement plus long à lire.
+
+⚠️ Le composant et `alertes-liens.ts` sont **dupliqués** entre les deux
+consoles (pas de bibliothèque d'interface partagée, même situation que
+`coords.ts`). L'avertissement est en tête des quatre fichiers.
+
+**Le cas « OUVERT EN CONTINU » ne marchait pas du tout.** Un restaurant porte
+un contenant unique et invisible, volontairement masqué des listes
+d'événements. Mais c'est lui qui porterait son lien Flaix — et comme il
+n'apparaissait nulle part, **un tel lieu n'avait aucun endroit où coller son
+adresse** : il serait resté « Bientôt » pour toujours. Il apparaît désormais
+dans la section des liens, et là seulement, sous « Ouvert en continu — un seul
+lien, valable tous les jours ». La liste des événements, elle, ne le montre
+toujours pas.
+
+**Le prénom et le nom se déduisent du nom d'affichage** quand les champs
+séparés manquent — le cas de tous les comptes Apple existants. « Rémi Notta »
+donne prénom et nom ; un nom d'un seul mot n'est pas découpé (c'est souvent la
+partie gauche d'une adresse e-mail, et l'écrire dans un champ « Prénom » serait
+pire que de le laisser vide).
+
+**764 tests backend, 52 sur les deux consoles.**
+
+```
++ apps/backoffice/src/app/(backoffice)/liens-flaix/page.tsx
++ apps/backoffice/src/components/liens-commande-flaix.tsx
++ apps/backoffice/src/lib/alertes-liens.ts (+ spec)
+~ backend/src/common/helpers/personnaliser-lien.ts (+ spec)
+~ apps/admin/src/lib/api/admin-client.ts
+~ apps/admin/src/app/(admin)/events/page.tsx
+~ apps/admin/src/components/liens-commande-flaix.tsx
+~ apps/admin/src/lib/alertes-liens.ts
+~ apps/backoffice/src/lib/api/backoffice-client.ts
+~ apps/backoffice/src/app/(backoffice)/layout.tsx
+```
+
+---
+
 ## [0.88.0] — 2026-10-16 — Zéro geste le jour du match
 
 Objection du client, et elle était juste : *« si je dois activer l'événement à

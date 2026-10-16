@@ -53,7 +53,9 @@ describe('personnaliser un lien Flaix', () => {
   });
 
   it('un champ VIDE ou en espaces vaut un champ absent', () => {
-    const r = personnaliserLien(LIEN_REEL, { ...CLIENT, lastName: '   ' });
+    // Sans nom d'affichage, rien ne vient combler le trou — c'est ce qu'on
+    // vérifie ici. Le repli par le nom d'affichage a son propre bloc plus bas.
+    const r = personnaliserLien(LIEN_REEL, { ...CLIENT, lastName: '   ', displayName: null });
 
     expect(r).not.toContain('lastname');
     expect(r).toContain('firstname=R%C3%A9mi');
@@ -100,7 +102,7 @@ describe('personnaliser un lien Flaix', () => {
   it('… et il suffit qu’UNE des deux manque pour retirer le paramètre', () => {
     const lien = 'https://commande.flaix.bo.synertic.net/o/x?qui=[#firstname] [#lastname]';
 
-    expect(personnaliserLien(lien, { ...CLIENT, lastName: null })).toBe(
+    expect(personnaliserLien(lien, { ...CLIENT, lastName: null, displayName: null })).toBe(
       'https://commande.flaix.bo.synertic.net/o/x',
     );
   });
@@ -164,5 +166,49 @@ describe('détecter qu’un lien attend une identité', () => {
     // Une expression régulière globale garde un curseur entre deux appels :
     // sans remise à zéro, un appel sur deux répondrait « non » à tort.
     for (let i = 0; i < 4; i += 1) expect(porteDesEtiquettes(LIEN_REEL)).toBe(true);
+  });
+});
+
+describe('a defaut de prenom et de nom, le nom d’affichage', () => {
+  // Cas vecu : un compte ouvert par Apple ne porte qu'un `displayName`, et
+  // Flaix redemandait un prenom que Break Eat connaissait pourtant.
+  const LIEN = 'https://commande.flaix.bo.synertic.net/o/x?f=[#firstname]&l=[#lastname]';
+
+  it('« Rémi Notta » donne prenom et nom', () => {
+    const r = personnaliserLien(LIEN, { displayName: 'Rémi Notta' });
+
+    expect(r).toBe('https://commande.flaix.bo.synertic.net/o/x?f=R%C3%A9mi&l=Notta');
+  });
+
+  it('le premier mot est le prenom, TOUT le reste est le nom', () => {
+    const r = personnaliserLien(LIEN, { displayName: 'Jean-Pierre De La Tour' });
+
+    expect(r).toBe(
+      'https://commande.flaix.bo.synertic.net/o/x?f=Jean-Pierre&l=De%20La%20Tour',
+    );
+  });
+
+  it('un seul mot n’est PAS decoupe', () => {
+    // « remi.notta » est la partie gauche d'une adresse, pas un prenom :
+    // l'ecrire dans un champ « Prenom » serait pire que de le laisser vide.
+    expect(personnaliserLien(LIEN, { displayName: 'remi.notta' })).toBe(
+      'https://commande.flaix.bo.synertic.net/o/x',
+    );
+  });
+
+  it('un prenom DEJA renseigne n’est pas remplace', () => {
+    const r = personnaliserLien(LIEN, { firstName: 'Rémi', displayName: 'Autre Chose' });
+
+    // Le prenom reste celui du compte ; seul le nom manquant est comble.
+    expect(r).toBe('https://commande.flaix.bo.synertic.net/o/x?f=R%C3%A9mi&l=Chose');
+  });
+
+  it('le repli ne touche ni l’e-mail ni le telephone', () => {
+    // On ne devine que ce qui se devine : un numero ne se deduit d'aucun nom.
+    const lien = 'https://commande.flaix.bo.synertic.net/o/x?m=[#mail]&p=[#phone]';
+
+    expect(personnaliserLien(lien, { displayName: 'Rémi Notta' })).toBe(
+      'https://commande.flaix.bo.synertic.net/o/x',
+    );
   });
 });
