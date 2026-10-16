@@ -5,6 +5,7 @@ import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guar
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { CLUB_EN_SERVICE } from '../../common/helpers/organisation-ouverte';
+import { fenetreDeCommande } from '../../common/helpers/fenetre-commande';
 
 /**
  * PublicVenuesController — découverte des lieux pour l'app mobile (Phase 16).
@@ -75,6 +76,7 @@ export class PublicVenuesController {
         photoUrl: true,
         flaixEnabled: true,
         flaixVenueId: true,
+        ordersOpenBeforeMin: true,
         buvettePlanUrl: true,
         organization: { select: { name: true, logoUrl: true, primaryColor: true } },
         // TOUS les événements (id, statut, visibilité) : la confidentialité se décide
@@ -82,7 +84,18 @@ export class PublicVenuesController {
         // l'événement privé n'est pas encore actif serait révélé en « Bientôt ».
         events: {
           orderBy: { startAt: 'asc' },
-          select: { id: true, status: true, visibility: true },
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            visibility: true,
+            // Les dates et le lien : c'est la DATE qui choisit le lien Flaix
+            // à ouvrir (`fenetre-commande`), et non un motif d'URL deviné.
+            startAt: true,
+            endAt: true,
+            isPermanentContainer: true,
+            flaixOrderUrl: true,
+          },
         },
       },
     });
@@ -101,6 +114,11 @@ export class PublicVenuesController {
     const canAccess = (ev: { id: string; visibility: EventVisibility }) =>
       ev.visibility === EventVisibility.PUBLIC || accessibleEventIds.has(ev.id);
 
+    // L'instant de référence, lu UNE seule fois pour toute la réponse : deux
+    // lieux de la même liste ne doivent pas être jugés à deux secondes
+    // d'écart, sinon un événement peut « ouvrir » entre deux lignes.
+    const maintenant = new Date();
+
     const userLat = parseCoord(lat);
     const userLng = parseCoord(lng);
     const hasLocation = userLat !== null && userLng !== null;
@@ -114,6 +132,22 @@ export class PublicVenuesController {
         if (v.events.length > 0 && accessible.length === 0) return null;
         // Cible de navigation : premier événement accessible ET actif.
         const currentEvent = accessible.find((e) => e.status === EventStatus.ACTIVE);
+
+        // LE LIEN FLAIX DU MOMENT.
+        //
+        // Calculé sur les événements ACCESSIBLES uniquement : un lieu privé ne
+        // doit pas livrer l'adresse de commande de son événement réservé.
+        //
+        // Et seulement si le lieu est en Flaix : UN interrupteur commande tout
+        // le relais. Des liens collés d'avance sur un lieu non basculé ne
+        // changent rien — c'est ce qui permet de préparer la saison tranquille.
+        const fenetre = v.flaixEnabled
+          ? fenetreDeCommande(accessible, maintenant, v.ordersOpenBeforeMin)
+          : ({ etat: 'aucun' } as const);
+
+        // Le prochain événement annoncé, qu'il soit en Flaix ou non : c'est ce
+        // qui permet à la carte de dire « samedi 20 h » au lieu de « Bientôt ».
+        const prochain = accessible.find((e) => e.startAt.getTime() > maintenant.getTime());
 
         const distanceKm =
           hasLocation && v.latitude !== null && v.longitude !== null
@@ -132,6 +166,13 @@ export class PublicVenuesController {
           primaryColor: v.organization?.primaryColor ?? null,
           flaixEnabled: v.flaixEnabled,
           flaixVenueId: v.flaixVenueId,
+          /** L'adresse à ouvrir MAINTENANT, ou null si la commande est fermée. */
+          flaixOrderUrl: fenetre.etat === 'ouvert' ? fenetre.url : null,
+          /** Quand elle ouvrira, pour l'annoncer au lieu de dire « fermé ». */
+          commandeOuvreA: fenetre.etat === 'bientot' ? fenetre.ouvreA.toISOString() : null,
+          prochainEvenement: prochain
+            ? { id: prochain.id, name: prochain.name, startAt: prochain.startAt.toISOString() }
+            : null,
           buvettePlanUrl: v.buvettePlanUrl,
           currentEventId: currentEvent?.id ?? null,
           distanceKm: distanceKm === null ? null : Math.round(distanceKm * 10) / 10,

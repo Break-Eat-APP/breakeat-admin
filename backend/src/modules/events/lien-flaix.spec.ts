@@ -39,4 +39,23 @@ describe('verifierLienFlaix', () => {
     expect(verifierLienFlaix('rapport du match').valide).toBe(false);
     expect(verifierLienFlaix(`https://ops.flaixlabs.com/${'a'.repeat(600)}`).valide).toBe(false);
   });
+
+  it('accepte l’hebergement des pages de COMMANDE (synertic.net)', () => {
+    // Le lien officiel d'un evenement. La garde ne connaissait que
+    // `flaixlabs.com` et l'aurait refuse en affirmant qu'il n'est pas Flaix :
+    // exact dans la forme, faux sur le fond.
+    const reel = 'https://commande.flaix.bo.synertic.net/o/n-n';
+
+    expect(verifierLienFlaix(reel)).toEqual({ valide: true, url: reel });
+  });
+
+  it('… sans ouvrir la porte aux imitations de ce domaine-la non plus', () => {
+    for (const piege of [
+      'https://synertic.net.pirate.io/o/n-n',
+      'https://faux-synertic.net/o/n-n',
+      'https://commande.flaix.bo.synertic.net.evil.com/o/n-n',
+    ]) {
+      expect(verifierLienFlaix(piege).valide).toBe(false);
+    }
+  });
 });

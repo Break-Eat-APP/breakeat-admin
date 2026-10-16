@@ -20,7 +20,7 @@ import { useUserLocation } from '@lib/hooks/use-user-location';
 import { useNotifStore } from '@store/notif.store';
 import { apiSearchVenues, type PublicVenue } from '@lib/api/mobile-api';
 import { showAlert } from '@lib/alert';
-import { cheminDeCommande, ouvertALaCommande } from '@lib/ouverture-lieu';
+import { cheminDeCommande, heureDOuverture, ouvertALaCommande } from '@lib/ouverture-lieu';
 import { visuelDeLieu } from '@lib/visuel-lieu';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
@@ -118,12 +118,25 @@ export function VenueDiscoveryScreen() {
   // « Ouvert » puis refusait au doigt.
   const openVenue = (v: PublicVenue) => {
     const chemin = cheminDeCommande(v);
-    if (chemin === 'flaix') {
-      navigation.navigate('FlaixOrder', { venueId: v.id, flaixVenueId: v.flaixVenueId });
+    if (chemin === 'flaix' && v.flaixOrderUrl) {
+      // On emporte l'ADRESSE, résolue par le serveur sur la date du jour —
+      // et le nom du lieu, pour que l'en-tête de la page dise où l'on est.
+      navigation.navigate('FlaixOrder', {
+        venueId: v.id,
+        flaixVenueId: v.flaixVenueId,
+        url: v.flaixOrderUrl,
+        venueName: v.name,
+      });
     } else if (chemin === 'evenement' && v.currentEventId) {
       navigation.navigate('EventHome', { eventId: v.currentEventId });
     } else {
-      showAlert('Bientôt', `${v.name} n'a pas encore d'événement ouvert à la commande.`);
+      const ouvreA = heureDOuverture(v);
+      showAlert(
+        ouvreA ? 'Pas encore ouvert' : 'Bientôt',
+        ouvreA
+          ? `La commande de ${v.name} ouvre à ${ouvreA}.`
+          : `${v.name} n'a pas encore d'événement ouvert à la commande.`,
+      );
     }
   };
 
@@ -223,12 +236,17 @@ export function VenueDiscoveryScreen() {
               const plan = v.buvettePlanUrl;
               const open = ouvertALaCommande(v);
               const visuel = visuelDeLieu(v);
+              // « Ouvre à 18:00 » fait revenir le client ; « Bientôt » ne dit
+              // rien. On ne perd l'heure que quand la distance la remplace.
+              const ouvreA = heureDOuverture(v);
               const status =
                 v.distanceKm != null
                   ? `${v.distanceKm.toFixed(1).replace('.', ',')} km`
                   : open
                     ? 'Ouvert'
-                    : 'Bientôt';
+                    : ouvreA
+                      ? `Ouvre à ${ouvreA}`
+                      : 'Bientôt';
               return (
                 <Pressable key={v.id} style={[styles.nearbyCard, shadowCard]} onPress={() => openVenue(v)}>
                   {/* La photo porte la carte : elle occupe les deux tiers. */}

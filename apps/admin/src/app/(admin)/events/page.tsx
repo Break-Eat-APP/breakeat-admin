@@ -14,6 +14,7 @@ import {
   getOrgId,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
+import { LiensCommandeFlaix } from '@/components/liens-commande-flaix';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -450,6 +451,38 @@ ${msg}`);
           })}
         </div>
       )}
+
+      {/* ── Les liens de commande Flaix, toute la saison d'un coup ──
+          Placés APRÈS la liste, et non dans la fiche de chaque match : c'est
+          justement d'ouvrir dix fiches qu'on veut dispenser le club. */}
+      <section
+        style={{
+          marginTop: 28,
+          background: '#fff',
+          border: `1px solid ${BRAND.border}`,
+          borderRadius: 12,
+          padding: 20,
+        }}
+      >
+        <h2 style={{ fontSize: 17, fontWeight: 700, color: BRAND.ink, margin: '0 0 4px' }}>
+          Liens de commande Flaix
+        </h2>
+        <p style={{ fontSize: 12.5, color: BRAND.grey, margin: '0 0 14px' }}>
+          Un lien par match, collé une fois. C&apos;est la date qui décide lequel s&apos;ouvre.
+        </p>
+        <LiensCommandeFlaix
+          orgId={orgId}
+          events={events}
+          onSaved={(maj) =>
+            setEvents((cur) =>
+              cur.map((e) => {
+                const m = maj.find((x) => x.id === e.id);
+                return m ? { ...e, flaixOrderUrl: m.flaixOrderUrl } : e;
+              }),
+            )
+          }
+        />
+      </section>
     </div>
   );
 }

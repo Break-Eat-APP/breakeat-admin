@@ -16,7 +16,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-10-12 (phase 58 : la carte d'un lieu — barre du bas à encoche, recherche dans le bandeau, grandes cartes, et le champ `Venue.photoUrl` qui manquait. 755 tests. Reste : les deux adresses légales, et la migration `20261012_photo_du_lieu` à passer AVANT de déployer l'API)_
+_Dernière mise à jour : 2026-10-16 (phase 59 : le relais Flaix — un lien de commande par événement, la date choisit, et la page s'affiche dans l'app. 790 tests. Migration `20261016_lien_commande_flaix` à passer, et une build EAS obligatoire : la WebView est une dépendance native). Avant : 2026-10-12 (phase 58 : la carte d'un lieu — barre du bas à encoche, recherche dans le bandeau, grandes cartes, et le champ `Venue.photoUrl` qui manquait. 755 tests. Reste : les deux adresses légales, et la migration `20261012_photo_du_lieu` à passer AVANT de déployer l'API)_
 
 ## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
@@ -517,7 +517,15 @@ l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
 
 ## ⏭️ REPRISE IMMÉDIATE
 
-0000000. **Passer `20261012_photo_du_lieu` sur la base AVANT de déployer l'API.**
+00000000. **Les deux points du contrat Flaix, à trancher avec le développeur.**
+     Sans eux, le relais marche mais l'app reste MUETTE après la commande :
+     (1) l'authentification unique — un jeton court signé par Break Eat, pour
+     que le client ne se reconnecte pas chez Flaix ; (2) le retour de la
+     commande par webhook — sans lui, ni « Mes commandes », ni notification,
+     ni Live Activity, ni décompte. Le webhook signé existe déjà côté
+     Break Eat (HMAC, anti-rejeu, idempotence) : il attend un identifiant.
+
+0000000. **Passer `20261016_lien_commande_flaix`, puis `20261012_photo_du_lieu`, AVANT de déployer l'API.**
      Elle ajoute `venues.photo_url`, que la recherche de lieux demande
      désormais. Déployer l'API sans la migration fait échouer **l'écran
      d'accueil** de l'app (colonne absente). `pnpm db:migrate:prod`.

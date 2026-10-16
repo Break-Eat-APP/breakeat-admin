@@ -5,6 +5,74 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.83.0] — 2026-10-16 — Le relais Flaix : un lien par match, et la date qui choisit
+
+**Un lien par événement, collé une fois.** Le club remplaçait LE lien Flaix de
+son lieu avant chaque match ; un oubli envoyait le public du samedi sur la page
+du mardi. Chaque événement porte désormais le sien (`Event.flaixOrderUrl`), et
+c'est la DATE qui décide lequel s'ouvre. On peut saisir la saison six mois à
+l'avance.
+
+**Ni deep linking, ni routage dynamique.** Deviner l'adresse à partir d'un
+motif tomberait en silence le jour où Flaix change son format. Un lien saisi
+est un lien vrai.
+
+**La fenêtre ouvre trois heures avant** (`Venue.ordersOpenBeforeMin`, réglable).
+Les portes d'un stade ouvrent avant le coup d'envoi, et c'est là qu'on commande.
+La règle vit au serveur : une seule horloge, corrigeable sans build — et le jour
+où l'API Flaix remplira le champ toute seule, l'app ne changera pas d'une ligne.
+
+**Un lieu Flaix n'a pas deux portes.** Vu à l'écran : un lieu basculé dont le
+match ouvrait trois heures plus tard s'affichait « Ouvert » et renvoyait le
+client dans le parcours Break Eat. Il affiche maintenant « Ouvre à 13:57 ».
+
+**La page Flaix s'affiche DANS l'app** (`react-native-webview`), sans barre
+d'adresse et sans éjection vers Safari. Le composant est scindé par plateforme
+— l'export web utilise une `iframe`, car cette bibliothèque ne rend pas sur le
+web et c'est l'export web qui sert les clients sans application. Vérifié : le
+bundle web ne contient aucune occurrence de `react-native-webview`.
+
+⚠️ **Les vrais liens sont sur `synertic.net`**, pas `flaixlabs.com`. La garde
+anti-hameçonnage aurait refusé les liens officiels. Elle porte les deux
+domaines, à deux endroits qui doivent rester d'accord (serveur + WebView).
+
+⚠️ **Dépendance native ajoutée** : la prochaine build EAS est obligatoire, la
+WebView ne passe pas par une mise à jour JavaScript.
+
+⚠️ **Avant de déployer** : passer `20261016_lien_commande_flaix`.
+
+**38 tests** (15 fenêtre, 8 service, 5 API, 2 domaines, 5 app, 3 divers).
+**790 au total.**
+
+```
++ backend/src/common/helpers/fenetre-commande.ts
++ backend/src/common/helpers/fenetre-commande.spec.ts
++ backend/src/modules/events/dto/definir-liens-commande-flaix.dto.ts
++ backend/prisma/migrations/20261016_lien_commande_flaix/migration.sql
++ apps/admin/src/components/liens-commande-flaix.tsx
++ apps/mobile/src/components/relais-flaix.tsx
++ apps/mobile/src/components/relais-flaix.native.tsx
+~ backend/prisma/schema.prisma
+~ backend/src/modules/events/lien-flaix.ts (+ spec)
+~ backend/src/modules/events/events.service.ts (+ spec)
+~ backend/src/modules/events/events.controller.ts
+~ backend/src/modules/venues/public-venues.controller.ts (+ spec)
+~ backend/src/modules/venues/venues.service.ts
+~ backend/src/modules/venues/dto/{create,update}-venue.dto.ts
+~ apps/admin/src/app/(admin)/events/page.tsx
+~ apps/admin/src/app/(admin)/organizations/[id]/page.tsx
+~ apps/admin/src/lib/api/admin-client.ts
+~ apps/mobile/src/lib/ouverture-lieu.ts (+ test)
+~ apps/mobile/src/lib/api/mobile-api.ts
+~ apps/mobile/src/screens/flaix-order.screen.tsx
+~ apps/mobile/src/screens/venue-discovery.screen.tsx
+~ apps/mobile/src/components/app-bottom-bar.tsx
+~ apps/mobile/src/navigation/root-navigator.tsx
+~ apps/mobile/package.json (react-native-webview)
+```
+
+---
+
 ## [0.82.0] — 2026-10-12 — La carte d'un lieu, et la photo qui n'existait pas
 
 **Le bouton central se décroche de la barre.** La barre du bas est dessinée en

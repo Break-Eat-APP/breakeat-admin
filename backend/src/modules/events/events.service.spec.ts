@@ -404,4 +404,118 @@ describe('EventsService', () => {
       );
     });
   });
+
+  // ─── liens de commande Flaix ────────────────────────────────
+
+  describe('definirLiensCommandeFlaix', () => {
+    const LIEN = 'https://ops.flaixlabs.com/commande/om-lyon';
+
+    beforeEach(() => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.$transaction as jest.Mock).mockImplementation(async (ops: unknown[]) => ops);
+    });
+
+    it('pose les liens de plusieurs evenements en une fois', async () => {
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([
+        { id: 'e1', name: 'OM - Lyon', isPermanentContainer: false },
+        { id: 'e2', name: 'OM - Nice', isPermanentContainer: false },
+      ]);
+
+      const res = await service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [
+        { eventId: 'e1', url: LIEN },
+        { eventId: 'e2', url: 'https://ops.flaixlabs.com/commande/om-nice' },
+      ]);
+
+      expect(res).toEqual([
+        { id: 'e1', flaixOrderUrl: LIEN },
+        { id: 'e2', flaixOrderUrl: 'https://ops.flaixlabs.com/commande/om-nice' },
+      ]);
+      expect(prisma.event.update).toHaveBeenCalledTimes(2);
+    });
+
+    it('un lien vide RETIRE le lien', async () => {
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([
+        { id: 'e1', name: 'OM - Lyon', isPermanentContainer: false },
+      ]);
+
+      const res = await service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [
+        { eventId: 'e1', url: '   ' },
+      ]);
+
+      expect(res).toEqual([{ id: 'e1', flaixOrderUrl: null }]);
+    });
+
+    it('TOUT OU RIEN : un seul lien invalide, et rien n’est ecrit', async () => {
+      // A dix lignes saisies ensemble, un enregistrement partiel laisserait le
+      // club croire que tout est passe — et c'est le match dont le lien a ete
+      // rejete qui s'ouvrirait sur le mauvais parcours, un samedi soir.
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([
+        { id: 'e1', name: 'OM - Lyon', isPermanentContainer: false },
+        { id: 'e2', name: 'OM - Nice', isPermanentContainer: false },
+      ]);
+
+      await expect(
+        service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [
+          { eventId: 'e1', url: LIEN },
+          { eventId: 'e2', url: 'https://faux-flaix.example.com/commande' },
+        ]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+
+    it('le refus NOMME l’evenement fautif', async () => {
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([
+        { id: 'e2', name: 'OM - Nice', isPermanentContainer: false },
+      ]);
+
+      await expect(
+        service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [
+          { eventId: 'e2', url: 'http://ops.flaixlabs.com/x' },
+        ]),
+      ).rejects.toThrow(/OM - Nice/);
+    });
+
+    it('refuse un lien qui n’est pas chez Flaix', async () => {
+      // Cette adresse mene a une page ou le client PAIE. Accepter n'importe
+      // quel domaine, c'est offrir un hameconnage parfait, signe Break Eat.
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([
+        { id: 'e1', name: 'OM - Lyon', isPermanentContainer: false },
+      ]);
+
+      await expect(
+        service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [
+          { eventId: 'e1', url: 'https://flaixlabs.com.pirate.io/commande' },
+        ]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('refuse le meme evenement cite deux fois', async () => {
+      await expect(
+        service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [
+          { eventId: 'e1', url: LIEN },
+          { eventId: 'e1', url: 'https://ops.flaixlabs.com/autre' },
+        ]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+
+    it('un evenement d’une AUTRE organisation est traite comme inexistant', async () => {
+      // Repondre « pas a vous » confirmerait son existence a qui devine un UUID.
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([]);
+
+      await expect(
+        service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [{ eventId: 'e-ailleurs', url: LIEN }]),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('refuse un appelant qui n’est pas du club', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [{ eventId: 'e1', url: LIEN }]),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
 });

@@ -9,8 +9,24 @@
  * https.
  */
 
-/** Le domaine de Flaix, et ses sous-domaines (`ops.flaixlabs.com`). */
-const DOMAINE_FLAIX = 'flaixlabs.com';
+/**
+ * LES DOMAINES DE FLAIX — il y en a deux, et ce n'est pas un détail.
+ *
+ * - `flaixlabs.com` : l'application Flaix et ses rapports (`ops.flaixlabs.com`) ;
+ * - `synertic.net`  : l'hébergement des pages de COMMANDE
+ *   (`commande.flaix.bo.synertic.net`).
+ *
+ * La liste n'a d'abord porté que le premier, et aurait donc refusé les vrais
+ * liens de commande en affirmant qu'ils ne sont pas Flaix — le pire des
+ * refus : exact dans la forme, faux sur le fond.
+ *
+ * ⚠️ AJOUTER UN DOMAINE ICI EST UNE DÉCISION DE SÉCURITÉ, pas une formalité.
+ * Ces pages demandent un mot de passe (le rapport) ou une carte bancaire (la
+ * commande), et l'app les affiche SANS barre d'adresse : le client n'a aucun
+ * moyen de voir où il se trouve. Un domaine de trop, et l'hameçonnage est
+ * parfait, signé Break Eat.
+ */
+const DOMAINES_FLAIX = ['flaixlabs.com', 'synertic.net'] as const;
 
 /** Une adresse de rapport raisonnable n'a pas besoin d'être plus longue. */
 export const LONGUEUR_MAX_LIEN_FLAIX = 500;
@@ -41,8 +57,12 @@ export function verifierLienFlaix(saisie: string): VerdictLienFlaix {
   // `flaixlabs.com.pirate.fr` et `faux-flaixlabs.com` contiennent le mot, et
   // ne sont pas Flaix.
   const hote = url.hostname.toLowerCase();
-  if (hote !== DOMAINE_FLAIX && !hote.endsWith(`.${DOMAINE_FLAIX}`)) {
-    return { valide: false, raison: 'Seuls les liens Flaix (flaixlabs.com) sont acceptés.' };
+  const chezFlaix = DOMAINES_FLAIX.some((d) => hote === d || hote.endsWith(`.${d}`));
+  if (!chezFlaix) {
+    return {
+      valide: false,
+      raison: `Seuls les liens Flaix (${DOMAINES_FLAIX.join(', ')}) sont acceptés.`,
+    };
   }
 
   // `https://moi:secret@ops.flaixlabs.com/…` : des identifiants dans l'adresse.

@@ -18,6 +18,7 @@ import { UpdateEventDto } from './dto/update-event.dto';
 import { UpdateEventStatusDto } from './dto/update-event-status.dto';
 import { AttachSupplierDto } from './dto/attach-supplier.dto';
 import { DefinirRapportFlaixDto } from './dto/definir-rapport-flaix.dto';
+import { DefinirLiensCommandeFlaixDto } from './dto/definir-liens-commande-flaix.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
@@ -102,6 +103,23 @@ export class EventsController {
     @Body() dto: DefinirRapportFlaixDto,
   ) {
     return this.eventsService.definirRapportFlaix(orgId, id, user.sub, dto.url);
+  }
+
+  /**
+   * PATCH /api/v1/organizations/:orgId/events/flaix/liens-commande
+   *
+   * DEUX segments et non un (`…/events/liens-commande`) : une route d'un seul
+   * segment entrerait en concurrence avec `PATCH :id`, et l'ordre de
+   * déclaration deviendrait porteur de sens — le genre de dépendance qui casse
+   * le jour où quelqu'un réordonne les méthodes.
+   */
+  @Patch('flaix/liens-commande')
+  definirLiensCommandeFlaix(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: DefinirLiensCommandeFlaixDto,
+  ) {
+    return this.eventsService.definirLiensCommandeFlaix(orgId, user.sub, dto.liens);
   }
 
   /** POST /api/v1/organizations/:orgId/events/:id/suppliers */

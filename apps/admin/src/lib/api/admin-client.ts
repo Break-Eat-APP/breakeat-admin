@@ -311,6 +311,14 @@ export interface AdminEvent {
   groups?: { groupId: string }[];
   /** Lien du rapport Flaix de ce match — posé à la main après l'événement. */
   flaixReportUrl?: string | null;
+  /**
+   * Lien de COMMANDE Flaix de ce match — la page que le CLIENT ouvre.
+   *
+   * À ne pas confondre avec le rapport, qui s'adresse au directeur après coup.
+   * Celui-ci s'adresse au client pendant le match, et c'est la date de
+   * l'événement qui décide lequel s'ouvre.
+   */
+  flaixOrderUrl?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -434,6 +442,23 @@ export async function apiDefinirRapportFlaix(
   url: string | null,
 ): Promise<{ id: string; flaixReportUrl: string | null }> {
   return req('PATCH', `/organizations/${orgId}/events/${eventId}/rapport-flaix`, { url });
+}
+
+/**
+ * Pose (ou retire) les liens de COMMANDE Flaix de PLUSIEURS événements d'un coup.
+ *
+ * C'est tout l'intérêt : Flaix crée une adresse par événement, des mois à
+ * l'avance. Le club colle sa saison en une fois et n'y revient plus — au lieu
+ * de remplacer un lien unique avant chaque match.
+ *
+ * Tout ou rien : un seul lien refusé, et rien n'est enregistré. Le message du
+ * serveur nomme l'événement fautif.
+ */
+export async function apiDefinirLiensCommandeFlaix(
+  orgId: string,
+  liens: { eventId: string; url: string | null }[],
+): Promise<{ id: string; flaixOrderUrl: string | null }[]> {
+  return req('PATCH', `/organizations/${orgId}/events/flaix/liens-commande`, { liens });
 }
 
 /** GET /organizations/:id/members — enriched with user + supplier info */
@@ -987,6 +1012,8 @@ export interface Venue {
   searchTerms?: string | null;
   /** La PHOTO du lieu, affichée en grand sur sa carte dans l'app mobile. */
   photoUrl?: string | null;
+  /** Minutes d'avance à l'ouverture de la commande (défaut 180). */
+  ordersOpenBeforeMin?: number;
   /** URL de l'image du plan des buvettes (affichée dans l'app mobile). */
   buvettePlanUrl?: string | null;
   /**
@@ -1017,6 +1044,7 @@ export interface VenueInput {
   longitude?: number | null;
   searchTerms?: string | null;
   photoUrl?: string | null;
+  ordersOpenBeforeMin?: number;
   buvettePlanUrl?: string | null;
   flaixEnabled?: boolean;
   flaixVenueId?: string | null;

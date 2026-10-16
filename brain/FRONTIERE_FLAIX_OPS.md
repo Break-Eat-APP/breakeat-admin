@@ -230,7 +230,7 @@ Et il est câblé **de bout en bout** :
 | Renvoyé à l'app par l'API publique des lieux | ✅ existe |
 | **L'app AIGUILLE déjà sur Flaix** (`venue-discovery.screen.tsx`) | ✅ **existe, et c'est livré** |
 | L'écran d'arrivée `FlaixOrder`, enregistré dans `App.expo.tsx` | ✅ existe |
-| **Le CONTENU de cet écran** | ⬜ le seul maillon manquant |
+| **Le CONTENU de cet écran** | ✅ **livré le 16/10 (phase 59)** — WebView, lien par événement, choix par la date |
 
 Le code vivant, aujourd'hui, dans la build que portent tes clients :
 
@@ -310,9 +310,9 @@ Deux voies, à trancher :
 et n'est plus jamais prévenu. C'est aussi ce qui soutient l'argument App Store
 (voir plus bas) — donc ce point n'est pas optionnel.
 
-**3. LA WEBVIEW EST UNE DÉPENDANCE NATIVE.**
-
-`react-native-webview` **n'est pas installé**. L'ajouter, c'est :
+**3. LA WEBVIEW EST UNE DÉPENDANCE NATIVE.** ✅ *Fait le 16/10 (phase 59) —
+`react-native-webview` 13.16.1, scindé par plateforme. Ce qui suit reste vrai
+pour la livraison :*
 
 - un **nouveau build EAS** (une dépendance native ne passe pas par une mise à
   jour over-the-air) ;

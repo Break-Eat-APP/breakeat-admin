@@ -116,8 +116,14 @@ function traceBarre(largeur: number): string {
   ].join(' ');
 }
 
-/** Écrans où la barre est masquée (plein écran / parcours bloquant). */
-const HIDDEN_ON: Array<keyof RootStackParamList> = ['Login', 'QRScanner'];
+/**
+ * Écrans où la barre est masquée (plein écran / parcours bloquant).
+ *
+ * `FlaixOrder` en fait partie : la page de commande Flaix s'affiche en plein
+ * écran, et la barre flottante se posait PAR-DESSUS son bas de page — c'est
+ * exactement là qu'un bouton « Payer » se trouve.
+ */
+const HIDDEN_ON: Array<keyof RootStackParamList> = ['Login', 'QRScanner', 'FlaixOrder'];
 
 /**
  * Le compte porté par une icône.

@@ -304,6 +304,80 @@ export class EventsService {
     this.logger.log(`Supplier ${supplierId} detached from event ${eventId}`);
   }
 
+  /**
+   * Pose (ou retire) les liens de COMMANDE Flaix de plusieurs événements.
+   *
+   * Le geste qu'on remplace : avant chaque match, aller changer LE lien unique
+   * du lieu. Ici le club colle d'un coup les adresses de sa saison, chacune sur
+   * son match — et c'est la DATE qui décide laquelle s'ouvre
+   * (`common/helpers/fenetre-commande.ts`).
+   *
+   * TOUT OU RIEN. Un seul lien mal collé, et rien n'est enregistré : à dix
+   * lignes saisies ensemble, un enregistrement partiel laisserait le club
+   * croire que tout est passé, et c'est le match dont le lien a été rejeté qui
+   * s'ouvrirait sur le parcours Break Eat, un samedi soir.
+   *
+   * Accepté sur un événement TERMINÉ, comme le rapport : corriger après coup ne
+   * doit pas être bloqué par le cycle de vie.
+   */
+  async definirLiensCommandeFlaix(
+    organizationId: string,
+    userId: string,
+    liens: { eventId: string; url?: string | null }[],
+  ): Promise<{ id: string; flaixOrderUrl: string | null }[]> {
+    await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
+
+    // Un même événement cité deux fois, avec deux liens : laquelle des deux
+    // lignes fait foi ? Aucune réponse n'est évidente, donc on refuse.
+    const vus = new Set<string>();
+    for (const l of liens) {
+      if (vus.has(l.eventId)) {
+        throw new BadRequestException('Le même événement apparaît deux fois dans la liste.');
+      }
+      vus.add(l.eventId);
+    }
+
+    const evenements = await this.prisma.event.findMany({
+      where: { id: { in: liens.map((l) => l.eventId) }, organizationId },
+      select: { id: true, name: true, isPermanentContainer: true },
+    });
+    const parId = new Map(evenements.map((e) => [e.id, e]));
+
+    // On valide TOUT avant d'écrire quoi que ce soit.
+    const aEcrire: { id: string; url: string | null }[] = [];
+    for (const l of liens) {
+      const ev = parId.get(l.eventId);
+      // Un événement d'une AUTRE organisation est traité comme inexistant :
+      // repondre « pas a vous » confirmerait son existence a qui devine un UUID.
+      if (!ev) throw new NotFoundException(`Événement introuvable : ${l.eventId}`);
+
+      const saisie = l.url?.trim();
+      if (!saisie) {
+        aEcrire.push({ id: ev.id, url: null });
+        continue;
+      }
+      const verdict = verifierLienFlaix(saisie);
+      // Le nom de l'événement dans le message : à dix lignes, « ce n'est pas un
+      // lien Flaix » sans dire LEQUEL oblige à tout relire.
+      if (!verdict.valide) throw new BadRequestException(`${ev.name} — ${verdict.raison}`);
+      aEcrire.push({ id: ev.id, url: verdict.url });
+    }
+
+    await this.prisma.$transaction(
+      aEcrire.map((e) =>
+        this.prisma.event.update({ where: { id: e.id }, data: { flaixOrderUrl: e.url } }),
+      ),
+    );
+
+    const poses = aEcrire.filter((e) => e.url).length;
+    this.logger.log(
+      `Liens de commande Flaix : ${poses} posé(s), ${aEcrire.length - poses} retiré(s) ` +
+        `sur ${aEcrire.length} événement(s) (org ${organizationId}) par ${userId}`,
+    );
+
+    return aEcrire.map((e) => ({ id: e.id, flaixOrderUrl: e.url }));
+  }
+
   // ─── Private guards ───────────────────────────────────────────
 
   /** Throws if the event is in a terminal state (ENDED or CANCELLED). */

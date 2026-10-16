@@ -49,7 +49,16 @@ export type RootStackParamList = {
   Notifications: undefined;
   QRScanner: undefined;
   EventHome: { eventId: string };
-  FlaixOrder: { venueId: string; flaixVenueId: string | null };
+  /**
+   * Le relais Flaix. `url` est l'adresse RESOLUE par le serveur pour le match
+   * en cours — l'app ne la fabrique jamais elle-meme.
+   */
+  FlaixOrder: {
+    venueId: string;
+    flaixVenueId: string | null;
+    url?: string | null;
+    venueName?: string;
+  };
   SupplierCatalog: { eventId: string; supplierId: string };
   SlotSelector: { eventId: string };
   Checkout: undefined;

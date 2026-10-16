@@ -77,6 +77,18 @@ export class UpdateVenueDto {
   @MaxLength(1000)
   buvettePlanUrl?: string | null;
 
+  /**
+   * Minutes d'avance a l'ouverture de la commande (defaut 180).
+   *
+   * Les portes d'un stade ouvrent avant le coup d'envoi, et c'est la qu'on
+   * commande. Borne haute a 24 h : au-dela, la « fenetre » n'en est plus une.
+   */
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Max(1440)
+  ordersOpenBeforeMin?: number;
+
   /** PHASE 20 — programme de fidélité activé par le club sur ce lieu. */
   @IsBoolean()
   @IsOptional()

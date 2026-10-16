@@ -12,6 +12,21 @@ function makeController() {
   return new PublicVenuesController(prisma as unknown as PrismaService);
 }
 
+// Un evenement tel que Prisma le rend : avec ses DATES. Les fixtures n'en
+// portaient pas, et la resolution du lien Flaix du moment — qui se decide sur
+// la date — n'avait rien a lire.
+const EV = (over: Partial<Record<string, unknown>> = {}) => ({
+  id: 'e-pub',
+  name: 'Match',
+  status: EventStatus.ACTIVE,
+  visibility: EventVisibility.PUBLIC,
+  startAt: new Date('2026-06-01T18:00:00Z'),
+  endAt: new Date('2026-06-01T23:00:00Z'),
+  isPermanentContainer: false,
+  flaixOrderUrl: null,
+  ...over,
+});
+
 const PUBLIC_VENUE = {
   id: 'v-pub',
   name: 'Stade Public',
@@ -19,7 +34,7 @@ const PUBLIC_VENUE = {
   latitude: null,
   longitude: null,
   organization: { name: 'Org', logoUrl: null, primaryColor: null },
-  events: [{ id: 'e-pub', status: EventStatus.ACTIVE, visibility: EventVisibility.PUBLIC }],
+  events: [EV()],
 };
 const PRIVATE_VENUE = {
   id: 'v-priv',
@@ -28,7 +43,7 @@ const PRIVATE_VENUE = {
   latitude: null,
   longitude: null,
   organization: { name: 'Org', logoUrl: null, primaryColor: null },
-  events: [{ id: 'e-priv', status: EventStatus.ACTIVE, visibility: EventVisibility.PRIVATE }],
+  events: [EV({ id: 'e-priv', visibility: EventVisibility.PRIVATE })],
 };
 // Lieu privé dont l'unique événement privé n'est PAS actif (ex. DRAFT) → doit rester masqué.
 const PRIVATE_VENUE_DRAFT = {
@@ -38,7 +53,7 @@ const PRIVATE_VENUE_DRAFT = {
   latitude: null,
   longitude: null,
   organization: { name: 'Org', logoUrl: null, primaryColor: null },
-  events: [{ id: 'e-priv-draft', status: EventStatus.DRAFT, visibility: EventVisibility.PRIVATE }],
+  events: [EV({ id: 'e-priv-draft', status: EventStatus.DRAFT, visibility: EventVisibility.PRIVATE })],
 };
 const NO_EVENT_VENUE = {
   id: 'v-none',
@@ -197,5 +212,124 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
 
     expect(v.photoUrl).toBeNull();
     expect(v.imageUrl).toBe('https://img/ecusson.png');
+  });
+
+  // ─── Le lien Flaix du moment ────────────────────────────────
+  //
+  // Le geste qu'on remplace : aller changer LE lien unique du lieu avant
+  // chaque match. Desormais chaque evenement porte le sien et c'est la DATE
+  // qui tranche. Se tromper ici, c'est envoyer le public de samedi sur la
+  // page de mardi.
+
+  const LIEU_FLAIX = {
+    ...PUBLIC_VENUE,
+    id: 'v-flaix',
+    flaixEnabled: true,
+    ordersOpenBeforeMin: 180,
+  };
+  const COMMANDE = 'https://ops.flaixlabs.com/commande/samedi';
+
+  it('ouvre le lien de l’evenement EN COURS', async () => {
+    const debut = new Date(Date.now() - 60 * 60_000);
+    const fin = new Date(Date.now() + 2 * 60 * 60_000);
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      { ...LIEU_FLAIX, events: [EV({ startAt: debut, endAt: fin, flaixOrderUrl: COMMANDE })] },
+    ]);
+
+    const [v] = await makeController().search(undefined, 'stade');
+
+    expect(v.flaixOrderUrl).toBe(COMMANDE);
+    expect(v.commandeOuvreA).toBeNull();
+  });
+
+  it('avant la fenetre : pas de lien, mais l’HEURE d’ouverture', async () => {
+    // « Ouvre a 18 h » fait revenir le client. « Ferme » ne le fait pas.
+    const debut = new Date(Date.now() + 5 * 60 * 60_000);
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      {
+        ...LIEU_FLAIX,
+        events: [
+          EV({ startAt: debut, endAt: new Date(debut.getTime() + 60_000), flaixOrderUrl: COMMANDE }),
+        ],
+      },
+    ]);
+
+    const [v] = await makeController().search(undefined, 'stade');
+
+    expect(v.flaixOrderUrl).toBeNull();
+    expect(v.commandeOuvreA).toBe(new Date(debut.getTime() - 180 * 60_000).toISOString());
+  });
+
+  it('le lien d’un evenement PRIVE inaccessible ne fuit pas', async () => {
+    // Sans ce filtre, l'adresse de commande d'une soiree reservee se lirait
+    // dans la reponse publique — il suffirait de la coller dans un navigateur.
+    const debut = new Date(Date.now() - 60 * 60_000);
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      {
+        ...LIEU_FLAIX,
+        events: [
+          EV({
+            id: 'e-prive',
+            visibility: EventVisibility.PRIVATE,
+            startAt: debut,
+            endAt: new Date(Date.now() + 60 * 60_000),
+            flaixOrderUrl: COMMANDE,
+          }),
+          EV({ id: 'e-pub-sans-lien', startAt: debut, endAt: new Date(Date.now() + 60 * 60_000) }),
+        ],
+      },
+    ]);
+
+    const [v] = await makeController().search(undefined, 'stade');
+
+    expect(v.flaixOrderUrl).toBeNull();
+  });
+
+  it('un lieu NON bascule en Flaix n’ouvre aucun lien, meme deja colle', async () => {
+    // UN interrupteur commande tout le relais : coller les liens de la saison
+    // d'avance ne doit rien changer tant que le club n'a pas bascule.
+    const debut = new Date(Date.now() - 60 * 60_000);
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      {
+        ...LIEU_FLAIX,
+        flaixEnabled: false,
+        events: [
+          EV({
+            startAt: debut,
+            endAt: new Date(Date.now() + 60 * 60_000),
+            flaixOrderUrl: COMMANDE,
+          }),
+        ],
+      },
+    ]);
+
+    const [v] = await makeController().search(undefined, 'stade');
+
+    expect(v.flaixOrderUrl).toBeNull();
+  });
+
+  it('annonce le prochain evenement, Flaix ou non', async () => {
+    const debut = new Date(Date.now() + 48 * 60 * 60_000);
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      {
+        ...PUBLIC_VENUE,
+        events: [
+          EV({
+            id: 'e-samedi',
+            name: 'OM - Lyon',
+            startAt: debut,
+            endAt: new Date(debut.getTime() + 3 * 60 * 60_000),
+          }),
+        ],
+      },
+    ]);
+
+    const [v] = await makeController().search(undefined, 'stade');
+
+    expect(v.prochainEvenement).toEqual({
+      id: 'e-samedi',
+      name: 'OM - Lyon',
+      startAt: debut.toISOString(),
+    });
   });
 });

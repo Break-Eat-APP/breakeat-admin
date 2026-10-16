@@ -87,6 +87,9 @@ export default function OrganizationDetailPage() {
   const [venueTimezone, setVenueTimezone] = useState('');
   const [venueSearchTerms, setVenueSearchTerms] = useState('');
   const [venuePhotoUrl, setVenuePhotoUrl] = useState('');
+  // Minutes d'avance a l'ouverture de la commande. 180 (trois heures) par
+  // defaut : les portes d'un stade ouvrent avant le coup d'envoi.
+  const [venueOuvreAvant, setVenueOuvreAvant] = useState('180');
   const [venueBuvettePlanUrl, setVenueBuvettePlanUrl] = useState('');
   // Phase 22 — un lieu ouvert en continu n'a aucun événement à créer.
   const [venueMode, setVenueMode] = useState<VenueOperatingMode>('EVENT_BASED');
@@ -130,6 +133,7 @@ export default function OrganizationDetailPage() {
       setVenueTimezone(primary?.timezone ?? '');
       setVenueSearchTerms(primary?.searchTerms ?? '');
       setVenuePhotoUrl(primary?.photoUrl ?? '');
+      setVenueOuvreAvant(String(primary?.ordersOpenBeforeMin ?? 180));
       setVenueBuvettePlanUrl(primary?.buvettePlanUrl ?? '');
       setVenueMode(primary?.operatingMode ?? 'EVENT_BASED');
       setFlaixEnabled(primary?.flaixEnabled ?? false);
@@ -224,6 +228,8 @@ export default function OrganizationDetailPage() {
         timezone: venueTimezone.trim() || 'Europe/Paris',
         searchTerms: venueSearchTerms.trim() || null,
         photoUrl: venuePhotoUrl.trim() || null,
+        // Borne a 24 h comme le serveur : au-dela, la fenetre n'en est plus une.
+        ordersOpenBeforeMin: Math.min(1440, Math.max(0, Number(venueOuvreAvant) || 0)),
         buvettePlanUrl: venueBuvettePlanUrl.trim() || null,
         operatingMode: venueMode,
         flaixEnabled,
@@ -397,6 +403,22 @@ export default function OrganizationDetailPage() {
               />
               <span style={{ color: BRAND.grey, fontSize: 12 }}>
                 Termes que les clients peuvent taper pour trouver ton club (séparés par des virgules).
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <label style={venueFieldLabel}>La commande ouvre … minutes avant</label>
+              <input
+                type="number"
+                min={0}
+                max={1440}
+                step={15}
+                value={venueOuvreAvant}
+                onChange={(e) => setVenueOuvreAvant(e.target.value)}
+                style={venueFieldInput}
+              />
+              <span style={{ color: BRAND.grey, fontSize: 12 }}>
+                Les portes ouvrent avant le coup d’envoi, et c’est là qu’on commande. 180 = trois
+                heures avant le début de l’événement. 0 = pile à l’heure du début.
               </span>
             </div>
             <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column', gap: 4 }}>

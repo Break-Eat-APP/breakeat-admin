@@ -102,6 +102,7 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
 - `lib/theme.ts` — couleurs + polices (`HEAD` = Raleway, `BLOC` = Oswald).
 - `lib/alert.ts` — alertes multiplateformes (⚠️ à utiliser à la place de `Alert.alert`).
 - `lib/suivi-commande.ts` — **fonction PURE** qui décide de l'état de la pastille (paliers réels, la commande la plus avancée l'emporte, ✓ et bleu effacés après 10 min). Couverte par `lib/__tests__/suivi-commande.test.ts`.
+- `components/relais-flaix.tsx` + `relais-flaix.native.tsx` — la page de commande Flaix **dans** l'app. Deux fichiers : `react-native-webview` ne rend pas sur le web, et l'export web sert les clients sans application. Le natif ne suit que les domaines de Flaix — **même liste que `backend/src/modules/events/lien-flaix.ts`, toute modification vaut pour les deux**.
 - `lib/visuel-lieu.ts` — **fonction PURE** : quelle image montrer d'un lieu, et comment la cadrer. La PHOTO du lieu remplit le cadre (`cover`), le LOGO du club se centre sans rognage (`contain`), sinon l'initiale. L'ordre s'inverse sur une petite tuile. Couverte par `lib/__tests__/visuel-lieu.test.ts`.
 - `lib/ouverture-lieu.ts` — **fonction PURE** : par où passe la commande d'un lieu (Flaix, événement, ou rien). Employée par la navigation ET par l'affichage, qui avaient divergé.
 - `lib/use-etat-pastille.ts` — la tient à jour : chargement à l'ouverture, au retour au premier plan, après paiement ; sondage 10 s **seulement** tant qu'une commande est en cours.

@@ -197,6 +197,7 @@ rendrait faux dès la phase suivante. À regénérer quand des phases sont ajout
 | **56** | Phase 56 — Les premiers tests des apps web (09/10/2026) |
 | **57** | Phase 57 — Les réglages qui promettaient ce qui n'existe pas (10–11/10/2026) |
 | **58** | Phase 58 — La carte d'un lieu, et la photo qui n'existait pas (11–12/10/2026) |
+| **59** | Phase 59 — Le relais Flaix : un lien par match, et la date qui choisit (16/10/2026) |
 
 **Deux cas particuliers, à connaître :**
 
@@ -6811,3 +6812,159 @@ l'API : le `select` demande `photo_url`, et une colonne absente fait échouer la
 recherche de lieux — c'est-à-dire l'écran d'accueil.
 
 755 tests (692 + 29 + 12 + 12 + 10).
+
+---
+
+## Phase 59 — Le relais Flaix : un lien par match, et la date qui choisit (16/10/2026)
+
+Jusqu'ici, le club collait **UN** lien Flaix sur son lieu et devait le
+remplacer avant chaque match. Un oubli, et le public du samedi arrivait sur la
+billetterie du mardi. Flaix, lui, sait créer une adresse par événement des mois
+à l'avance.
+
+### Ce qu'on n'a pas fait, et pourquoi
+
+Deux pistes ont été écartées avant d'écrire une ligne :
+
+- **le deep linking** répond à l'inverse du problème : c'est le monde extérieur
+  qui ouvre l'app. Ici c'est l'app qui ouvre une page ;
+- **le routage dynamique** — deviner l'adresse à partir d'un motif
+  (`…/event/<id>`) — tomberait **en silence** le jour où Flaix change son
+  format d'URL. Un samedi soir, sur tous les lieux à la fois.
+
+> Un lien saisi est un lien vrai. Un lien deviné est une panne à retardement.
+
+### Le modèle : le lien appartient à l'ÉVÉNEMENT
+
+`Event.flaixOrderUrl`. C'est l'événement qui porte la date, le nom et le lieu —
+il portera aussi son adresse de commande. Le club colle sa saison en une fois,
+et plus personne ne touche à rien le jour du match.
+
+Deux liens à ne pas confondre, désormais, sur le même objet :
+
+| Champ | Pour qui | Quand |
+|---|---|---|
+| `flaixReportUrl` | le directeur | **après** le match — le rapport |
+| `flaixOrderUrl` | le client | **pendant** — la commande |
+
+Tous deux passent la même garde (`events/lien-flaix.ts`) : `https://` et
+`*.flaixlabs.com`, rien d'autre. Ces pages demandent un mot de passe ou une
+carte bancaire — accepter n'importe quel domaine, ce serait offrir un
+hameçonnage parfait, signé Break Eat.
+
+### La fenêtre : trois heures avant, par défaut
+
+`Venue.ordersOpenBeforeMin` (180). Les portes d'un stade ouvrent avant le coup
+d'envoi, et c'est là qu'on commande. Réglé sur le **lieu** : c'est une habitude
+de club, pas une décision par match.
+
+La règle est une fonction pure, `common/helpers/fenetre-commande.ts`, et elle
+vit au **serveur** pour trois raisons :
+
+1. une seule horloge — le téléphone d'un client peut être à l'heure de Tokyo ;
+2. elle se corrige sans refaire une build, et une build native passe par Apple ;
+3. **le jour où l'API Flaix remplira `flaixOrderUrl` toute seule, rien ne
+   change.** L'app ne saura jamais que le lien était collé à la main.
+
+C'est ce troisième point qui fait que le travail d'aujourd'hui n'est pas jeté
+demain : le champ est le contrat, le collage n'est que sa version manuelle.
+
+**15 tests**, dont les cas qui coûtent cher : un lien sur un **brouillon**
+n'ouvre rien (il y vivra des mois), un événement **suspendu** ferme la vente
+(c'est le geste du club quand la buvette est débordée), deux événements qui se
+chevauchent servent celui qui a commencé le premier, et un lieu **permanent**
+(restaurant) n'a pas de coup d'envoi — la fenêtre ne s'y applique pas.
+
+### Un lieu Flaix n'a pas deux portes
+
+Défaut **vu à l'écran** pendant la vérification, pas dans un test : un lieu
+basculé en Flaix dont le match n'ouvrait que trois heures plus tard s'affichait
+**« Ouvert »** et envoyait le client dans le parcours Break Eat — des produits
+et des prix que le club ne tient plus, puisque c'est Flaix qui vend.
+
+La règle dit maintenant : commande Flaix ouverte → Flaix ; commande Flaix
+**prévue plus tard** → fermé, avec l'heure (« Ouvre à 13:57 ») ; lieu basculé
+**sans aucun lien** → le parcours Break Eat continue, le temps que le club
+finisse sa configuration.
+
+> « Ouvre à 18 h » fait revenir un client. « Bientôt » ne dit rien.
+
+### La saisie : toute la saison d'un coup
+
+Une section sur la page des événements, et non un champ dans chaque fiche :
+c'est justement d'ouvrir dix fiches qu'on veut dispenser le club. Un
+enregistrement, **tout ou rien** — à dix lignes, un enregistrement partiel
+laisserait croire que tout est passé, et le message du serveur **nomme**
+l'événement fautif.
+
+### La WebView, et le piège de l'export web
+
+`react-native-webview` est installé (13.16.1). La page Flaix s'affiche DANS
+l'app : pas de barre d'adresse (Flaix fait partie de Break Eat), et pas
+d'éjection vers Safari — une app qui éjecte pour sa fonction principale
+s'expose à la règle 4.2 d'Apple.
+
+Mais cette bibliothèque **ne rend pas sur le web**, et l'export web est ce qui
+sert les clients qui n'installent rien. Le composant est donc scindé par
+plateforme, selon la convention déjà présente dans le dépôt
+(`paiement.ts` / `paiement.native.ts`) :
+
+- `relais-flaix.tsx` → **web**, une `iframe` ;
+- `relais-flaix.native.tsx` → **iOS/Android**, la WebView.
+
+Vérifié, et pas supposé : le bundle web exporté ne contient **aucune**
+occurrence de `react-native-webview`, et contient bien l'`iframe`.
+
+La WebView ne suit que `*.flaixlabs.com` (`onShouldStartLoadWithRequest`).
+Sans barre d'adresse, un client n'a aucun moyen de voir qu'une page l'a emmené
+ailleurs — et cette page prend un paiement.
+
+Et la barre du bas se masque sur cet écran : elle flottait **par-dessus** le
+bas de la page Flaix, c'est-à-dire là où se trouve le bouton « Payer ».
+
+### Les vrais liens ne sont pas sur le domaine qu'on croyait
+
+Découverte en cours de route, et elle aurait coûté une livraison : le lien
+officiel d'un événement est
+
+```
+https://commande.flaix.bo.synertic.net/o/n-n
+```
+
+— **`synertic.net`**, pas `flaixlabs.com`. La garde anti-hameçonnage, écrite
+pour le lien de rapport, aurait donc refusé les vrais liens de commande en
+affirmant qu'ils *ne sont pas Flaix* : le pire des refus, exact dans la forme
+et faux sur le fond.
+
+La liste porte maintenant les **deux** domaines, et elle est dupliquée à deux
+endroits sans dépendance commune — le serveur (ce qui est enregistrable) et la
+WebView (où la page a le droit d'emmener le client). Si elles divergent, un
+lien accepté par l'un se bloque chez l'autre, écran blanc sans explication.
+C'est écrit en tête des deux fichiers.
+
+Vérifié aussi avant d'écrire la WebView : la page Flaix répond `200` **sans
+`X-Frame-Options` ni `frame-ancestors`**. Elle accepte donc d'être intégrée —
+ce qui n'allait pas de soi, et aurait condamné tout le dispositif.
+
+### Vérifié de bout en bout, avec le vrai lien
+
+La page de réservation Flaix (« test breakeat · Stade Marie-Marvingt ·
+LEMANS ») s'affiche **dans** l'application : en-tête Break Eat au-dessus, pas
+de barre d'adresse, pas de barre du bas.
+
+### Ce qui reste à trancher
+
+Deux points du contrat, inchangés et bloquants pour la suite :
+
+1. **l'authentification unique** — le client est connecté à Break Eat et ne
+   doit pas se reconnecter chez Flaix. Un jeton court signé par Break Eat,
+   plutôt que le JWT de session ;
+2. **le retour de la commande** — sans webhook, l'app ne sait pas qu'une
+   commande existe : ni « Mes commandes », ni notification, ni Live Activity,
+   ni **décompte**. La vitrine devient muette.
+
+Le décompte sur l'écran verrouillé (demandé le 16/10) dépend entièrement du
+point 2 : techniquement il tient en une ligne SwiftUI qui se met à jour seule,
+sans APNs — mais il lui faut une heure cible, et donc une commande connue.
+
+**790 tests** : 722 backend, 34 mobile, 12 back-office, 12 opérateur, 10 admin.

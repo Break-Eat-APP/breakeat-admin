@@ -465,8 +465,23 @@ export interface PublicVenue {
   primaryColor: string | null;
   /** Intégration Flaix : si true, la sélection du lieu passe le relais à Flaix. */
   flaixEnabled: boolean;
-  /** Identifiant du lieu côté Flaix (pour les appels API Flaix). */
+  /** Identifiant du lieu côté Flaix (pour les appels API Flaix à venir). */
   flaixVenueId: string | null;
+  /**
+   * L'adresse de commande Flaix À OUVRIR MAINTENANT.
+   *
+   * Résolue par le SERVEUR à partir de la date : chaque événement porte son
+   * lien, et c'est celui de l'événement en cours qui remonte. L'app ne choisit
+   * pas — une horloge de travers ouvrirait le match de la semaine suivante.
+   *
+   * `null` : la commande est fermée (voir `commandeOuvreA`), ou ce lieu n'est
+   * pas en Flaix.
+   */
+  flaixOrderUrl: string | null;
+  /** Quand la commande ouvrira (ISO), pour l'annoncer au lieu de dire « fermé ». */
+  commandeOuvreA: string | null;
+  /** Le prochain événement annoncé sur ce lieu — Flaix ou non. */
+  prochainEvenement: { id: string; name: string; startAt: string } | null;
   /** URL de l'image du plan des buvettes (null si le lieu n'en a pas). */
   buvettePlanUrl: string | null;
   /** Événement actif sur ce lieu → cible de navigation (null si aucun). */

@@ -5,23 +5,39 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { THEME, FONT } from '@lib/theme';
 import { PageHeader } from '@components/page-header';
+import { RelaisFlaix } from '@components/relais-flaix';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'FlaixOrder'>;
 
 /**
- * L'ÉCRAN D'ATTENTE DU RELAIS FLAIX.
+ * LE RELAIS FLAIX.
  *
- * Il n'ouvre encore aucune adresse : le mécanisme du lien par événement n'est
- * pas tranché (voir `brain/FRONTIERE_FLAIX_OPS.md`). En attendant, cet écran
- * doit au moins être HONNÊTE et ne pas enfermer le client — l'audit du 10/10 le
- * décrivait justement comme un cul-de-sac.
+ * La commande de certains lieux se passe sur une page Flaix. Elle s'ouvre ici,
+ * DANS l'application : Flaix fait partie de Break Eat, le client ne doit pas
+ * voir qu'il change de maison.
  *
- * Deux garde-fous, donc : on n'y arrive plus que si le lieu est réellement
- * configuré (`venue-discovery.screen.tsx` retombe sinon sur l'événement du
- * lieu), et on offre toujours le retour.
+ * L'adresse arrive toute faite, RÉSOLUE PAR LE SERVEUR à partir de la date du
+ * jour (`backend/src/common/helpers/fenetre-commande.ts`) : chaque événement
+ * porte son lien, et c'est celui du match en cours qui remonte. L'app n'a
+ * jamais à deviner une URL — le jour où Flaix change son format d'adresse,
+ * rien ne tombe.
+ *
+ * Sans adresse, l'écran reste HONNÊTE et offre le retour : c'est le cul-de-sac
+ * que l'audit du 10/10 avait relevé, et il ne doit pas revenir.
  */
 export function FlaixOrderScreen({ route, navigation }: Props) {
-  const { flaixVenueId } = route.params;
+  const { flaixVenueId, url, venueName } = route.params;
+  const titre = venueName ?? 'Commande';
+
+  if (url) {
+    return (
+      <View style={styles.root}>
+        <PageHeader title={titre} />
+        <RelaisFlaix url={url} titre={titre} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       <PageHeader title="Commande" />
@@ -29,8 +45,8 @@ export function FlaixOrderScreen({ route, navigation }: Props) {
         <MaterialCommunityIcons name="lightning-bolt" size={48} color={THEME.orange} />
         <Text style={styles.title}>Commande en ligne</Text>
         <Text style={styles.sub}>
-          La commande de ce lieu se fait sur sa page dédiée. Elle n'est pas encore
-          accessible depuis l'application.
+          La commande de ce lieu n&apos;est pas ouverte en ce moment. Reviens un peu avant
+          le début de l&apos;événement.
         </Text>
         <Pressable style={styles.retour} onPress={() => navigation.goBack()}>
           <Text style={styles.retourTexte}>Retour aux lieux</Text>
