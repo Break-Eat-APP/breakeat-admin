@@ -5,6 +5,42 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.90.0] — 2026-10-16 — Le client ne tape plus rien
+
+**Le téléphone, enfin saisissable.** Il n'existait aucune route de mise à jour
+du profil : un compte ouvert par Apple ou Google n'avait donc **jamais** de
+numéro — aucun des deux fournisseurs ne le donne — et la page de commande le
+redemandait à chaque match. `PATCH /auth/me` (prénom, nom, téléphone ; pas
+l'adresse e-mail, qui identifie le compte).
+
+**Demandé une fois, dans l'app.** Avant d'ouvrir la page Flaix pour la
+première fois, et seulement si le lien attend une identité qui manque. Ce
+n'est pas une étape de plus : la page la demande de toute façon. « Plus tard »
+est toujours offert et mène à la commande quand même.
+
+Détail qui compte : le lien est personnalisé **par le serveur**. Après
+enregistrement, l'app **recharge** la liste des lieux avant d'ouvrir — sans ça,
+le client aurait saisi son numéro et la page l'aurait redemandé.
+
+**Plus de mélange des deux rythmes.** Un lieu « par événement » affichait aussi
+la ligne « Ouvert en continu », et inversement. C'est désormais le **rythme du
+lieu** qui décide : un seul lien pour un restaurant, des matchs datés pour un
+stade, jamais les deux. Un lieu qui change de mode garde ses anciens
+événements, et coller un lien sur une ligne morte ne mène nulle part.
+
+**764 tests backend, 34 mobile, 52 sur les consoles.**
+
+```
++ backend/src/modules/auth/dto/mettre-a-jour-profil.dto.ts
++ apps/mobile/src/components/demande-coordonnees.tsx
+~ backend/src/modules/auth/auth.service.ts, auth.controller.ts
+~ apps/mobile/src/screens/venue-discovery.screen.tsx
+~ apps/mobile/src/lib/api/mobile-api.ts
+~ apps/admin + apps/backoffice : liens-commande-flaix.tsx, pages
+```
+
+---
+
 ## [0.89.0] — 2026-10-16 — Deux portes pour la saisie, et le cas « ouvert en continu »
 
 **Une page « Liens Flaix » dans le back-office**, avec un sélecteur de club.

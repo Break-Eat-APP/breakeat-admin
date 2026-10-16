@@ -362,6 +362,60 @@ export class AuthService {
   }
 
   /**
+   * Le client corrige SON profil — prénom, nom, téléphone.
+   *
+   * Pourquoi cette route existe : jusqu'ici, rien ne permettait d'ajouter un
+   * numéro après coup. Un compte ouvert par Apple ou Google n'en a JAMAIS
+   * (aucun des deux fournisseurs ne le donne), et ces coordonnées sont
+   * exactement ce que la page de commande Flaix demande. Sans elles, le
+   * client les retape à chaque match.
+   *
+   * Un champ laissé VIDE efface la valeur : c'est la seule façon pour un
+   * client de retirer un numéro qu'il ne veut plus voir partir chez un
+   * partenaire. Un champ ABSENT, lui, ne touche à rien.
+   */
+  async mettreAJourProfil(
+    userId: string,
+    dto: { firstName?: string; lastName?: string; phone?: string; displayName?: string },
+  ): Promise<SafeUser> {
+    const net = (v?: string) => {
+      if (v === undefined) return undefined;
+      const t = v.trim();
+      return t === '' ? null : t;
+    };
+
+    // Typé à la main : `displayName` n'est PAS nullable en base, les trois
+    // autres le sont. Un objet construit par étalement perdrait cette nuance
+    // et ferait passer un `null` là où la colonne le refuse.
+    const data: {
+      firstName?: string | null;
+      lastName?: string | null;
+      phone?: string | null;
+      displayName?: string;
+    } = {};
+
+    const prenom = net(dto.firstName);
+    const nom = net(dto.lastName);
+    const tel = net(dto.phone);
+    const affiche = net(dto.displayName);
+
+    if (prenom !== undefined) data.firstName = prenom;
+    if (nom !== undefined) data.lastName = nom;
+    if (tel !== undefined) data.phone = tel;
+    // Le nom d'affichage ne se vide pas : il est en tête de « Mes commandes »,
+    // et un vide y laisserait un trou sans explication.
+    if (affiche) data.displayName = affiche;
+
+    if (Object.keys(data).length === 0) return this.usersService.findById(userId);
+
+    const maj = await this.prisma.user.update({ where: { id: userId }, data });
+    this.logger.log(
+      `Profil mis a jour (${Object.keys(data).join(', ')}) sur le compte ${userId}`,
+    );
+    return sansMotDePasse(maj);
+  }
+
+  /**
    * Returns the user profile extended with all organisation memberships.
    * Used by GET /auth/me/memberships for the admin panel.
    * The admin panel calls this once after login to resolve which org the user manages.

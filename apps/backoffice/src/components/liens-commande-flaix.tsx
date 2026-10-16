@@ -29,9 +29,19 @@ import { alertesDeSaisie } from '@/lib/alertes-liens';
 export function LiensCommandeFlaix({
   orgId,
   events,
+  modeContinu,
   onSaved,
 }: {
   orgId: string;
+  /**
+   * Le lieu est-il OUVERT EN CONTINU (restaurant) plutôt que par événement ?
+   *
+   * C'est le rythme du LIEU qui décide de ce qu'on affiche, jamais la
+   * présence d'un contenant en base : un lieu passé d'un mode à l'autre garde
+   * ses anciens événements, et mélanger les deux ferait coller un lien sur une
+   * ligne qui ne s'ouvrira jamais.
+   */
+  modeContinu: boolean;
   events: EvenementDuClub[];
   onSaved: (maj: { id: string; flaixOrderUrl: string | null }[]) => void;
 }) {
@@ -41,17 +51,17 @@ export function LiensCommandeFlaix({
   // Le contenant d'un lieu OUVERT EN CONTINU (restaurant) passe en tête : il
   // n'a ni date ni fin, et son unique lien vaut tous les jours.
   const aVenir = useMemo(() => {
+    // UN SEUL RYTHME À L'ÉCRAN. En continu : le contenant unique, et rien
+    // d'autre. Par événement : les matchs datés, et jamais le contenant.
+    if (modeContinu) return events.filter((e) => e.isPermanentContainer);
+
     const maintenant = Date.now();
     return events
-      .filter((e) => e.isPermanentContainer || new Date(e.endAt).getTime() > maintenant)
+      .filter((e) => !e.isPermanentContainer)
+      .filter((e) => new Date(e.endAt).getTime() > maintenant)
       .filter((e) => e.status !== 'CANCELLED')
-      .sort((a, b) => {
-        if (a.isPermanentContainer !== b.isPermanentContainer) {
-          return a.isPermanentContainer ? -1 : 1;
-        }
-        return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
-      });
-  }, [events]);
+      .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+  }, [events, modeContinu]);
 
   const [saisies, setSaisies] = useState<Record<string, string>>({});
   const [envoi, setEnvoi] = useState(false);
@@ -108,8 +118,9 @@ export function LiensCommandeFlaix({
   if (aVenir.length === 0) {
     return (
       <p style={{ margin: 0, fontSize: 13.5, color: BRAND.grey, lineHeight: 1.55 }}>
-        Aucun événement à venir. Crée tes matchs, puis reviens coller leurs liens Flaix —
-        tu peux les saisir des mois à l&apos;avance.
+        {modeContinu
+          ? 'Ce lieu est ouvert en continu, mais son espace de commande n’est pas encore créé. Enregistre le lieu une fois, puis reviens coller son lien.'
+          : 'Aucun événement à venir. Crée tes matchs, puis reviens coller leurs liens Flaix — tu peux les saisir des mois à l’avance.'}
       </p>
     );
   }
@@ -117,9 +128,18 @@ export function LiensCommandeFlaix({
   return (
     <div>
       <p style={{ margin: '0 0 10px', fontSize: 13.5, color: BRAND.inkSoft, lineHeight: 1.55 }}>
-        Colle l&apos;adresse de commande que Flaix fournit pour chaque match. L&apos;application
-        ouvre <strong>celle du match en cours</strong> — tu n&apos;as rien à changer le jour J.
-        La commande ouvre à l&apos;avance selon le réglage du lieu.
+        {modeContinu ? (
+          <>
+            Ce lieu est <strong>ouvert en continu</strong> : un seul lien, valable tous les
+            jours, sans heure d&apos;ouverture.
+          </>
+        ) : (
+          <>
+            Colle l&apos;adresse de commande que Flaix fournit pour chaque match.
+            L&apos;application ouvre <strong>celle du match en cours</strong> — tu n&apos;as rien
+            à changer le jour J. La commande ouvre à l&apos;avance selon le réglage du lieu.
+          </>
+        )}
       </p>
       <p style={{ margin: '0 0 14px', fontSize: 12.5, color: BRAND.grey, lineHeight: 1.6 }}>
         Tu peux garder tes étiquettes d&apos;identité, comme dans ton ancien back-office :{' '}

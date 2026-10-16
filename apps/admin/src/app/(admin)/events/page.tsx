@@ -481,6 +481,10 @@ ${msg}`);
         <LiensCommandeFlaix
           orgId={orgId}
           events={events}
+          // Le rythme du LIEU décide de ce qui s'affiche : un lieu ouvert en
+          // continu n'a qu'un lien, un lieu par événement n'a que des matchs.
+          // Les mélanger ferait coller un lien sur une ligne morte.
+          modeContinu={venues[0]?.operatingMode === 'PERMANENT'}
           onSaved={(maj) =>
             setEvents((cur) =>
               cur.map((e) => {

@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   HttpCode,
   HttpStatus,
@@ -12,6 +13,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { SocialLoginDto } from './dto/social-login.dto';
+import { MettreAJourProfilDto } from './dto/mettre-a-jour-profil.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from './strategies/jwt.strategy';
@@ -94,6 +96,20 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   me(@CurrentUser() user: JwtPayload) {
     return this.authService.me(user.sub);
+  }
+
+  /**
+   * PATCH /auth/me — le client corrige son profil.
+   *
+   * Prénom, nom et téléphone : ce que la page de commande Flaix demande, et
+   * qu'aucun écran ne permettait d'ajouter après une inscription Apple ou
+   * Google. L'adresse e-mail n'est pas modifiable ici — elle identifie le
+   * compte et sert à rattacher les connexions extérieures.
+   */
+  @Patch('me')
+  @UseGuards(JwtAuthGuard)
+  mettreAJourProfil(@CurrentUser() user: JwtPayload, @Body() dto: MettreAJourProfilDto) {
+    return this.authService.mettreAJourProfil(user.sub, dto);
   }
 
   /**

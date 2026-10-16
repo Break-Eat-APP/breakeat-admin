@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   apiEvenementsDuClub,
+  apiGetVenues,
   apiListOrganizations,
   type EvenementDuClub,
   type OrgListItem,
@@ -31,6 +32,9 @@ export default function LiensFlaixPage() {
   const [clubs, setClubs] = useState<OrgListItem[]>([]);
   const [clubId, setClubId] = useState('');
   const [evenements, setEvenements] = useState<EvenementDuClub[]>([]);
+  // Le rythme du lieu : il décide de ce qu'on affiche (un lien unique, ou
+  // des matchs datés). Jamais les deux.
+  const [modeContinu, setModeContinu] = useState(false);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState('');
 
@@ -52,12 +56,15 @@ export default function LiensFlaixPage() {
   const charger = useCallback(async (id: string) => {
     if (!id) {
       setEvenements([]);
+      setModeContinu(false);
       return;
     }
     setChargement(true);
     setErreur('');
     try {
-      setEvenements(await apiEvenementsDuClub(id));
+      const [evs, lieux] = await Promise.all([apiEvenementsDuClub(id), apiGetVenues(id)]);
+      setEvenements(evs);
+      setModeContinu(lieux[0]?.operatingMode === 'PERMANENT');
     } catch (e) {
       setEvenements([]);
       setErreur(e instanceof Error ? e.message : 'Chargement des événements impossible.');
@@ -159,6 +166,7 @@ export default function LiensFlaixPage() {
           <LiensCommandeFlaix
             orgId={clubId}
             events={evenements}
+            modeContinu={modeContinu}
             onSaved={(maj) =>
               setEvenements((cur) =>
                 cur.map((e) => {

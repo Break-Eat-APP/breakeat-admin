@@ -18,12 +18,18 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { useNotifStore } from '@store/notif.store';
-import { apiSearchVenues, type PublicVenue } from '@lib/api/mobile-api';
+import {
+  apiMonProfil,
+  apiSearchVenues,
+  type MonProfil,
+  type PublicVenue,
+} from '@lib/api/mobile-api';
 import { showAlert } from '@lib/alert';
 import { cheminDeCommande, heureDOuverture, ouvertALaCommande } from '@lib/ouverture-lieu';
 import { visuelDeLieu } from '@lib/visuel-lieu';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
+import { DemandeCoordonnees } from '@components/demande-coordonnees';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
 
 const LOGO_FULL_WHITE = require('../../assets/logo-full-white.png');
@@ -60,6 +66,13 @@ export function VenueDiscoveryScreen() {
   const { rafraichir } = useNotifStore();
   const { coords, status: locStatus, request: requestLocation } = useUserLocation();
   const [query, setQuery] = useState('');
+  // La demande de coordonnées, posée UNE fois avant la première commande
+  // Flaix. `lieuEnAttente` retient où l'on allait : on y va dès que c'est
+  // réglé, ou tout de suite si le client passe son tour.
+  const [profil, setProfil] = useState<MonProfil | null>(null);
+  const [demandeOuverte, setDemandeOuverte] = useState(false);
+  const [lieuEnAttente, setLieuEnAttente] = useState<PublicVenue | null>(null);
+
   const [planUrl, setPlanUrl] = useState<string | null>(null);
   const [planTitle, setPlanTitle] = useState('Plan des buvettes');
 
@@ -116,17 +129,54 @@ export function VenueDiscoveryScreen() {
   // écrite deux fois, elle avait divergé — la navigation exigeait l'identifiant
   // Flaix, l'affichage non, et un lieu à moitié configuré s'annonçait
   // « Ouvert » puis refusait au doigt.
+  /** Ouvre le relais Flaix, sans plus rien vérifier. */
+  const ouvrirFlaix = (v: PublicVenue, url: string) => {
+    navigation.navigate('FlaixOrder', {
+      venueId: v.id,
+      flaixVenueId: v.flaixVenueId,
+      url,
+      venueName: v.name,
+    });
+  };
+
+  /**
+   * Ce que la page de commande va redemander, et qu'on peut lui éviter.
+   *
+   * Le lien est personnalisé par le SERVEUR : si le profil change, il faut
+   * donc recharger la liste pour obtenir la nouvelle adresse. D'où le
+   * rechargement après enregistrement — sans lui, le client saisirait son
+   * numéro et la page le redemanderait quand même.
+   */
+  const coordonneesManquantes = (p: MonProfil | null) =>
+    !p?.phone?.trim() || !p?.firstName?.trim() || !p?.lastName?.trim();
+
   const openVenue = (v: PublicVenue) => {
     const chemin = cheminDeCommande(v);
     if (chemin === 'flaix' && v.flaixOrderUrl) {
-      // On emporte l'ADRESSE, résolue par le serveur sur la date du jour —
-      // et le nom du lieu, pour que l'en-tête de la page dise où l'on est.
-      navigation.navigate('FlaixOrder', {
-        venueId: v.id,
-        flaixVenueId: v.flaixVenueId,
-        url: v.flaixOrderUrl,
-        venueName: v.name,
-      });
+      const url = v.flaixOrderUrl;
+      // Le lien porte-t-il des coordonnées à pré-remplir ? S'il n'en attend
+      // aucune, il n'y a rien à demander : on ouvre.
+      const attendUneIdentite = /[?&](firstname|lastname|mail|email|phone|tel)=/i.test(url);
+      if (!attendUneIdentite) {
+        ouvrirFlaix(v, url);
+        return;
+      }
+
+      void (async () => {
+        try {
+          const p = profil ?? (await apiMonProfil());
+          setProfil(p);
+          if (coordonneesManquantes(p)) {
+            setLieuEnAttente(v);
+            setDemandeOuverte(true);
+            return;
+          }
+        } catch {
+          // Profil illisible (réseau) : on n'empêche pas de commander. La
+          // page de commande demandera ce qui manque, comme avant.
+        }
+        ouvrirFlaix(v, url);
+      })();
     } else if (chemin === 'evenement' && v.currentEventId) {
       navigation.navigate('EventHome', { eventId: v.currentEventId });
     } else {
@@ -383,6 +433,40 @@ export function VenueDiscoveryScreen() {
         </View>
         )}
       </ScrollView>
+
+      <DemandeCoordonnees
+        visible={demandeOuverte}
+        profil={profil}
+        onTermine={(enregistre) => {
+          setDemandeOuverte(false);
+          const cible = lieuEnAttente;
+          setLieuEnAttente(null);
+          if (!cible) return;
+          if (!enregistre) {
+            // « Plus tard » : on ouvre avec l'adresse telle quelle.
+            if (cible.flaixOrderUrl) ouvrirFlaix(cible, cible.flaixOrderUrl);
+            return;
+          }
+          // Enregistré : le serveur reconstruit l'adresse avec les nouvelles
+          // coordonnées, donc on recharge AVANT d'ouvrir.
+          setProfil(null);
+          void (async () => {
+            try {
+              const frais = await apiSearchVenues({
+                q: query.trim() || undefined,
+                lat: coords?.lat,
+                lng: coords?.lng,
+                radiusKm: 10,
+              });
+              setVenues(frais);
+              const maj = frais.find((x) => x.id === cible.id) ?? cible;
+              if (maj.flaixOrderUrl) ouvrirFlaix(maj, maj.flaixOrderUrl);
+            } catch {
+              if (cible.flaixOrderUrl) ouvrirFlaix(cible, cible.flaixOrderUrl);
+            }
+          })();
+        }}
+      />
 
       <BuvettePlanViewer
         visible={planUrl !== null}

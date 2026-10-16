@@ -430,6 +430,33 @@ export type FournisseurSocial = 'apple' | 'google';
  * le nom qu'une fois, jamais aux suivantes. Le serveur ne le croit que pour
  * remplir un compte NEUF ; l'adresse, elle, est lue dans le jeton signé.
  */
+/** Le profil complet du client — ce que Break Eat sait de lui. */
+export interface MonProfil {
+  id: string;
+  email: string;
+  displayName: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+}
+
+export const apiMonProfil = () => req<MonProfil>('/auth/me');
+
+/**
+ * Le client complète son profil.
+ *
+ * Ces coordonnées sont celles que la page de commande Flaix demande. Les
+ * saisir une fois ici évite de les retaper à chaque match — et un compte
+ * ouvert par Apple ou Google n'a jamais de numéro, aucun des deux
+ * fournisseurs ne le donnant.
+ */
+export const apiMettreAJourProfil = (profil: {
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+}) =>
+  req<MonProfil>('/auth/me', { method: 'PATCH', body: JSON.stringify(profil) });
+
 export const apiConnexionSociale = (
   provider: FournisseurSocial,
   token: string,
