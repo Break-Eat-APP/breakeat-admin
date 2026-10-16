@@ -5,6 +5,42 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.85.0] — 2026-10-16 — Deux fois le même lien, et personne pour le dire
+
+Question posée : « et si j'ai deux liens identiques en même temps, ou deux fois
+le même match dans la saison — Marseille vs Nice ? » Trois cas, observés et non
+supposés.
+
+**Le même MATCH deux fois dans la saison** (aller / retour) : aucun problème.
+C'est la date qui choisit, le nom n'est qu'une étiquette.
+
+**Deux matchs le MÊME JOUR** : la bascule est automatique. Le lever de rideau
+jusqu'à sa fin, puis le match principal — sans intervention.
+
+**Le même LIEN collé sur deux matchs** : défaut réel, et silencieux. Le second
+envoyait son public sur la page du premier. Flaix refuse alors la commande — sa
+page est liée à SON match — et le client lit un refus qu'il ne comprend pas.
+
+L'écran de saisie avertit désormais, **à la frappe** : lien partagé par
+plusieurs matchs, et matchs qui se chevauchent vraiment (en disant lequel
+l'application servira). On avertit, on ne refuse pas : un tournoi de trois
+jours peut légitimement n'avoir qu'une page, et c'est au club de le savoir.
+Les lignes concernées passent en ambre.
+
+**10 tests**, dont celui qui compte le plus : deux matchs qui S'ENCHAÎNENT
+n'alertent pas. Signaler le cas normal d'une journée à deux matchs aurait rendu
+l'avertissement inaudible.
+
+**807 tests au total.**
+
+```
++ apps/admin/src/lib/alertes-liens.ts
++ apps/admin/src/lib/alertes-liens.spec.ts
+~ apps/admin/src/components/liens-commande-flaix.tsx
+```
+
+---
+
 ## [0.84.0] — 2026-10-16 — Une saison entière, éprouvée (et un défaut de performance)
 
 **20 lieux, 400 événements, six mois, 15 380 vérifications — aucun écart de

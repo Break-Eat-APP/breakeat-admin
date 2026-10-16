@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Check, Link2 } from 'lucide-react';
 import { apiDefinirLiensCommandeFlaix, type AdminEvent } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
+import { alertesDeSaisie } from '@/lib/alertes-liens';
 
 /**
  * LES LIENS DE COMMANDE FLAIX, TOUTE LA SAISON D'UN COUP.
@@ -44,6 +45,24 @@ export function LiensCommandeFlaix({
 
   const valeur = (e: AdminEvent) => saisies[e.id] ?? e.flaixOrderUrl ?? '';
   const modifie = aVenir.some((e) => valeur(e).trim() !== (e.flaixOrderUrl ?? ''));
+
+  // Ce qui cloche dans la saisie EN COURS — pas seulement dans ce qui est
+  // enregistré : l'erreur doit se voir au moment où on la commet, pas le jour
+  // du match. On n'empêche rien, on montre (voir `alertes-liens.ts`).
+  const alertes = useMemo(
+    () =>
+      alertesDeSaisie(
+        aVenir.map((e) => ({
+          id: e.id,
+          name: e.name,
+          startAt: e.startAt,
+          endAt: e.endAt,
+          url: saisies[e.id] ?? e.flaixOrderUrl ?? '',
+        })),
+      ),
+    [aVenir, saisies],
+  );
+  const signales = new Set(alertes.flatMap((a) => a.ids));
 
   const enregistrer = async () => {
     setEnvoi(true);
@@ -101,7 +120,12 @@ export function LiensCommandeFlaix({
                 padding: '10px 12px',
                 borderRadius: 10,
                 border: `1px solid ${BRAND.border}`,
-                background: v ? 'rgba(22,163,74,0.04)' : '#fff',
+                background: signales.has(e.id)
+                  ? 'rgba(245,158,11,0.08)'
+                  : v
+                    ? 'rgba(22,163,74,0.04)'
+                    : '#fff',
+                borderColor: signales.has(e.id) ? '#fbbf24' : BRAND.border,
               }}
             >
               <div style={{ minWidth: 190, flex: '0 0 auto' }}>
@@ -144,6 +168,27 @@ export function LiensCommandeFlaix({
           );
         })}
       </div>
+
+      {alertes.length > 0 ? (
+        <div
+          style={{
+            marginTop: 14,
+            padding: '12px 14px',
+            borderRadius: 10,
+            background: 'rgba(245,158,11,0.10)',
+            border: '1px solid #fbbf24',
+          }}
+        >
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#92400e', marginBottom: 6 }}>
+            À vérifier avant d&apos;enregistrer
+          </div>
+          {alertes.map((a, i) => (
+            <div key={i} style={{ fontSize: 13, color: '#92400e', lineHeight: 1.55 }}>
+              • {a.message}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {erreur ? (
         <div style={{ marginTop: 12, fontSize: 13, color: '#b91c1c' }}>{erreur}</div>

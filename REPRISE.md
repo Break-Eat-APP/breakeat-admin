@@ -525,10 +525,12 @@ l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
      ni Live Activity, ni décompte. Le webhook signé existe déjà côté
      Break Eat (HMAC, anti-rejeu, idempotence) : il attend un identifiant.
 
-0000000. **Passer `20261016_lien_commande_flaix`, `20261016b_heure_ouverture_commande`, puis `20261012_photo_du_lieu`, AVANT de déployer l'API.**
-     Elle ajoute `venues.photo_url`, que la recherche de lieux demande
-     désormais. Déployer l'API sans la migration fait échouer **l'écran
-     d'accueil** de l'app (colonne absente). `pnpm db:migrate:prod`.
+0000000. ✅ **RIEN À FAIRE — les migrations sont AUTOMATIQUES.**
+     `backend/railway.json` lance `pnpm db:migrate:prod` avant `node dist/main`
+     à chaque déploiement. Vérifié le 16/10 : la production renvoie déjà
+     `flaixOrderUrl`, `commandeOuvreA` et `prochainEvenement`, en 200 — donc
+     les trois migrations du jour sont passées. Les consignes précédentes
+     « passer la migration à la main » étaient erronées.
 
 000. **Purger la démonstration** — back-office → **Vue d'ensemble**. Un encart
      rouge liste les commandes `DEMO-…` par organisation (elles sont comptées
