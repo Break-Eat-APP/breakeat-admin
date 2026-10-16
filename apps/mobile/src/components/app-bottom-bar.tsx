@@ -5,7 +5,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { THEME, HEAD } from '@lib/theme';
-import { useCartStore } from '@store/cart.store';
 import { useNotifStore } from '@store/notif.store';
 import { navigateTo } from '@navigation/nav-ref';
 import { PastilleSuivi } from '@components/pastille-suivi';
@@ -95,19 +94,47 @@ const RAYON_BARRE = HAUTEUR_BARRE / 2;
  */
 const RAYON_ENCOCHE = 46;
 
-/** Le contour de la barre : deux bouts ronds, et un creux centré. */
+/**
+ * LE RACCORD DE PART ET D'AUTRE DU CREUX.
+ *
+ * Sans lui, le bord horizontal rencontrait le cercle du creux à la verticale :
+ * un ANGLE VIF, deux fois, de chaque côté de la pastille. L'œil l'accroche
+ * immédiatement — c'est ce qui distingue une encoche dessinée d'une encoche
+ * bricolée.
+ *
+ * On intercale donc un petit cercle TANGENT au bord du haut et au creux. Son
+ * centre est à (cx ± √(e² + 2·e·f), f) : la tangence à la droite `y = 0` impose
+ * l'ordonnée `f`, et la tangence EXTÉRIEURE au creux impose que la distance
+ * entre les deux centres vaille `e + f`. Le reste se déduit.
+ */
+const RACCORD = 14;
+
+/** Le contour de la barre : deux bouts ronds, et un creux raccordé en douceur. */
 function traceBarre(largeur: number): string {
   const h = HAUTEUR_BARRE;
   const r = RAYON_BARRE;
   const cx = largeur / 2;
   const e = RAYON_ENCOCHE;
+  const f = RACCORD;
 
-  // Bord haut gauche → début du creux → ARC qui plonge dans la barre →
-  // bord haut droit → bout rond droit → bord bas → bout rond gauche.
+  // Écart horizontal entre l'axe et le centre du raccord (voir ci-dessus).
+  const dx = Math.sqrt(e * e + 2 * e * f);
+  // Le point où les deux cercles se touchent : sur le segment qui joint leurs
+  // centres, à `e` du centre du creux.
+  const pxDroite = cx + (e / (e + f)) * dx;
+  const pxGauche = cx - (e / (e + f)) * dx;
+  const py = (e / (e + f)) * f;
+
   return [
     `M ${r} 0`,
-    `H ${cx - e}`,
-    `A ${e} ${e} 0 0 0 ${cx + e} 0`,
+    // Bord haut, jusqu'au début du raccord gauche.
+    `H ${cx - dx}`,
+    // Raccord gauche : le bord plonge doucement vers le creux.
+    `A ${f} ${f} 0 0 1 ${pxGauche} ${py}`,
+    // Le creux lui-même.
+    `A ${e} ${e} 0 0 0 ${pxDroite} ${py}`,
+    // Raccord droit : on remonte vers le bord haut, aussi doucement.
+    `A ${f} ${f} 0 0 1 ${cx + dx} 0`,
     `H ${largeur - r}`,
     `A ${r} ${r} 0 0 1 ${largeur - r} ${h}`,
     `H ${r}`,
@@ -171,9 +198,12 @@ function Onglet({
 
 export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
   const insets = useSafeAreaInsets();
-  // Selecteurs SCALAIRES : rendre un objet ici re-rendrait la barre a chaque
-  // changement du panier, sur tous les ecrans.
-  const articles = useCartStore((e) => e.items.reduce((total, i) => total + i.quantity, 0));
+  // Selecteur SCALAIRE : rendre un objet ici re-rendrait la barre a chaque
+  // changement, sur tous les ecrans.
+  //
+  // Le PANIER n'a plus d'onglet depuis le 16/10 : c'est Flaix qui tient le
+  // panier et les produits. L'écran existe toujours et reste atteignable
+  // depuis le parcours de commande d'un lieu non basculé.
   const nonLues = useNotifStore((e) => e.nonLues);
   // Appele AVANT le retour anticipe ci-dessous : un hook ne se saute pas.
   const etatPastille = useEtatPastille(currentRoute);
@@ -187,10 +217,8 @@ export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
   }
 
   const isLieux = currentRoute === 'Lieux';
-  const isPanier = currentRoute === 'Cart';
   const isCommandes = currentRoute === 'Commandes';
   const isAlertes = currentRoute === 'Notifications';
-  const isProfil = currentRoute === 'Profile';
 
   const teinte = (actif: boolean) => (actif ? THEME.orange : THEME.inkSoft);
 
@@ -221,27 +249,13 @@ export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
             <MaterialCommunityIcons name="stadium-variant" size={23} color={teinte(isLieux)} />
           }
         />
-        <Onglet
-          libelle="Panier"
-          actif={isPanier}
-          compte={articles}
-          onPress={() => navigateTo('Cart')}
-          icone={
-            <Ionicons
-              name={isPanier ? 'cart' : 'cart-outline'}
-              size={23}
-              color={teinte(isPanier)}
-            />
-          }
-        />
-
         {/* Mes commandes — la pastille surélevée. */}
         <Pressable style={styles.fabWrap} onPress={() => navigateTo('Commandes')} hitSlop={6}>
           <View style={styles.fabCadre}>
             <PastilleSuivi etat={etatPastille} actif={isCommandes} />
           </View>
           <Text style={[styles.fabLabel, !isCommandes && styles.fabLabelInactive]} numberOfLines={1}>
-            Commandes
+            Mes commandes
           </Text>
         </Pressable>
 
@@ -258,18 +272,6 @@ export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
               name={isAlertes || nonLues > 0 ? 'notifications' : 'notifications-outline'}
               size={23}
               color={teinte(isAlertes || nonLues > 0)}
-            />
-          }
-        />
-        <Onglet
-          libelle="Profil"
-          actif={isProfil}
-          onPress={() => navigateTo('Profile')}
-          icone={
-            <Ionicons
-              name={isProfil ? 'person-circle' : 'person-circle-outline'}
-              size={24}
-              color={teinte(isProfil)}
             />
           }
         />
@@ -311,7 +313,10 @@ const styles = StyleSheet.create({
 
   // Largeur FIXE, et non `flex` : la pastille ne doit pas retrecir sur un
   // petit ecran au point de mordre sur « Panier ».
-  fabWrap: { width: 82, alignItems: 'center', justifyContent: 'center' },
+  // 118 et non 82 : « Mes commandes » ne tient pas dans 82 px et se
+  // tronquait en « Mes command… ». La barre n'a plus que trois places
+  // depuis le retrait du panier et du profil — la largeur est là.
+  fabWrap: { width: 118, alignItems: 'center', justifyContent: 'center' },
   // L'anneau deborde de 8 px autour du disque. On remonte de 38 au lieu de
   // 32 : la pastille doit se loger DANS le creux et le dépasser, sinon le
   // creux se voit sans que le bouton paraisse détaché — le pire des deux.

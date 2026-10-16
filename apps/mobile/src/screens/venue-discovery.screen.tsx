@@ -376,9 +376,17 @@ export function VenueDiscoveryScreen() {
         ) : (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.hScroll}>
             {favorites.map((v) => {
+              // LA PHOTO D'UN FAVORI NE SE FIGE PAS.
+              //
+              // Le favori garde une copie du visuel au moment où on l'ajoute.
+              // Si le club change sa photo ensuite, la tuile montrait encore
+              // l'ancienne — vu à l'écran le 16/10. On relit donc le lieu VIVANT
+              // quand il est dans la liste du moment, et on ne retombe sur la
+              // copie que pour un favori hors résultats.
+              const vivant = venues.find((x) => x.id === v.id);
               // Dans 56 px, un écusson se reconnaît ; un bout de pelouse
               // recadré, non. D'où l'ordre inversé par rapport à la carte.
-              const visuel = visuelDeLieu(v, 'logo');
+              const visuel = visuelDeLieu(vivant ?? v, 'logo');
               return (
               <View key={v.id} style={[styles.favCard, shadowCard]}>
                 <View style={styles.favLogo}>
