@@ -235,12 +235,18 @@ export function LoginScreen({ navigation, route }: Props) {
         return;
       }
 
-      const nom = [credential.fullName?.givenName, credential.fullName?.familyName]
-        .filter(Boolean)
-        .join(' ')
-        .trim();
+      // Apple remet le nom DÉCOUPÉ, et une seule fois — à la première
+      // autorisation. On transmet les deux morceaux tels quels : ils
+      // pré-remplissent la commande chez Flaix.
+      const prenom = credential.fullName?.givenName?.trim() || undefined;
+      const nomFamille = credential.fullName?.familyName?.trim() || undefined;
+      const complet = [prenom, nomFamille].filter(Boolean).join(' ').trim();
 
-      const res = await apiConnexionSociale('apple', credential.identityToken, nom || undefined);
+      const res = await apiConnexionSociale('apple', credential.identityToken, {
+        displayName: complet || undefined,
+        firstName: prenom,
+        lastName: nomFamille,
+      });
       await setAuth(res.accessToken, res.user, res.refreshToken);
       void requestLocation();
       proceed();

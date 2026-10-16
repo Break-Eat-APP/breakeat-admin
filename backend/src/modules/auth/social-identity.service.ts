@@ -27,6 +27,19 @@ export interface IdentiteVerifiee {
   email: string | null;
   /** Faux si le fournisseur ne garantit pas l'adresse — on ne rattache pas. */
   emailVerifie: boolean;
+  /**
+   * Le prénom et le nom, quand le fournisseur les donne.
+   *
+   * Google les écrit dans CHAQUE jeton (`given_name`, `family_name`). Apple ne
+   * les met jamais dans le jeton : il les remet à l'application, et une seule
+   * fois — à la première autorisation. Ils arrivent donc par le DTO, pas par
+   * ici (voir `auth.service.ts`).
+   *
+   * Ils servent à pré-remplir la commande chez Flaix : sans eux, le client
+   * retape son identité à chaque match.
+   */
+  firstName: string | null;
+  lastName: string | null;
 }
 
 const APPLE_JWKS = 'https://appleid.apple.com/auth/keys';
@@ -132,7 +145,21 @@ export class SocialIdentityService implements OnModuleInit {
     const brut = (payload as { email_verified?: unknown }).email_verified;
     const emailVerifie = brut === true || brut === 'true';
 
-    return { provider, subject, email, emailVerifie };
+    // Google remplit ces deux champs ; Apple jamais. On lit ce qui est là,
+    // sans rien exiger : un jeton sans nom reste un jeton valide.
+    const nomDuJeton = (cle: string): string | null => {
+      const v = (payload as Record<string, unknown>)[cle];
+      return typeof v === 'string' && v.trim() ? v.trim() : null;
+    };
+
+    return {
+      provider,
+      subject,
+      email,
+      emailVerifie,
+      firstName: nomDuJeton('given_name'),
+      lastName: nomDuJeton('family_name'),
+    };
   }
 
   /**

@@ -22,4 +22,22 @@ export class SocialLoginDto {
   @IsString()
   @MaxLength(120)
   displayName?: string;
+
+  /**
+   * Prénom et nom, remis par APPLE à la première autorisation.
+   *
+   * Séparés, et non recollés en une chaîne : c'est sous cette forme qu'Apple
+   * les donne, et sous cette forme que la page de commande Flaix les attend.
+   * Les recoller obligerait à les redécouper, ce qui se trompe sur
+   * « Jean-Pierre De La Tour ».
+   */
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  firstName?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  lastName?: string;
 }

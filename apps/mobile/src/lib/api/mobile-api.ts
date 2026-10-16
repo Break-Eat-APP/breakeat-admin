@@ -433,11 +433,22 @@ export type FournisseurSocial = 'apple' | 'google';
 export const apiConnexionSociale = (
   provider: FournisseurSocial,
   token: string,
-  displayName?: string,
+  /**
+   * Le nom tel qu'Apple le remet — prénom et nom SÉPARÉS.
+   *
+   * Apple ne les donne qu'à la PREMIÈRE autorisation, jamais ensuite. Les
+   * recoller en une chaîne obligerait à les redécouper côté serveur, et ce
+   * découpage se trompe sur « Jean-Pierre De La Tour ». Ils pré-remplissent
+   * la commande chez Flaix : sans eux, le client retape son identité à
+   * chaque match.
+   *
+   * Google, lui, les écrit dans son jeton : le serveur les y lit tout seul.
+   */
+  identite?: { displayName?: string; firstName?: string; lastName?: string },
 ) =>
   req<LoginResponse>('/auth/social', {
     method: 'POST',
-    body: JSON.stringify({ provider, token, displayName }),
+    body: JSON.stringify({ provider, token, ...identite }),
   });
 
 /** Ce que l'application a le droit de proposer : un bouton sans serveur ment. */

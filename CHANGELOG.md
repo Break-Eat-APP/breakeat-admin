@@ -5,6 +5,41 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.87.0] — 2026-10-16 — Apple et Google donnaient le nom, on le jetait
+
+Suite de la personnalisation du lien Flaix : et les clients connectés par
+Apple ou Google ? Vérifié dans le code — leur compte n'avait **ni prénom, ni
+nom, ni téléphone**. Leur lien ne portait que l'adresse e-mail.
+
+Or le nom **arrivait**, et on le perdait :
+
+- **Google** écrit `given_name` et `family_name` dans **chaque** jeton. Le
+  serveur n'en lisait que l'adresse ;
+- **Apple** remet le nom découpé en prénom / nom, mais **une seule fois**, à
+  la première autorisation. L'application les recollait en une chaîne avant de
+  les envoyer — et les recoller, c'est devoir les redécouper, ce qui se trompe
+  sur « Jean-Pierre De La Tour ».
+
+Les deux sont désormais conservés tels quels. Et un compte **existant** sans
+nom se complète tout seul à la prochaine connexion Google — mais un nom
+**déjà saisi n'est jamais écrasé** : un fournisseur ne réécrit pas par-dessus
+une correction humaine.
+
+**Reste le téléphone**, qu'aucun des deux ne donne jamais, et qu'aucun écran
+ne permet encore de saisir après coup. Décision produit en attente.
+
+**6 tests** (757 backend).
+
+```
+~ backend/src/modules/auth/social-identity.service.ts
+~ backend/src/modules/auth/auth.service.ts (+ social-login.spec.ts)
+~ backend/src/modules/auth/dto/social-login.dto.ts
+~ apps/mobile/src/screens/login.screen.tsx
+~ apps/mobile/src/lib/api/mobile-api.ts
+```
+
+---
+
 ## [0.86.0] — 2026-10-16 — Le client ne se reconnecte pas chez Flaix
 
 Information donnée en cours de route, et elle évitait un échec de test : le

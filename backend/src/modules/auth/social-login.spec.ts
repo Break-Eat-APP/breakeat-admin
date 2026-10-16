@@ -17,6 +17,9 @@ describe('AuthService — connexion Apple / Google', () => {
     subject: '000123.abc.0001',
     email: 'jo@club.fr',
     emailVerifie: true,
+    // Apple ne met jamais le nom dans son jeton : il le remet a l'application.
+    firstName: null as string | null,
+    lastName: null as string | null,
   };
 
   function monter(overrides: {
@@ -154,5 +157,143 @@ describe('AuthService — connexion Apple / Google', () => {
     expect(prisma.userIdentity.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ userId: 'u-neuf' }) }),
     );
+  });
+
+  // ─── Le nom, pour pre-remplir la commande chez Flaix ──────────
+  //
+  // Sans lui, un client connecte par Apple ou Google retape son identite a
+  // chaque match — alors que le fournisseur nous l'avait donnee.
+
+  it('GOOGLE : le nom du JETON est enregistre a la creation', async () => {
+    const { service, prisma } = monter({
+      identiteVerifiee: {
+        ...identite,
+        provider: 'google' as never,
+        firstName: 'Jo',
+        lastName: 'Dupont',
+      },
+    });
+
+    await service.connexionSociale({ provider: 'google', token: 'jwt' });
+
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ firstName: 'Jo', lastName: 'Dupont' }),
+      }),
+    );
+  });
+
+  it('APPLE : le nom vient de l’application, et il est decoupe', async () => {
+    // Apple ne le donne qu'a la PREMIERE autorisation. Le perdre la, c'est le
+    // perdre pour toujours.
+    const { service, prisma } = monter({});
+
+    await service.connexionSociale({
+      provider: 'apple',
+      token: 'jwt',
+      firstName: 'Jean-Pierre',
+      lastName: 'De La Tour',
+    });
+
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ firstName: 'Jean-Pierre', lastName: 'De La Tour' }),
+      }),
+    );
+  });
+
+  it('un nom en espaces vaut un nom absent', async () => {
+    const { service, prisma } = monter({});
+
+    await service.connexionSociale({
+      provider: 'apple',
+      token: 'jwt',
+      firstName: '   ',
+      lastName: '',
+    });
+
+    expect(prisma.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ firstName: null, lastName: null }),
+      }),
+    );
+  });
+
+  it('un compte EXISTANT sans nom se complete tout seul', async () => {
+    // Google renvoie le nom a chaque connexion : les comptes ouverts avant
+    // qu'on sache le lire se remplissent a la prochaine ouverture.
+    const { service, prisma } = monter({
+      userRow: { id: 'u-1', email: 'jo@club.fr', isActive: true, firstName: null, lastName: null },
+      identiteVerifiee: {
+        ...identite,
+        provider: 'google' as never,
+        firstName: 'Jo',
+        lastName: 'Dupont',
+      },
+    });
+    prisma.user.update.mockResolvedValue({
+      id: 'u-1',
+      email: 'jo@club.fr',
+      isActive: true,
+      firstName: 'Jo',
+      lastName: 'Dupont',
+    });
+
+    await service.connexionSociale({ provider: 'google', token: 'jwt' });
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'u-1' },
+      data: { firstName: 'Jo', lastName: 'Dupont' },
+    });
+  });
+
+  it('… mais un nom DEJA saisi n’est jamais ecrase', async () => {
+    // Si le client a corrige son prenom dans Break Eat, c'est le sien qui
+    // reste : un fournisseur ne reecrit pas par-dessus une saisie humaine.
+    const { service, prisma } = monter({
+      userRow: {
+        id: 'u-1',
+        email: 'jo@club.fr',
+        isActive: true,
+        firstName: 'Joséphine',
+        lastName: 'Dupont',
+      },
+      identiteVerifiee: {
+        ...identite,
+        provider: 'google' as never,
+        firstName: 'Jo',
+        lastName: 'Dupont',
+      },
+    });
+
+    await service.connexionSociale({ provider: 'google', token: 'jwt' });
+
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
+  it('seul le champ MANQUANT est complete', async () => {
+    const { service, prisma } = monter({
+      userRow: {
+        id: 'u-1',
+        email: 'jo@club.fr',
+        isActive: true,
+        firstName: 'Joséphine',
+        lastName: null,
+      },
+      identiteVerifiee: {
+        ...identite,
+        provider: 'google' as never,
+        firstName: 'Jo',
+        lastName: 'Dupont',
+      },
+    });
+    prisma.user.update.mockResolvedValue({ id: 'u-1', email: 'jo@club.fr', isActive: true });
+
+    await service.connexionSociale({ provider: 'google', token: 'jwt' });
+
+    expect(prisma.user.update).toHaveBeenCalledWith({
+      where: { id: 'u-1' },
+      data: { lastName: 'Dupont' },
+    });
   });
 });

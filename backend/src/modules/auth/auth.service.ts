@@ -51,6 +51,29 @@ function sansMotDePasse(ligne: SafeUser & { passwordHash?: string | null }): Saf
 
 @Injectable()
 export class AuthService {
+
+  /**
+   * Complète le nom d'un compte SANS jamais écraser ce qui existe.
+   *
+   * Google renvoie le nom à chaque connexion : un compte créé avant que l'on
+   * sache le lire se remplit donc tout seul, à la prochaine ouverture. Mais si
+   * le client a corrigé son prénom dans Break Eat, c'est le sien qui reste —
+   * un fournisseur ne doit pas réécrire par-dessus une saisie humaine.
+   */
+  private async completerNom(
+    compte: { id: string; firstName: string | null; lastName: string | null },
+    prenom: string | null,
+    nom: string | null,
+  ) {
+    const manquants: { firstName?: string; lastName?: string } = {};
+    if (!compte.firstName && prenom) manquants.firstName = prenom;
+    if (!compte.lastName && nom) manquants.lastName = nom;
+    if (Object.keys(manquants).length === 0) return compte as never;
+
+    this.logger.log(`Nom complété sur le compte ${compte.id} (${Object.keys(manquants).join(', ')})`);
+    return this.prisma.user.update({ where: { id: compte.id }, data: manquants });
+  }
+
   private readonly logger = new Logger(AuthService.name);
 
   constructor(
@@ -157,12 +180,24 @@ export class AuthService {
     provider: Fournisseur;
     token: string;
     displayName?: string;
+    firstName?: string;
+    lastName?: string;
   }): Promise<AuthResponse> {
     // Chaque issue laisse une trace. Sans cela, une connexion REUSSIE sur un
     // compte existant etait muette : « aucune ligne » ne distinguait plus une
     // requete jamais arrivee d'une connexion reussie suivie d'une autre panne.
     this.logger.log(`Connexion ${dto.provider} : demande reçue`);
     const identite = await this.socialIdentity.verifier(dto.provider, dto.token);
+
+    // D'où vient le nom, selon le fournisseur : Google l'écrit dans le jeton,
+    // Apple le remet à l'application (et une seule fois). On prend ce qui
+    // arrive, de l'un ou de l'autre.
+    const propre = (v?: string | null) => {
+      const t = v?.trim();
+      return t ? t : null;
+    };
+    const prenom = propre(identite.firstName) ?? propre(dto.firstName);
+    const nom = propre(identite.lastName) ?? propre(dto.lastName);
 
     let existante = await this.prisma.userIdentity.findUnique({
       where: {
@@ -218,7 +253,7 @@ export class AuthService {
           this.logger.warn(`Connexion ${dto.provider} refusée : compte ${deja.id} archivé`);
           throw new UnauthorizedException('Ce compte a été archivé. Vous pouvez vous réinscrire avec la même adresse : un nouveau compte sera créé.');
         }
-        user = sansMotDePasse(deja);
+        user = sansMotDePasse(await this.completerNom(deja, prenom, nom));
         this.logger.log(`Identité ${identite.provider} rattachée au compte ${user.id}`);
       } else {
         const cree = await this.prisma.user.create({
@@ -230,6 +265,10 @@ export class AuthService {
             // ensuite : s'il manque, la partie gauche de l'adresse vaut mieux
             // qu'un champ vide en tête de « Mes commandes ».
             displayName: dto.displayName?.trim() || identite.email.split('@')[0],
+            // Pré-remplissent la commande chez Flaix. Sans eux, le client
+            // retape son identité à chaque match.
+            firstName: prenom,
+            lastName: nom,
           },
         });
         user = sansMotDePasse(cree);
