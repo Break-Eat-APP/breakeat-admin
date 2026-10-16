@@ -24,14 +24,24 @@ export interface MatchAVerifier {
   endAt: string;
   /** Le lien saisi, tel qu'il est à l'écran (saisie en cours comprise). */
   url: string;
+  /** DRAFT, ACTIVE, PAUSED… Seul un match ACTIF ouvre sa commande. */
+  status?: string;
 }
 
 export interface AlerteLien {
-  type: 'lien-partage' | 'chevauchement';
+  type: 'lien-partage' | 'chevauchement' | 'pas-actif';
   /** Les matchs concernés, pour les mettre en évidence dans la liste. */
   ids: string[];
   message: string;
 }
+
+/** Le statut d'un match, dit comme le club le lit dans sa liste. */
+const LIBELLE_STATUT: Record<string, string> = {
+  DRAFT: 'brouillon',
+  PAUSED: 'suspendu',
+  ENDED: 'terminé',
+  CANCELLED: 'annulé',
+};
 
 /** Un lien vide n'est pas une saisie : on ne l'analyse pas. */
 function renseigne(url: string): boolean {
@@ -41,6 +51,28 @@ function renseigne(url: string): boolean {
 export function alertesDeSaisie(matchs: readonly MatchAVerifier[]): AlerteLien[] {
   const alertes: AlerteLien[] = [];
   const avecLien = matchs.filter((m) => renseigne(m.url));
+
+  // ── 0. Un match qui n'est pas ACTIF n'ouvrira rien.
+  //
+  // Le cas vécu : un lien collé sur un BROUILLON, un « Liens enregistrés » en
+  // vert, et l'application qui répond « aucun événement ouvert ». Tout était
+  // correct — sauf que personne ne disait que le match n'était pas publié.
+  //
+  // On ne refuse pas : coller les liens d'une saison AVANT de publier les
+  // matchs est exactement l'usage prévu. On prévient, pour que l'absence
+  // d'ouverture le jour J ne soit jamais une surprise.
+  const inactifs = avecLien.filter((m) => m.status && m.status !== 'ACTIVE');
+  if (inactifs.length > 0) {
+    alertes.push({
+      type: 'pas-actif',
+      ids: inactifs.map((m) => m.id),
+      message:
+        `${inactifs.length === 1 ? 'Ce match n’est pas actif' : `Ces ${inactifs.length} matchs ne sont pas actifs`} : ` +
+        `${inactifs.map((m) => `${m.name} (${LIBELLE_STATUT[m.status as string] ?? m.status})`).join(', ')}. ` +
+        `Le lien est bien enregistré, mais l’application n’ouvrira rien tant que le match reste dans cet état. ` +
+        `Passe-le en « Actif » dans sa fiche le moment venu.`,
+    });
+  }
 
   // ── 1. Le même lien sur plusieurs matchs.
   const parLien = new Map<string, MatchAVerifier[]>();

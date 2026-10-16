@@ -58,6 +58,7 @@ export function LiensCommandeFlaix({
           startAt: e.startAt,
           endAt: e.endAt,
           url: saisies[e.id] ?? e.flaixOrderUrl ?? '',
+          status: e.status,
         })),
       ),
     [aVenir, saisies],

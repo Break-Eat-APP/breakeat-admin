@@ -14,6 +14,7 @@ const m = (over: Partial<MatchAVerifier> = {}): MatchAVerifier => ({
   startAt: J(14, 18),
   endAt: J(14, 22),
   url: 'https://commande.flaix.bo.synertic.net/o/aller',
+  status: 'ACTIVE',
   ...over,
 });
 
@@ -131,5 +132,49 @@ describe('les alertes de saisie des liens', () => {
   it('un seul match ne peut rien chevaucher', () => {
     expect(alertesDeSaisie([m()])).toEqual([]);
     expect(alertesDeSaisie([])).toEqual([]);
+  });
+});
+
+describe('un match qui n’ouvrira rien', () => {
+  it('un lien sur un BROUILLON est signalé', () => {
+    // Le cas vécu : lien collé, « Liens enregistrés » en vert, et
+    // l'application qui répond « aucun événement ouvert ». Tout était
+    // correct — sauf que rien ne disait que le match n'était pas publié.
+    const [a] = alertesDeSaisie([m({ id: 'test', name: 'test', status: 'DRAFT' })]);
+
+    expect(a.type).toBe('pas-actif');
+    expect(a.ids).toEqual(['test']);
+    expect(a.message).toContain('brouillon');
+    expect(a.message).toContain('Actif');
+  });
+
+  it('suspendu, terminé et annulé le sont aussi, chacun nommé', () => {
+    const alertes = alertesDeSaisie([
+      m({ id: 'a', name: 'A', status: 'PAUSED' }),
+      m({ id: 'b', name: 'B', status: 'ENDED', startAt: J(21, 18), endAt: J(21, 22), url: 'https://commande.flaix.bo.synertic.net/o/b' }),
+      m({ id: 'c', name: 'C', status: 'CANCELLED', startAt: J(28, 18), endAt: J(28, 22), url: 'https://commande.flaix.bo.synertic.net/o/c' }),
+    ]);
+
+    const [a] = alertes.filter((x) => x.type === 'pas-actif');
+    expect(a.ids).toEqual(['a', 'b', 'c']);
+    expect(a.message).toContain('suspendu');
+    expect(a.message).toContain('terminé');
+    expect(a.message).toContain('annulé');
+  });
+
+  it('un match ACTIF n’alerte pas', () => {
+    expect(alertesDeSaisie([m({ status: 'ACTIVE' })])).toEqual([]);
+  });
+
+  it('un brouillon SANS lien n’alerte pas', () => {
+    // Coller la saison avant de publier les matchs est l'usage prévu : on ne
+    // reproche rien tant qu'aucun lien n'attend.
+    expect(alertesDeSaisie([m({ status: 'DRAFT', url: '' })])).toEqual([]);
+  });
+
+  it('un statut absent ne déclenche rien', () => {
+    // Un appelant qui ne transmet pas le statut ne doit pas voir surgir une
+    // alerte qu'il ne peut pas comprendre.
+    expect(alertesDeSaisie([m({ status: undefined })])).toEqual([]);
   });
 });
