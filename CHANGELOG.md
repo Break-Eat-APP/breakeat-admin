@@ -5,6 +5,50 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.84.0] — 2026-10-16 — Une saison entière, éprouvée (et un défaut de performance)
+
+**20 lieux, 400 événements, six mois, 15 380 vérifications — aucun écart de
+comportement.** L'audit traverse les deux changements d'heure, les matchs de
+nuit (00h30), les matinaux (07h00), les brouillons et annulés avec un lien
+posé, et le samedi où vingt stades jouent en même temps.
+
+Les quatre règles de sécurité, éprouvées sur l'API réelle : match terminé,
+suspendu, annulé, pas encore ouvert → **la commande est fermée** dans les
+quatre cas.
+
+**UN DÉFAUT DE PERFORMANCE, trouvé et corrigé.** La règle d'ouverture
+construisait un `Intl.DateTimeFormat` neuf à chaque appel, quatre par
+événement :
+
+| | Avant | Après |
+|---|---|---|
+| 20 lieux × 20 événements | 100,7 ms | **3,7 ms** |
+| 50 lieux × 60 événements | 716,3 ms | **44,2 ms** |
+| L'API complète, 20 lieux | 117–210 ms | **27–29 ms** |
+
+Deux corrections sans aucun changement de comportement (les 22 tests passent à
+l'identique) : le formateur est gardé par fuseau (réutiliser est 16,5× plus
+rapide que reconstruire), et la date de fin — gratuite — est testée avant
+l'heure d'ouverture, qui est chère. Au bout de trois saisons, l'immense
+majorité des événements sont terminés : on payait le prix fort pour une
+réponse connue d'avance.
+
+Ce défaut n'aurait cassé aucun test. Il se serait vu un samedi de championnat,
+en accueil, sur vingt lieux à la fois.
+
+**Reste ouvert, sans urgence** : la recherche charge tous les événements de
+chaque lieu depuis toujours (1 200 lignes à trois saisons). Le filtre n'est pas
+anodin — la confidentialité des lieux privés se décide sur l'ensemble des
+événements. Détaillé dans l'audit.
+
+```
++ brain/audits/AUDIT_SAISON_FLAIX_2026-10-16.md
++ backend/scripts/audit-saison.cjs
+~ backend/src/common/helpers/fenetre-commande.ts
+```
+
+---
+
 ## [0.83.0] — 2026-10-16 — Le relais Flaix : un lien par match, et la date qui choisit
 
 **Un lien par événement, collé une fois.** Le club remplaçait LE lien Flaix de

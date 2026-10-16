@@ -85,19 +85,39 @@ function minutesDepuisMinuit(heure: string): number | null {
  * pour deux fonctions — et plutôt que de coder « +1 h l'hiver, +2 h l'été »,
  * qui serait faux deux dimanches par an.
  */
+/**
+ * Les formateurs, gardés d'un appel à l'autre.
+ *
+ * Mesuré : construire un `Intl.DateTimeFormat` coûte SEIZE FOIS plus cher que
+ * de s'en resservir. Une recherche de lieux en demandait un par événement et
+ * par passe — soit, pour vingt lieux d'une saison, 100 ms de calcul pur avant
+ * même d'avoir répondu. Le cache est minuscule (un objet par fuseau, et un
+ * club n'en a qu'un) et ne périme jamais : le fuseau d'un lieu ne change pas.
+ */
+const FORMATEURS = new Map<string, Intl.DateTimeFormat>();
+
+function formateur(timezone: string): Intl.DateTimeFormat {
+  let f = FORMATEURS.get(timezone);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    FORMATEURS.set(timezone, f);
+  }
+  return f;
+}
+
 function partiesDansFuseau(
   d: Date,
   timezone: string,
 ): { annee: number; mois: number; jour: number; heure: number; minute: number } {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(d);
+  const parts = formateur(timezone).formatToParts(d);
   const lire = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? '0');
   return {
     annee: lire('year'),
@@ -192,9 +212,11 @@ export function fenetreDeCommande<T extends EvenementCommandable>(
 
   // ── 2. En cours : ouvert depuis l'heure dite, et jusqu'à la fin.
   const ouverts = candidats
-    .filter(
-      (ev) => t >= heureDOuverture(ev, reglage).getTime() && t <= ev.endAt.getTime(),
-    )
+    // `endAt` d'abord, et ce n'est pas une coquetterie : au bout de trois
+    // saisons, l'immense majorite des evenements d'un lieu sont TERMINES.
+    // Calculer leur heure d'ouverture — la partie chere — pour les ecarter
+    // ensuite, c'est payer le prix fort pour une reponse connue d'avance.
+    .filter((ev) => t <= ev.endAt.getTime() && t >= heureDOuverture(ev, reglage).getTime())
     // Deux événements qui se chevauchent sur un même lieu, ça arrive (un match
     // qui déborde sur le concert d'après). On sert celui qui a commencé le
     // premier : c'est celui dont le public est déjà dans les gradins.

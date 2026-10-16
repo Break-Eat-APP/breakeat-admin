@@ -16,7 +16,7 @@
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-10-16 (phase 59 : le relais Flaix — un lien de commande par événement, la date choisit, et la page s'affiche dans l'app. 790 tests. Migration `20261016_lien_commande_flaix` à passer, et une build EAS obligatoire : la WebView est une dépendance native). Avant : 2026-10-12 (phase 58 : la carte d'un lieu — barre du bas à encoche, recherche dans le bandeau, grandes cartes, et le champ `Venue.photoUrl` qui manquait. 755 tests. Reste : les deux adresses légales, et la migration `20261012_photo_du_lieu` à passer AVANT de déployer l'API)_
+_Dernière mise à jour : 2026-10-16 (audit d'une saison entière : 20 lieux, 400 événements, 15 380 vérifications, aucun écart — un défaut de PERFORMANCE corrigé au passage, l'API passe de 117–210 ms à 27 ms. Voir `brain/audits/AUDIT_SAISON_FLAIX_2026-10-16.md`. Avant : phase 59 : le relais Flaix — un lien de commande par événement, la date choisit, et la page s'affiche dans l'app. 790 tests. Migration `20261016_lien_commande_flaix` à passer, et une build EAS obligatoire : la WebView est une dépendance native). Avant : 2026-10-12 (phase 58 : la carte d'un lieu — barre du bas à encoche, recherche dans le bandeau, grandes cartes, et le champ `Venue.photoUrl` qui manquait. 755 tests. Reste : les deux adresses légales, et la migration `20261012_photo_du_lieu` à passer AVANT de déployer l'API)_
 
 ## 🟢 ÉTAT AU 06/09/2026 — LIRE D'ABORD
 
