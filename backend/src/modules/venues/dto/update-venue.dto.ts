@@ -3,6 +3,7 @@ import {
   IsOptional,
   IsEnum,
   IsInt,
+  Matches,
   IsNumber,
   IsBoolean,
   IsUrl,
@@ -78,16 +79,15 @@ export class UpdateVenueDto {
   buvettePlanUrl?: string | null;
 
   /**
-   * Minutes d'avance a l'ouverture de la commande (defaut 180).
-   *
-   * Les portes d'un stade ouvrent avant le coup d'envoi, et c'est la qu'on
-   * commande. Borne haute a 24 h : au-dela, la « fenetre » n'en est plus une.
+   * Heure d'acces au lien de commande, le jour de l'evenement (« HH:MM »,
+   * fuseau du lieu). L'ouverture des CRENEAUX se regle dans Flaix.
    */
-  @IsInt()
+  @IsString()
   @IsOptional()
-  @Min(0)
-  @Max(1440)
-  ordersOpenBeforeMin?: number;
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
+    message: 'ordersOpenAt doit etre une heure au format HH:MM (ex. 08:00)',
+  })
+  ordersOpenAt?: string;
 
   /** PHASE 20 — programme de fidélité activé par le club sur ce lieu. */
   @IsBoolean()

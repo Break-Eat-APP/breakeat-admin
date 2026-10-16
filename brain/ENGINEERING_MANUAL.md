@@ -6852,11 +6852,31 @@ Tous deux passent la même garde (`events/lien-flaix.ts`) : `https://` et
 carte bancaire — accepter n'importe quel domaine, ce serait offrir un
 hameçonnage parfait, signé Break Eat.
 
-### La fenêtre : trois heures avant, par défaut
+### La fenêtre : une HEURE, le jour du match
 
-`Venue.ordersOpenBeforeMin` (180). Les portes d'un stade ouvrent avant le coup
-d'envoi, et c'est là qu'on commande. Réglé sur le **lieu** : c'est une habitude
-de club, pas une décision par match.
+`Venue.ordersOpenAt` (« 08:00 »), dans le fuseau du lieu.
+
+Première version : « trois heures avant le début ». Corrigée le jour même sur
+retour du client, et sa formulation est meilleure — **le lien ouvre à 8 h le
+matin du match**. Une heure fixe se dit en une phrase à une équipe, et surtout
+elle **ne bouge pas quand l'horaire du match change**. L'ouverture des
+*créneaux de retrait* se règle, elle, dans Flaix : ce champ ne décide que de
+l'accès au lien, qui vient des heures avant.
+
+Deux pièges traités, et testés :
+
+- **le fuseau.** « 8 h » n'a de sens que quelque part. Le jour du match se lit
+  dans le fuseau du LIEU — à Auckland, un match du 18 à 9 h est le 17 en UTC,
+  et lire la date en UTC ouvrirait la vente vingt-quatre heures trop tôt. Le
+  calcul passe par `Intl`, seul outil du runtime qui connaisse les changements
+  d'heure : coder « +2 h » serait faux la moitié de l'année, et personne ne le
+  verrait avant le premier match de novembre ;
+- **le match de nuit.** Un coup d'envoi à 00:30 tombe *avant* l'heure réglée du
+  même jour local. Sans garde-fou, la vente n'ouvrirait qu'une fois le match
+  fini. On ouvre donc au plus tard au coup d'envoi.
+
+Réglé sur le **lieu** : c'est une habitude de club, pas une décision par
+match.
 
 La règle est une fonction pure, `common/helpers/fenetre-commande.ts`, et elle
 vit au **serveur** pour trois raisons :
@@ -6869,7 +6889,7 @@ vit au **serveur** pour trois raisons :
 C'est ce troisième point qui fait que le travail d'aujourd'hui n'est pas jeté
 demain : le champ est le contrat, le collage n'est que sa version manuelle.
 
-**15 tests**, dont les cas qui coûtent cher : un lien sur un **brouillon**
+**22 tests**, dont les cas qui coûtent cher : un lien sur un **brouillon**
 n'ouvre rien (il y vivra des mois), un événement **suspendu** ferme la vente
 (c'est le geste du club quand la buvette est débordée), deux événements qui se
 chevauchent servent celui qui a commencé le premier, et un lieu **permanent**
@@ -6967,4 +6987,4 @@ Le décompte sur l'écran verrouillé (demandé le 16/10) dépend entièrement d
 point 2 : techniquement il tient en une ligne SwiftUI qui se met à jour seule,
 sans APNs — mais il lui faut une heure cible, et donc une commande connue.
 
-**790 tests** : 722 backend, 34 mobile, 12 back-office, 12 opérateur, 10 admin.
+**797 tests** : 729 backend, 34 mobile, 12 back-office, 12 opérateur, 10 admin.

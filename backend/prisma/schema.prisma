@@ -391,19 +391,22 @@ model Venue {
   /// côté Flaix (utilisé par les appels API Flaix, à brancher au contrat Flaix).
   flaixEnabled           Boolean            @default(false) @map("flaix_enabled")
   flaixVenueId           String?            @map("flaix_venue_id")
-  /// Combien de MINUTES avant le début d'un événement la commande ouvre.
+  /// L'HEURE À LAQUELLE LE LIEN DE COMMANDE DEVIENT ACCESSIBLE, le jour de
+  /// l'événement. Format « HH:MM », dans le fuseau du lieu (`timezone`).
   ///
-  /// Les portes d'un stade ouvrent avant le coup d'envoi, et c'est là que les
-  /// gens commandent. Attendre le début du match pour ouvrir la vente, c'est
-  /// rater l'essentiel du service.
+  /// Une heure fixe, et non un délai avant le coup d'envoi : c'est ainsi que
+  /// le club le pense (« le lien ouvre à 8 h le matin du match »), et ça ne
+  /// bouge pas quand l'horaire du match change. L'ouverture des CRÉNEAUX de
+  /// retrait, elle, se règle dans Flaix — ce champ ne décide que de l'accès
+  /// au lien, qui vient des heures avant.
   ///
-  /// Réglé sur le LIEU et non sur chaque événement : c'est une habitude de
-  /// club, pas une décision par match. Un club qui la change une fois la
-  /// change pour tous ses matchs — et n'a rien à ressaisir.
+  /// Réglé sur le LIEU : c'est une habitude de club, pas une décision par
+  /// match. Un club qui la change une fois la change pour tous ses matchs.
   ///
-  /// 180 minutes par défaut (trois heures). Zéro = la commande ouvre pile au
-  /// début.
-  ordersOpenBeforeMin    Int                @default(180) @map("orders_open_before_min")
+  /// Garde-fou : un match qui commence AVANT cette heure (un tournoi à 7 h,
+  /// une finale de nuit) ouvre dès son début — jamais après. Voir
+  /// `common/helpers/fenetre-commande.ts`.
+  ordersOpenAt           String             @default("08:00") @map("orders_open_at")
   /// La PHOTO du lieu, telle que le client la voit sur sa carte dans l'app.
   ///
   /// À ne pas confondre avec le logo du club (`Organization.logoUrl`), qui

@@ -225,7 +225,9 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
     ...PUBLIC_VENUE,
     id: 'v-flaix',
     flaixEnabled: true,
-    ordersOpenBeforeMin: 180,
+    // Le lien ouvre a 8 h, heure de Paris, le jour du match.
+    ordersOpenAt: '08:00',
+    timezone: 'Europe/Paris',
   };
   const COMMANDE = 'https://ops.flaixlabs.com/commande/samedi';
 
@@ -242,14 +244,19 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
     expect(v.commandeOuvreA).toBeNull();
   });
 
-  it('avant la fenetre : pas de lien, mais l’HEURE d’ouverture', async () => {
-    // « Ouvre a 18 h » fait revenir le client. « Ferme » ne le fait pas.
-    const debut = new Date(Date.now() + 5 * 60 * 60_000);
+  it('avant l’heure d’acces : pas de lien, mais l’HEURE d’ouverture', async () => {
+    // « Ouvre a 8 h » fait revenir le client. « Ferme » ne le fait pas.
+    // Un match DEMAIN : son lien n'ouvrira qu'au matin.
+    const demain = new Date(Date.now() + 24 * 60 * 60_000);
     (prisma.venue.findMany as jest.Mock).mockResolvedValue([
       {
         ...LIEU_FLAIX,
         events: [
-          EV({ startAt: debut, endAt: new Date(debut.getTime() + 60_000), flaixOrderUrl: COMMANDE }),
+          EV({
+            startAt: demain,
+            endAt: new Date(demain.getTime() + 3 * 60 * 60_000),
+            flaixOrderUrl: COMMANDE,
+          }),
         ],
       },
     ]);
@@ -257,7 +264,11 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
     const [v] = await makeController().search(undefined, 'stade');
 
     expect(v.flaixOrderUrl).toBeNull();
-    expect(v.commandeOuvreA).toBe(new Date(debut.getTime() - 180 * 60_000).toISOString());
+    // L'heure exacte depend du fuseau : on verifie qu'elle est ANNONCEE, et
+    // qu'elle tombe avant le coup d'envoi. Figer « 06:00Z » ferait tomber le
+    // test a chaque changement d'heure.
+    expect(v.commandeOuvreA).not.toBeNull();
+    expect(new Date(v.commandeOuvreA as string).getTime()).toBeLessThanOrEqual(demain.getTime());
   });
 
   it('le lien d’un evenement PRIVE inaccessible ne fuit pas', async () => {

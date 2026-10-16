@@ -17,8 +17,13 @@ l'avance.
 motif tomberait en silence le jour où Flaix change son format. Un lien saisi
 est un lien vrai.
 
-**La fenêtre ouvre trois heures avant** (`Venue.ordersOpenBeforeMin`, réglable).
-Les portes d'un stade ouvrent avant le coup d'envoi, et c'est là qu'on commande.
+**Le lien ouvre à une HEURE fixe, le jour du match** (`Venue.ordersOpenAt`,
+« 08:00 » par défaut, dans le fuseau du lieu). Une heure plutôt qu'un délai :
+elle ne bouge pas quand l'horaire du match change. L'ouverture des *créneaux de
+retrait* se règle dans Flaix. Deux pièges testés : le fuseau et le changement
+d'heure (`Intl`, pas un « +2 h » codé en dur), et le match de nuit, qui ouvre à
+son coup d'envoi plutôt que le lendemain matin.
+
 La règle vit au serveur : une seule horloge, corrigeable sans build — et le jour
 où l'API Flaix remplira le champ toute seule, l'app ne changera pas d'une ligne.
 
@@ -41,14 +46,15 @@ WebView ne passe pas par une mise à jour JavaScript.
 
 ⚠️ **Avant de déployer** : passer `20261016_lien_commande_flaix`.
 
-**38 tests** (15 fenêtre, 8 service, 5 API, 2 domaines, 5 app, 3 divers).
-**790 au total.**
+**45 tests** (22 fenêtre, 8 service, 5 API, 2 domaines, 5 app, 3 divers).
+**797 au total.**
 
 ```
 + backend/src/common/helpers/fenetre-commande.ts
 + backend/src/common/helpers/fenetre-commande.spec.ts
 + backend/src/modules/events/dto/definir-liens-commande-flaix.dto.ts
 + backend/prisma/migrations/20261016_lien_commande_flaix/migration.sql
++ backend/prisma/migrations/20261016b_heure_ouverture_commande/migration.sql
 + apps/admin/src/components/liens-commande-flaix.tsx
 + apps/mobile/src/components/relais-flaix.tsx
 + apps/mobile/src/components/relais-flaix.native.tsx

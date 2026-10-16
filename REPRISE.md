@@ -525,7 +525,7 @@ l'appelant — 401 prouve qu'elle existe, 404 qu'elle manque.
      ni Live Activity, ni décompte. Le webhook signé existe déjà côté
      Break Eat (HMAC, anti-rejeu, idempotence) : il attend un identifiant.
 
-0000000. **Passer `20261016_lien_commande_flaix`, puis `20261012_photo_du_lieu`, AVANT de déployer l'API.**
+0000000. **Passer `20261016_lien_commande_flaix`, `20261016b_heure_ouverture_commande`, puis `20261012_photo_du_lieu`, AVANT de déployer l'API.**
      Elle ajoute `venues.photo_url`, que la recherche de lieux demande
      désormais. Déployer l'API sans la migration fait échouer **l'écran
      d'accueil** de l'app (colonne absente). `pnpm db:migrate:prod`.

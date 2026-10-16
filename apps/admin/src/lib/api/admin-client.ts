@@ -1012,8 +1012,8 @@ export interface Venue {
   searchTerms?: string | null;
   /** La PHOTO du lieu, affichée en grand sur sa carte dans l'app mobile. */
   photoUrl?: string | null;
-  /** Minutes d'avance à l'ouverture de la commande (défaut 180). */
-  ordersOpenBeforeMin?: number;
+  /** Heure d'accès au lien de commande, le jour de l'événement (« HH:MM »). */
+  ordersOpenAt?: string;
   /** URL de l'image du plan des buvettes (affichée dans l'app mobile). */
   buvettePlanUrl?: string | null;
   /**
@@ -1044,7 +1044,7 @@ export interface VenueInput {
   longitude?: number | null;
   searchTerms?: string | null;
   photoUrl?: string | null;
-  ordersOpenBeforeMin?: number;
+  ordersOpenAt?: string;
   buvettePlanUrl?: string | null;
   flaixEnabled?: boolean;
   flaixVenueId?: string | null;

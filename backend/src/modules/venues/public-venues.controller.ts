@@ -76,7 +76,8 @@ export class PublicVenuesController {
         photoUrl: true,
         flaixEnabled: true,
         flaixVenueId: true,
-        ordersOpenBeforeMin: true,
+        ordersOpenAt: true,
+        timezone: true,
         buvettePlanUrl: true,
         organization: { select: { name: true, logoUrl: true, primaryColor: true } },
         // TOUS les événements (id, statut, visibilité) : la confidentialité se décide
@@ -142,7 +143,11 @@ export class PublicVenuesController {
         // le relais. Des liens collés d'avance sur un lieu non basculé ne
         // changent rien — c'est ce qui permet de préparer la saison tranquille.
         const fenetre = v.flaixEnabled
-          ? fenetreDeCommande(accessible, maintenant, v.ordersOpenBeforeMin)
+          ? fenetreDeCommande(accessible, maintenant, {
+              heure: v.ordersOpenAt,
+              // Le fuseau du LIEU : « 8 h » n'a de sens que quelque part.
+              timezone: v.timezone ?? 'Europe/Paris',
+            })
           : ({ etat: 'aucun' } as const);
 
         // Le prochain événement annoncé, qu'il soit en Flaix ou non : c'est ce
