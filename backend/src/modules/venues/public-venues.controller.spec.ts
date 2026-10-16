@@ -6,6 +6,8 @@ import type { PrismaService } from '../../database/prisma.service';
 const prisma = {
   venue: { findMany: jest.fn() },
   groupMember: { findMany: jest.fn() },
+  // Lu seulement quand un lien Flaix porte des etiquettes a remplir.
+  user: { findUnique: jest.fn() },
 };
 
 function makeController() {
@@ -342,5 +344,84 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
       name: 'OM - Lyon',
       startAt: debut.toISOString(),
     });
+  });
+
+  // ─── L'identite du client dans le lien ──────────────────────
+  //
+  // Le club colle un lien herite de son ancien back-office, avec des
+  // etiquettes a remplir. Sans remplacement, Flaix recoit « [#firstname] » —
+  // et, pire, le « # » tronque tout ce qui suit.
+
+  it('remplit les etiquettes avec l’identite du client connecte', async () => {
+    const debut = new Date(Date.now() - 60 * 60_000);
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      {
+        ...LIEU_FLAIX,
+        events: [
+          EV({
+            startAt: debut,
+            endAt: new Date(Date.now() + 60 * 60_000),
+            flaixOrderUrl:
+              'https://commande.flaix.bo.synertic.net/o/x?firstname=[#firstname]&mail=[#mail]',
+          }),
+        ],
+      },
+    ]);
+    (prisma.groupMember.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+      firstName: 'Remi',
+      lastName: 'Notta',
+      email: 'remi@example.com',
+      phone: null,
+      displayName: 'Remi Notta',
+    });
+
+    const [v] = await makeController().search({ sub: 'u1' } as never, 'stade');
+
+    expect(v.flaixOrderUrl).toBe(
+      'https://commande.flaix.bo.synertic.net/o/x?firstname=Remi&mail=remi%40example.com',
+    );
+  });
+
+  it('un visiteur ANONYME obtient l’adresse nue, sans etiquette', async () => {
+    const debut = new Date(Date.now() - 60 * 60_000);
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      {
+        ...LIEU_FLAIX,
+        events: [
+          EV({
+            startAt: debut,
+            endAt: new Date(Date.now() + 60 * 60_000),
+            flaixOrderUrl:
+              'https://commande.flaix.bo.synertic.net/o/x?firstname=[#firstname]&mail=[#mail]',
+          }),
+        ],
+      },
+    ]);
+
+    const [v] = await makeController().search(undefined, 'stade');
+
+    expect(v.flaixOrderUrl).toBe('https://commande.flaix.bo.synertic.net/o/x');
+    // Et on n'est pas alle chercher une identite qui n'existe pas.
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('un lien SANS etiquette ne declenche aucune lecture d’identite', async () => {
+    // Une requete de moins a chaque frappe au clavier.
+    const debut = new Date(Date.now() - 60 * 60_000);
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      {
+        ...LIEU_FLAIX,
+        events: [
+          EV({ startAt: debut, endAt: new Date(Date.now() + 60 * 60_000), flaixOrderUrl: COMMANDE }),
+        ],
+      },
+    ]);
+    (prisma.groupMember.findMany as jest.Mock).mockResolvedValue([]);
+
+    const [v] = await makeController().search({ sub: 'u1' } as never, 'stade');
+
+    expect(v.flaixOrderUrl).toBe(COMMANDE);
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 });

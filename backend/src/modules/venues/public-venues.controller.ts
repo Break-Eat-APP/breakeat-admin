@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Header, Query, UseGuards } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { EventStatus, EventVisibility, Prisma, VenueStatus } from '@prisma/client';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
@@ -6,6 +6,10 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { CLUB_EN_SERVICE } from '../../common/helpers/organisation-ouverte';
 import { fenetreDeCommande } from '../../common/helpers/fenetre-commande';
+import {
+  personnaliserLien,
+  porteDesEtiquettes,
+} from '../../common/helpers/personnaliser-lien';
 
 /**
  * PublicVenuesController — découverte des lieux pour l'app mobile (Phase 16).
@@ -39,6 +43,17 @@ export class PublicVenuesController {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * `no-store` : cette réponse peut porter le NOM, l'ADRESSE E-MAIL et le
+   * TÉLÉPHONE du client, glissés dans le lien de commande Flaix. Un cache
+   * partagé — proxy, CDN — servirait l'identité d'un client à un autre.
+   *
+   * L'en-tête est posé sur toute la route et non seulement quand le lien est
+   * personnalisé : un cache qui garderait la version anonyme la rendrait
+   * ensuite à un client connecté, qui perdrait sa personnalisation sans
+   * comprendre pourquoi.
+   */
+  @Header('Cache-Control', 'no-store')
   @Get()
   async search(
     @CurrentUser() user?: JwtPayload,
@@ -184,6 +199,37 @@ export class PublicVenuesController {
         };
       })
       .filter((v): v is NonNullable<typeof v> => v !== null);
+
+    // ── L'IDENTITÉ DU CLIENT DANS LE LIEN FLAIX ──────────────────────
+    //
+    // Le club colle un lien qui porte des étiquettes (`[#firstname]`…),
+    // héritées de son ancien back-office. Elles doivent être remplacées AVANT
+    // que l'app n'ouvre la page : c'est ce qui évite au client de se
+    // reconnecter chez Flaix. Voir `common/helpers/personnaliser-lien.ts`.
+    //
+    // On ne va chercher l'identité QUE si un lien l'attend : la grande
+    // majorité des recherches n'en a aucun besoin, et c'est une requête de
+    // moins sur chaque frappe au clavier.
+    const aPersonnaliser = result.some(
+      (v) => v.flaixOrderUrl && porteDesEtiquettes(v.flaixOrderUrl),
+    );
+    if (aPersonnaliser) {
+      const client = user?.sub
+        ? await this.prisma.user.findUnique({
+            where: { id: user.sub },
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              displayName: true,
+            },
+          })
+        : null;
+      for (const v of result) {
+        if (v.flaixOrderUrl) v.flaixOrderUrl = personnaliserLien(v.flaixOrderUrl, client);
+      }
+    }
 
     // Deux chemins pour trouver un lieu, et deux seulement :
     //

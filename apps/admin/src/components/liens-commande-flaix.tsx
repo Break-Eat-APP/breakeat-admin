@@ -100,10 +100,18 @@ export function LiensCommandeFlaix({
 
   return (
     <div>
-      <p style={{ margin: '0 0 14px', fontSize: 13.5, color: BRAND.inkSoft, lineHeight: 1.55 }}>
+      <p style={{ margin: '0 0 10px', fontSize: 13.5, color: BRAND.inkSoft, lineHeight: 1.55 }}>
         Colle l&apos;adresse de commande que Flaix fournit pour chaque match. L&apos;application
         ouvre <strong>celle du match en cours</strong> — tu n&apos;as rien à changer le jour J.
         La commande ouvre à l&apos;avance selon le réglage du lieu.
+      </p>
+      <p style={{ margin: '0 0 14px', fontSize: 12.5, color: BRAND.grey, lineHeight: 1.6 }}>
+        Tu peux garder tes étiquettes d&apos;identité, comme dans ton ancien back-office :{' '}
+        <code style={codeStyle}>[#firstname]</code> <code style={codeStyle}>[#lastname]</code>{' '}
+        <code style={codeStyle}>[#mail]</code> <code style={codeStyle}>[#phone]</code> (ou{' '}
+        <code style={codeStyle}>[#Votre portable]</code>). Break Eat les remplace par les
+        coordonnées du client avant d&apos;ouvrir la page — il n&apos;a pas à se reconnecter.
+        Un client non connecté reçoit l&apos;adresse sans ces informations.
       </p>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -221,3 +229,12 @@ export function LiensCommandeFlaix({
     </div>
   );
 }
+
+const codeStyle: React.CSSProperties = {
+  background: BRAND.bgSubtle,
+  borderRadius: 5,
+  padding: '1px 5px',
+  fontSize: 11.5,
+  fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+  color: BRAND.inkSoft,
+};

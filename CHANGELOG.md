@@ -5,6 +5,56 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.86.0] — 2026-10-16 — Le client ne se reconnecte pas chez Flaix
+
+Information donnée en cours de route, et elle évitait un échec de test : le
+lien que le club colle depuis son ancien back-office porte des **étiquettes
+d'identité**.
+
+```
+…/o/marseille-vs-gap?firstname=[#firstname]&lastname=[#lastname]
+                     &mail=[#mail]&phone=[#Votre portable]
+```
+
+Shapper les remplaçait avant d'ouvrir la page — c'est tout le mécanisme de la
+marque blanche. Break Eat ne le faisait pas. **Deux défauts, et le second est
+invisible :**
+
+1. Flaix aurait reçu `firstname=[#firstname]` et pré-rempli le formulaire avec
+   ce texte ;
+2. surtout, le `#` d'une étiquette ouvre un **fragment d'URL** — qu'un
+   navigateur n'envoie jamais au serveur. Tout ce qui suit la première
+   étiquette ne serait **jamais arrivé** chez Flaix. Le lien aurait paru
+   correct dans l'admin et aurait été tronqué à l'ouverture.
+
+Le remplacement se fait désormais **sur le serveur**, au moment de rendre la
+liste des lieux : une seule place, corrigeable sans rebuild, et la build déjà
+partie en TestFlight en profite sans rien changer.
+
+Les étiquettes reconnues tolèrent les orthographes du club — `[#firstname]`,
+`[#prenom]`, `[#mail]`, `[#Votre portable]`, accents et espaces compris : les
+liens existants ne sont pas à retoucher.
+
+**Un paramètre qu'on ne peut pas remplir est retiré en entier** (client non
+connecté, téléphone non renseigné, étiquette inconnue). Un visiteur anonyme
+reçoit l'adresse nue et Flaix lui demande ses coordonnées — le repli correct.
+
+⚠️ Cette adresse porte le nom, l'e-mail et le téléphone du client : la route
+répond désormais `Cache-Control: no-store`. Un cache partagé servirait
+l'identité d'un client à un autre.
+
+**22 tests** (19 sur le remplacement, 3 sur l'API), dont l'échappement des
+espaces littéraux — attrapé par le test, pas par la relecture. **829 au total.**
+
+```
++ backend/src/common/helpers/personnaliser-lien.ts
++ backend/src/common/helpers/personnaliser-lien.spec.ts
+~ backend/src/modules/venues/public-venues.controller.ts (+ spec)
+~ apps/admin/src/components/liens-commande-flaix.tsx
+```
+
+---
+
 ## [0.85.0] — 2026-10-16 — Deux fois le même lien, et personne pour le dire
 
 Question posée : « et si j'ai deux liens identiques en même temps, ou deux fois
