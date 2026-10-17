@@ -4,24 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
-  CreditCard,
-  LayoutDashboard,
-  Receipt,
-  Wand2,
-  CalendarDays,
-  Store,
-  Tags,
-  Contact,
-  FileBarChart,
-  Palette,
-  Megaphone,
-  Building2,
-  FileText,
-  Users,
-  Settings,
-  type LucideIcon,
-} from 'lucide-react';
-import {
   getToken,
   getOrgId,
   getOrgName,
@@ -30,85 +12,8 @@ import {
   apiMeWithMemberships,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
+import { NAV_GROUPS } from '@/lib/nav';
 import { BreakEatLogo } from '@/components/brand/BreakEatLogo';
-
-/** `external` ouvre dans un onglet à part : on quitte l'admin, pas la session. */
-type NavItem = { href: string; icon: LucideIcon; label: string; external?: boolean };
-type NavGroup = { title: string; items: NavItem[] };
-
-// Grouped navigation — structure le menu par intention (pilotage / config /
-// organisation / système / outils) pour un repérage rapide et un rendu soigné.
-const NAV_GROUPS: NavGroup[] = [
-  {
-    title: 'Pilotage',
-    items: [
-      { href: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
-      { href: '/accounting', icon: Receipt, label: 'Comptabilité' },
-      // Avec le tableau de bord et la comptabilité : c'est du PILOTAGE. Le
-      // club y lit son audience et sa clientèle, pas une configuration.
-      { href: '/clients', icon: Contact, label: 'Mes clients' },
-      // Les rapports d'événements vivent chez Flaix, avec leurs propres
-      // identifiants : on y mène, sans jamais toucher au mot de passe. Le lien
-      // de CHAQUE match est sur sa fiche événement.
-      { href: 'https://ops.flaixlabs.com/login', icon: FileBarChart, label: 'Rapports Flaix', external: true },
-    ],
-  },
-  {
-    // Regroupé par objet plutôt que par écran : « mon lieu », « mes points de
-    // retrait », « mon équipe ». Le club cherche une chose, pas une page.
-    title: 'Mon lieu',
-    items: [
-      // UNE entrée pour le lieu, et une seule.
-      //
-      // « Configurer mon lieu » pointait vers le wizard, « Fiche du lieu »
-      // vers le vrai formulaire. Le club configurait donc dans un écran qui
-      // CRÉE un ensemble neuf à chaque passage, puis relisait l'autre — d'où
-      // « rien ne s’enregistre ». Deux portes pour un même objet, dont une
-      // qui empile des doublons.
-      { href: '/organizations', icon: Building2, label: 'Mon lieu' },
-      // Le wizard reste accessible, nommé pour ce qu’il est : la mise en place
-      // INITIALE, pas l’écran où l’on revient modifier.
-      { href: '/wizard', icon: Wand2, label: 'Configuration de démarrage' },
-      // L'apparence décrit ce que le client voit DE CE LIEU : sa place est ici,
-      // pas dans un groupe « communication » avec les campagnes push.
-      { href: '/appearance', icon: Palette, label: "Apparence de l'app" },
-      { href: '/events', icon: CalendarDays, label: 'Événements' },
-      // Le contrat signé avec Break Eat et les pièces du lieu : c'est une
-      // pièce DU LIEU, pas un réglage système.
-      { href: '/documentation', icon: FileText, label: 'Documentation' },
-    ],
-  },
-  {
-    title: 'Points de retrait',
-    items: [
-      { href: '/suppliers', icon: Store, label: 'Points de retrait' },
-      { href: '/encaissement', icon: CreditCard, label: 'Encaissement' },
-    ],
-  },
-  {
-    title: 'Équipe & clients',
-    items: [
-      { href: '/team', icon: Users, label: 'Équipe' },
-      { href: '/groups', icon: Tags, label: 'Groupes de clients' },
-    ],
-  },
-  {
-    title: 'Communication',
-    items: [
-      // « Notifications » — un push par ETAPE de commande — a ete retiree le
-      // 07/09/2026 : la Live Activity raconte deja la progression, et le push
-      // la doublait. Ce qui compte reste la CAMPAGNE, adressee a tous les
-      // clients d'un club.
-      { href: '/campaigns', icon: Megaphone, label: 'Campagnes & push' },
-    ],
-  },
-  {
-    title: 'Système',
-    items: [
-      { href: '/settings', icon: Settings, label: 'Paramètres' },
-    ],
-  },
-];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -267,23 +172,44 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav style={{ flex: 1, padding: '10px 0 14px' }}>
           {NAV_GROUPS.map((group, gi) => (
             <div key={group.title} style={{ marginTop: gi === 0 ? 4 : 14 }}>
-              <div
+              {/*
+                LE TITRE DE SECTION EST UN LIEN.
+
+                Il ouvre la page des modules de cette section, chacun avec une
+                phrase qui dit ce qu'on y fait. Le menu dit OÙ l'on va ; cette
+                page dit ce qu'on y trouve. Qui connaît son chemin clique
+                directement une entrée et ne passe jamais par là — les deux
+                publics sont servis sans se gêner.
+
+                ORANGE et Raleway : un titre qui ne se distingue pas de ses
+                entrées ne structure rien, il devient une ligne de plus. La
+                couleur ET la famille le séparent, sans grossir le texte dans un
+                menu déjà dense.
+              */}
+              <Link
+                href={`/section/${group.slug}`}
                 style={{
+                  display: 'block',
                   padding: '0 22px 7px',
-                  // ORANGE et Raleway : un titre de groupe qui ne se distingue
-                  // pas de ses entrees ne structure rien — il devient une ligne
-                  // de plus. La couleur ET la famille le separent, sans avoir a
-                  // grossir le texte dans un menu deja dense.
                   fontFamily: BRAND.fontDisplay,
                   fontSize: 11,
                   fontWeight: 800,
                   letterSpacing: '0.1em',
                   textTransform: 'uppercase',
                   color: BRAND.orange,
+                  textDecoration: 'none',
+                  opacity: pathname === `/section/${group.slug}` ? 1 : 0.8,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = '1';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity =
+                    pathname === `/section/${group.slug}` ? '1' : '0.8';
                 }}
               >
                 {group.title}
-              </div>
+              </Link>
               {group.items.map(({ href, icon: Icon, label, external }) => {
                 // For /organizations, redirect to specific org id if available
                 const resolvedHref =
