@@ -69,11 +69,18 @@ export default function GroupsPage() {
   }, [data]);
 
   return (
-    <div style={{ padding: '32px 40px', maxWidth: 1100 }}>
+    <div style={{ padding: '30px 36px 56px', maxWidth: 1500 }}>
       <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 700, color: BRAND.ink, margin: 0 }}>Groupes &amp; accès</h1>
-          <p style={{ fontSize: 14, color: BRAND.grey, margin: '6px 0 0' }}>
+          <h1 style={{
+            fontFamily: BRAND.fontDisplay,
+            fontSize: 30,
+            fontWeight: 800,
+            color: BRAND.ink,
+            margin: 0,
+            letterSpacing: -0.6,
+          }}>Groupes &amp; accès</h1>
+          <p style={{ fontSize: 14.5, color: BRAND.grey, margin: '7px 0 0', lineHeight: 1.5 }}>
             Catégorisez vos abonnés par groupe — accès privés, restauration d'entreprise, domaine email auto.
           </p>
         </div>

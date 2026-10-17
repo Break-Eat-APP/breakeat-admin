@@ -34,6 +34,19 @@ export const BRAND = {
   grey: '#776e68', // hints — 4.7:1 sur le canevas, seuil WCAG du petit texte
   border: '#eee7e1', // filets — chauds, presque invisibles
   bg: '#fbf8f5', // canevas — blanc cassé chaud
+  /**
+   * CANEVAS TEINTÉ — pour les écrans entièrement faits de cartes.
+   *
+   * Plus marqué que `bg`, et c'est tout l'effet recherché : une carte blanche
+   * posée sur du blanc cassé ne se détache pas, et la page se lit comme un
+   * document. Avec ce fond, on voit les PLANS — ce qui est posé sur quoi — et
+   * l'écran devient un outil. Direction reprise de FlaiX Expert (16/10),
+   * transposée du violet à l'orange de la marque.
+   *
+   * À réserver aux surfaces en grille de cartes : sur un écran de formulaire,
+   * il ajouterait du bruit sans rien séparer.
+   */
+  canvas: '#faf3ef',
   bgSubtle: '#f5efe9', // remplissages, chips, en-têtes de tableau
   surface: '#ffffff', // cartes — blanc franc, ressort sur le canevas
 

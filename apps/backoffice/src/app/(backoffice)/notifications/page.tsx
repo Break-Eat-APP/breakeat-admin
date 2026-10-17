@@ -97,10 +97,17 @@ export default function NotificationsPage() {
   const history    = scheduled?.filter((s) => s.status !== 'PENDING') ?? [];
 
   return (
-    <div style={{ padding: '32px 40px', maxWidth: 780 }}>
+    <div style={{ padding: '30px 36px 56px', maxWidth: 820 }}>
       <header style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 700, color: BRAND.ink, margin: 0 }}>Notifications push</h1>
-        <p style={{ fontSize: 14, color: BRAND.grey, margin: '6px 0 0' }}>
+        <h1 style={{
+            fontFamily: BRAND.fontDisplay,
+            fontSize: 30,
+            fontWeight: 800,
+            color: BRAND.ink,
+            margin: 0,
+            letterSpacing: -0.6,
+          }}>Notifications push</h1>
+        <p style={{ fontSize: 14.5, color: BRAND.grey, margin: '7px 0 0', lineHeight: 1.5 }}>
           Envoie immédiat ou programmé vers tous les utilisateurs ou un club spécifique.
         </p>
       </header>

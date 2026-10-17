@@ -20,13 +20,41 @@ import {
   isSuperAdmin,
 } from '@/lib/api/backoffice-client';
 
-const NAV_ITEMS: { href: string; icon: LucideIcon; label: string }[] = [
-  { href: '/overview', icon: LayoutDashboard, label: "Vue d'ensemble" },
-  { href: '/organizations', icon: Building2, label: 'Organisations' },
-  { href: '/users', icon: UserCircle, label: 'Utilisateurs' },
-  { href: '/groups', icon: Users, label: 'Groupes & accès' },
-  { href: '/liens-flaix', icon: Link2, label: 'Liens Flaix' },
-  { href: '/notifications', icon: Bell, label: 'Notifications' },
+/**
+ * LE MENU, RANGÉ PAR QUESTION PLUTÔT QUE PAR TABLE.
+ *
+ * Six entrées à plat, c'est six choses à relire à chaque fois. Groupées, on
+ * ne lit que le groupe : « je cherche un club » → Clubs ; « je cherche
+ * quelqu'un » → Personnes. La structure se reconnaît sans être lue.
+ *
+ * « Vue d'ensemble » reste SEULE en tête : c'est le point d'entrée, et le
+ * seul écran qui parle de toute la plateforme à la fois.
+ */
+type Entree = { href: string; icon: LucideIcon; label: string };
+type Groupe = { titre?: string; entrees: Entree[] };
+
+const NAV: Groupe[] = [
+  {
+    entrees: [{ href: '/overview', icon: LayoutDashboard, label: "Vue d'ensemble" }],
+  },
+  {
+    titre: 'Clubs',
+    entrees: [
+      { href: '/organizations', icon: Building2, label: 'Organisations' },
+      { href: '/liens-flaix', icon: Link2, label: 'Liens de commande' },
+    ],
+  },
+  {
+    titre: 'Personnes',
+    entrees: [
+      { href: '/users', icon: UserCircle, label: 'Utilisateurs' },
+      { href: '/groups', icon: Users, label: 'Groupes & accès' },
+    ],
+  },
+  {
+    titre: 'Communication',
+    entrees: [{ href: '/notifications', icon: Bell, label: 'Notifications' }],
+  },
 ];
 
 export default function BackofficeLayout({ children }: { children: React.ReactNode }) {
@@ -137,60 +165,98 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
           </div>
         </div>
 
-        {/* Navigation — icônes Lucide, pastille active arrondie */}
-        <nav style={{ flex: 1, padding: '12px 0' }}>
-          {NAV_ITEMS.map(({ href, icon: Icon, label }) => {
-            const isActive =
-              pathname === href || (href !== '/overview' && pathname.startsWith(href));
-
-            return (
-              <Link
-                key={href}
-                href={href}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 11,
-                  margin: '1px 10px',
-                  padding: '9px 12px',
-                  borderRadius: 10,
-                  color: isActive ? BRAND.orange : BRAND.inkSoft,
-                  background: isActive ? BRAND.orangeTint : 'transparent',
-                  textDecoration: 'none',
-                  fontSize: 13.5,
-                  fontWeight: isActive ? 600 : 500,
-                  transition: 'background 0.12s, color 0.12s',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) e.currentTarget.style.background = BRAND.bgSubtle;
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) e.currentTarget.style.background = 'transparent';
-                }}
-              >
-                <Icon size={18} strokeWidth={1.75} style={{ flexShrink: 0 }} />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* User + logout */}
-        <div style={{ padding: '12px 20px', borderTop: `1px solid ${BRAND.border}` }}>
-          {userName && (
+        {/*
+          QUI EST CONNECTÉ, et sur quoi. Repris de FlaiX Expert : savoir d'un
+          coup d'œil qu'on est en super-admin évite les gestes faits « dans le
+          mauvais compte », qui sont les plus coûteux à rattraper.
+        */}
+        <div style={{ padding: '14px 14px 2px' }}>
+          <div
+            style={{
+              background: BRAND.orangeTint,
+              borderRadius: 14,
+              padding: '12px 14px',
+            }}
+          >
             <div
               style={{
-                fontSize: 12,
-                color: BRAND.grey,
-                marginBottom: 8,
+                fontSize: 13.5,
+                fontWeight: 700,
+                color: BRAND.ink,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
               }}
             >
-              {userName}
+              {userName || 'Super-admin'}
             </div>
-          )}
+            <div style={{ fontSize: 11.5, color: BRAND.orange, marginTop: 2, fontWeight: 600 }}>
+              Accès à tous les clubs
+            </div>
+          </div>
+        </div>
+
+        {/*
+          Navigation groupée. L'entrée active est une PILULE PLEINE orange et
+          non une teinte : sur une liste de six, une nuance pâle se cherche.
+          Pleine, elle se trouve sans la lire.
+        */}
+        <nav style={{ flex: 1, padding: '10px 0 16px', overflowY: 'auto' }}>
+          {NAV.map((groupe, i) => (
+            <div key={groupe.titre ?? `g${i}`} style={{ marginBottom: 6 }}>
+              {groupe.titre ? (
+                <div
+                  style={{
+                    ...BRAND.sectionTitle,
+                    color: BRAND.grey,
+                    fontSize: 10.5,
+                    margin: '14px 22px 6px',
+                  }}
+                >
+                  {groupe.titre}
+                </div>
+              ) : null}
+              {groupe.entrees.map(({ href, icon: Icon, label }) => {
+                const isActive =
+                  pathname === href || (href !== '/overview' && pathname.startsWith(href));
+
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 11,
+                      margin: '2px 12px',
+                      padding: '10px 14px',
+                      borderRadius: BRAND.radius.pill,
+                      color: isActive ? '#fff' : BRAND.inkSoft,
+                      background: isActive ? BRAND.orange : 'transparent',
+                      boxShadow: isActive ? BRAND.shadowButton : 'none',
+                      textDecoration: 'none',
+                      fontSize: 13.5,
+                      fontWeight: isActive ? 700 : 500,
+                      transition: 'background 0.12s, color 0.12s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) e.currentTarget.style.background = BRAND.bgSubtle;
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <Icon size={18} strokeWidth={1.9} style={{ flexShrink: 0 }} />
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+
+        {/* La sortie. Le nom est déjà en haut : le répéter ne dit rien de plus. */}
+        <div style={{ padding: '12px 14px', borderTop: `1px solid ${BRAND.border}` }}>
           <button
             onClick={handleLogout}
             style={{
@@ -198,8 +264,8 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
               background: '#fff',
               color: BRAND.inkSoft,
               border: `1px solid ${BRAND.border}`,
-              borderRadius: 10,
-              padding: '9px 0',
+              borderRadius: BRAND.radius.pill,
+              padding: '10px 0',
               fontSize: 13,
               fontWeight: 600,
               cursor: 'pointer',
@@ -221,7 +287,8 @@ export default function BackofficeLayout({ children }: { children: React.ReactNo
       </aside>
 
       {/* ─── Main content ─────────────────────────────────────────────────── */}
-      <main style={{ flex: 1, overflowY: 'auto', minWidth: 0, background: BRAND.bg }}>
+      {/* Canevas TEINTÉ : c'est lui qui fait ressortir les cartes blanches. */}
+      <main style={{ flex: 1, overflowY: 'auto', minWidth: 0, background: BRAND.canvas }}>
         {children}
       </main>
     </div>

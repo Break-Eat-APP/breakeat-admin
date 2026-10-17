@@ -92,8 +92,15 @@ export default function LiensFlaixPage() {
   }, [evenements]);
 
   return (
-    <div style={{ padding: 32, fontFamily: BRAND.font }}>
-      <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0, letterSpacing: -0.3 }}>
+    <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font }}>
+      <h1 style={{
+            fontFamily: BRAND.fontDisplay,
+            fontSize: 30,
+            fontWeight: 800,
+            color: BRAND.ink,
+            margin: 0,
+            letterSpacing: -0.6,
+        }}>
         Liens de commande Flaix
       </h1>
       <p
