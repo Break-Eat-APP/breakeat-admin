@@ -108,6 +108,10 @@ export function PageHeader({
           {sous ? (
             <p
               style={{
+                // Raleway aussi sur les phrases : demandé le 17/10 pour une
+                // écriture plus moderne. Elle reste lisible à cette taille, et
+                // donne au texte le même ton qu'aux titres.
+                fontFamily: BRAND.fontDisplay,
                 fontSize: 14.5,
                 color: BRAND.grey,
                 margin: '7px 0 0',
@@ -169,7 +173,15 @@ export function TitreCarte({ titre, sous }: { titre: string; sous?: string }) {
         {titre}
       </h2>
       {sous ? (
-        <p style={{ fontSize: 13, color: BRAND.grey, margin: '5px 0 0', lineHeight: 1.5 }}>
+        <p
+          style={{
+            fontFamily: BRAND.fontDisplay,
+            fontSize: 13.5,
+            color: BRAND.grey,
+            margin: '5px 0 0',
+            lineHeight: 1.55,
+          }}
+        >
           {sous}
         </p>
       ) : null}
@@ -281,12 +293,24 @@ export function CarteLien({
           >
             {titre}
           </div>
-          <p style={{ fontSize: 13, color: BRAND.grey, margin: '6px 0 0', lineHeight: 1.5 }}>
+          <p
+            style={{
+              fontFamily: BRAND.fontDisplay,
+              fontSize: 13.5,
+              color: BRAND.grey,
+              margin: '6px 0 0',
+              lineHeight: 1.55,
+            }}
+          >
             {description}
           </p>
         </div>
         {etat ? (
-          <div style={{ fontSize: 13, fontWeight: 600, color: BRAND.orange }}>{etat}</div>
+          <div
+            style={{ fontFamily: BRAND.fontDisplay, fontSize: 13, fontWeight: 700, color: BRAND.orange }}
+          >
+            {etat}
+          </div>
         ) : null}
       </div>
     </Link>

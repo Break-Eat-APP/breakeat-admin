@@ -73,6 +73,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
+  /**
+   * La section est-elle ACTIVE ?
+   *
+   * Vrai sur sa page de modules, mais aussi sur chacun des écrans qu'elle
+   * contient : le menu ne liste plus les modules, donc sans cela on perdrait
+   * tout repère dès qu'on en ouvre un.
+   */
+  const actif = (slug: string): boolean => {
+    const groupe = NAV_GROUPS.find((g) => g.slug === slug);
+    if (!groupe) return false;
+    if (pathname === `/section/${slug}`) return true;
+    return groupe.items.some(
+      (i) => !i.external && (pathname === i.href || pathname.startsWith(`${i.href}/`)),
+    );
+  };
+
   return (
     <div
       style={{
@@ -168,10 +184,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         )}
 
-        {/* Navigation — groupée par intention, icônes Lucide, pastille active arrondie */}
-        <nav style={{ flex: 1, padding: '10px 0 14px' }}>
-          {NAV_GROUPS.map((group, gi) => (
-            <div key={group.title} style={{ marginTop: gi === 0 ? 4 : 14 }}>
+        {/*
+          LE MENU NE LISTE QUE DES SECTIONS.
+
+          Chaque section ouvre la page de ses modules, où chacun porte une
+          phrase qui dit ce qu'on y fait. Les entrées directes ont été retirées
+          le 17/10 : deux chemins vers le même écran, c'est une duplication à
+          tenir à jour — et un menu qui s'allonge sans rien expliquer.
+        */}
+        <nav style={{ flex: 1, padding: '14px 0 14px' }}>
+          {NAV_GROUPS.map((group) => (
+            <div key={group.title}>
               {/*
                 LE TITRE DE SECTION EST UN LIEN.
 
@@ -189,77 +212,35 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link
                 href={`/section/${group.slug}`}
                 style={{
-                  display: 'block',
-                  padding: '0 22px 7px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 11,
+                  margin: '3px 12px',
+                  padding: '12px 16px',
+                  borderRadius: BRAND.radius.pill,
+                  // Raleway : une seule famille pour toute la navigation et les
+                  // titres. Elle donne le ton « moderne » sans qu'on ait à
+                  // grossir quoi que ce soit.
                   fontFamily: BRAND.fontDisplay,
-                  fontSize: 11,
-                  fontWeight: 800,
-                  letterSpacing: '0.1em',
-                  textTransform: 'uppercase',
-                  color: BRAND.orange,
+                  fontSize: 14,
+                  fontWeight: actif(group.slug) ? 800 : 600,
+                  letterSpacing: 0.1,
+                  color: actif(group.slug) ? '#fff' : BRAND.ink,
+                  background: actif(group.slug) ? BRAND.orange : 'transparent',
+                  boxShadow: actif(group.slug) ? BRAND.shadowButton : 'none',
                   textDecoration: 'none',
-                  opacity: pathname === `/section/${group.slug}` ? 1 : 0.8,
+                  transition: 'background 0.12s, color 0.12s',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.opacity = '1';
+                  if (!actif(group.slug)) e.currentTarget.style.background = BRAND.bgSubtle;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.opacity =
-                    pathname === `/section/${group.slug}` ? '1' : '0.8';
+                  if (!actif(group.slug)) e.currentTarget.style.background = 'transparent';
                 }}
               >
+                <group.icon size={18} strokeWidth={2} style={{ flexShrink: 0 }} />
                 {group.title}
               </Link>
-              {group.items.map(({ href, icon: Icon, label, external }) => {
-                // For /organizations, redirect to specific org id if available
-                const resolvedHref =
-                  href === '/organizations' && getOrgId()
-                    ? `/organizations/${getOrgId()}`
-                    : href;
-
-                // Un lien externe n'est jamais « actif » : il ne correspond à
-                // aucune route de l'admin.
-                const isActive =
-                  !external &&
-                  (pathname === resolvedHref ||
-                    (href !== '/dashboard' && pathname.startsWith(href)));
-
-                return (
-                  <Link
-                    key={href}
-                    href={resolvedHref}
-                    target={external ? '_blank' : undefined}
-                    rel={external ? 'noopener noreferrer' : undefined}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 11,
-                      margin: '2px 12px',
-                      padding: '10px 14px',
-                      // PILULE PLEINE sur l'actif : sur quinze entrées, une
-                      // teinte pâle se cherche. Pleine, elle se trouve sans
-                      // être lue.
-                      borderRadius: BRAND.radius.pill,
-                      color: isActive ? '#fff' : BRAND.inkSoft,
-                      background: isActive ? BRAND.orange : 'transparent',
-                      boxShadow: isActive ? BRAND.shadowButton : 'none',
-                      textDecoration: 'none',
-                      fontSize: 13.5,
-                      fontWeight: isActive ? 700 : 500,
-                      transition: 'background 0.12s, color 0.12s',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) e.currentTarget.style.background = BRAND.bgSubtle;
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) e.currentTarget.style.background = 'transparent';
-                    }}
-                  >
-                    <Icon size={18} strokeWidth={1.75} style={{ flexShrink: 0 }} />
-                    {label}
-                  </Link>
-                );
-              })}
             </div>
           ))}
         </nav>

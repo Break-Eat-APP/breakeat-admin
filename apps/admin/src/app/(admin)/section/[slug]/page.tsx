@@ -79,7 +79,15 @@ export default function SectionPage({ params }: { params: Promise<{ slug: string
                   {item.label}
                 </div>
                 <p
-                  style={{ fontSize: 13, color: BRAND.grey, margin: '6px 0 0', lineHeight: 1.5 }}
+                  style={{
+                    // Raleway sur la phrase aussi : c'est elle qu'on lit pour
+                    // choisir, elle merite le meme soin que le titre.
+                    fontFamily: BRAND.fontDisplay,
+                    fontSize: 13.5,
+                    color: BRAND.grey,
+                    margin: '6px 0 0',
+                    lineHeight: 1.55,
+                  }}
                 >
                   {item.description}
                 </p>
@@ -87,11 +95,27 @@ export default function SectionPage({ params }: { params: Promise<{ slug: string
               {/* Un lien qui SORT de la console se signale : on ne découvre pas
                   qu'on a changé de site une fois qu'on y est. */}
               {item.external ? (
-                <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.orange }}>
+                <div
+                  style={{
+                    fontFamily: BRAND.fontDisplay,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: BRAND.orange,
+                  }}
+                >
                   Ouvre chez Flaix ↗
                 </div>
               ) : (
-                <div style={{ fontSize: 13, fontWeight: 700, color: BRAND.orange }}>Ouvrir</div>
+                <div
+                  style={{
+                    fontFamily: BRAND.fontDisplay,
+                    fontSize: 13,
+                    fontWeight: 700,
+                    color: BRAND.orange,
+                  }}
+                >
+                  Ouvrir
+                </div>
               )}
             </div>
           </a>

@@ -46,7 +46,10 @@ export const BRAND = {
    * À réserver aux surfaces en grille de cartes : sur un écran de formulaire,
    * il ajouterait du bruit sans rien séparer.
    */
-  canvas: '#faf3ef',
+  // Relevé le 17/10 : à #faf3ef le fond tirait sur le gris rosé, et le client
+  // l'a vu avant moi. Un canevas « teinté » doit se lire comme une COULEUR,
+  // pas comme un blanc sale — sinon il n'apporte que de la grisaille.
+  canvas: '#fef3ea',
   bgSubtle: '#f5efe9', // remplissages, chips, en-têtes de tableau
   surface: '#ffffff', // cartes — blanc franc, ressort sur le canevas
 

@@ -43,6 +43,8 @@ export type GroupeNav = {
   /** Identifiant d'URL de la page de section : `/section/<slug>`. */
   slug: string;
   title: string;
+  /** L'icône de la section dans le menu — c'est elle qu'on reconnaît avant le mot. */
+  icon: LucideIcon;
   /** La phrase sous le titre de la page de section. */
   sous: string;
   items: EntreeNav[];
@@ -51,6 +53,7 @@ export type GroupeNav = {
 export const NAV_GROUPS: GroupeNav[] = [
   {
     slug: 'pilotage',
+    icon: LayoutDashboard,
     title: 'Pilotage',
     sous: 'Ce que ton club a vendu, et à qui.',
     items: [
@@ -90,6 +93,7 @@ export const NAV_GROUPS: GroupeNav[] = [
     // Regroupé par objet plutôt que par écran : « mon lieu », « mes points de
     // retrait », « mon équipe ». Le club cherche une chose, pas une page.
     slug: 'mon-lieu',
+    icon: Building2,
     title: 'Mon lieu',
     sous: 'Tous les réglages du lieu, au même endroit.',
     items: [
@@ -142,6 +146,7 @@ export const NAV_GROUPS: GroupeNav[] = [
   },
   {
     slug: 'points-de-retrait',
+    icon: Store,
     title: 'Points de retrait',
     sous: 'Où l’on sert, et où va l’argent.',
     items: [
@@ -161,6 +166,7 @@ export const NAV_GROUPS: GroupeNav[] = [
   },
   {
     slug: 'equipe-clients',
+    icon: Users,
     title: 'Équipe & clients',
     sous: 'Qui travaille, et qui a le droit de voir quoi.',
     items: [
@@ -180,6 +186,7 @@ export const NAV_GROUPS: GroupeNav[] = [
   },
   {
     slug: 'communication',
+    icon: Megaphone,
     title: 'Communication',
     sous: 'Parler à tes clients, au bon moment.',
     items: [
@@ -197,6 +204,7 @@ export const NAV_GROUPS: GroupeNav[] = [
   },
   {
     slug: 'systeme',
+    icon: Settings,
     title: 'Système',
     sous: 'Les réglages techniques. Rarement nécessaires.',
     items: [
