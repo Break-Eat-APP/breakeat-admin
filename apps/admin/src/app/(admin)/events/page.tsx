@@ -162,7 +162,7 @@ ${msg}`);
   }
 
   return (
-    <div style={{ padding: 32, fontFamily: BRAND.font }}>
+    <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font }}>
       {/* Header */}
       <div
         style={{
@@ -173,7 +173,7 @@ ${msg}`);
         }}
       >
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0, letterSpacing: -0.3 }}>
+          <h1 style={{ fontFamily: BRAND.fontDisplay, fontSize: 30, fontWeight: 800, color: BRAND.ink, margin: 0, letterSpacing: -0.6 }}>
             Événements &amp; configuration
           </h1>
           <p style={{ color: BRAND.inkSoft, fontSize: 13.5, margin: '6px 0 0', lineHeight: 1.55, maxWidth: 580 }}>

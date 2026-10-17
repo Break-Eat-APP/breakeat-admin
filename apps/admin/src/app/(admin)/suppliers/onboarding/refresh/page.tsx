@@ -21,7 +21,7 @@ export default function LienInscriptionExpire() {
   }, [router]);
 
   return (
-    <div style={{ padding: 32, fontFamily: BRAND.font, color: BRAND.grey, fontSize: 14 }}>
+    <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font, color: BRAND.grey, fontSize: 14 }}>
       Le lien d’inscription a expiré — ouverture de la page Encaissement…
     </div>
   );

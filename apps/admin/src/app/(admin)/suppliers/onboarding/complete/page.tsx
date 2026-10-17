@@ -24,7 +24,7 @@ export default function RetourInscriptionStripe() {
   }, [router]);
 
   return (
-    <div style={{ padding: 32, fontFamily: BRAND.font, color: BRAND.grey, fontSize: 14 }}>
+    <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font, color: BRAND.grey, fontSize: 14 }}>
       Retour de Stripe — ouverture de la page Encaissement…
     </div>
   );

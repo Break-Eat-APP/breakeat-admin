@@ -249,11 +249,11 @@ export default function AccountingPage() {
   const nbOrdersEvenements = data?.ordersCount ?? 0;
 
   return (
-    <div style={{ padding: 32, fontFamily: BRAND.font }}>
+    <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 8 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0, letterSpacing: -0.3 }}>Comptabilité</h1>
+          <h1 style={{ fontFamily: BRAND.fontDisplay, fontSize: 30, fontWeight: 800, color: BRAND.ink, margin: 0, letterSpacing: -0.6 }}>Comptabilité</h1>
           <p style={{ color: BRAND.inkSoft, fontSize: 13.5, margin: '6px 0 0', lineHeight: 1.55 }}>
             Chiffre d&apos;affaires, TVA et commandes — consolidés sur l&apos;ensemble des événements de <strong>{orgName ?? 'l\'organisation'}</strong>.
             La TVA est calculée <strong>produit par produit</strong> : 5,5 %, 10 % ou 20 % selon ce qui est vendu.

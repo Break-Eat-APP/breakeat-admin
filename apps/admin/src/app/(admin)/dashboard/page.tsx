@@ -2,7 +2,21 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { RefreshCw, ChevronRight, Building2, Lock, CalendarDays, type LucideIcon } from 'lucide-react';
+import {
+  RefreshCw,
+  ChevronRight,
+  Building2,
+  Lock,
+  CalendarDays,
+  Palette,
+  Store,
+  CreditCard,
+  Receipt,
+  Contact,
+  Megaphone,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   apiGetOrgStats,
   getStoredUser,
@@ -13,6 +27,7 @@ import {
   type OrgEventStat,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
+import { CarteLien, Grille, TitreSection } from '@/components/ui';
 
 // ─── Formatting helpers ─────────────────────────────────────────────────────────
 
@@ -150,7 +165,7 @@ export default function DashboardPage() {
   const now = Date.now();
 
   return (
-    <div style={{ padding: 32, maxWidth: 1100, fontFamily: BRAND.font }}>
+    <div style={{ padding: '30px 36px 56px', maxWidth: 1280, fontFamily: BRAND.font }}>
       {/* Header */}
       <div
         style={{
@@ -162,7 +177,16 @@ export default function DashboardPage() {
         }}
       >
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 600, color: BRAND.ink, margin: 0, letterSpacing: -0.5 }}>
+          <h1
+            style={{
+              fontFamily: BRAND.fontDisplay,
+              fontSize: 30,
+              fontWeight: 800,
+              color: BRAND.ink,
+              margin: 0,
+              letterSpacing: -0.6,
+            }}
+          >
             Bonjour{userName ? `, ${userName}` : ''}
           </h1>
           {orgName && (
@@ -301,17 +325,106 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* Quick-access footer */}
-      <div style={{ marginTop: 36, padding: '18px 0', borderTop: `1px solid ${BRAND.border}` }}>
-        <div style={{ fontSize: 12, color: BRAND.grey }}>
-          Accès rapide — Dashboard opérateur :{' '}
+      {/*
+        OÙ ALLER MAINTENANT.
+
+        Le menu latéral mène déjà partout, mais un menu se lit mot à mot. Une
+        grille de cartes se parcourt d'un regard, et chaque carte DIT ce qu'on
+        va y faire — ce qu'un libellé de menu ne dira jamais. C'est la
+        différence entre savoir où cliquer et savoir pourquoi.
+
+        Le poste opérateur, lui, ouvre dans un onglet à part : il vit sur une
+        tablette au comptoir, pas dans cet écran.
+      */}
+      <TitreSection>Mon lieu</TitreSection>
+      <Grille>
+        <CarteLien
+          href="/organizations"
+          icone={Building2}
+          titre="Mon lieu"
+          description="L'adresse, le fuseau, la photo, le plan des buvettes et le relais Flaix."
+          etat={orgName || 'À configurer'}
+        />
+        <CarteLien
+          href="/events"
+          icone={CalendarDays}
+          titre="Événements"
+          description="Créer un match, le rendre actif, et coller les liens de commande Flaix de la saison."
+          etat={
+            stats && stats.events.length > 0
+              ? `${stats.events.length} événement${stats.events.length > 1 ? 's' : ''}`
+              : 'Aucun événement'
+          }
+        />
+        <CarteLien
+          href="/appearance"
+          icone={Palette}
+          titre="Apparence de l'app"
+          description="Ce que le client voit de ce lieu : couleurs, logo, raccourcis de l'accueil."
+          etat="Vu par tes clients"
+        />
+      </Grille>
+
+      <TitreSection>Vendre</TitreSection>
+      <Grille>
+        <CarteLien
+          href="/suppliers"
+          icone={Store}
+          titre="Points de retrait"
+          description="Les buvettes, leurs produits, leurs prix et leurs créneaux de retrait."
+          etat="Produits & créneaux"
+        />
+        <CarteLien
+          href="/encaissement"
+          icone={CreditCard}
+          titre="Encaissement"
+          description="Le compte Stripe du club — c'est lui qui reçoit l'argent des commandes."
+          etat="Compte bancaire"
+        />
+        <CarteLien
+          href="/accounting"
+          icone={Receipt}
+          titre="Comptabilité"
+          description="Chiffre d'affaires, TVA par taux, et l'export de tes ventes."
+          etat="CA et TVA"
+        />
+      </Grille>
+
+      <TitreSection>Mes clients</TitreSection>
+      <Grille>
+        <CarteLien
+          href="/clients"
+          icone={Contact}
+          titre="Mes clients"
+          description="Qui commande, à quelle fréquence, et ce qu'ils consomment."
+          etat="Fichier client"
+        />
+        <CarteLien
+          href="/campaigns"
+          icone={Megaphone}
+          titre="Campagnes & push"
+          description="Envoyer un message à tes clients — avant un match, ou après."
+          etat="Notifications"
+        />
+        <CarteLien
+          href="/team"
+          icone={Users}
+          titre="Équipe"
+          description="Les comptes de tes équipiers, et la buvette que chacun tient."
+          etat="Accès du personnel"
+        />
+      </Grille>
+
+      <div style={{ marginTop: 34, padding: '18px 0', borderTop: `1px solid ${BRAND.border}` }}>
+        <div style={{ fontSize: 12.5, color: BRAND.grey }}>
+          Le comptoir se tient ailleurs —{' '}
           <a
             href={OPERATOR_URL}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ color: BRAND.orange, fontWeight: 600 }}
+            style={{ color: BRAND.orange, fontWeight: 700 }}
           >
-            Ouvrir le poste opérateur
+            ouvrir le poste opérateur
           </a>
         </div>
       </div>

@@ -350,7 +350,7 @@ export default function EncaissementPage() {
   const etat = ETATS[org?.stripeAccountStatus ?? 'NOT_ONBOARDED'] ?? ETATS.NOT_ONBOARDED;
 
   return (
-    <div style={{ padding: 32, fontFamily: BRAND.font, maxWidth: 760 }}>
+    <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font, maxWidth: 760 }}>
       <h1
         style={{
           fontSize: 26,

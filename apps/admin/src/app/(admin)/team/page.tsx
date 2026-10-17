@@ -256,10 +256,10 @@ L'ancien cessera immediatement de fonctionner.`)) return;
   }
 
   return (
-    <div style={{ padding: 32, maxWidth: 960, fontFamily: BRAND.font }}>
+    <div style={{ padding: '30px 36px 56px', maxWidth: 1100, fontFamily: BRAND.font }}>
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: '0 0 4px', letterSpacing: -0.3 }}>
+        <h1 style={{ fontFamily: BRAND.fontDisplay, fontSize: 30, fontWeight: 800, color: BRAND.ink, margin: '0 0 4px', letterSpacing: -0.6 }}>
           Équipe
         </h1>
         <p style={{ color: BRAND.grey, fontSize: 14, margin: 0 }}>

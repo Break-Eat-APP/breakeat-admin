@@ -187,7 +187,7 @@ export default function GroupDetailPage() {
   if (!group) return null;
 
   return (
-    <div style={{ padding: 32, fontFamily: BRAND.font }}>
+    <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font }}>
       {/* Breadcrumb */}
       <Link
         href="/groups"
@@ -198,7 +198,7 @@ export default function GroupDetailPage() {
 
       {/* Header */}
       <div style={{ margin: '12px 0 24px', display: 'flex', alignItems: 'center', gap: 12 }}>
-        <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0 }}>{group.name}</h1>
+        <h1 style={{ fontFamily: BRAND.fontDisplay, fontSize: 30, fontWeight: 800, color: BRAND.ink, margin: 0, letterSpacing: -0.6 }}>{group.name}</h1>
         {group.emailDomain && (
           <span
             style={{
@@ -417,7 +417,7 @@ export default function GroupDetailPage() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div style={{ padding: 32, fontFamily: BRAND.font, color: BRAND.grey }}>{children}</div>;
+  return <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font, color: BRAND.grey }}>{children}</div>;
 }
 
 function ErrBanner({ msg }: { msg: string }) {

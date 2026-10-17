@@ -136,11 +136,11 @@ Cette action est definitive.`)) return;
   }
 
   return (
-    <div style={{ padding: 32, fontFamily: BRAND.font }}>
+    <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8, gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0, letterSpacing: -0.3 }}>Buvettes</h1>
+          <h1 style={{ fontFamily: BRAND.fontDisplay, fontSize: 30, fontWeight: 800, color: BRAND.ink, margin: 0, letterSpacing: -0.6 }}>Buvettes</h1>
           <p style={{ color: BRAND.grey, fontSize: 14, margin: '4px 0 0' }}>
             {suppliers.length} buvette{suppliers.length !== 1 ? 's' : ''}
           </p>

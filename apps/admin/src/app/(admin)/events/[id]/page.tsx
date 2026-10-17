@@ -421,11 +421,11 @@ export default function EventDetailPage() {
   const attachedIds = new Set(suppliers.map((s) => s.id));
 
   return (
-    <div style={{ padding: 32, fontFamily: BRAND.font }}>
+    <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font }}>
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0 }}>
+          <h1 style={{ fontFamily: BRAND.fontDisplay, fontSize: 30, fontWeight: 800, color: BRAND.ink, margin: 0, letterSpacing: -0.6 }}>
             {event.name}
           </h1>
           <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: '3px 12px', fontSize: 12, fontWeight: 600 }}>
@@ -1239,7 +1239,7 @@ export default function EventDetailPage() {
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div style={{ padding: 32, fontFamily: BRAND.font, color: BRAND.grey }}>{children}</div>;
+  return <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font, color: BRAND.grey }}>{children}</div>;
 }
 
 function ErrBanner({ msg }: { msg: string }) {

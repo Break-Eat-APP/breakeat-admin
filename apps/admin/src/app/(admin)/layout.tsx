@@ -232,20 +232,33 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </div>
 
-        {/* Org context */}
+        {/*
+          LE CLUB SUR LEQUEL ON TRAVAILLE, en évidence.
+          Un bandeau gris en haut d'écran se regarde une fois puis s'oublie.
+          Une pastille teintée, à la place où FlaiX Expert la met, répond à
+          « où suis-je ? » sans qu'on ait à se le demander — et évite les
+          gestes faits dans le mauvais club.
+        */}
         {orgName && (
-          <div
-            style={{
-              padding: '12px 20px',
-              borderBottom: `1px solid ${BRAND.border}`,
-              background: BRAND.bgSubtle,
-            }}
-          >
-            <div style={{ fontSize: 10, color: BRAND.grey, textTransform: 'uppercase', letterSpacing: 1 }}>
-              Organisation
-            </div>
-            <div style={{ fontSize: 13, color: BRAND.ink, fontWeight: 600, marginTop: 2 }}>
-              {orgName}
+          <div style={{ padding: '14px 14px 2px' }}>
+            <div style={{ background: BRAND.orangeTint, borderRadius: 14, padding: '12px 14px' }}>
+              <div
+                style={{
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  color: BRAND.ink,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {orgName}
+              </div>
+              <div
+                style={{ fontSize: 11.5, color: BRAND.orange, marginTop: 2, fontWeight: 600 }}
+              >
+                Ton club
+              </div>
             </div>
           </div>
         )}
@@ -295,14 +308,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                       display: 'flex',
                       alignItems: 'center',
                       gap: 11,
-                      margin: '1px 10px',
-                      padding: '9px 12px',
-                      borderRadius: 10,
-                      color: isActive ? BRAND.orange : BRAND.inkSoft,
-                      background: isActive ? BRAND.orangeTint : 'transparent',
+                      margin: '2px 12px',
+                      padding: '10px 14px',
+                      // PILULE PLEINE sur l'actif : sur quinze entrées, une
+                      // teinte pâle se cherche. Pleine, elle se trouve sans
+                      // être lue.
+                      borderRadius: BRAND.radius.pill,
+                      color: isActive ? '#fff' : BRAND.inkSoft,
+                      background: isActive ? BRAND.orange : 'transparent',
+                      boxShadow: isActive ? BRAND.shadowButton : 'none',
                       textDecoration: 'none',
                       fontSize: 13.5,
-                      fontWeight: isActive ? 600 : 500,
+                      fontWeight: isActive ? 700 : 500,
                       transition: 'background 0.12s, color 0.12s',
                     }}
                     onMouseEnter={(e) => {
@@ -367,7 +384,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* ─── Main content ─────────────────────────────────────────────────── */}
-      <main style={{ flex: 1, overflowY: 'auto', minWidth: 0, background: BRAND.bg }}>
+      {/* Canevas TEINTÉ : c'est lui qui fait ressortir les cartes blanches. */}
+      <main style={{ flex: 1, overflowY: 'auto', minWidth: 0, background: BRAND.canvas }}>
         {suspendue && (
           <div
             style={{

@@ -273,11 +273,11 @@ export default function AppearancePage() {
   }
 
   return (
-    <div style={{ padding: 32, fontFamily: BRAND.font }}>
+    <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 8 }}>
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0, letterSpacing: -0.3 }}>Apparence de l&apos;app</h1>
+          <h1 style={{ fontFamily: BRAND.fontDisplay, fontSize: 30, fontWeight: 800, color: BRAND.ink, margin: 0, letterSpacing: -0.6 }}>Apparence de l&apos;app</h1>
           <p style={{ color: BRAND.inkSoft, fontSize: 13.5, margin: '6px 0 0', maxWidth: 560, lineHeight: 1.55 }}>
             Compose l&apos;écran d&apos;accueil de ton app client : cartes (icône ou image), couleurs, taille,
             disposition. Pars d&apos;un modèle, puis personnalise. L&apos;aperçu est en temps réel.

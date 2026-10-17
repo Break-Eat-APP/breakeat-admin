@@ -16,7 +16,7 @@ export default function VenuesRedirect() {
   }, [router]);
 
   return (
-    <div style={{ padding: 32, fontFamily: BRAND.font, color: BRAND.grey, fontSize: 14 }}>
+    <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font, color: BRAND.grey, fontSize: 14 }}>
       Le lieu se gère désormais dans « Organisation ». Redirection…
     </div>
   );

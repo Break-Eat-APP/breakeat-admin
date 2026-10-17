@@ -340,14 +340,14 @@ export default function SupplierDetailPage() {
   const uncategorised = products.filter((p) => !categories.find((c) => c.id === p.categoryId));
 
   return (
-    <div style={{ padding: 32, fontFamily: BRAND.font }}>
+    <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font }}>
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
           <a href="/suppliers" style={{ color: BRAND.grey, fontSize: 13, textDecoration: 'none' }}>← Buvettes</a>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h1 style={{ fontSize: 26, fontWeight: 600, color: BRAND.ink, margin: 0, letterSpacing: -0.3 }}>
+          <h1 style={{ fontFamily: BRAND.fontDisplay, fontSize: 30, fontWeight: 800, color: BRAND.ink, margin: 0, letterSpacing: -0.6 }}>
             {supplier.name}
           </h1>
           {(() => {
