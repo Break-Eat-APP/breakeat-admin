@@ -409,7 +409,8 @@ export async function apiAddMember(
 /** PATCH /organizations/:id/branding — update logo, color, description */
 export async function apiUpdateOrgBranding(
   orgId: string,
-  data: { logoUrl?: string; primaryColor?: string; description?: string },
+  /** `null` RETIRE la valeur ; omettre le champ la laisse telle quelle. */
+  data: { logoUrl?: string | null; primaryColor?: string | null; description?: string },
 ): Promise<Organization> {
   return req<Organization>('PATCH', `/organizations/${orgId}/branding`, data);
 }
@@ -1071,6 +1072,13 @@ export interface VenueInput {
   loyaltyPointValueCents?: number;
   operatingMode?: VenueOperatingMode;
   timezone?: string;
+  /**
+   * ACTIVE : le lieu apparaît dans l'app. INACTIVE : il en disparaît.
+   *
+   * Ce n'est PAS une suppression — un lieu porte des commandes, donc de la
+   * comptabilité. Masquer est le seul geste réversible, et c'est le bon.
+   */
+  status?: 'ACTIVE' | 'INACTIVE';
 }
 
 /**

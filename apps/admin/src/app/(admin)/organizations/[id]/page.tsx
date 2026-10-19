@@ -87,6 +87,9 @@ export default function OrganizationDetailPage() {
   const [venueTimezone, setVenueTimezone] = useState('');
   const [venueSearchTerms, setVenueSearchTerms] = useState('');
   const [venuePhotoUrl, setVenuePhotoUrl] = useState('');
+  // Un lieu est visible par défaut : c'est l'état d'un lieu qu'on vient de
+  // créer, et le seul qui ait du sens tant qu'on n'a pas décidé le contraire.
+  const [venueVisible, setVenueVisible] = useState(true);
   // Heure a laquelle le lien de commande devient accessible, le jour de
   // l'evenement. Une heure fixe plutot qu'un delai : c'est ainsi que le club
   // le pense, et ca ne bouge pas quand l'horaire du match change.
@@ -134,6 +137,7 @@ export default function OrganizationDetailPage() {
       setVenueTimezone(primary?.timezone ?? '');
       setVenueSearchTerms(primary?.searchTerms ?? '');
       setVenuePhotoUrl(primary?.photoUrl ?? '');
+      setVenueVisible((primary?.status ?? 'ACTIVE') === 'ACTIVE');
       setVenueOuvreA(primary?.ordersOpenAt ?? '08:00');
       setVenueBuvettePlanUrl(primary?.buvettePlanUrl ?? '');
       setVenueMode(primary?.operatingMode ?? 'EVENT_BASED');
@@ -159,10 +163,28 @@ export default function OrganizationDetailPage() {
     setBrandingError('');
     setBrandingSuccess('');
     try {
-      const body: { logoUrl?: string; primaryColor?: string; description?: string } = {};
-      if (brandingLogoUrl.trim()) body.logoUrl = brandingLogoUrl.trim();
-      if (brandingColor.trim()) body.primaryColor = brandingColor.trim();
-      body.description = brandingDesc.trim();
+      /*
+        UN CHAMP VIDÉ DOIT PARTIR, pas être tu.
+
+        Avant : `if (brandingLogoUrl.trim()) body.logoUrl = …`. Effacer le
+        logo d'un club ne faisait donc rien du tout — la requête n'en parlait
+        pas, le serveur gardait l'ancienne valeur, et l'écran annonçait
+        « Branding sauvegardé ». On recommençait en cherchant sa propre erreur.
+
+        `null` dit explicitement « retire-le » ; le serveur l'accepte (voir
+        `UpdateOrgBrandingDto`). C'est ce que fait déjà le back-office
+        super-admin, qui écrit sur la MÊME route : deux consoles qui ne se
+        comportent pas pareil sur un même bouton sont un piège.
+      */
+      const body: {
+        logoUrl?: string | null;
+        primaryColor?: string | null;
+        description?: string;
+      } = {
+        logoUrl: brandingLogoUrl.trim() || null,
+        primaryColor: brandingColor.trim() || null,
+        description: brandingDesc.trim(),
+      };
       await apiUpdateOrgBranding(orgId, body);
       setBrandingSuccess('Branding sauvegardé.');
       await loadOrg();
@@ -241,6 +263,7 @@ export default function OrganizationDetailPage() {
         loyaltyPointValueCents: Math.max(1, Number(loyaltyPointValueCents) || 1),
         latitude: lat,
         longitude: lng,
+        status: venueVisible ? ('ACTIVE' as const) : ('INACTIVE' as const),
       };
       if (venue) {
         await apiUpdateVenue(orgId, venue.id, payload);
@@ -441,6 +464,37 @@ export default function OrganizationDetailPage() {
               />
               <span style={{ color: BRAND.grey, fontSize: 12 }}>
                 Image (créée sur Canva puis hébergée) montrant où se situent les buvettes. Affichée dans l’app sur la carte du lieu et après la commande.
+              </span>
+            </div>
+
+            {/*
+              LA VISIBILITÉ DU LIEU.
+
+              Décoché, le lieu disparaît de la recherche et de la carte : plus
+              personne ne le trouve ni n'y commande. Tout le reste est conservé
+              — commandes, comptabilité, configuration — et le recocher le
+              remet en ligne tel quel.
+
+              C'est le seul geste qui retire un lieu de l'app. Il n'existe pas
+              de suppression, et il n'en faut pas : un lieu porte des commandes
+              déjà payées, et les effacer fausserait les comptes du club.
+            */}
+            <div style={{ gridColumn: '1 / -1', borderTop: `1px solid ${BRAND.border}`, paddingTop: 14, marginTop: 4 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={venueVisible}
+                  onChange={(e) => setVenueVisible(e.target.checked)}
+                  style={{ width: 16, height: 16, accentColor: BRAND.orange, cursor: 'pointer' }}
+                />
+                <span style={{ ...venueFieldLabel, marginBottom: 0 }}>
+                  Lieu visible dans l’application
+                </span>
+              </label>
+              <span style={{ color: BRAND.grey, fontSize: 12, display: 'block', marginTop: 4 }}>
+                {venueVisible
+                  ? 'Les clients peuvent trouver ce lieu et y commander.'
+                  : 'Ce lieu n’apparaît plus dans l’app et n’accepte plus de commande. Rien n’est supprimé : ses commandes et sa configuration restent, et le recocher le remet en ligne.'}
               </span>
             </div>
 
