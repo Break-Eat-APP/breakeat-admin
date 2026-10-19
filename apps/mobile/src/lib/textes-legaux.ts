@@ -66,7 +66,7 @@ const MENTIONS: DocumentLegal = {
     {
       titre: '3. Hébergement',
       paragraphes: [
-        'Le serveur de l’application et sa base de données sont hébergés par Railway Corporation, San Francisco, Californie, États-Unis.',
+        'Le serveur de l’application et sa base de données sont hébergés par Railway Corporation, 548 Market St, PMB 68956, San Francisco, CA 94104, États-Unis — téléphone : +1 415 707 7675, https://railway.com.',
         'Le site internet breakeatapp.com est hébergé par OVH SAS, société par actions simplifiée au capital de 50 000 000 €, RCS Lille Métropole 424 761 419, dont le siège est situé 2 rue Kellermann, 59100 Roubaix, France — téléphone : 09 72 10 10 07.',
       ],
     },
