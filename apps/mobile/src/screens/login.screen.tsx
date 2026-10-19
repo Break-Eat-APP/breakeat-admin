@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -32,8 +31,18 @@ import { BreakEatLogo } from '@components/break-eat-logo';
 // finiraient par diverger sur le format que le serveur renvoie.
 import { messageServeur } from '@lib/message-serveur';
 
-/** Les conditions generales, hebergees sur le site vitrine. */
-const URL_CGU = 'https://breakeat.fr/conditions-generales';
+/*
+  LES CGU SE LISENT DANS L'APP, et c'est une correction.
+
+  Ce lien ouvrait `https://breakeat.fr/conditions-generales` — un domaine qui
+  ne répond pas (le site est breakeatapp.com). La case à cocher de
+  l'inscription renvoyait donc DANS LE VIDE : on demandait d'accepter un
+  texte qu'il était impossible de lire.
+
+  Depuis le 19/10, les quatre documents vivent dans l'application
+  (`lib/textes-legaux.ts`). Le lien y mène, sans sortir de l'app ni dépendre
+  du réseau — et le texte accepté est exactement celui que l'app embarque.
+*/
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -401,7 +410,7 @@ export function LoginScreen({ navigation, route }: Props) {
               J’ai pris connaissance et j’accepte les{' '}
               <Text
                 style={styles.cguLien}
-                onPress={() => void Linking.openURL(URL_CGU)}
+                onPress={() => navigation.navigate('DocumentLegal', { cle: 'cgu' })}
               >
                 conditions générales d’utilisation
               </Text>
