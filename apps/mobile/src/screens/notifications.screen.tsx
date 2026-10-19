@@ -108,7 +108,13 @@ const styles = StyleSheet.create({
 
   enTete: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   point: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' },
-  titre: { flex: 1, color: THEME.ink, fontSize: 15.5, fontFamily: HEAD.bold },
+  // LE TITRE EN ORANGE VIF (demande du 19/10).
+  //
+  // Il devient ce qu'on lit en premier dans une pile de cartes : on balaie les
+  // titres, et on ne descend dans le corps que sur celui qui concerne. Le
+  // corps reste en gris pour que la hierarchie tienne — deux couleurs fortes
+  // l'une sous l'autre et plus rien ne ressort.
+  titre: { flex: 1, color: THEME.orange, fontSize: 15.5, fontFamily: HEAD.bold },
   corps: { color: THEME.inkSoft, fontSize: 14, lineHeight: 20 },
   date: { color: THEME.grey, fontSize: 12, fontFamily: HEAD.medium },
 });
