@@ -140,9 +140,9 @@ print(f"   lockup detoure : {complet.width}x{complet.height}")
 HAUTES = 0.25
 
 
-def marque_seule(im: Image.Image) -> Image.Image:
+def separer(im: Image.Image):
     """
-    Le B, isole du mot par la hauteur de ses formes.
+    Rend (la marque, le mot), separes par la hauteur de leurs formes.
 
     On ne recadre PAS un rectangle : on efface les pixels des formes ecartees,
     puis on recadre ce qu'il reste. Un simple rectangle laissait une echarde
@@ -152,7 +152,8 @@ def marque_seule(im: Image.Image) -> Image.Image:
     largeur, hauteur = im.size
     alpha = im.split()[3].load()
     vus = bytearray(largeur * hauteur)
-    garde = bytearray(largeur * hauteur)
+    garde = bytearray(largeur * hauteur)   # la marque
+    lettres = bytearray(largeur * hauteur)  # le mot
     for y0 in range(hauteur):
         for x0 in range(largeur):
             if alpha[x0, y0] < 60 or vus[y0 * largeur + x0]:
@@ -172,30 +173,71 @@ def marque_seule(im: Image.Image) -> Image.Image:
                         vus[ny * largeur + nx] = 1
                         file.append((nx, ny))
                         forme.append((nx, ny))
-            if (y2 - y1 + 1) < hauteur * HAUTES:
-                continue  # une lettre du mot
+            cible = garde if (y2 - y1 + 1) >= hauteur * HAUTES else lettres
             for x, y in forme:
-                garde[y * largeur + x] = 1
+                cible[y * largeur + x] = 1
 
     assert any(garde), "aucune forme pleine hauteur : la marque est introuvable"
+    assert any(lettres), "aucune lettre : le mot est introuvable"
 
     # AUCUNE dilatation ici, et c'est deliberé : le flanc gauche du << B >>
     # de BREAKEAT passe a DEUX pixels du lobe de la marque. Rattraper les
     # bords adoucis en gardant le voisinage ramenait l'echarde qu'on venait
     # d'effacer. Le seuil du remplissage (alpha 60) ne coupe qu'un lisere
     # sous-pixel, invisible aux tailles d'affichage.
-    sortie = im.copy()
-    px = sortie.load()
-    for y in range(hauteur):
-        for x in range(largeur):
-            if not garde[y * largeur + x]:
-                r, v, b, _ = px[x, y]
-                px[x, y] = (r, v, b, 0)
-    return sortie.crop(sortie.getbbox())
+    def extraire(masque):
+        sortie = im.copy()
+        px = sortie.load()
+        for y in range(hauteur):
+            for x in range(largeur):
+                if not masque[y * largeur + x]:
+                    r, v, b, _ = px[x, y]
+                    px[x, y] = (r, v, b, 0)
+        return sortie.crop(sortie.getbbox())
+
+    return extraire(garde), extraire(lettres)
 
 
-marque = marque_seule(complet)
+# ── Le mot, agrandi -- et pourquoi on ne grossit pas tout.
+#
+# Dans l'artwork d'origine le mot ne fait que 10 % de la hauteur du lockup
+# (27 % dans la version precedente). Rendu a 46 px dans le bandeau de l'app,
+# sa hauteur de capitale tombe a 4,8 px : illisible.
+#
+# Doubler le LOCKUP entier reglerait la lisibilite et creerait deux problemes :
+# un B enorme, et un bandeau qui grandit de 46 px sur l'ecran d'accueil. On
+# recompose donc -- marque inchangee, mot a 2x -- ce qui ne touche ni la
+# hauteur du bandeau ni la taille du B.
+#
+# L'artwork source dans `logo/` n'est PAS modifie : seules les declinaisons
+# d'interface le sont.
+AGRANDIR_MOT = 2.0
+#: Ecart marque-mot, en part de la largeur de la marque. Dans l'original ils
+#: se CHEVAUCHENT (le lobe du B passe sous la premiere lettre) ; une fois le
+#: mot agrandi, ce chevauchement devient une collision.
+ECART = 0.05
+
+
+def recomposer(marque: Image.Image, mot: Image.Image) -> Image.Image:
+    """La marque telle quelle, le mot deux fois plus grand, centres ensemble."""
+    mot = mot.resize(
+        (max(1, round(mot.width * AGRANDIR_MOT)), max(1, round(mot.height * AGRANDIR_MOT))),
+        Image.LANCZOS,
+    )
+    ecart = round(marque.width * ECART)
+    largeur = marque.width + ecart + mot.width
+    hauteur = max(marque.height, mot.height)
+    out = Image.new("RGBA", (largeur, hauteur), (0, 0, 0, 0))
+    out.paste(marque, (0, (hauteur - marque.height) // 2), marque)
+    out.paste(mot, (marque.width + ecart, (hauteur - mot.height) // 2), mot)
+    return out
+
+
+marque, mot = separer(complet)
 print(f"   marque isolee : {marque.width}x{marque.height}")
+print(f"   mot isole     : {mot.width}x{mot.height}")
+complet = recomposer(marque, mot)
+print(f"   lockup recompose (mot x{AGRANDIR_MOT:g}) : {complet.width}x{complet.height}")
 
 print("\n-- Consoles (orange sur transparent) --")
 ecrire(complet, [

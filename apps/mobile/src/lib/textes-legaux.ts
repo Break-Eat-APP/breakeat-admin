@@ -68,7 +68,6 @@ const MENTIONS: DocumentLegal = {
       paragraphes: [
         'Le serveur de l’application et sa base de données sont hébergés par Railway Corporation, San Francisco, Californie, États-Unis.',
         'Le site internet breakeatapp.com est hébergé par OVH SAS, société par actions simplifiée au capital de 50 000 000 €, RCS Lille Métropole 424 761 419, dont le siège est situé 2 rue Kellermann, 59100 Roubaix, France — téléphone : 09 72 10 10 07.',
-        'Les interfaces d’administration destinées aux clubs et aux points de vente sont hébergées par Vercel Inc.',
       ],
     },
     {

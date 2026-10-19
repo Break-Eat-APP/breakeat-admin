@@ -604,16 +604,18 @@ const styles = StyleSheet.create({
   /*
     LE LOCKUP SE DIMENSIONNE PAR SA HAUTEUR, pas par sa largeur.
 
-    La v2 est bien plus compacte que la v1 (480×212 contre 760×212) : son B
-    est grand, son mot est petit. En gardant la largeur de 150 px d'avant,
-    le bandeau grandissait de 24 px pour rien. En partant de la hauteur, la
-    tête garde exactement son rythme — et le mot reste lisible, sa
-    chasse très étalée le sauve aux petites tailles.
+    En partant de la HAUTEUR plutôt que de la largeur, la tête garde
+    exactement son rythme quelle que soit la forme du lockup.
+
+    Le mot a été DOUBLÉ dans l'artwork d'interface (voir
+    `outils/decliner-logo.py`) : à 46 px, sa hauteur de capitale passait de
+    4,8 px — illisible — à 9,5 px. Le lockup s'allonge donc de 104 à 161 px,
+    sans que le bandeau ni le B ne changent de taille.
 
     Le ratio est DÉDUIT du fichier : figé, il étirerait le logo au
     prochain export.
   */
-  lockup: { height: 46, width: 46 * (480 / 212) },
+  lockup: { height: 46, width: 46 * (741 / 212) },
   avatar: {
     width: 38, height: 38, borderRadius: 19,
     alignItems: 'center', justifyContent: 'center',
