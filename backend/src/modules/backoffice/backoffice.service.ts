@@ -445,11 +445,47 @@ export class BackofficeService {
   // ─── Suppression organisation ─────────────────────────────────
 
   /** Supprime définitivement une organisation (cascade Prisma sur venues, events…). */
-  async deleteOrganization(id: string) {
+  /**
+   * Supprime définitivement une organisation.
+   *
+   * Le bouton n'avait AUCUNE garde, là où la remise à zéro — bien moins
+   * destructrice — exige qu'on recopie le nom. Et sa phrase mentait : les
+   * commandes ne portent pas de clé étrangère vers l'organisation
+   * (`Order.organizationId` est une colonne nue), elles SURVIVAIENT donc à sa
+   * suppression. Orphelines, invisibles depuis le moindre écran, et toujours
+   * comptées dans les totaux de la plateforme.
+   *
+   * Deux barrières, reprises de ce qui existait déjà ailleurs :
+   *
+   *  · RECOPIER LE NOM, comme la remise à zéro. Un bouton seul se clique sur
+   *    la mauvaise ligne ; recopier oblige à regarder ce qu'on vise ;
+   *  · REFUSER TANT QU'IL RESTE DES COMMANDES, comme la suppression d'un
+   *    compte. On renvoie alors vers les deux gestes qui, eux, sont propres :
+   *    la remise à zéro (qui efface les commandes pour de bon) ou la
+   *    désactivation (qui ferme le club sans rien perdre).
+   */
+  async deleteOrganization(id: string, confirmation: string) {
     const org = await this.prisma.organization.findUnique({ where: { id } });
     if (!org) throw new NotFoundException('Organization not found');
+
+    if (confirmation.trim() !== org.name) {
+      throw new BadRequestException(
+        `Confirmation incorrecte. Recopiez exactement le nom du club : « ${org.name} ».`,
+      );
+    }
+
+    const commandes = await this.prisma.order.count({ where: { organizationId: id } });
+    if (commandes > 0) {
+      throw new BadRequestException(
+        `« ${org.name} » porte ${commandes} commande${commandes > 1 ? 's' : ''}. ` +
+          'Les supprimer avec le club les laisserait orphelines, hors de tout écran mais ' +
+          'toujours comptées. Faites d’abord une remise à zéro des données — ou désactivez ' +
+          'le club, ce qui le ferme sans rien perdre.',
+      );
+    }
+
     await this.prisma.organization.delete({ where: { id } });
-    this.logger.log(`[backoffice] Organization deleted: ${id}`);
+    this.logger.warn(`[backoffice] Organisation « ${org.name} » (${id}) SUPPRIMÉE`);
     return { deleted: true };
   }
 

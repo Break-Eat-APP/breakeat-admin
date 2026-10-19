@@ -28,6 +28,7 @@ describe('BackofficeService', () => {
       findUnique: jest.Mock;
       create: jest.Mock;
       update: jest.Mock;
+      delete: jest.Mock;
     };
     group: { findMany: jest.Mock };
     $transaction: jest.Mock;
@@ -50,6 +51,7 @@ describe('BackofficeService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        delete: jest.fn(),
       },
       group: { findMany: jest.fn() },
       $transaction: jest.fn(),
@@ -495,6 +497,67 @@ describe('BackofficeService', () => {
 
       expect(tx.event.deleteMany).toHaveBeenCalledWith({ where: { organizationId: ORG_ID } });
       expect(tx.supplier.deleteMany).toHaveBeenCalledWith({ where: { organizationId: ORG_ID } });
+    });
+  });
+
+  /**
+   * SUPPRIMER UN CLUB — l'opération la plus destructrice de la console, et
+   * la seule qui n'avait aucune garde.
+   *
+   * Les commandes ne portent PAS de clé étrangère vers l'organisation : elles
+   * survivaient à sa suppression, orphelines, hors de tout écran mais
+   * toujours comptées dans les totaux de la plateforme.
+   */
+  describe('deleteOrganization', () => {
+    const ORG_ID = 'org-1';
+    const NOM = 'Les Spartiates';
+
+    it('supprime quand le nom est recopié et qu’aucune commande ne reste', async () => {
+      prisma.organization.findUnique.mockResolvedValue({ id: ORG_ID, name: NOM });
+      prisma.order.count.mockResolvedValue(0);
+
+      await expect(service.deleteOrganization(ORG_ID, NOM)).resolves.toEqual({ deleted: true });
+      expect(prisma.organization.delete).toHaveBeenCalledWith({ where: { id: ORG_ID } });
+    });
+
+    it('refuse un nom approchant — comme la remise à zéro', async () => {
+      prisma.organization.findUnique.mockResolvedValue({ id: ORG_ID, name: NOM });
+
+      await expect(service.deleteOrganization(ORG_ID, 'Les Spartiate')).rejects.toThrow(
+        /Recopiez exactement/,
+      );
+      expect(prisma.organization.delete).not.toHaveBeenCalled();
+      // La vérification du nom passe AVANT le comptage : on ne va pas lire la
+      // base pour une saisie qu'on sait déjà fausse.
+      expect(prisma.order.count).not.toHaveBeenCalled();
+    });
+
+    it('REFUSE tant que le club porte des commandes, et dit quoi faire', async () => {
+      prisma.organization.findUnique.mockResolvedValue({ id: ORG_ID, name: NOM });
+      prisma.order.count.mockResolvedValue(42);
+
+      const promesse = service.deleteOrganization(ORG_ID, NOM);
+
+      // Le nombre, puis la sortie : un refus qui ne dit pas quoi faire ensuite
+      // envoie chercher dans les journaux du serveur.
+      await expect(promesse).rejects.toThrow(/42 commandes/);
+      await expect(service.deleteOrganization(ORG_ID, NOM)).rejects.toThrow(/remise à zéro/);
+      expect(prisma.organization.delete).not.toHaveBeenCalled();
+    });
+
+    it('accorde le singulier à une seule commande', async () => {
+      prisma.organization.findUnique.mockResolvedValue({ id: ORG_ID, name: NOM });
+      prisma.order.count.mockResolvedValue(1);
+
+      await expect(service.deleteOrganization(ORG_ID, NOM)).rejects.toThrow(/1 commande\./);
+    });
+
+    it('refuse une organisation inconnue', async () => {
+      prisma.organization.findUnique.mockResolvedValue(null);
+
+      await expect(service.deleteOrganization('inconnue', NOM)).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

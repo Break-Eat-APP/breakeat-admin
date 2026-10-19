@@ -158,9 +158,20 @@ export default function OrganizationsPage() {
     mutationFn: (id: string) => apiDeactivateOrganization(id),
     onSuccess: invalidate,
   });
+  /**
+   * La suppression d'un club : on recopie son nom, et le serveur peut refuser.
+   *
+   * Le refus n'est pas une panne — « ce club porte 42 commandes, faites une
+   * remise à zéro d'abord » dit exactement quoi faire. L'avaler et afficher
+   * « erreur » obligerait à chercher dans les journaux du serveur ce que la
+   * réponse contenait déjà.
+   */
   const deleteMut = useMutation({
-    mutationFn: (id: string) => apiDeleteOrganization(id),
+    mutationFn: ({ id, confirmation }: { id: string; confirmation: string }) =>
+      apiDeleteOrganization(id, confirmation),
     onSuccess: invalidate,
+    onError: (e: unknown) =>
+      window.alert(e instanceof Error ? e.message : 'Suppression impossible.'),
   });
 
   const handleNameChange = (v: string) => {
@@ -336,9 +347,25 @@ export default function OrganizationsPage() {
                   <button
                     disabled={busy}
                     onClick={() => {
-                      if (window.confirm(`Supprimer définitivement "${org.name}" et toutes ses données ?`)) {
-                        deleteMut.mutate(org.id);
-                      }
+                      /*
+                        RECOPIER LE NOM, comme pour la remise à zéro.
+
+                        L'ancienne confirmation se validait d'un clic — sur la
+                        bonne ligne comme sur sa voisine — et annonçait « et
+                        toutes ses données », ce qui était faux : les commandes
+                        ne cascadent pas et survivaient, orphelines.
+
+                        Le serveur revérifie, évidemment : cette invite est un
+                        garde-fou pour la main, pas une sécurité.
+                      */
+                      const saisi = window.prompt(
+                        `Supprimer définitivement « ${org.name} » ?\n\n` +
+                          'Cette action est irréversible. Le serveur refusera tant que ce club ' +
+                          'porte des commandes — faites alors une remise à zéro, ou désactivez-le.\n\n' +
+                          'Recopiez le nom du club pour confirmer :',
+                      );
+                      if (saisi === null) return;
+                      deleteMut.mutate({ id: org.id, confirmation: saisi });
                     }}
                     style={deleteBtnSmall}
                     title="Supprimer définitivement"

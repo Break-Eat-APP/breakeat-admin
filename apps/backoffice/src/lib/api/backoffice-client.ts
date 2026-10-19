@@ -658,8 +658,18 @@ export async function apiCancelScheduledNotification(id: string): Promise<Schedu
 
 // ─── Suppression organisation ─────────────────────────────────────────────────
 
-export async function apiDeleteOrganization(id: string): Promise<{ deleted: boolean }> {
-  return req<{ deleted: boolean }>('DELETE', `/backoffice/organizations/${id}`);
+/**
+ * Supprime un club. `confirmation` doit reproduire son nom à l'identique.
+ *
+ * Le serveur REFUSE tant que le club porte des commandes : elles ne cascadent
+ * pas et survivraient à sa suppression, hors de tout écran mais toujours
+ * comptées. Sa phrase dit alors quoi faire — il faut la montrer telle quelle.
+ */
+export async function apiDeleteOrganization(
+  id: string,
+  confirmation: string,
+): Promise<{ deleted: boolean }> {
+  return req<{ deleted: boolean }>('DELETE', `/backoffice/organizations/${id}`, { confirmation });
 }
 
 /** Ce que la remise à zéro a effacé, poste par poste. */

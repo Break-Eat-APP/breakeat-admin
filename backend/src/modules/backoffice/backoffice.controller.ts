@@ -18,6 +18,7 @@ import { SendNotificationDto } from './dto/send-notification.dto';
 import { ScheduleNotificationDto } from './dto/schedule-notification.dto';
 import { ResetOrgDataDto } from './dto/reset-org-data.dto';
 import { PurgeDemoDto } from './dto/purge-demo.dto';
+import { SupprimerOrgDto } from './dto/supprimer-org.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -88,11 +89,16 @@ export class BackofficeController {
     return this.backoffice.setOrganizationStatus(id, false);
   }
 
-  /** DELETE /organizations/:id — suppression définitive (cascade). */
+  /**
+   * DELETE /organizations/:id — suppression définitive.
+   *
+   * Exige de recopier le nom du club, et refuse tant qu'il reste des
+   * commandes : elles ne cascadent pas et survivraient, orphelines.
+   */
   @Delete('organizations/:id')
   @HttpCode(HttpStatus.OK)
-  deleteOrganization(@Param('id', ParseUUIDPipe) id: string) {
-    return this.backoffice.deleteOrganization(id);
+  deleteOrganization(@Param('id', ParseUUIDPipe) id: string, @Body() dto: SupprimerOrgDto) {
+    return this.backoffice.deleteOrganization(id, dto.confirmation);
   }
 
   /**
