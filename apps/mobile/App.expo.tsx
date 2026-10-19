@@ -60,6 +60,10 @@ import { signalerVisite } from '@lib/frequentation';
 import { useNotifStore } from '@store/notif.store';
 import { NotificationsScreen } from '@screens/notifications.screen';
 import { AideScreen } from '@screens/aide.screen';
+import {
+  DocumentLegalScreen,
+  InformationsLegalesScreen,
+} from '@screens/informations-legales.screen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -235,6 +239,11 @@ export default function AppPreview() {
               <Stack.Screen name="Profile" component={ProfileScreen} />
               <Stack.Screen name="Partners" component={PartnersScreen} />
               <Stack.Screen name="Aide" component={AideScreen} />
+              <Stack.Screen
+                name="InformationsLegales"
+                component={InformationsLegalesScreen}
+              />
+              <Stack.Screen name="DocumentLegal" component={DocumentLegalScreen} />
 
               {/* Auth */}
               <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />

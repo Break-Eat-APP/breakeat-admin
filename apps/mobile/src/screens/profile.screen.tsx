@@ -199,9 +199,14 @@ export function ProfileScreen() {
             utilise tous les jours. */}
         <MenuItem label="Inviter un ami" onPress={() => void partagerLApplication()} />
         <View style={styles.divider} />
-        <MenuItem label="Mentions légales" onPress={() => showAlert('Bientôt', 'Disponible prochainement.')} />
-        <View style={styles.divider} />
-        <MenuItem label="Confidentialité" onPress={() => showAlert('Bientôt', 'Disponible prochainement.')} />
+        {/* UNE entrée pour les quatre documents. Deux lignes séparées — et
+            qui ouvraient toutes deux « Disponible prochainement » — faisaient
+            du menu un sommaire sans rien offrir à lire. */}
+        <MenuItem
+          label="Informations légales"
+          icon="document-text-outline"
+          onPress={() => navigation.navigate('InformationsLegales')}
+        />
       </View>
 
         {token && (

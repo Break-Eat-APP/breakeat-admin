@@ -75,6 +75,10 @@ export type RootStackParamList = {
   OrderTracking: { orderId: string };
   /** Service client : les motifs, et un message déjà préparé. */
   Aide: undefined;
+  /** Les quatre documents légaux, regroupés. */
+  InformationsLegales: undefined;
+  /** Un document en entier. La clé dit lequel — voir `lib/textes-legaux.ts`. */
+  DocumentLegal: { cle: 'mentions' | 'confidentialite' | 'cgu' | 'cgv' };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
