@@ -8,8 +8,15 @@ import { Image, type ImageStyle, type StyleProp } from 'react-native';
 const MARK_WHITE = require('../../assets/logo-mark.png');
 const MARK_ORANGE = require('../../assets/logo-mark-orange.png');
 
-/** Ratio largeur/hauteur de la marque (≈ 480×533). */
-const RATIO = 0.9;
+/**
+ * La marque est fournie sur un CARRÉ (480×480), d'où ce ratio de 1.
+ *
+ * Le carré n'est pas un choix d'affichage : `app.config.js` donne ces
+ * mêmes fichiers comme icône iOS, comme `adaptiveIcon` Android et comme
+ * image de démarrage, et les trois exigent une image carrée. Le B y est
+ * centré avec sa marge ; `contain` fait le reste ici.
+ */
+const RATIO = 1;
 
 export function BreakEatLogo({
   size = 40,
