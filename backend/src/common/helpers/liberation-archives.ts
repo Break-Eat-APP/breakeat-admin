@@ -32,6 +32,18 @@ import type { PrismaService } from '../../database/prisma.service';
  */
 export const adresseTemoin = (userId: string): string => `archive+${userId}@archive.invalid`;
 
+/**
+ * L'adresse-témoin d'un compte SUPPRIMÉ par son titulaire.
+ *
+ * Distincte de celle d'un archivage, et la nuance compte : un archivage est une
+ * décision d'administration, réversible, qui CONSERVE l'adresse d'origine dans
+ * `archivedEmail`. Une suppression est une demande du client — l'adresse
+ * d'origine ne doit plus exister nulle part. Deux mots différents dans le
+ * back-office pour deux gestes qui ne s'annulent pas de la même façon.
+ */
+export const adresseSupprimee = (userId: string): string =>
+  `supprime+${userId}@suppression.invalid`;
+
 /** Le slug-témoin d'une organisation libérée — mêmes caractères qu'un slug saisi. */
 export const slugTemoin = (orgId: string, slug: string): string =>
   `${slug}--archive-${orgId.slice(0, 8)}`;
@@ -58,7 +70,12 @@ export async function libererCompteArchive(
   if (!ancien || ancien.isActive) return null;
 
   // Déjà libéré : son adresse est un témoin, il n'a plus rien à rendre.
+  //
+  // Un compte SUPPRIMÉ en fait partie : sans cette seconde garde, on aurait
+  // recopié son adresse-témoin dans `archivedEmail` — et un compte supprimé
+  // se serait remis à porter une adresse, ce qu'une suppression interdit.
   if (ancien.email === adresseTemoin(ancien.id)) return null;
+  if (ancien.email === adresseSupprimee(ancien.id)) return null;
 
   await prisma.$transaction([
     prisma.user.update({

@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Patch,
+  Delete,
   Body,
   HttpCode,
   HttpStatus,
@@ -117,6 +118,21 @@ export class AuthController {
    * Returns the current user + all organisation memberships with org name/slug.
    * Used exclusively by the admin panel to resolve which orgs the caller manages.
    */
+  /**
+   * DELETE /auth/me — le client supprime son compte.
+   *
+   * Exigée par Apple (5.1.1(v)). Le geste est irréversible et ne demande pas
+   * de mot de passe : le jeton de session suffit à prouver qui parle, et un
+   * compte ouvert par Apple ou Google n'a pas de mot de passe à redemander.
+   * C'est l'application qui pose la double confirmation, là où le client la
+   * lit.
+   */
+  @Delete('me')
+  @UseGuards(JwtAuthGuard)
+  supprimerMonCompte(@CurrentUser() user: JwtPayload) {
+    return this.authService.supprimerMonCompte(user.sub);
+  }
+
   @Get('me/memberships')
   @UseGuards(JwtAuthGuard)
   meWithMemberships(@CurrentUser() user: JwtPayload) {

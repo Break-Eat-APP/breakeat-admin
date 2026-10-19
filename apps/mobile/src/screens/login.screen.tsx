@@ -28,6 +28,9 @@ import { showAlert } from '@lib/alert';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
 import { BreakEatLogo } from '@components/break-eat-logo';
+// Extraction commune : l'écran du profil en a besoin aussi, et deux copies
+// finiraient par diverger sur le format que le serveur renvoie.
+import { messageServeur } from '@lib/message-serveur';
 
 /** Les conditions generales, hebergees sur le site vitrine. */
 const URL_CGU = 'https://breakeat.fr/conditions-generales';
@@ -49,24 +52,6 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
  * commandes, ses points — à qui saurait en déclarer l'adresse.
  */
 
-/**
- * La phrase du serveur, extraite de sa réponse.
- *
- * Une erreur d'API porte le CORPS brut de la réponse — du JSON. L'afficher tel
- * quel montrait au client `{"message":…,"statusCode":401}` : il retenait « 401 »
- * et perdait la seule information utile, la phrase qui dit POURQUOI.
- */
-function messageServeur(e: unknown): string {
-  const brut = e instanceof Error ? e.message : '';
-  try {
-    const { message } = JSON.parse(brut) as { message?: string | string[] };
-    const m = Array.isArray(message) ? message[0] : message;
-    if (m) return m;
-  } catch {
-    /* pas du JSON : le message est déjà lisible */
-  }
-  return brut;
-}
 
 export function LoginScreen({ navigation, route }: Props) {
   const { setAuth } = useAuthStore();

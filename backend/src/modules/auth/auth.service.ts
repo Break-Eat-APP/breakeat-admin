@@ -1,8 +1,11 @@
 import {
+  BadRequestException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
   Logger,
 } from '@nestjs/common';
+import { GlobalRole, OrgRole } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
@@ -11,7 +14,10 @@ import { UsersService } from '../users/users.service';
 import { GroupsService } from '../groups/groups.service';
 import type { SafeUser } from '../users/users.service';
 import { SocialIdentityService, type Fournisseur } from './social-identity.service';
-import { libererCompteArchive } from '../../common/helpers/liberation-archives';
+import {
+  adresseSupprimee,
+  libererCompteArchive,
+} from '../../common/helpers/liberation-archives';
 import type { RegisterDto } from './dto/register.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { JwtPayload } from './strategies/jwt.strategy';
@@ -470,5 +476,113 @@ export class AuthService {
 
   private hashToken(token: string): string {
     return crypto.createHash('sha256').update(token).digest('hex');
+  }
+
+  /**
+   * LE CLIENT SUPPRIME SON COMPTE.
+   *
+   * Exigé par Apple (règle 5.1.1(v)) : une app qui permet de créer un compte
+   * doit permettre de le supprimer DANS l'app, et les données personnelles
+   * doivent réellement partir — une désactivation ne suffit pas.
+   *
+   * ON ANONYMISE, ON N'EFFACE PAS LA LIGNE. Deux raisons, et la seconde suffit
+   * à elle seule :
+   *
+   *  · la base REFUSE d'effacer un compte qui porte des commandes
+   *    (`Order.user` n'a pas de cascade, et c'est délibéré) ;
+   *  · effacer ces commandes retirerait leur montant de la comptabilité du
+   *    club, des déclarations de TVA et des reçus déjà remis. Le client a le
+   *    droit de disparaître, pas de réécrire les comptes de quelqu'un d'autre.
+   *
+   * Ce qui part : le nom, le prénom, le téléphone, l'adresse, le mot de passe,
+   * les connexions Apple/Google, les sessions, les jetons push, les paniers,
+   * les notifications reçues, les appartenances aux clubs et aux groupes.
+   * Ce qui reste : les commandes et leurs paiements, rattachés à une ligne qui
+   * ne désigne plus personne.
+   *
+   * L'adresse est LIBÉRÉE : se réinscrire plus tard crée un compte neuf, sans
+   * aucun lien avec l'ancien. C'est déjà la règle de l'archivage, et pour la
+   * même raison — l'app ne vérifie pas les adresses, rendre l'historique à qui
+   * sait taper une adresse serait le donner.
+   */
+  async supprimerMonCompte(userId: string): Promise<{ supprime: true }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, globalRole: true },
+    });
+    if (!user) throw new NotFoundException('Compte introuvable.');
+
+    // ── Deux portes qu'on ne se laisse pas claquer dans le dos.
+    //
+    // Elles ne concernent jamais un client : il n'est ni administrateur de la
+    // plateforme, ni administrateur d'un club. Un examinateur de l'App Store
+    // crée un compte ordinaire — sa suppression passe sans rien rencontrer.
+    if (user.globalRole === GlobalRole.SUPER_ADMIN) {
+      const autres = await this.prisma.user.count({
+        where: { globalRole: GlobalRole.SUPER_ADMIN, isActive: true, id: { not: userId } },
+      });
+      if (autres === 0) {
+        throw new BadRequestException(
+          'Ce compte est le dernier administrateur de la plateforme : le supprimer rendrait ' +
+            'le back-office inaccessible. Nommez un autre administrateur d’abord.',
+        );
+      }
+    }
+
+    const administre = await this.prisma.organizationMember.findMany({
+      where: { userId, orgRole: OrgRole.ORG_ADMIN },
+      select: { organizationId: true, organization: { select: { name: true } } },
+    });
+    for (const m of administre) {
+      const autres = await this.prisma.organizationMember.count({
+        where: {
+          organizationId: m.organizationId,
+          orgRole: OrgRole.ORG_ADMIN,
+          userId: { not: userId },
+          user: { isActive: true },
+        },
+      });
+      if (autres === 0) {
+        throw new BadRequestException(
+          `Ce compte est le dernier administrateur de « ${m.organization.name} » : le supprimer ` +
+            'laisserait ce club sans personne pour le gérer. Nommez un autre administrateur, ' +
+            'puis réessayez.',
+        );
+      }
+    }
+
+    // UNE transaction : un compte à moitié anonymisé — nom effacé mais session
+    // toujours valable, ou l'inverse — serait pire que l'état de départ, et
+    // invisible depuis l'écran qui vient d'annoncer « compte supprimé ».
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          email: adresseSupprimee(userId),
+          // `archivedEmail` reste NUL : c'est là qu'un archivage conserve
+          // l'adresse d'origine. Une suppression n'a rien à conserver.
+          archivedEmail: null,
+          displayName: 'Compte supprimé',
+          firstName: null,
+          lastName: null,
+          phone: null,
+          passwordHash: null,
+          isActive: false,
+        },
+      }),
+      this.prisma.userIdentity.deleteMany({ where: { userId } }),
+      this.prisma.refreshToken.deleteMany({ where: { userId } }),
+      this.prisma.pushToken.deleteMany({ where: { userId } }),
+      this.prisma.cart.deleteMany({ where: { userId } }),
+      this.prisma.userNotification.deleteMany({ where: { userId } }),
+      this.prisma.groupMember.deleteMany({ where: { userId } }),
+      this.prisma.organizationMember.deleteMany({ where: { userId } }),
+    ]);
+
+    // Le journal garde l'IDENTIFIANT, jamais l'adresse : la tracer ici
+    // reconstituerait ce qu'on vient d'effacer, dans un fichier qu'on
+    // conserve bien plus longtemps que la base.
+    this.logger.warn(`Compte ${userId} SUPPRIMÉ à la demande de son titulaire.`);
+    return { supprime: true };
   }
 }
