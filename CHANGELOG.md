@@ -5,6 +5,151 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.92.0] — 2026-10-19 — Le logo v2, et ce qu'Apple exige avant la mise en ligne
+
+**Il manquait la suppression de compte, et c'était un motif de rejet.** Apple
+l'exige depuis le 30/06/2022 (règle 5.1.1(v)) : une app qui permet de créer un
+compte doit permettre de le supprimer **dans l'app**, et les données
+personnelles doivent réellement partir — une désactivation ne suffit pas. Il
+n'existait aucun moyen de le faire, ni dans l'app ni sur le serveur.
+
+`DELETE /auth/me` **anonymise** au lieu d'effacer, et c'est la seule réponse
+correcte ici : la base refuse d'effacer un compte porteur de commandes
+(`Order.user` n'a pas de cascade, délibérément), et les effacer retirerait leur
+montant de la comptabilité du club, de ses déclarations de TVA et des reçus
+déjà remis. Le client a le droit de disparaître, pas de réécrire les comptes
+d'un tiers.
+
+Partent : nom, prénom, téléphone, adresse, mot de passe, connexions
+Apple/Google, sessions, jetons push, paniers, notifications reçues,
+appartenances. Restent : les commandes et leurs paiements, rattachés à une
+ligne qui ne désigne plus personne. L'adresse est **libérée**, et
+`archivedEmail` reste nul — c'est toute la différence avec un archivage, qui la
+conserve pour pouvoir revenir dessus.
+
+Deux refus possibles, qui ne concernent jamais un client ordinaire (ni
+l'examinateur Apple, qui crée un compte ordinaire) : dernier administrateur de
+la plateforme, ou dernier administrateur d'un club — le message le nomme.
+
+**« Notifications indisponibles » sur TOUS les iPhone.** Le menu du profil
+lisait `globalThis.Notification`, l'API du **navigateur** : elle n'existe pas
+dans React Native, l'objet était donc toujours absent, et l'écran en concluait
+que l'appareil ne savait pas notifier. Pendant ce temps les push
+fonctionnaient — elles passent par `expo-notifications`, que ce menu ne
+consultait jamais. Deux mécanismes côte à côte qui s'ignoraient. Et activer
+depuis cet écran **enregistre désormais le jeton** : avant, un client pouvait
+accorder la permission et ne rien recevoir.
+
+**Le logo officiel v2, décliné pour toutes les surfaces** depuis une seule
+source (`outils/decliner-logo.py`). Trois pièges, rencontrés dans cet ordre :
+le détourage **délavait** la couleur (l'opacité se déduisait de la clarté
+moyenne, or l'orange de la marque est clair — le logo sortait saumon) ; la
+marque seule emportait le « B » de BREAKEAT, aucune colonne vide ne les séparant
+puisque le lobe du B déborde **sous** la première lettre (on isole donc par la
+HAUTEUR des formes) ; et deux ratios codés en dur sur les anciennes dimensions
+auraient étiré la v2, plus compacte.
+
+**Le reçu porte le nom du client.** Il disait « Délivré à remi@exemple.fr » —
+or une comptabilité classe par nom, et une adresse ne vaut pas identité sur un
+justificatif.
+
+**Un favori ne menait nulle part.** La tuile ne garde qu'un nom et une image ;
+ce qui décide de ce qui s'ouvre — le lien Flaix du jour, l'heure d'ouverture —
+ne peut venir que du serveur. D'où `GET /public/venues/:id`, qui sert le cas
+que la liste ne peut pas : un favori hors du rayon, ou masqué par une recherche
+en cours. La route a demandé d'**extraire la projection** (masquage des lieux
+privés, lien du moment, identité glissée dedans) : trois règles délicates que
+deux routes auraient fini par écrire différemment.
+
+**Deux gardes qui manquaient dans les consoles.** La suppression d'un club
+n'avait AUCUNE protection, là où la remise à zéro — bien moins destructrice —
+exige qu'on recopie le nom ; et sa phrase mentait, les commandes ne portant pas
+de clé étrangère vers l'organisation et lui **survivant**, orphelines et
+toujours comptées. Côté club, vider le champ logo ne faisait rien du tout : la
+requête ne le transmettait pas, et l'écran annonçait quand même
+« Branding sauvegardé ».
+
+**Et enfin un endroit pour retirer un lieu de l'app.** Le serveur sait depuis
+toujours le passer en `INACTIVE`, mais aucune console n'exposait ce réglage.
+Pas de suppression, volontairement : un lieu porte des commandes payées.
+
+Côté app encore : l'icône du lieu devient une **épingle de carte** (le stade
+promettait un stade, alors que l'écran liste des bars et des buvettes de club),
+« Alertes » devient « Notifications » (le mot que portent l'écran, le réglage
+et le système), les titres de notification passent en orange vif, et le profil
+montre prénom/nom/téléphone en les rendant modifiables — une faute de frappe à
+l'inscription repartait sur chaque commande sans aucun écran pour y revenir.
+
+**790 tests backend, 34 mobile.**
+
+```
++ README.md                                    ← la porte d'entrée du dépôt
++ outils/decliner-logo.py
++ backend/src/modules/auth/suppression-compte.spec.ts
++ backend/src/modules/backoffice/dto/supprimer-org.dto.ts
++ apps/mobile/src/lib/permission-notifs.ts
++ apps/mobile/src/lib/message-serveur.ts
++ apps/{admin,backoffice,operator}/src/app/icon.png
+~ backend/src/modules/auth/auth.service.ts, auth.controller.ts
+~ backend/src/common/helpers/liberation-archives.ts
+~ backend/src/modules/venues/public-venues.controller.ts  (projection extraite)
+~ backend/src/modules/orders/recu.service.ts
+~ backend/src/modules/backoffice/backoffice.service.ts
+~ apps/mobile/src/screens/{profile,venue-discovery,notifications,login}.screen.tsx
+~ apps/mobile/src/components/{app-bottom-bar,demande-coordonnees,break-eat-logo}.tsx
+~ apps/admin + apps/backoffice : pages organisations, clients d'API
+~ les logos des 4 applications
+```
+
+---
+
+## [0.91.0] — 2026-10-17 — Les deux consoles reprennent le gabarit FlaiX Expert
+
+**Le même design, appliqué aux deux back-offices.** Un canevas teinté pour que
+les cartes blanches se détachent — du blanc sur du blanc donne une page plate,
+qu'on lit comme un document et non comme un outil ; des cartes à coin franc ;
+un carré d'icône teinté par destination, pour retrouver un écran à sa forme
+avant d'avoir lu son titre ; et des pilules partout où l'on clique, jamais
+d'angle droit.
+
+Le gabarit vit dans `src/components/ui.tsx`, et nulle part ailleurs : avant,
+chaque écran réinventait son titre, ses cartes et ses boutons en style en
+ligne — six pages qui se ressemblaient vaguement, et une correction de design
+à faire six fois.
+
+**Le menu ne liste plus que des SECTIONS.** Cliquer une section ouvre la page
+de ses modules, chacun avec une phrase qui dit ce qu'on y fait. Un libellé de
+menu dit *où* l'on va, jamais ce qu'on y trouve : « Encaissement » ne répond
+pas à « c'est là que je mets mon RIB ? ». Les entrées directes ont été
+retirées — deux chemins vers le même écran, c'est une duplication à tenir à
+jour et un menu qui s'allonge sans rien expliquer.
+
+Une seule route pour toutes les sections (`/section/[slug]`), alimentée par les
+mêmes données que le menu (`lib/nav.ts`) : six pages écrites à la main
+finiraient par diverger du menu.
+
+**« Mon lieu » ouvrait un 404.** L'entrée pointait sur `/organizations`, qui
+n'existait pas — seule `/organizations/[id]` était écrite. Un relais lit
+désormais le club de la session et redirige.
+
+**La barre du bas de l'app passe à trois places.** Le panier n'a plus d'onglet :
+c'est Flaix qui tient le panier et les produits. Le profil non plus — il se
+rejoint par l'avatar du bandeau. Restent Lieux, « Mes commandes » (la pastille
+surélevée) et les alertes. Les épaules du creux sont raccordées par des
+congés tangents, calculés plutôt que devinés.
+
+```
++ apps/admin/src/lib/nav.ts
++ apps/admin/src/app/(admin)/section/[slug]/page.tsx
++ apps/admin/src/app/(admin)/organizations/page.tsx   ← le relais « Mon lieu »
++ apps/{admin,backoffice}/src/components/ui.tsx
+~ apps/{admin,backoffice}/src/app/**/layout.tsx + pages
+~ apps/mobile/src/components/app-bottom-bar.tsx
+~ packages/brand/src/brand.ts  (canevas orange pâle)
+```
+
+---
+
 ## [0.90.0] — 2026-10-16 — Le client ne tape plus rien
 
 **Le téléphone, enfin saisissable.** Il n'existait aucune route de mise à jour
