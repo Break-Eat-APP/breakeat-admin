@@ -6988,3 +6988,237 @@ point 2 : techniquement il tient en une ligne SwiftUI qui se met à jour seule,
 sans APNs — mais il lui faut une heure cible, et donc une commande connue.
 
 **797 tests** : 729 backend, 34 mobile, 12 back-office, 12 opérateur, 10 admin.
+
+---
+
+## Phase 60 — Le gabarit FlaiX Expert dans les deux consoles (17/10/2026)
+
+Chaque écran réinventait son titre, ses cartes et ses boutons en style en
+ligne. Six pages qui se ressemblaient vaguement — et une correction de design à
+faire six fois.
+
+### Le gabarit vit à UN endroit
+
+`src/components/ui.tsx`, dans chaque console : `Page`, `PageHeader`, `Carte`,
+`Grille`, `CarreIcone`, `CarteLien`, `Kpi`, `Chip`, `Bouton`. Changer un rayon
+ou une ombre se fait là, et nulle part ailleurs.
+
+Quatre partis pris, et la raison de chacun :
+
+- **un canevas teinté** (`BRAND.canvas`), pour que les cartes blanches se
+  détachent. Du blanc sur du blanc donne une page plate, qu'on lit comme un
+  document et non comme un outil ;
+- **un carré d'icône teinté** par destination : sur une grille de douze, on
+  retrouve un écran à sa forme avant d'avoir lu son titre ;
+- **une ligne d'état** en bas de chaque carte de navigation — « 3 clubs ·
+  12 comptes » répond à la question avant qu'on ait cliqué ;
+- **des pilules** partout où l'on clique. Jamais d'angle droit sur un élément
+  cliquable.
+
+### Le menu ne liste que des SECTIONS
+
+Cliquer une section ouvre la page de ses modules, chacun avec une phrase qui
+dit ce qu'on y fait. Un libellé de menu dit **où** l'on va, jamais ce qu'on y
+trouve : « Encaissement » ne répond pas à « c'est là que je mets mon RIB ? ».
+
+Les entrées directes ont été retirées du menu : deux chemins vers le même
+écran, c'est une duplication à tenir à jour — et un menu qui s'allonge sans
+rien expliquer.
+
+Une **seule** route pour toutes les sections (`/section/[slug]`), alimentée par
+les mêmes données que le menu (`admin/src/lib/nav.ts`). Six pages écrites à la
+main finiraient par diverger du menu, et c'est précisément ce qu'on évite.
+
+> Qui connaît son chemin clique dans le menu. Qui cherche atterrit sur une page
+> qui explique. Les deux publics sont servis, sans se gêner.
+
+### Deux pièges rencontrés
+
+**« Mon lieu » ouvrait un 404.** L'entrée pointait sur `/organizations`, qui
+n'existait pas — seule `/organizations/[id]` était écrite. Un relais lit
+désormais le club de la session et redirige
+(`admin/src/app/(admin)/organizations/page.tsx`).
+
+**La section active se perdait.** Le menu ne listant plus les modules, ouvrir
+un module n'allumait plus rien. `actif(slug)` couvre donc la page de section
+**et** chacun de ses écrans enfants.
+
+### La barre du bas passe à trois places
+
+Le panier n'a plus d'onglet : c'est Flaix qui tient le panier et les produits.
+Le profil non plus — il se rejoint par l'avatar du bandeau. Restent **Lieux**,
+**Mes commandes** (la pastille surélevée) et les alertes.
+
+Les épaules du creux sont raccordées par des **congés tangents**, calculés
+(`dx = √(e² + 2·e·f)`) plutôt que devinés : un raccord approché se voit à
+l'œil comme une bosse, à toutes les largeurs d'écran.
+
+---
+
+## Phase 61 — Le logo v2, l'épingle, les favoris (17–19/10/2026)
+
+### Une source, toutes les déclinaisons
+
+`outils/decliner-logo.py` fabrique tout depuis le PNG officiel : lockup orange
+sur transparent pour les consoles, marque seule, lockup blanc pour le bandeau
+de l'app, marques carrées pour l'icône iOS, l'`adaptiveIcon` Android et l'écran
+de démarrage.
+
+Trois pièges, rencontrés dans cet ordre, et chacun invisible à la compilation :
+
+1. **Le détourage délavait la couleur.** L'opacité se déduisait de la clarté
+   moyenne du pixel — or l'orange de la marque est clair (253, 64, 0 :
+   moyenne 105) et se retrouvait à moitié transparent. Le logo sortait saumon.
+   On regarde désormais le **canal le plus sombre** : il vaut 255 sur du blanc
+   pur et s'effondre dès qu'il y a de la couleur, donc un pixel coloré est
+   pleinement opaque quelle que soit sa clarté.
+
+2. **La marque seule emportait le « B » de BREAKEAT.** Aucune colonne vide ne
+   les sépare : le lobe inférieur du B déborde **sous** la première lettre.
+   Couper « au premier trou » plaçait donc la coupe après elle. On isole par la
+   **hauteur des formes** — les lettres font 10 % du lockup, les trois morceaux
+   du B (l'éclair le coupe en trois) font 48, 51 et 74 %. Et l'on efface les
+   pixels écartés au lieu de recadrer un rectangle : un rectangle laissait une
+   écharde orange, le flanc de la lettre voisine.
+
+3. **Deux ratios étaient codés en dur** sur les anciennes dimensions. La v2
+   étant plus compacte, ils l'auraient étirée. Ils se déduisent du fichier.
+
+Les marques mobiles restent **carrées** : `app.config.js` les donne comme
+icône, `adaptiveIcon` et image de démarrage, et les trois l'exigent.
+
+### L'épingle plutôt que le stade
+
+L'onglet des lieux portait un stade. Il promettait un stade, alors que l'écran
+liste des **lieux** — un bar, une salle, une buvette de club. Une épingle ne
+promet rien d'autre qu'un endroit.
+
+Dessinée (`IconeLieu`, react-native-svg) plutôt que prise dans une police
+d'icônes : les épingles toutes faites sont des gouttes pleines où la boule ne
+se distingue pas de la pointe. Ici la boule est une forme à part — c'est elle
+qui porte l'orange quand l'onglet est actif.
+
+### Un favori ne menait nulle part
+
+La tuile d'un favori ne garde qu'un nom et une image. Ce qui décide de ce qui
+s'ouvre — le lien Flaix du jour, l'heure d'ouverture, l'événement en cours —
+change d'une heure à l'autre et ne peut venir que du serveur.
+
+D'où **`GET /public/venues/:id`**, qui sert le cas que la liste ne peut pas :
+un favori hors du rayon, ou masqué par une recherche en cours.
+
+Cette route a imposé d'**extraire la projection** dans
+`PublicVenuesController.projeter()` : masquage des lieux privés, lien Flaix du
+moment, identité glissée dans ce lien. Trois règles délicates que deux routes
+auraient fini par écrire différemment — et la première oubliée aurait été la
+confidentialité.
+
+> 404 et non 403 sur un lieu privé : répondre « interdit » confirmerait son
+> existence à qui essaie des identifiants.
+
+### La fiche d'informations
+
+Le profil montre prénom, nom et téléphone, et les rend modifiables. Une faute
+de frappe à l'inscription repartait sur chaque commande sans aucun écran pour y
+revenir.
+
+C'est la **même feuille** qu'avant une commande (`demande-coordonnees.tsx`),
+en mode édition. Deux formulaires auraient divergé à la première correction.
+Un détail qui a mordu : `useState` ne lit sa valeur initiale qu'une fois, et la
+feuille n'est pas démontée entre deux ouvertures — sans un effet de
+re-remplissage à l'ouverture, elle rouvrait vide et l'on écrivait par-dessus
+ses propres informations sans les voir.
+
+---
+
+## Phase 62 — Ce qu'Apple exige, et les gardes qui manquaient (19/10/2026)
+
+### La suppression de compte — un motif de rejet
+
+Apple l'exige depuis le 30/06/2022 (règle **5.1.1(v)**) : une app qui permet de
+créer un compte doit permettre de le supprimer **dans l'app**, et les données
+personnelles doivent réellement partir — une désactivation ne suffit pas. Il
+n'existait aucun moyen de le faire, ni dans l'app ni sur le serveur.
+
+**On anonymise, on n'efface pas la ligne.** Deux raisons, et la seconde suffit :
+
+- la base **refuse** d'effacer un compte porteur de commandes (`Order.user`
+  n'a pas de cascade, délibérément) ;
+- les effacer retirerait leur montant de la comptabilité du club, de ses
+  déclarations de TVA et des reçus déjà remis.
+
+> Le client a le droit de disparaître, pas de réécrire les comptes d'un tiers.
+
+`AuthService.supprimerMonCompte()` efface nom, prénom, téléphone, adresse, mot
+de passe, identités Apple/Google, sessions, jetons push, paniers, notifications
+reçues et appartenances. Les commandes restent, rattachées à une ligne qui ne
+désigne plus personne.
+
+L'adresse est **libérée** (`adresseSupprimee()`), et `archivedEmail` reste
+**nul** : c'est toute la différence avec un archivage, qui la conserve pour
+pouvoir revenir dessus. Se réinscrire crée un compte neuf — l'app ne vérifie
+pas les adresses, rendre un historique à qui sait taper une adresse reviendrait
+à le donner.
+
+Deux refus, qui ne rencontrent jamais un client ordinaire (ni l'examinateur
+Apple, qui crée un compte ordinaire) : dernier administrateur de la plateforme,
+ou dernier administrateur d'un club — le message le nomme, sans quoi un manager
+de trois clubs ne saurait pas lequel débloquer.
+
+### L'état des notifications venait de l'API du NAVIGATEUR
+
+Le menu du profil annonçait « Notifications indisponibles » sur **tous** les
+iPhone. Il lisait `globalThis.Notification`, l'API du navigateur : elle
+n'existe pas dans React Native, l'objet était donc toujours absent, et l'écran
+en concluait que l'appareil ne savait pas notifier.
+
+Pendant ce temps les push fonctionnaient — elles passent par
+`expo-notifications`, que ce menu ne consultait jamais. Deux mécanismes côte à
+côte qui s'ignoraient.
+
+`lib/permission-notifs.ts` interroge désormais la bonne source selon la
+plateforme, et **activer enregistre le jeton** dans la foulée : une permission
+accordée sans jeton donnait un client persuadé d'être abonné, qui ne recevait
+rien.
+
+### Le reçu porte le nom
+
+Il disait « Délivré à remi@exemple.fr ». Une comptabilité classe par **nom**, et
+une adresse ne vaut pas identité sur un justificatif.
+
+Prénom + nom, l'un des deux sinon, le nom d'affichage en dernier recours — tout
+ce qu'une inscription Apple laisse parfois. Et « Délivré à » introduit la
+**ligne**, pas le nom : une première version donnait l'étiquette au nom, si
+bien qu'un client sans nom se retrouvait avec une adresse posée nue. Le test
+existant l'a vu.
+
+### Deux gardes qui manquaient dans les consoles
+
+**Supprimer un club** n'avait aucune protection — ni confirmation recopiée, ni
+vérification — là où la remise à zéro, bien moins destructrice, en exige une.
+Et sa phrase mentait : les commandes ne portent **pas** de clé étrangère vers
+l'organisation (`Order.organizationId` est une colonne nue) et lui
+**survivaient**. Orphelines, hors de tout écran, et toujours comptées dans les
+totaux de la plateforme.
+
+Deux barrières, reprises de ce qui existait ailleurs : recopier le nom (comme
+la remise à zéro) et refuser tant qu'il reste des commandes (comme la
+suppression d'un compte), en renvoyant vers les deux gestes propres.
+
+**Vider le champ logo d'un club** ne faisait rien du tout : `if (valeur.trim())`
+empêchait la requête d'en parler, le serveur gardait l'ancienne valeur, et
+l'écran annonçait quand même « Branding sauvegardé ». Le back-office, lui,
+envoyait déjà `null` — et il écrit sur la **même route**.
+
+> Deux consoles qui ne se comportent pas pareil sur un même bouton sont un
+> piège, pas une variante.
+
+### Retirer un lieu de l'app
+
+Le serveur sait depuis toujours passer un lieu en `INACTIVE`, et la recherche
+publique l'écarte. Mais aucune console n'exposait ce réglage : un lieu créé par
+erreur restait visible sans aucun moyen de le retirer.
+
+Pas de suppression, et c'est délibéré : un lieu porte des commandes payées.
+Masquer est le seul geste réversible, et c'est le bon.
+
