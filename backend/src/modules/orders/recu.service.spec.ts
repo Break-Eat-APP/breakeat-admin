@@ -7,13 +7,20 @@ import type { PrismaService } from '../../database/prisma.service';
  *
  * Un ticket anonyme ne se fait pas rembourser : une note de frais, une
  * comptabilité de club ou une réclamation demandent toutes de savoir à qui le
- * document a été délivré. L'adresse du client suffit — et elle seule : le reçu
- * ne porte ni domicile ni moyen de paiement.
+ * document a été délivré — et une comptabilité classe par NOM, pas par adresse
+ * e-mail. Le reçu porte donc le nom de l'inscription, l'adresse sous lui, et
+ * rien d'autre : ni domicile ni moyen de paiement.
  */
 describe('RecuService — ce que porte le document', () => {
   const COMMANDE = 'aaaaaaaa-1111-4111-8111-111111111111';
 
-  function service(overrides: { dailyNumber?: number | null; email?: string | null } = {}) {
+  function service(
+    overrides: {
+      dailyNumber?: number | null;
+      email?: string | null;
+      client?: Record<string, unknown> | null;
+    } = {},
+  ) {
     const prisma = {
       order: {
         findUnique: jest.fn().mockResolvedValue({
@@ -43,15 +50,62 @@ describe('RecuService — ce que porte le document', () => {
         findUnique: jest
           .fn()
           .mockResolvedValue(
-            overrides.email === null ? null : { email: overrides.email ?? 'jo@exemple.fr' },
+            overrides.client !== undefined
+              ? overrides.client
+              : overrides.email === null
+                ? null
+                : { email: overrides.email ?? 'jo@exemple.fr' },
           ),
       },
     } as unknown as PrismaService;
     return new RecuService(prisma);
   }
 
-  it('indique à qui il est délivré', async () => {
-    await expect(service().html(COMMANDE)).resolves.toContain('Délivré à jo@exemple.fr');
+  it('porte le NOM de l’inscription, et l’adresse sous lui', async () => {
+    const html = await service({
+      client: {
+        email: 'jo@exemple.fr',
+        firstName: 'Jo',
+        lastName: 'Martin',
+        displayName: 'JoJo',
+      },
+    }).html(COMMANDE);
+
+    // C'est le nom qu'une comptabilite cherche ; l'adresse reste dessous, car
+    // c'est elle qui rattache le recu au compte.
+    expect(html).toContain('Délivré à Jo Martin');
+    expect(html).toContain('jo@exemple.fr');
+    // Le nom d'affichage ne sert que de dernier recours : tant qu'un etat
+    // civil existe, c'est lui qui vaut sur un justificatif.
+    expect(html).not.toContain('JoJo');
+  });
+
+  it('se contente du prénom quand le nom manque', async () => {
+    const html = await service({
+      client: { email: 'jo@exemple.fr', firstName: 'Jo', lastName: null, displayName: null },
+    }).html(COMMANDE);
+
+    expect(html).toContain('Délivré à Jo');
+  });
+
+  it('retombe sur le nom d’affichage — tout ce qu’Apple laisse parfois', async () => {
+    // Apple ne communique l'identite qu'a la toute premiere autorisation :
+    // un compte ouvert ainsi n'a souvent qu'un nom d'affichage.
+    const html = await service({
+      client: { email: 'jo@exemple.fr', firstName: null, lastName: null, displayName: 'Jo M.' },
+    }).html(COMMANDE);
+
+    expect(html).toContain('Délivré à Jo M.');
+  });
+
+  it('sans aucun nom, « Délivré à » reste — porté par l’adresse', async () => {
+    // La regression qu'il fallait eviter : l'etiquette appartient a la ligne,
+    // pas au nom. Une adresse posee nue ne dit pas ce qu'elle fait la.
+    const html = await service({
+      client: { email: 'jo@exemple.fr', firstName: null, lastName: null, displayName: null },
+    }).html(COMMANDE);
+
+    expect(html).toContain('Délivré à jo@exemple.fr');
   });
 
   it('annonce le numéro du jour ET garde la référence longue', async () => {

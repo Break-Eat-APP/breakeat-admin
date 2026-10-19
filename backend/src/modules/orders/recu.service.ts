@@ -37,11 +37,16 @@ export class RecuService {
       }),
       // À qui ce reçu est délivré. Un justificatif anonyme ne se fait pas
       // rembourser : une note de frais, une comptabilité de club ou une
-      // réclamation demandent toutes de savoir qui a payé. L'adresse suffit —
-      // le reçu ne porte toujours ni domicile ni moyen de paiement.
+      // réclamation demandent toutes de savoir qui a payé.
+      //
+      // Le NOM d'abord, l'adresse ensuite : une comptabilité classe par nom, et
+      // « remi@exemple.fr » ne vaut pas identité sur un justificatif. Les deux
+      // y figurent, car l'adresse est ce qui rattache le reçu au compte.
+      //
+      // Le reçu ne porte toujours ni domicile ni moyen de paiement.
       this.prisma.user.findUnique({
         where: { id: order.userId },
-        select: { email: true },
+        select: { email: true, firstName: true, lastName: true, displayName: true },
       }),
     ]);
 
@@ -50,6 +55,22 @@ export class RecuService {
       order.items.map((l) => ({ ttcCents: l.lineTotalCents, vatRateBps: l.vatRateBps })),
       order.totalCents,
     );
+
+    /**
+     * LE NOM DU CLIENT, tel qu'il l'a donné en s'inscrivant.
+     *
+     * Prénom et nom quand les deux sont là ; l'un des deux sinon. En dernier
+     * recours le nom d'affichage — c'est tout ce qu'une inscription par Apple
+     * laisse parfois, Apple ne communiquant l'identité qu'à la toute première
+     * autorisation.
+     *
+     * Et rien du tout si rien n'est renseigné : une ligne « Délivré à » vide,
+     * ou remplie d'un bout d'adresse e-mail, vaut moins que pas de ligne.
+     */
+    const nomClient =
+      [client?.firstName, client?.lastName].filter(Boolean).join(' ').trim() ||
+      client?.displayName?.trim() ||
+      '';
 
     const euros = (cents: number) =>
       `${(cents / 100).toFixed(2).replace('.', ',')}\u00a0€`;
@@ -129,7 +150,17 @@ export class RecuService {
       <p class="num">
         ${order.dailyNumber != null ? `Commande n° ${order.dailyNumber}<br>` : ''}
         Reçu n° ${echapper(order.publicOrderNumber)}
-        ${client?.email ? `<br>Délivré à ${echapper(client.email)}` : ''}
+        ${
+          // « Délivré à » introduit la LIGNE, pas le nom : un client sans nom
+          // n'a pas à hériter d'une adresse e-mail posée nue, sans rien qui
+          // dise ce qu'elle fait là.
+          nomClient
+            ? `<br>Délivré à ${echapper(nomClient)}` +
+              (client?.email ? `<br>${echapper(client.email)}` : '')
+            : client?.email
+              ? `<br>Délivré à ${echapper(client.email)}`
+              : ''
+        }
       </p>
 
       <table>${lignes}</table>
