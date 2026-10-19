@@ -454,8 +454,25 @@ export const apiMettreAJourProfil = (profil: {
   firstName?: string;
   lastName?: string;
   phone?: string;
+  /** Le nom affiché en tête de « Mes commandes ». Jamais vidé par le serveur. */
+  displayName?: string;
 }) =>
   req<MonProfil>('/auth/me', { method: 'PATCH', body: JSON.stringify(profil) });
+
+/**
+ * Le client SUPPRIME son compte. Irréversible.
+ *
+ * Exigé par Apple (règle 5.1.1(v)). Le serveur anonymise plutôt qu'il
+ * n'efface : les commandes restent dans la comptabilité du club, rattachées à
+ * une ligne qui ne désigne plus personne. L'adresse, elle, est libérée — se
+ * réinscrire crée un compte neuf, sans lien avec l'ancien.
+ *
+ * Peut être REFUSÉ (400) : dernier administrateur de la plateforme ou d'un
+ * club. Le serveur dit alors quoi faire, et c'est sa phrase qu'il faut
+ * montrer.
+ */
+export const apiSupprimerMonCompte = () =>
+  req<{ supprime: true }>('/auth/me', { method: 'DELETE' });
 
 export const apiConnexionSociale = (
   provider: FournisseurSocial,
@@ -542,6 +559,23 @@ export const apiSearchVenues = (params: {
   const suffix = parts.length ? `?${parts.join('&')}` : '';
   return req<PublicVenue[]>(`/public/venues${suffix}`);
 };
+
+/**
+ * UN lieu, par son identifiant — et son état du MOMENT.
+ *
+ * Pourquoi ne pas réutiliser la copie gardée dans les favoris : elle ne
+ * contient qu'un nom et une image. Ce qui décide de ce qui s'ouvre — le lien
+ * Flaix du jour, l'heure d'ouverture, l'événement en cours — change d'une
+ * heure à l'autre et ne peut venir que du serveur.
+ *
+ * La position reste facultative : elle ne sert qu'à afficher une distance,
+ * jamais à écarter le lieu. Un favori s'ouvre où qu'il soit.
+ */
+export const apiGetPublicVenue = (id: string, pos?: { lat: number; lng: number }) =>
+  req<PublicVenue>(
+    `/public/venues/${encodeURIComponent(id)}` +
+      (pos ? `?lat=${pos.lat}&lng=${pos.lng}` : ''),
+  );
 
 // ─── Public event browsing (no auth required) ─────────────────
 

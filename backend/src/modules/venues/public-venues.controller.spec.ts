@@ -425,3 +425,79 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
     expect(prisma.user.findUnique).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * UN LIEU PAR SON IDENTIFIANT — ce qui rend une tuile de favori cliquable.
+ *
+ * La liste ne suffit pas : un favori peut etre hors du rayon, ou avoir
+ * disparu de l'ecran parce qu'une recherche est en cours. Ce qui compte ici,
+ * c'est que cette seconde porte n'en soit pas une derobee : les regles de
+ * confidentialite doivent valoir mot pour mot.
+ */
+describe('PublicVenuesController — un lieu par son identifiant', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('rend le lieu demande, avec les memes champs que la liste', async () => {
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([PUBLIC_VENUE]);
+
+    const lieu = await makeController().parId('v-pub');
+
+    expect(lieu.id).toBe('v-pub');
+    expect(lieu.name).toBe('Stade Public');
+    // La cible de navigation : sans elle, ouvrir le favori ne menerait
+    // nulle part, ce qui etait precisement le defaut a corriger.
+    expect(lieu.currentEventId).toBe('e-pub');
+  });
+
+  it('ne filtre PAS sur la distance : un favori lointain s’ouvre quand meme', async () => {
+    // Le cas qui a motive la route. Le lieu est a 400 km, donc absent de la
+    // liste de proximite ; sa tuile de favori, elle, est a l’ecran.
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      { ...PUBLIC_VENUE, latitude: 43.3, longitude: 5.4 },
+    ]);
+
+    const lieu = await makeController().parId('v-pub', undefined, '48.86', '2.35');
+
+    expect(lieu.id).toBe('v-pub');
+    expect(lieu.distanceKm).toBeGreaterThan(300);
+  });
+
+  it('un lieu PRIVE inaccessible repond 404, pas son contenu', async () => {
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([PRIVATE_VENUE]);
+
+    // 404 et non 403 : « interdit » confirmerait l’existence du lieu a qui
+    // essaie des identifiants au hasard.
+    await expect(makeController().parId('v-priv')).rejects.toThrow('Lieu introuvable.');
+  });
+
+  it('… mais un membre du groupe l’obtient', async () => {
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([PRIVATE_VENUE]);
+    (prisma.groupMember.findMany as jest.Mock).mockResolvedValue([
+      { group: { events: [{ eventId: 'e-priv' }] } },
+    ]);
+
+    const lieu = await makeController().parId('v-priv', { sub: 'u-1' } as never);
+
+    expect(lieu.id).toBe('v-priv');
+  });
+
+  it('un identifiant inconnu repond 404', async () => {
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([]);
+
+    await expect(makeController().parId('v-fantome')).rejects.toThrow('Lieu introuvable.');
+  });
+
+  it('ne lit QUE le lieu demande, et seulement s’il est en service', async () => {
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([PUBLIC_VENUE]);
+
+    await makeController().parId('v-pub');
+
+    // Un club suspendu ne doit pas se laisser ouvrir par son identifiant : la
+    // meme clause que la liste est posee ici, sinon la suspension ne tiendrait
+    // qu’a moitie.
+    const where = (prisma.venue.findMany as jest.Mock).mock.calls[0][0].where;
+    expect(where.id).toBe('v-pub');
+    expect(where.status).toBe('ACTIVE');
+    expect(where.organization).toBeDefined();
+  });
+});

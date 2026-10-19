@@ -1,8 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 
 import { THEME, HEAD } from '@lib/theme';
 import { useNotifStore } from '@store/notif.store';
@@ -15,17 +15,17 @@ import type { RootStackParamList } from '@navigation/root-navigator';
  * Barre du bas PERSISTANTE — rendue en overlay au-dessus de chaque écran
  * (hors du Stack), façon application native.
  *
- * Cinq places : Lieux · Panier — la PASTILLE — Alertes · Profil. À gauche le
- * parcours d'achat, à droite ce qui appartient au client, et au milieu ce pour
- * quoi il rouvre l'application : ses commandes en cours.
+ * Trois places : Lieux — la PASTILLE — Notifications. Le PANIER et le PROFIL
+ * en sont sortis le 16/10 : c'est Flaix qui tient le panier, et le profil se
+ * rejoint par l'avatar du bandeau. Trois places pour trois intentions, plutôt
+ * que cinq dont deux redondantes.
  *
  * L'éclair plutôt que le logo dans la pastille : un logo répété à chaque écran
  * ne dit rien de ce que le bouton FAIT. L'éclair dit la rapidité — la promesse
  * de l'app — et se lit à 24 pixels, ce qu'un lockup ne fait pas.
  *
- * Alertes et Profil étaient jusqu'ici deux icônes dans le bandeau orange de
- * l'accueil, donc introuvables depuis tout autre écran. Ici, elles suivent le
- * client partout.
+ * Les notifications étaient une icône du bandeau orange de l'accueil, donc
+ * introuvables depuis tout autre écran. Ici, elles suivent le client partout.
  */
 
 // Geometrie REELLE de la barre — a lire avec `styles`, en bas de ce fichier.
@@ -167,6 +167,47 @@ function Pastille({ compte }: { compte: number }) {
   );
 }
 
+/**
+ * LA COULEUR D'UN ONGLET — une seule règle pour les trois.
+ *
+ * Orange quand on y est, gris sourd sinon. Un onglet qui s'éteindrait d'une
+ * autre couleur se lirait comme un état particulier, pas comme un repos.
+ */
+const teinte = (actif: boolean) => (actif ? THEME.orange : THEME.inkSoft);
+
+/**
+ * L'ICÔNE DU LIEU — une épingle de carte : une boule, et la hampe sous elle.
+ *
+ * Avant, un stade (`stadium-variant`). Il promettait un stade, alors que
+ * l'écran liste des LIEUX — un bar, une salle, une buvette de club. Une
+ * épingle ne promet rien d'autre qu'un endroit, et c'est exactement le sujet.
+ *
+ * Dessinée plutôt que prise dans une police d'icônes : les épingles toutes
+ * faites sont des gouttes pleines, où la boule ne se distingue pas de la
+ * pointe. Ici la boule est une forme à part — c'est elle qui porte l'orange
+ * quand l'onglet est actif, et c'est ce qu'on voit en premier.
+ *
+ * Le gris inactif est celui des deux autres onglets (`teinte`) : un onglet qui
+ * s'éteindrait d'une autre couleur se lirait comme un état, pas comme un repos.
+ */
+function IconeLieu({ actif, taille = 23 }: { actif: boolean; taille?: number }) {
+  const couleur = teinte(actif);
+  // Tracé pensé dans une boîte de 24, mis à l'échelle par le viewBox : les
+  // coordonnées restent lisibles quelle que soit la taille demandée.
+  return (
+    <Svg width={taille} height={taille} viewBox="0 0 24 24">
+      {/* La hampe : elle part de sous la boule et s'affine jusqu'au sol.
+          Un trait d'épaisseur constante donnait un clou ; l'effilé donne
+          une épingle qui se pose. */}
+      <Path d="M9.6 12.4 L14.4 12.4 L12.7 21.4 Q12 22.4 11.3 21.4 Z" fill={couleur} />
+      <Circle cx={12} cy={8.6} r={5.6} fill={couleur} />
+      {/* L'œil de l'épingle, évidé : sans lui la boule est un point plein et
+          l'ensemble ne se lit plus comme une épingle à cette taille. */}
+      <Circle cx={12} cy={8.6} r={2.1} fill={THEME.surface} />
+    </Svg>
+  );
+}
+
 function Onglet({
   icone,
   libelle,
@@ -218,9 +259,7 @@ export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
 
   const isLieux = currentRoute === 'Lieux';
   const isCommandes = currentRoute === 'Commandes';
-  const isAlertes = currentRoute === 'Notifications';
-
-  const teinte = (actif: boolean) => (actif ? THEME.orange : THEME.inkSoft);
+  const isNotifs = currentRoute === 'Notifications';
 
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom: insets.bottom + 16 }]}>
@@ -245,9 +284,7 @@ export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
           libelle="Lieux"
           actif={isLieux}
           onPress={() => navigateTo('Lieux')}
-          icone={
-            <MaterialCommunityIcons name="stadium-variant" size={23} color={teinte(isLieux)} />
-          }
+          icone={<IconeLieu actif={isLieux} />}
         />
         {/* Mes commandes — la pastille surélevée. */}
         <Pressable style={styles.fabWrap} onPress={() => navigateTo('Commandes')} hitSlop={6}>
@@ -260,18 +297,22 @@ export function AppBottomBar({ currentRoute }: { currentRoute?: string }) {
         </Pressable>
 
         <Onglet
-          libelle="Alertes"
-          actif={isAlertes}
+          // « Notifications », et non « Alertes » : c'est le mot que porte
+          // l'ecran qui s'ouvre, celui du reglage dans le profil, et celui
+          // du systeme. Deux mots pour une meme chose font chercher deux
+          // endroits differents.
+          libelle="Notifications"
+          actif={isNotifs}
           compte={nonLues}
           onPress={() => navigateTo('Notifications')}
           icone={
             <Ionicons
               // Une cloche PLEINE et orange dès qu'il y a du nouveau : la
               // pastille chiffrée seule se rate d'un coup d'œil, et le client
-              // ne pensait pas à ouvrir « Alertes ».
-              name={isAlertes || nonLues > 0 ? 'notifications' : 'notifications-outline'}
+              // ne pensait pas à ouvrir l'écran.
+              name={isNotifs || nonLues > 0 ? 'notifications' : 'notifications-outline'}
               size={23}
-              color={teinte(isAlertes || nonLues > 0)}
+              color={teinte(isNotifs || nonLues > 0)}
             />
           }
         />

@@ -19,6 +19,7 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { useNotifStore } from '@store/notif.store';
 import {
+  apiGetPublicVenue,
   apiMonProfil,
   apiSearchVenues,
   type MonProfil,
@@ -188,6 +189,56 @@ export function VenueDiscoveryScreen() {
           : `${v.name} n'a pas encore d'événement ouvert à la commande.`,
       );
     }
+  };
+
+  /**
+   * OUVRIR UN LIEU FAVORI.
+   *
+   * La tuile d'un favori ne menait nulle part : on n'avait sous la main qu'un
+   * nom et une image, et rien de ce qui décide de ce qui s'ouvre — le lien
+   * Flaix du jour, l'heure d'ouverture, l'événement en cours.
+   *
+   * Deux cas, et un seul comportement visible :
+   *
+   *  · le lieu est DANS les résultats du moment — on le connaît déjà, on
+   *    ouvre sans attendre ;
+   *  · il n'y est pas (hors rayon, ou masqué par une recherche en cours) — on
+   *    le relit au serveur. C'est le cas courant d'un favori : on ne l'ajoute
+   *    pas à ses favoris pour le chercher à nouveau chaque fois.
+   *
+   * `ouverture` retient l'identifiant en cours : sans lui, deux touches
+   * rapides lanceraient deux lectures, et la seconde réponse écraserait la
+   * première — on ouvrirait le mauvais lieu.
+   */
+  const [ouverture, setOuverture] = useState<string | null>(null);
+  const openFavori = (fav: Fav) => {
+    const vivant = venues.find((x) => x.id === fav.id);
+    if (vivant) {
+      openVenue(vivant);
+      return;
+    }
+    if (ouverture) return;
+    setOuverture(fav.id);
+    void (async () => {
+      try {
+        const v = await apiGetPublicVenue(
+          fav.id,
+          coords ?? undefined,
+        );
+        openVenue(v);
+      } catch (e: unknown) {
+        console.warn('apiGetPublicVenue a échoué:', e);
+        // Le lieu peut avoir été retiré, ou le club suspendu : le favori
+        // pointe alors dans le vide. On le dit, plutôt que de ne rien faire —
+        // c'est exactement le silence qu'on vient de corriger.
+        showAlert(
+          'Lieu indisponible',
+          `${fav.name} n'est plus accessible pour le moment. Réessaie plus tard.`,
+        );
+      } finally {
+        setOuverture(null);
+      }
+    })();
   };
 
   // Le compte se relit a chaque retour sur l'accueil : une notification peut
@@ -388,7 +439,13 @@ export function VenueDiscoveryScreen() {
               // recadré, non. D'où l'ordre inversé par rapport à la carte.
               const visuel = visuelDeLieu(vivant ?? v, 'logo');
               return (
-              <View key={v.id} style={[styles.favCard, shadowCard]}>
+              <Pressable
+                key={v.id}
+                style={[styles.favCard, shadowCard, ouverture === v.id && styles.favCardOuvre]}
+                onPress={() => openFavori(v)}
+                accessibilityRole="button"
+                accessibilityLabel={`Ouvrir ${v.name}`}
+              >
                 <View style={styles.favLogo}>
                   {visuel.type === 'image' ? (
                     <Image
@@ -401,10 +458,12 @@ export function VenueDiscoveryScreen() {
                   )}
                 </View>
                 <Text style={styles.favName} numberOfLines={2}>{v.name}</Text>
+                {/* Le cœur garde son propre geste : retirer un favori ne doit
+                    pas ouvrir le lieu au passage. */}
                 <Pressable onPress={() => toggleFav(v)} hitSlop={8}>
                   <Ionicons name="heart" size={18} color={THEME.orange} />
                 </Pressable>
-              </View>
+              </Pressable>
               );
             })}
           </ScrollView>
@@ -542,7 +601,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingBottom: 4,
   },
-  lockup: { width: 150, height: 150 * (212 / 760) },
+  /*
+    LE LOCKUP SE DIMENSIONNE PAR SA HAUTEUR, pas par sa largeur.
+
+    La v2 est bien plus compacte que la v1 (480×212 contre 760×212) : son B
+    est grand, son mot est petit. En gardant la largeur de 150 px d'avant,
+    le bandeau grandissait de 24 px pour rien. En partant de la hauteur, la
+    tête garde exactement son rythme — et le mot reste lisible, sa
+    chasse très étalée le sauve aux petites tailles.
+
+    Le ratio est DÉDUIT du fichier : figé, il étirerait le logo au
+    prochain export.
+  */
+  lockup: { height: 46, width: 46 * (480 / 212) },
   avatar: {
     width: 38, height: 38, borderRadius: 19,
     alignItems: 'center', justifyContent: 'center',
@@ -653,6 +724,10 @@ const styles = StyleSheet.create({
     width: 176, flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: THEME.surface, borderRadius: 14, padding: 10,
   },
+  // Pendant la lecture du lieu, la tuile s'efface un peu : sans ce signe, une
+  // touche sur un favori hors résultats paraissait n'avoir rien déclenché, et
+  // on touchait deux fois.
+  favCardOuvre: { opacity: 0.55 },
   favLogo: {
     width: 42, height: 42, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: THEME.border,
     overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: 3,

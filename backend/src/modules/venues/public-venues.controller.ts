@@ -1,4 +1,12 @@
-import { Controller, Get, Header, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Header,
+  NotFoundException,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { EventStatus, EventVisibility, Prisma, VenueStatus } from '@prisma/client';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
@@ -6,10 +14,50 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { CLUB_EN_SERVICE } from '../../common/helpers/organisation-ouverte';
 import { fenetreDeCommande } from '../../common/helpers/fenetre-commande';
-import {
-  personnaliserLien,
-  porteDesEtiquettes,
-} from '../../common/helpers/personnaliser-lien';
+import { personnaliserLien, porteDesEtiquettes } from '../../common/helpers/personnaliser-lien';
+
+/**
+ * CE QU'UN LIEU PUBLIC LAISSE LIRE — une seule fois, pour les deux routes.
+ *
+ * La liste et la fiche d'un lieu doivent répondre EXACTEMENT la même chose :
+ * deux sélections écrites séparément finiraient par diverger, et c'est ici
+ * que ça se paierait cher. Il y a dans ce `select` des champs qui décident de
+ * la confidentialité (`visibility`) et de l'ouverture de la commande
+ * (`startAt`, `endAt`, `flaixOrderUrl`) : en oublier un sur une route, c'est
+ * soit révéler un lieu privé, soit annoncer fermé un lieu qui vend.
+ */
+const SELECTION_LIEU = {
+  id: true,
+  name: true,
+  address: true,
+  latitude: true,
+  longitude: true,
+  photoUrl: true,
+  flaixEnabled: true,
+  flaixVenueId: true,
+  ordersOpenAt: true,
+  timezone: true,
+  buvettePlanUrl: true,
+  organization: { select: { name: true, logoUrl: true, primaryColor: true } },
+  // TOUS les événements (id, statut, visibilité) : la confidentialité se décide
+  // sur l'ensemble, pas seulement les actifs — sinon un lieu privé dont
+  // l'événement privé n'est pas encore actif serait révélé en « Bientôt ».
+  events: {
+    orderBy: { startAt: 'asc' },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      visibility: true,
+      // Les dates et le lien : c'est la DATE qui choisit le lien Flaix
+      // à ouvrir (`fenetre-commande`), et non un motif d'URL deviné.
+      startAt: true,
+      endAt: true,
+      isPermanentContainer: true,
+      flaixOrderUrl: true,
+    },
+  },
+} satisfies Prisma.VenueSelect;
 
 /**
  * PublicVenuesController — découverte des lieux pour l'app mobile (Phase 16).
@@ -79,43 +127,72 @@ export class PublicVenuesController {
         : {}),
     };
 
-    const venues = await this.prisma.venue.findMany({
+    const userLat = parseCoord(lat);
+    const userLng = parseCoord(lng);
+    const hasLocation = userLat !== null && userLng !== null;
+    const radius = parsePositiveNumber(radiusKm) ?? PublicVenuesController.DEFAULT_RADIUS_KM;
+
+    let result = await this.projeter(
+      await this.lire(where),
+      user,
+      hasLocation ? { lat: userLat, lng: userLng } : null,
+    );
+
+    // Deux chemins pour trouver un lieu, et deux seulement :
+    //
+    //  1. LA PROXIMITÉ — sans recherche, on n'affiche que les lieux géolocalisés
+    //     dans le rayon. Un lieu sans coordonnées n'y figure pas : il n'a
+    //     aucune position à comparer. C'est au club de renseigner son GPS.
+    //  2. LA RECHERCHE — taper un nom, une adresse ou un mot-clé configuré par
+    //     le club l'emporte sur la distance. Qui cherche « spartiates » veut ce
+    //     club, qu'il soit à 2 ou 400 km ; répondre « aucun résultat » sur un
+    //     nom exact serait incompréhensible.
+    if (hasLocation && !term) {
+      result = result.filter((v) => v.distanceKm !== null && v.distanceKm <= radius);
+      result.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
+    }
+
+    // Ni position, ni recherche : aucun des deux chemins n'est emprunté, donc
+    // rien à montrer. Lister tout le catalogue serait un troisième chemin non
+    // voulu — et trompeur : un client verrait des clubs à 400 km comme s'ils
+    // le concernaient. L'app affiche alors son invitation à autoriser la
+    // localisation ou à chercher un nom.
+    if (!hasLocation && !term) return [];
+
+    return result;
+  }
+
+  /**
+   * LA LECTURE BRUTE, isolée pour que `projeter` en déduise son type.
+   *
+   * Sans elle, il faudrait écrire à la main le type de ce que Prisma renvoie —
+   * une trentaine de champs imbriqués, qu'un jour on oublierait de suivre.
+   */
+  private lire(where: Prisma.VenueWhereInput) {
+    return this.prisma.venue.findMany({
       where,
       orderBy: { name: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        address: true,
-        latitude: true,
-        longitude: true,
-        photoUrl: true,
-        flaixEnabled: true,
-        flaixVenueId: true,
-        ordersOpenAt: true,
-        timezone: true,
-        buvettePlanUrl: true,
-        organization: { select: { name: true, logoUrl: true, primaryColor: true } },
-        // TOUS les événements (id, statut, visibilité) : la confidentialité se décide
-        // sur l'ensemble, pas seulement les actifs — sinon un lieu privé dont
-        // l'événement privé n'est pas encore actif serait révélé en « Bientôt ».
-        events: {
-          orderBy: { startAt: 'asc' },
-          select: {
-            id: true,
-            name: true,
-            status: true,
-            visibility: true,
-            // Les dates et le lien : c'est la DATE qui choisit le lien Flaix
-            // à ouvrir (`fenetre-commande`), et non un motif d'URL deviné.
-            startAt: true,
-            endAt: true,
-            isPermanentContainer: true,
-            flaixOrderUrl: true,
-          },
-        },
-      },
+      select: SELECTION_LIEU,
     });
+  }
 
+  /**
+   * DES LIGNES DE BASE VERS CE QUE L'APPLICATION A LE DROIT DE VOIR.
+   *
+   * Masquage des lieux privés, lien Flaix du moment, identité glissée dans ce
+   * lien : trois règles délicates, tenues ICI et nulle part ailleurs. La liste
+   * et la fiche d'un lieu passent toutes deux par cette méthode — une seconde
+   * route qui les réécrirait de son côté finirait par en oublier une, et la
+   * première oubliée serait la confidentialité.
+   *
+   * `position` vaut null quand on ignore où est le client : les distances
+   * valent alors null, et aucun lieu n'est écarté pour cette raison.
+   */
+  private async projeter(
+    venues: Awaited<ReturnType<PublicVenuesController['lire']>>,
+    user: JwtPayload | undefined,
+    position: { lat: number; lng: number } | null,
+  ) {
     // Ensemble des événements PRIVÉS accessibles à l'utilisateur (via ses groupes).
     const accessibleEventIds = new Set<string>();
     if (user?.sub) {
@@ -135,12 +212,7 @@ export class PublicVenuesController {
     // d'écart, sinon un événement peut « ouvrir » entre deux lignes.
     const maintenant = new Date();
 
-    const userLat = parseCoord(lat);
-    const userLng = parseCoord(lng);
-    const hasLocation = userLat !== null && userLng !== null;
-    const radius = parsePositiveNumber(radiusKm) ?? PublicVenuesController.DEFAULT_RADIUS_KM;
-
-    let result = venues
+    const result = venues
       .map((v) => {
         const accessible = v.events.filter(canAccess);
         // Lieu privé masqué : a des événements, mais AUCUN accessible (toutes visibilités
@@ -170,8 +242,8 @@ export class PublicVenuesController {
         const prochain = accessible.find((e) => e.startAt.getTime() > maintenant.getTime());
 
         const distanceKm =
-          hasLocation && v.latitude !== null && v.longitude !== null
-            ? haversineKm(userLat, userLng, v.latitude, v.longitude)
+          position && v.latitude !== null && v.longitude !== null
+            ? haversineKm(position.lat, position.lng, v.latitude, v.longitude)
             : null;
         return {
           id: v.id,
@@ -231,28 +303,41 @@ export class PublicVenuesController {
       }
     }
 
-    // Deux chemins pour trouver un lieu, et deux seulement :
-    //
-    //  1. LA PROXIMITÉ — sans recherche, on n'affiche que les lieux géolocalisés
-    //     dans le rayon. Un lieu sans coordonnées n'y figure pas : il n'a
-    //     aucune position à comparer. C'est au club de renseigner son GPS.
-    //  2. LA RECHERCHE — taper un nom, une adresse ou un mot-clé configuré par
-    //     le club l'emporte sur la distance. Qui cherche « spartiates » veut ce
-    //     club, qu'il soit à 2 ou 400 km ; répondre « aucun résultat » sur un
-    //     nom exact serait incompréhensible.
-    if (hasLocation && !term) {
-      result = result.filter((v) => v.distanceKm !== null && v.distanceKm <= radius);
-      result.sort((a, b) => (a.distanceKm ?? 0) - (b.distanceKm ?? 0));
-    }
-
-    // Ni position, ni recherche : aucun des deux chemins n'est emprunté, donc
-    // rien à montrer. Lister tout le catalogue serait un troisième chemin non
-    // voulu — et trompeur : un client verrait des clubs à 400 km comme s'ils
-    // le concernaient. L'app affiche alors son invitation à autoriser la
-    // localisation ou à chercher un nom.
-    if (!hasLocation && !term) return [];
-
     return result;
+  }
+
+  /**
+   * UN LIEU, PAR SON IDENTIFIANT.
+   *
+   * Ce que la liste ne peut pas servir : un lieu FAVORI qu'on rouvre alors
+   * qu'il est hors du rayon, ou qu'une recherche en cours a fait disparaître
+   * de l'écran. Sans cette route, la tuile d'un favori ne menait nulle part —
+   * on ne savait pas quoi ouvrir, faute de connaître l'état réel du lieu.
+   *
+   * Les mêmes règles s'appliquent : club suspendu, lieu privé masqué, lien du
+   * moment. Elles ne sont pas réécrites ici, elles sont appelées — un lieu
+   * qu'on refuse de lister ne doit pas se laisser lire en le nommant.
+   *
+   * 404 plutôt que 403 sur un lieu privé : répondre « interdit » confirmerait
+   * son existence à qui essaie des identifiants.
+   */
+  @Header('Cache-Control', 'no-store')
+  @Get(':id')
+  async parId(
+    @Param('id') id: string,
+    @CurrentUser() user?: JwtPayload,
+    @Query('lat') lat?: string,
+    @Query('lng') lng?: string,
+  ) {
+    const userLat = parseCoord(lat);
+    const userLng = parseCoord(lng);
+    const [lieu] = await this.projeter(
+      await this.lire({ id, status: VenueStatus.ACTIVE, ...CLUB_EN_SERVICE }),
+      user,
+      userLat !== null && userLng !== null ? { lat: userLat, lng: userLng } : null,
+    );
+    if (!lieu) throw new NotFoundException('Lieu introuvable.');
+    return lieu;
   }
 }
 
