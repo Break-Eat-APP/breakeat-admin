@@ -67,7 +67,7 @@ const MENTIONS: DocumentLegal = {
       titre: '3. Hébergement',
       paragraphes: [
         'Le serveur de l’application et sa base de données sont hébergés par Railway Corporation, 548 Market St, PMB 68956, San Francisco, CA 94104, États-Unis — téléphone : +1 415 707 7675, https://railway.com.',
-        'Le site internet breakeatapp.com est hébergé par OVH SAS, société par actions simplifiée au capital de 50 000 000 €, RCS Lille Métropole 424 761 419, dont le siège est situé 2 rue Kellermann, 59100 Roubaix, France — téléphone : 09 72 10 10 07.',
+        'Le site internet breakeatapp.com est hébergé par Wix.com Ltd, 40 Namal Tel Aviv St., Tel Aviv 6350671, Israël — https://www.wix.com.',
       ],
     },
     {
@@ -174,7 +174,7 @@ const CONFIDENTIALITE: DocumentLegal = {
       titre: '5. Destinataires et prestataires',
       paragraphes: [
         'Les données sont accessibles, dans la limite de leurs missions, aux personnes habilitées de Break Eat App et aux buvettes partenaires pour les commandes qui les concernent.',
-        'Les prestataires intervenant dans le fonctionnement du service sont : Railway (hébergement du serveur et de la base de données), OVH (hébergement du site), Vercel (interfaces d’administration), Stripe (paiement), Expo et Apple (acheminement des notifications).',
+        'Les prestataires intervenant dans le fonctionnement du service sont : Railway (hébergement du serveur et de la base de données), Wix (hébergement du site), Vercel (interfaces d’administration), Stripe (paiement), Expo et Apple (acheminement des notifications).',
         'Aucun outil publicitaire, aucun traceur commercial et aucun prestataire de mesure d’audience tiers n’est intégré à l’application.',
       ],
     },
