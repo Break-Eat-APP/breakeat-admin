@@ -16,7 +16,7 @@ Capital social : 1 000 €. TVA intracommunautaire : FR26925187395.
 
 Président et directeur de la publication : Rémi Notta.
 
-E-mail : reminotta@breakeatapp.com — Téléphone : 06 46 69 56 75.
+E-mail : contact@breakeatapp.com — Téléphone : 06 46 69 56 75.
 
 Site : https://breakeatapp.com
 
@@ -76,7 +76,7 @@ Une confirmation de commande et un reçu sont mis à disposition dans l’applic
 
 L’utilisateur se présente au point de retrait indiqué dans l’application et présente le numéro ou le code de commande demandé. Il suit les consignes du personnel et les règles du site partenaire.
 
-En cas de retard, de non-retrait, de fermeture du point de vente ou de difficulté de remise, l’utilisateur peut écrire à reminotta@breakeatapp.com. Les conséquences commerciales sont régies par les conditions générales de vente et par la loi.
+En cas de retard, de non-retrait, de fermeture du point de vente ou de difficulté de remise, l’utilisateur peut écrire à contact@breakeatapp.com. Les conséquences commerciales sont régies par les conditions générales de vente et par la loi.
 
 ## 10. Annulation, indisponibilité et remboursement
 
@@ -90,7 +90,7 @@ En cas d’annulation de l’événement, toute commande payée et non fournie e
 
 ## 11. Réclamations
 
-Les réclamations relatives au compte, à l’application ou à une commande peuvent être adressées à reminotta@breakeatapp.com.
+Les réclamations relatives au compte, à l’application ou à une commande peuvent être adressées à contact@breakeatapp.com.
 
 Break Eat reçoit la réclamation et coordonne avec la buvette la correction de la commande, le remplacement ou le remboursement selon le cas. Le numéro de commande peut être demandé.
 
@@ -152,7 +152,7 @@ En cas de modification substantielle, l’utilisateur est informé par un moyen 
 
 Les présentes conditions sont soumises au droit français, sous réserve des dispositions impératives protégeant les consommateurs.
 
-L’utilisateur peut adresser une réclamation à reminotta@breakeatapp.com afin que Break Eat examine la difficulté et, si nécessaire, coordonne avec la buvette.
+L’utilisateur peut adresser une réclamation à contact@breakeatapp.com afin que Break Eat examine la difficulté et, si nécessaire, coordonne avec la buvette.
 
 Le consommateur conserve le droit de saisir les juridictions compétentes. Les informations relatives à la médiation de la consommation sont mises à disposition lorsque la réglementation l’exige.
 

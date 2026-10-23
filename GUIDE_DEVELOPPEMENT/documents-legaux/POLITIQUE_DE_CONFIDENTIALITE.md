@@ -8,7 +8,7 @@
 
 Le responsable du traitement est BREAK EAT APP, SAS au capital de 1 000 €, RCS Marseille 925 187 395, dont le siège social est situé 91 allée des Chardonnerets, 13013 Marseille, France.
 
-Contact relatif aux données personnelles : reminotta@breakeatapp.com. À la date de cette version, aucun délégué à la protection des données (DPO) distinct n’est désigné.
+Contact relatif aux données personnelles : contact@breakeatapp.com. À la date de cette version, aucun délégué à la protection des données (DPO) distinct n’est désigné.
 
 La publication de l’application sur l’App Store par Notta LLC ne confère à cette société aucun rôle dans le traitement des données décrites ici : les données sont collectées, hébergées et traitées sous la responsabilité de BREAK EAT APP, en France.
 
@@ -76,7 +76,7 @@ Lorsque le traitement repose sur le consentement, celui-ci peut être retiré à
 
 Tu peux également définir des directives relatives au sort de tes données après ton décès, dans les conditions prévues par le droit français.
 
-Pour exercer ces droits : reminotta@breakeatapp.com. Une vérification d’identité proportionnée peut être demandée en cas de doute raisonnable.
+Pour exercer ces droits : contact@breakeatapp.com. Une vérification d’identité proportionnée peut être demandée en cas de doute raisonnable.
 
 ## 9. Réclamation auprès de la CNIL
 
@@ -110,7 +110,7 @@ La mesure d’audience est réalisée par nos propres serveurs. Elle repose sur 
 
 ## 14. Suppression du compte
 
-Tu peux supprimer ton compte directement depuis l’application, dans le menu Profil, ou en écrivant à reminotta@breakeatapp.com.
+Tu peux supprimer ton compte directement depuis l’application, dans le menu Profil, ou en écrivant à contact@breakeatapp.com.
 
 La suppression efface ton nom, ton prénom, ton téléphone, ton adresse e-mail, ton mot de passe, tes connexions Apple ou Google, tes sessions et tes notifications.
 
@@ -126,4 +126,4 @@ Lorsqu’une modification nécessite une information particulière ou un nouveau
 
 BREAK EAT APP — 91 allée des Chardonnerets, 13013 Marseille, France
 
-E-mail : reminotta@breakeatapp.com — Téléphone : 06 46 69 56 75
+E-mail : contact@breakeatapp.com — Téléphone : 06 46 69 56 75

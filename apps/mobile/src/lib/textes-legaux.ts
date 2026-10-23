@@ -44,7 +44,7 @@ const EDITEUR = [
   'SIREN : 925 187 395 — RCS Marseille 925 187 395.',
   'Capital social : 1 000 €. TVA intracommunautaire : FR26925187395.',
   'Président et directeur de la publication : Rémi Notta.',
-  'E-mail : reminotta@breakeatapp.com — Téléphone : 06 46 69 56 75.',
+  'E-mail : contact@breakeatapp.com — Téléphone : 06 46 69 56 75.',
   'Site : https://breakeatapp.com',
 ];
 
@@ -113,7 +113,7 @@ const MENTIONS: DocumentLegal = {
       paragraphes: [
         'L’utilisation de l’application entraîne le traitement de données à caractère personnel, notamment pour la gestion des comptes, des commandes, des paiements, de l’assistance et de la sécurité du service.',
         'Les finalités, les bases légales, les destinataires, les durées de conservation, les transferts éventuels hors de l’Espace économique européen et les droits des personnes sont détaillés dans la politique de confidentialité, accessible depuis cet écran.',
-        'Pour toute question relative aux données personnelles : reminotta@breakeatapp.com.',
+        'Pour toute question relative aux données personnelles : contact@breakeatapp.com.',
       ],
     },
     {
@@ -128,7 +128,7 @@ const MENTIONS: DocumentLegal = {
       paragraphes: [
         'BREAK EAT APP — BREAK EAT',
         '91 allée des Chardonnerets, 13013 Marseille, France',
-        'E-mail : reminotta@breakeatapp.com',
+        'E-mail : contact@breakeatapp.com',
         'Site : https://breakeatapp.com',
       ],
     },
@@ -145,7 +145,7 @@ const CONFIDENTIALITE: DocumentLegal = {
       titre: '1. Responsable du traitement',
       paragraphes: [
         'Le responsable du traitement est BREAK EAT APP, SAS au capital de 1 000 €, RCS Marseille 925 187 395, dont le siège social est situé 91 allée des Chardonnerets, 13013 Marseille, France.',
-        'Contact relatif aux données personnelles : reminotta@breakeatapp.com. À la date de cette version, aucun délégué à la protection des données (DPO) distinct n’est désigné.',
+        'Contact relatif aux données personnelles : contact@breakeatapp.com. À la date de cette version, aucun délégué à la protection des données (DPO) distinct n’est désigné.',
         'La publication de l’application sur l’App Store par Notta LLC ne confère à cette société aucun rôle dans le traitement des données décrites ici : les données sont collectées, hébergées et traitées sous la responsabilité de BREAK EAT APP, en France.',
       ],
     },
@@ -207,7 +207,7 @@ const CONFIDENTIALITE: DocumentLegal = {
         'Dans les conditions prévues par le RGPD, tu peux demander l’accès à tes données, leur rectification, leur effacement, la limitation du traitement, t’opposer à certains traitements et, lorsque les conditions sont réunies, obtenir leur portabilité.',
         'Lorsque le traitement repose sur le consentement, celui-ci peut être retiré à tout moment pour l’avenir, sans remettre en cause ce qui a été fait avant.',
         'Tu peux également définir des directives relatives au sort de tes données après ton décès, dans les conditions prévues par le droit français.',
-        'Pour exercer ces droits : reminotta@breakeatapp.com. Une vérification d’identité proportionnée peut être demandée en cas de doute raisonnable.',
+        'Pour exercer ces droits : contact@breakeatapp.com. Une vérification d’identité proportionnée peut être demandée en cas de doute raisonnable.',
       ],
     },
     {
@@ -248,7 +248,7 @@ const CONFIDENTIALITE: DocumentLegal = {
     {
       titre: '14. Suppression du compte',
       paragraphes: [
-        'Tu peux supprimer ton compte directement depuis l’application, dans le menu Profil, ou en écrivant à reminotta@breakeatapp.com.',
+        'Tu peux supprimer ton compte directement depuis l’application, dans le menu Profil, ou en écrivant à contact@breakeatapp.com.',
         'La suppression efface ton nom, ton prénom, ton téléphone, ton adresse e-mail, ton mot de passe, tes connexions Apple ou Google, tes sessions et tes notifications.',
         'Tes commandes passées sont conservées sans ton nom : la loi impose de garder les pièces comptables, et les comptes du club en dépendent. Elles ne permettent plus de t’identifier.',
       ],
@@ -264,7 +264,7 @@ const CONFIDENTIALITE: DocumentLegal = {
       titre: '16. Contact',
       paragraphes: [
         'BREAK EAT APP — 91 allée des Chardonnerets, 13013 Marseille, France',
-        'E-mail : reminotta@breakeatapp.com — Téléphone : 06 46 69 56 75',
+        'E-mail : contact@breakeatapp.com — Téléphone : 06 46 69 56 75',
       ],
     },
   ],
@@ -335,7 +335,7 @@ const CGU: DocumentLegal = {
       titre: '9. Retrait des commandes',
       paragraphes: [
         'L’utilisateur se présente au point de retrait indiqué dans l’application et présente le numéro ou le code de commande demandé. Il suit les consignes du personnel et les règles du site partenaire.',
-        'En cas de retard, de non-retrait, de fermeture du point de vente ou de difficulté de remise, l’utilisateur peut écrire à reminotta@breakeatapp.com. Les conséquences commerciales sont régies par les conditions générales de vente et par la loi.',
+        'En cas de retard, de non-retrait, de fermeture du point de vente ou de difficulté de remise, l’utilisateur peut écrire à contact@breakeatapp.com. Les conséquences commerciales sont régies par les conditions générales de vente et par la loi.',
       ],
     },
     {
@@ -350,7 +350,7 @@ const CGU: DocumentLegal = {
     {
       titre: '11. Réclamations',
       paragraphes: [
-        'Les réclamations relatives au compte, à l’application ou à une commande peuvent être adressées à reminotta@breakeatapp.com.',
+        'Les réclamations relatives au compte, à l’application ou à une commande peuvent être adressées à contact@breakeatapp.com.',
         'Break Eat reçoit la réclamation et coordonne avec la buvette la correction de la commande, le remplacement ou le remboursement selon le cas. Le numéro de commande peut être demandé.',
         'Le client est invité à signaler le problème dans les meilleurs délais, sans que cela limite ses droits légaux.',
       ],
@@ -417,7 +417,7 @@ const CGU: DocumentLegal = {
       titre: '20. Droit applicable et litiges',
       paragraphes: [
         'Les présentes conditions sont soumises au droit français, sous réserve des dispositions impératives protégeant les consommateurs.',
-        'L’utilisateur peut adresser une réclamation à reminotta@breakeatapp.com afin que Break Eat examine la difficulté et, si nécessaire, coordonne avec la buvette.',
+        'L’utilisateur peut adresser une réclamation à contact@breakeatapp.com afin que Break Eat examine la difficulté et, si nécessaire, coordonne avec la buvette.',
         'Le consommateur conserve le droit de saisir les juridictions compétentes. Les informations relatives à la médiation de la consommation sont mises à disposition lorsque la réglementation l’exige.',
       ],
     },
@@ -519,7 +519,7 @@ const CGV: DocumentLegal = {
       titre: '12. Réclamations',
       paragraphes: [
         'Pour toute réclamation relative aux produits, à leur préparation, à leur qualité ou à leur remise, le client peut contacter le partenaire vendeur identifié dans l’offre ou le récapitulatif de commande.',
-        'Pour les difficultés liées au fonctionnement technique de l’application : reminotta@breakeatapp.com ou 06 46 69 56 75.',
+        'Pour les difficultés liées au fonctionnement technique de l’application : contact@breakeatapp.com ou 06 46 69 56 75.',
       ],
     },
     {
@@ -588,7 +588,7 @@ const CGV: DocumentLegal = {
     {
       titre: '22. Contact',
       paragraphes: [
-        'Pour les questions relatives au fonctionnement technique de la plateforme : BREAK EAT APP, 91 allée des Chardonnerets, 13013 Marseille, France ; reminotta@breakeatapp.com ; 06 46 69 56 75.',
+        'Pour les questions relatives au fonctionnement technique de la plateforme : BREAK EAT APP, 91 allée des Chardonnerets, 13013 Marseille, France ; contact@breakeatapp.com ; 06 46 69 56 75.',
         'Pour les questions relatives aux produits, à leur préparation ou à leur remise : contacter le partenaire vendeur indiqué dans l’offre ou le récapitulatif de commande.',
       ],
     },
