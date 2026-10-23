@@ -56,7 +56,13 @@ const MENTIONS: DocumentLegal = {
   resume: 'Qui édite l’application, qui l’héberge, et comment nous joindre.',
   version: VERSION,
   sections: [
-    { titre: '1. Éditeur de l’application et du site', paragraphes: EDITEUR },
+    {
+      titre: '1. Éditeur de l’application et du site',
+      paragraphes: [
+        ...EDITEUR,
+        'Distribution : l’application est publiée sur l’App Store d’Apple par Notta LLC, titulaire du compte développeur — c’est le nom qui apparaît sur la fiche de l’application. L’exploitation du service, la vente, l’encaissement et le traitement des données personnelles relèvent de BREAK EAT APP, société française désignée ci-dessus.',
+      ],
+    },
     {
       titre: '2. Directeur de la publication',
       paragraphes: [
@@ -140,6 +146,7 @@ const CONFIDENTIALITE: DocumentLegal = {
       paragraphes: [
         'Le responsable du traitement est BREAK EAT APP, SAS au capital de 1 000 €, RCS Marseille 925 187 395, dont le siège social est situé 91 allée des Chardonnerets, 13013 Marseille, France.',
         'Contact relatif aux données personnelles : reminotta@breakeatapp.com. À la date de cette version, aucun délégué à la protection des données (DPO) distinct n’est désigné.',
+        'La publication de l’application sur l’App Store par Notta LLC ne confère à cette société aucun rôle dans le traitement des données décrites ici : les données sont collectées, hébergées et traitées sous la responsabilité de BREAK EAT APP, en France.',
       ],
     },
     {
