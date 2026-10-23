@@ -16,7 +16,7 @@ Capital social : 1 000 €. TVA intracommunautaire : FR26925187395.
 
 Président et directeur de la publication : Rémi Notta.
 
-E-mail : reminotta@breakeatapp.com — Téléphone : 06 46 69 56 75.
+E-mail : contact@breakeatapp.com — Téléphone : 06 46 69 56 75.
 
 Site : https://breakeatapp.com
 
@@ -70,7 +70,7 @@ L’utilisation de l’application entraîne le traitement de données à caract
 
 Les finalités, les bases légales, les destinataires, les durées de conservation, les transferts éventuels hors de l’Espace économique européen et les droits des personnes sont détaillés dans la politique de confidentialité, accessible depuis cet écran.
 
-Pour toute question relative aux données personnelles : reminotta@breakeatapp.com.
+Pour toute question relative aux données personnelles : contact@breakeatapp.com.
 
 ## 9. Conditions d’utilisation et de commande
 
@@ -84,6 +84,6 @@ BREAK EAT APP — BREAK EAT
 
 91 allée des Chardonnerets, 13013 Marseille, France
 
-E-mail : reminotta@breakeatapp.com
+E-mail : contact@breakeatapp.com
 
 Site : https://breakeatapp.com

@@ -157,22 +157,57 @@ async function main() {
   const docs = chargerDocuments();
   fs.mkdirSync(SORTIE, { recursive: true });
 
+  /**
+   * UN DOCUMENT OUVERT DANS WORD NE DOIT PAS BLOQUER LES AUTRES.
+   *
+   * Windows verrouille un .docx tant qu'il est ouvert, et l'ecriture leve
+   * EBUSY. La premiere version s'arretait la : un seul fichier ouvert, et les
+   * documents suivants restaient a l'ancienne version SANS que rien ne le
+   * dise clairement. C'est le pire des cas — on repart avec un lot a moitie a
+   * jour en croyant l'avoir regenere.
+   *
+   * On continue donc, et on recapitule a la fin ce qui n'a pas pu etre ecrit.
+   */
+  const bloques = [];
+
   for (const doc of docs) {
     const base = nomDe(doc);
-    fs.writeFileSync(path.join(SORTIE, `${base}.md`), enMarkdown(doc), 'utf8');
-    const buffer = await Packer.toBuffer(enDocx(doc));
-    fs.writeFileSync(path.join(SORTIE, `${base}.docx`), buffer);
     const mots = doc.sections.reduce(
       (t, s) => t + s.paragraphes.join(' ').split(/\s+/).length,
       0,
     );
+
+    const sorties = [
+      ['md', async () => Buffer.from(enMarkdown(doc), 'utf8')],
+      ['docx', async () => Packer.toBuffer(enDocx(doc))],
+    ];
+
+    for (const [extension, fabriquer] of sorties) {
+      const cible = path.join(SORTIE, `${base}.${extension}`);
+      try {
+        fs.writeFileSync(cible, await fabriquer());
+      } catch (e) {
+        if (e.code === 'EBUSY' || e.code === 'EPERM') bloques.push(`${base}.${extension}`);
+        else throw e;
+      }
+    }
+
     console.log(`   ${base}  (${doc.sections.length} articles, ~${mots} mots)`);
   }
 
   console.log(
-    `\n${docs.length} documents ecrits en .docx et .md dans ` +
+    `\n${docs.length} documents traites dans ` +
       `« ${path.relative(RACINE, SORTIE)} ».`,
   );
+
+  if (bloques.length > 0) {
+    console.log(
+      `\n/!\\ ${bloques.length} fichier(s) VERROUILLE(S), donc restes a ` +
+        `l'ancienne version :\n   ${bloques.join('\n   ')}\n` +
+        `   Fermez-les (Word verrouille a l'ouverture) et relancez.`,
+    );
+    process.exitCode = 1;
+  }
 }
 
 main().catch((e) => {
