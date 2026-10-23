@@ -16,6 +16,7 @@ import {
 import { OrderActorType, OrderStatus } from '@prisma/client';
 import { GlobalRole, OrgRole } from '../../common/enums/role.enum';
 import { PrismaService } from '../../database/prisma.service';
+import { NoterCommandeDto } from './dto/noter-commande.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
@@ -91,6 +92,10 @@ export class OrdersController {
         // Même ordre de lignes que le poste, stable d'un chargement à l'autre.
         items: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
         slot: CUSTOMER_SLOT_SELECT,
+        // La note déjà donnée : sans elle, l'app reproposerait « Noter ma
+        // commande » après chaque notation, et le client croirait que la
+        // sienne n'a pas été enregistrée.
+        rating: { select: { stars: true } },
       },
     });
     return this.ordersService.withPickupGuidance(orders);
@@ -105,6 +110,7 @@ export class OrdersController {
         items: { orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] },
         payments: true,
         slot: CUSTOMER_SLOT_SELECT,
+        rating: { select: { stars: true } },
       },
     });
     if (!order) throw new NotFoundException('Order not found');
@@ -134,6 +140,22 @@ export class OrdersController {
       throw new ForbiddenException('You do not own this order');
     }
     return this.ordersService.findAuditTrail(id);
+  }
+
+  /**
+   * POST /api/v1/orders/:id/avis — le client note SA commande.
+   *
+   * Une seule fois, et seulement apres l'avoir recuperee : la garde est dans
+   * le service, qui dit en francais pourquoi il refuse.
+   */
+  @Post(':id/avis')
+  @HttpCode(HttpStatus.CREATED)
+  noterCommande(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: NoterCommandeDto,
+  ) {
+    return this.ordersService.noterCommande(id, user.sub, dto);
   }
 
   /**

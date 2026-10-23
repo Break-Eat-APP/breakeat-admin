@@ -577,6 +577,13 @@ export class AuthService {
       this.prisma.userNotification.deleteMany({ where: { userId } }),
       this.prisma.groupMember.deleteMany({ where: { userId } }),
       this.prisma.organizationMember.deleteMany({ where: { userId } }),
+      // LE COMMENTAIRE D'UNE NOTE EST DU TEXTE ECRIT PAR LA PERSONNE.
+      //
+      // « le serveur Jean a ete tres sympa » la designe autant que son nom.
+      // On l'efface donc, et on garde l'ETOILE : un chiffre de 1 a 5 ne
+      // designe personne, et le club perdrait sinon toute sa mesure de
+      // qualite a chaque compte supprime.
+      this.prisma.orderRating.updateMany({ where: { userId }, data: { comment: null } }),
     ]);
 
     // Le journal garde l'IDENTIFIANT, jamais l'adresse : la tracer ici

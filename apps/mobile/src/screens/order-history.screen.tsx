@@ -18,6 +18,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { formatOrderNumber, apiLienRecu, apiGetMyOrders, apiMarkArrived, formatPrice, formatTime, type Order } from '@lib/api/mobile-api';
+import { NoterCommande } from '@components/noter-commande';
 import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
@@ -120,6 +121,9 @@ export function OrderHistoryScreen() {
   // Commande dont on regarde le plan — porte le plan ET le nom de la buvette,
   // pour que le titre dise devant laquelle se presenter.
   const [planAffiche, setPlanAffiche] = useState<Order | null>(null);
+  /** La commande dont on demande la note. Porte le nom de la buvette : on
+   *  note quelqu'un, pas « une commande ». */
+  const [commandeANoter, setCommandeANoter] = useState<Order | null>(null);
   /**
    * Le client arrive-t-il de la page de paiement ?
    *
@@ -334,6 +338,7 @@ export function OrderHistoryScreen() {
               onPress={() => navigation.navigate('OrderTracking', { orderId: item.id })}
               onArrived={markArrived}
               onPlan={setPlanAffiche}
+              onNoter={setCommandeANoter}
             />
           )}
         />
@@ -344,6 +349,20 @@ export function OrderHistoryScreen() {
         title={planAffiche?.supplierName ?? 'Plan des buvettes'}
         onClose={() => setPlanAffiche(null)}
       />
+      {commandeANoter ? (
+        <NoterCommande
+          visible
+          orderId={commandeANoter.id}
+          buvette={commandeANoter.supplierName ?? null}
+          onFini={(note) => {
+            setCommandeANoter(null);
+            // On RELIT la liste plutôt que de corriger l'objet en mémoire :
+            // le serveur est seul à savoir ce qu'il a réellement enregistré,
+            // et une correction locale divergerait au premier refus.
+            if (note != null) void load();
+          }}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -405,11 +424,13 @@ function OrderCard({
   onPress,
   onArrived,
   onPlan,
+  onNoter,
 }: {
   order: Order;
   onPress: () => void;
   onArrived: (orderId: string) => void;
   onPlan: (order: Order) => void;
+  onNoter: (order: Order) => void;
 }) {
   const cfg = ui(order.status);
   const live = isLive(order.status);
@@ -532,6 +553,41 @@ function OrderCard({
           {recuEnCours ? 'Ouverture…' : 'Reçu'}
         </Text>
       </Pressable>
+
+      {/*
+        LES ÉTOILES — seulement sur une commande RÉCUPÉRÉE.
+
+        Proposées ici et non en fin de parcours : au comptoir, le client a son
+        plat dans les mains et range son téléphone. C'est en rouvrant
+        « Mes commandes » qu'il a une seconde à donner.
+
+        Déjà notée, le bloc ne disparaît pas : il montre les étoiles choisies.
+        Faire disparaître la question laisserait croire qu'elle n'a pas été
+        enregistrée.
+      */}
+      {!live && order.note != null ? (
+        <View style={styles.noteDonnee}>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <Ionicons
+              key={n}
+              name={n <= (order.note ?? 0) ? 'star' : 'star-outline'}
+              size={14}
+              color={THEME.orange}
+            />
+          ))}
+          <Text style={styles.noteDonneeTexte}>Merci pour ta note</Text>
+        </View>
+      ) : null}
+      {!live && order.note == null ? (
+        <Pressable
+          style={({ pressed }) => [styles.noterBtn, pressed && styles.pressed]}
+          onPress={() => onNoter(order)}
+          hitSlop={4}
+        >
+          <Ionicons name="star-outline" size={16} color={THEME.orange} />
+          <Text style={styles.noterBtnText}>Noter ma commande</Text>
+        </Pressable>
+      ) : null}
 
       {/* « Je suis arrivé » — uniquement tant que la commande est en cours. */}
       {live &&
@@ -711,6 +767,32 @@ const styles = StyleSheet.create({
     paddingVertical: 11, paddingHorizontal: 18, marginTop: 2,
   },
   arrivedBtnText: { color: '#fff', fontSize: 12, fontFamily: HEAD.bold, textAlign: 'center', lineHeight: 17 },
+  // Le bouton de note reprend la forme de celui du reçu — même rang, même
+  // discrétion : ce sont deux gestes d'après-commande, aucun ne doit crier.
+  noterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: THEME.orangeTint,
+  },
+  noterBtnText: { color: THEME.orange, fontSize: 13, fontFamily: HEAD.semibold },
+  noteDonnee: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: 10,
+  },
+  noteDonneeTexte: {
+    color: THEME.grey,
+    fontSize: 12.5,
+    fontFamily: HEAD.medium,
+    marginLeft: 6,
+  },
   recuBtn: {
     flexDirection: 'row',
     alignItems: 'center',

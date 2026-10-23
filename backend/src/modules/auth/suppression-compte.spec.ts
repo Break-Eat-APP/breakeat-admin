@@ -57,6 +57,8 @@ describe('AuthService — suppression de compte par son titulaire', () => {
       cart: { deleteMany: jest.fn() },
       userNotification: { deleteMany: jest.fn() },
       groupMember: { deleteMany: jest.fn() },
+      // Les COMMENTAIRES de note sont effaces, les etoiles restent.
+      orderRating: { updateMany: jest.fn() },
       // Volontairement ABSENT du service : si un jour quelqu'un l'y ajoute, le
       // test « les commandes ne bougent pas » tombera, et c'est le but.
       order: { deleteMany: jest.fn() },

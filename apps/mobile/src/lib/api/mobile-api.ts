@@ -363,6 +363,14 @@ export interface Order {
    * s'affichait « Récupérée », comme si de rien n'était.
    */
   paymentStatus?: string | null;
+  /**
+   * La note déjà donnée (1–5), ou `null` si la commande n'a pas été notée.
+   *
+   * La VALEUR plutôt qu'un booléen : l'écran peut redonner les étoiles
+   * choisies au lieu de faire disparaître le bloc, et le client voit ce
+   * qu'il a répondu.
+   */
+  note?: number | null;
   totalCents: number;
   currency: string;
   createdAt: string;
@@ -701,6 +709,22 @@ export const apiNotifications = () =>
 /** La cloche revient à zéro. */
 export const apiMarquerNotificationsLues = () =>
   req<{ marquees: number }>('/notifications/lues', { method: 'POST' });
+
+/**
+ * Le client note SA commande. Une seule fois, après l'avoir récupérée.
+ *
+ * Le serveur refuse les deux autres cas et dit pourquoi en français : une
+ * commande pas encore retirée, ou déjà notée. C'est sa phrase qu'il faut
+ * montrer.
+ */
+export const apiNoterCommande = (
+  orderId: string,
+  avis: { stars: number; comment?: string },
+) =>
+  req<{ id: string; stars: number; comment: string | null; createdAt: string }>(
+    `/orders/${orderId}/avis`,
+    { method: 'POST', body: JSON.stringify(avis) },
+  );
 
 export const apiLienRecu = (orderId: string) =>
   req<{ url: string }>(`/orders/${orderId}/recu/lien`, { method: 'POST' });

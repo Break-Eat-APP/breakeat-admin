@@ -912,7 +912,9 @@ export class OrdersService {
    */
   async withPickupGuidance<T extends { supplierId: string; venueId: string }>(
     orders: T[],
-  ): Promise<(T & { supplierName: string | null; pickupPlanUrl: string | null })[]> {
+  ): Promise<
+    (T & { supplierName: string | null; pickupPlanUrl: string | null; note: number | null })[]
+  > {
     if (orders.length === 0) return [];
 
     const [suppliers, venues] = await Promise.all([
@@ -931,12 +933,94 @@ export class OrdersService {
     return orders.map((order) => {
       const buvette = parBuvette.get(order.supplierId);
       const lieu = parLieu.get(order.venueId);
+      // La relation est LUE quand l'appelant l'a demandee (`include`), et
+      // absente sinon. On ne la retire pas de l'objet : cette fonction est
+      // generique et promet de rendre `T` intact, plus ses deux champs.
+      const avec = order as T & { rating?: { stars: number } | null };
       return {
         ...order,
         supplierName: buvette?.name ?? null,
         pickupPlanUrl: buvette?.planUrl ?? lieu?.buvettePlanUrl ?? null,
+        /**
+         * La note deja donnee, ou null.
+         *
+         * On expose la VALEUR et pas un simple booleen : l'ecran redonne
+         * ainsi les etoiles choisies au lieu de faire disparaitre le bloc,
+         * et le client voit ce qu'il a repondu.
+         */
+        note: avec.rating ? avec.rating.stars : null,
       };
     });
+  }
+
+  /**
+   * LE CLIENT NOTE SA COMMANDE.
+   *
+   * Trois gardes, et chacune repond a une facon d'obtenir une note qui ne
+   * vaut rien :
+   *
+   *  . la commande doit etre LA SIENNE — filtree sur (id, userId), comme
+   *    partout ici : distinguer 404 et 403 revelerait l'existence d'une
+   *    commande a qui n'y a pas droit ;
+   *  . elle doit avoir ete RECUPEREE. Noter un plat qu'on n'a pas encore eu
+   *    ne mesure rien, et la buvette se verrait reprocher une attente qui
+   *    n'est pas finie ;
+   *  . une seule note par commande. La contrainte est en base (`orderId`
+   *    unique) ; ici on la traduit en une phrase lisible plutot qu'en erreur
+   *    SQL.
+   *
+   * La note porte sur la BUVETTE, pas sur Break Eat : c'est elle qui a
+   * prepare, et c'est au club que l'information sert.
+   */
+  async noterCommande(
+    orderId: string,
+    userId: string,
+    dto: { stars: number; comment?: string },
+  ) {
+    const order = await this.prisma.order.findFirst({
+      where: { id: orderId, userId },
+      select: {
+        id: true,
+        status: true,
+        supplierId: true,
+        organizationId: true,
+        venueId: true,
+      },
+    });
+    if (!order) throw new NotFoundException('Commande introuvable.');
+
+    const recuperee =
+      order.status === OrderStatus.PICKED_UP || order.status === OrderStatus.COMPLETED;
+    if (!recuperee) {
+      throw new BadRequestException(
+        'Cette commande n’a pas encore été récupérée : elle pourra être notée ensuite.',
+      );
+    }
+
+    const deja = await this.prisma.orderRating.findUnique({
+      where: { orderId },
+      select: { id: true },
+    });
+    if (deja) throw new ConflictException('Cette commande a déjà été notée.');
+
+    const commentaire = dto.comment?.trim();
+    const note = await this.prisma.orderRating.create({
+      data: {
+        orderId,
+        userId,
+        supplierId: order.supplierId,
+        organizationId: order.organizationId,
+        venueId: order.venueId,
+        stars: dto.stars,
+        // Un commentaire vide n'est pas un commentaire : on garde `null`,
+        // sans quoi un ecran afficherait un cadre de citation vide.
+        comment: commentaire && commentaire.length > 0 ? commentaire : null,
+      },
+      select: { id: true, stars: true, comment: true, createdAt: true },
+    });
+
+    this.logger.log(`Commande ${orderId} notee ${dto.stars}/5`);
+    return note;
   }
 
   /**
