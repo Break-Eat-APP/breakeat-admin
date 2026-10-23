@@ -1474,6 +1474,35 @@ export async function apiGetOrgStats(orgId: string): Promise<OrgStatsOverview> {
   return req<OrgStatsOverview>('GET', `/organizations/${orgId}/stats`);
 }
 
+/** Une note laissée par un client sur une commande récupérée. */
+export interface AvisClient {
+  id: string;
+  /** 1 à 5. Borné en base. */
+  stars: number;
+  /** Facultatif : la plupart des clients notent sans écrire. */
+  comment: string | null;
+  createdAt: string;
+  /** La buvette notée. Null si elle a été supprimée depuis. */
+  buvette: string | null;
+  /** Le numéro du jour, ou la référence longue à défaut. */
+  commande: number | string | null;
+}
+
+export interface AvisOrganisation {
+  total: number;
+  /** Sur 5, une décimale. `null` tant qu'aucune note n'existe — un « 0,0 »
+   *  se lirait comme une très mauvaise note. */
+  moyenne: number | null;
+  /** Toujours les cinq lignes, même à zéro : une barre absente ne se
+   *  distingue pas d'une barre vide. */
+  repartition: { stars: number; nombre: number }[];
+  notes: AvisClient[];
+}
+
+export async function apiGetOrgAvis(orgId: string): Promise<AvisOrganisation> {
+  return req<AvisOrganisation>('GET', `/organizations/${orgId}/avis`);
+}
+
 export type PeriodGranularity = 'day' | 'week' | 'month';
 
 export interface PeriodBucket {

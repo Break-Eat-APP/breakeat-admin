@@ -10,6 +10,7 @@ import {
   Palette,
   Receipt,
   Settings,
+  Star,
   Store,
   Tags,
   Users,
@@ -76,6 +77,14 @@ export const NAV_GROUPS: GroupeNav[] = [
         icon: Contact,
         label: 'Mes clients',
         description: 'Qui commande, à quelle fréquence, et ce qu’ils consomment.',
+      },
+      {
+        // Avec le pilotage : ce que les clients disent du service est une
+        // MESURE, au même titre que le chiffre d'affaires — pas un réglage.
+        href: '/avis',
+        icon: Star,
+        label: 'Avis clients',
+        description: 'Les notes laissées après chaque retrait, buvette par buvette.',
       },
       {
         // Les rapports d'événements vivent chez Flaix, avec leurs propres
