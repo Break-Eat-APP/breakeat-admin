@@ -28,6 +28,27 @@ import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 export class StatsController {
   constructor(private readonly statsService: StatsService) {}
 
+  /**
+   * GET /api/v1/organizations/:orgId/avis — les notes laissees par les clients.
+   *
+   * Un SUPER_ADMIN franchit la garde d'organisation : le back-office lit donc
+   * ce MEME endpoint, club par club. Deux routes donneraient deux moyennes
+   * pour une meme buvette.
+   */
+  @Get('organizations/:orgId/avis')
+  getOrgRatings(
+    @Param('orgId', ParseUUIDPipe) orgId: string,
+    @CurrentUser() user: JwtPayload,
+    @Query('limite') limite?: string,
+  ) {
+    const n = Number(limite);
+    return this.statsService.getOrgRatings(
+      orgId,
+      user.sub,
+      Number.isFinite(n) && n > 0 ? n : 100,
+    );
+  }
+
   @Get('organizations/:orgId/stats')
   getOrgStats(
     @Param('orgId', ParseUUIDPipe) orgId: string,

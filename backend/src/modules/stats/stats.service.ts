@@ -138,6 +138,77 @@ export class StatsService {
    * Org-wide KPIs (CA HT/TTC, order count, average basket) plus a per-event
    * revenue breakdown. Restricted to managers of the org.
    */
+  /**
+   * LES NOTES LAISSEES PAR LES CLIENTS, pour un club.
+   *
+   * Meme garde que le reste du module (`requireOrgAccess`), donc un
+   * SUPER_ADMIN la franchit et le back-office lit le meme endpoint que la
+   * console du club : deux routes donneraient deux moyennes pour la meme
+   * buvette, et c'est la pire des divergences — personne ne saurait laquelle
+   * croire.
+   *
+   * On rend la REPARTITION et pas seulement la moyenne. Une moyenne de 3
+   * recouvre deux realites opposees : « tout le monde trouve ca moyen » et
+   * « la moitie adore, la moitie deteste ». La seconde se corrige, la
+   * premiere se repense.
+   */
+  async getOrgRatings(orgId: string, userId: string, limite = 100) {
+    await requireOrgAccess(this.prisma, userId, orgId, MANAGE_ROLES);
+
+    const [notes, repartition] = await Promise.all([
+      this.prisma.orderRating.findMany({
+        where: { organizationId: orgId },
+        orderBy: { createdAt: 'desc' },
+        take: Math.min(Math.max(limite, 1), 500),
+        select: {
+          id: true,
+          stars: true,
+          comment: true,
+          createdAt: true,
+          supplierId: true,
+          order: { select: { publicOrderNumber: true, dailyNumber: true } },
+        },
+      }),
+      this.prisma.orderRating.groupBy({
+        by: ['stars'],
+        where: { organizationId: orgId },
+        _count: { _all: true },
+      }),
+    ]);
+
+    // Le nom de la buvette se lit a part : `OrderRating` ne porte qu'un
+    // identifiant, et une buvette renommee ne doit pas reecrire l'historique.
+    const buvettes = await this.prisma.supplier.findMany({
+      where: { id: { in: [...new Set(notes.map((n) => n.supplierId))] } },
+      select: { id: true, name: true },
+    });
+    const nomDe = new Map(buvettes.map((b) => [b.id, b.name]));
+
+    const total = repartition.reduce((t, r) => t + r._count._all, 0);
+    const somme = repartition.reduce((t, r) => t + r.stars * r._count._all, 0);
+
+    return {
+      total,
+      /** Moyenne sur 5, a une decimale. `null` tant qu'aucune note n'existe —
+       *  un « 0,0 » se lirait comme une tres mauvaise note. */
+      moyenne: total > 0 ? Math.round((somme / total) * 10) / 10 : null,
+      /** Combien de 1, de 2, … de 5. Toujours les cinq lignes, meme a zero :
+       *  une barre absente ne se distingue pas d'une barre vide. */
+      repartition: [1, 2, 3, 4, 5].map((stars) => ({
+        stars,
+        nombre: repartition.find((r) => r.stars === stars)?._count._all ?? 0,
+      })),
+      notes: notes.map((n) => ({
+        id: n.id,
+        stars: n.stars,
+        comment: n.comment,
+        createdAt: n.createdAt.toISOString(),
+        buvette: nomDe.get(n.supplierId) ?? null,
+        commande: n.order?.dailyNumber ?? n.order?.publicOrderNumber ?? null,
+      })),
+    };
+  }
+
   async getOrgOverview(orgId: string, userId: string): Promise<OrgStatsOverview> {
     await requireOrgAccess(this.prisma, userId, orgId, MANAGE_ROLES);
 
