@@ -656,6 +656,39 @@ export async function apiCancelScheduledNotification(id: string): Promise<Schedu
   return req<ScheduledPush>('DELETE', `/backoffice/notifications/scheduled/${id}`);
 }
 
+// ─── Avis clients ─────────────────────────────────────────────────────────────
+
+/** Une note laissée par un client sur une commande récupérée. */
+export interface AvisClient {
+  id: string;
+  stars: number;
+  /** Facultatif : la plupart des clients notent sans écrire. */
+  comment: string | null;
+  createdAt: string;
+  /** La buvette notée. Null si elle a été supprimée depuis. */
+  buvette: string | null;
+  commande: number | string | null;
+}
+
+export interface AvisOrganisation {
+  total: number;
+  /** Sur 5, une décimale. `null` tant qu'aucune note n'existe. */
+  moyenne: number | null;
+  repartition: { stars: number; nombre: number }[];
+  notes: AvisClient[];
+}
+
+/**
+ * Les notes d'un club — MÊME endpoint que sa propre console.
+ *
+ * Un SUPER_ADMIN franchit la garde d'organisation, il n'y a donc qu'une
+ * route et une seule façon de calculer. Deux routes donneraient deux
+ * moyennes pour la même buvette.
+ */
+export async function apiGetOrgAvis(orgId: string): Promise<AvisOrganisation> {
+  return req<AvisOrganisation>('GET', `/organizations/${orgId}/avis`);
+}
+
 // ─── Suppression organisation ─────────────────────────────────────────────────
 
 /**
