@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -6,7 +6,9 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 import { THEME } from '@lib/theme';
 import { PageHeader } from '@components/page-header';
 import { useAuthStore } from '@store/auth.store';
-import { showAlert } from '@lib/alert';
+import { showAlert, confirmAction } from '@lib/alert';
+import { apiSupprimerMonCompte } from '@lib/api/mobile-api';
+import { messageServeur } from '@lib/message-serveur';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Aide'>;
 
@@ -59,6 +61,59 @@ const MOTIFS: { cle: string; titre: string; icone: keyof typeof Ionicons.glyphMa
   ];
 
 export function AideScreen({ navigation }: Props) {
+  /**
+   * SUPPRIMER SON COMPTE — ici plutôt que sous la déconnexion.
+   *
+   * Déplacé depuis le profil le 23/10. Les deux boutons s'y touchaient, et
+   * seule la couleur les distinguait : l'un ferme une session, l'autre efface
+   * un compte. Un geste irréversible ne doit pas être le voisin immédiat d'un
+   * geste quotidien.
+   *
+   * Apple demande que la suppression soit FACILE À TROUVER (règle 5.1.1(v)).
+   * « Aide & contact » reste une destination évidente pour qui cherche à
+   * régler un problème de compte, et la section porte son propre titre.
+   *
+   * DEUX confirmations, comme avant : Apple les autorise expressément, et ce
+   * geste s'atteint d'un seul doigt depuis un écran qu'on parcourt.
+   */
+  const [suppressionEnCours, setSuppressionEnCours] = useState(false);
+
+  const supprimerCompte = () => {
+    confirmAction(
+      'Supprimer mon compte',
+      'Ton nom, ton adresse e-mail, ton téléphone et tes connexions seront effacés, ' +
+        'et tu seras déconnecté.\n\n' +
+        'Tes commandes passées restent dans la comptabilité des clubs, sans ton nom : ' +
+        'elles ne peuvent pas être effacées sans fausser leurs comptes.',
+      () => {
+        confirmAction(
+          'Confirmer la suppression',
+          'Cette action est définitive. Tu pourras te réinscrire, mais tu repartiras ' +
+            'd’un compte vide : ni historique, ni points de fidélité.',
+          () => {
+            setSuppressionEnCours(true);
+            void apiSupprimerMonCompte()
+              .then(async () => {
+                await useAuthStore.getState().clearAuth();
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login', params: { defaultTab: 'login' } }],
+                });
+              })
+              .catch((e: unknown) => {
+                // Un refus du serveur est ACTIONNABLE — « vous êtes le dernier
+                // administrateur de tel club ». C'est sa phrase qu'il faut montrer.
+                showAlert('Suppression impossible', messageServeur(e, 'Réessaie dans un instant.'));
+              })
+              .finally(() => setSuppressionEnCours(false));
+          },
+          { confirmLabel: 'Supprimer définitivement', destructive: true },
+        );
+      },
+      { confirmLabel: 'Continuer', destructive: true },
+    );
+  };
+
   const { user } = useAuthStore();
 
   /**
@@ -128,13 +183,47 @@ export function AideScreen({ navigation }: Props) {
           comptoir pendant un événement, le plus rapide reste de vous adresser au stand : l’équipe a
           votre commande sous les yeux.
         </Text>
+
+        {/* MON COMPTE — sa propre section, séparée des motifs de contact :
+            supprimer son compte n'est pas écrire au support. */}
+        <Text style={styles.titreSection}>Mon compte</Text>
+        <View style={styles.liste}>
+          <Pressable
+            style={({ pressed }) => [styles.ligne, pressed && styles.pressee]}
+            onPress={supprimerCompte}
+            disabled={suppressionEnCours}
+            accessibilityRole="button"
+          >
+            <Ionicons name="trash-outline" size={19} color={DANGER} />
+            <Text style={[styles.ligneTexte, { color: DANGER }]}>
+              {suppressionEnCours ? 'Suppression…' : 'Supprimer mon compte'}
+            </Text>
+            <Text style={styles.chevron}>›</Text>
+          </Pressable>
+        </View>
+        <Text style={styles.noteSuppression}>
+          Définitif. Tes commandes passées restent dans la comptabilité des clubs, sans ton
+          nom : la loi impose de conserver les pièces comptables.
+        </Text>
       </ScrollView>
     </View>
   );
 }
 
+/** Le rouge des gestes irréversibles. Jamais utilisé ailleurs dans l'écran. */
+const DANGER = '#b91c1c';
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
+  titreSection: {
+    color: THEME.inkSoft,
+    fontSize: 12.5,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginTop: 6,
+  },
+  noteSuppression: { color: THEME.grey, fontSize: 12, lineHeight: 17 },
   contenu: { padding: 20, gap: 18 },
   intro: { color: THEME.inkSoft, fontSize: 14, lineHeight: 20 },
   liste: {

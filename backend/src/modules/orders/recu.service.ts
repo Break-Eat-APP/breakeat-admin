@@ -117,7 +117,10 @@ export class RecuService {
   }
   .ticket { background: #fff; width: 100%; max-width: 420px; border-radius: 18px;
             border: 1px solid #eee6e1; padding: 26px 24px; }
-  h1 { font-size: 17px; margin: 0 0 2px; }
+  /* Le nom de la buvette en ORANGE VIF : c'est ce qu'on cherche en rouvrant
+     un reçu — « c'était laquelle ? ». Le reste du document reste sobre,
+     sinon rien ne ressort. */
+  h1 { font-size: 17px; margin: 0 0 2px; color: #FD4000; }
   .club { color: #6b625c; font-size: 13.5px; margin: 0 0 18px; }
   .num { font-size: 13px; color: #6b625c; font-variant-numeric: tabular-nums;
          letter-spacing: .4px; margin: 0 0 20px; line-height: 1.7; }

@@ -11,8 +11,7 @@ import { PageHeader } from '@components/page-header';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { showAlert, confirmAction } from '@lib/alert';
 import { DemandeCoordonnees } from '@components/demande-coordonnees';
-import { apiMonProfil, apiSupprimerMonCompte, type MonProfil } from '@lib/api/mobile-api';
-import { messageServeur } from '@lib/message-serveur';
+import { apiMonProfil, type MonProfil } from '@lib/api/mobile-api';
 import {
   demanderNotifs,
   lireEtatNotifs,
@@ -55,63 +54,6 @@ export function ProfileScreen() {
   useEffect(() => {
     void chargerProfil();
   }, [chargerProfil]);
-
-  /**
-   * SUPPRIMER SON COMPTE — irréversible, et dit comme tel.
-   *
-   * Exigé par Apple (règle 5.1.1(v)) : une app qui permet de créer un compte
-   * doit permettre de le supprimer DANS l'app. Il n'y avait aucun moyen de le
-   * faire, nulle part.
-   *
-   * DEUX confirmations, et c'est délibéré. Apple autorise expressément les
-   * étapes de confirmation, et ce geste est atteint d'un seul doigt depuis un
-   * menu qu'on parcourt distraitement. La première explique ce qui part et ce
-   * qui reste ; la seconde ne demande plus qu'un oui franc.
-   *
-   * Le second message dit que les COMMANDES RESTENT : le client y a droit
-   * avant de décider, et il le découvrirait autrement en rouvrant un reçu.
-   */
-  const [suppressionEnCours, setSuppressionEnCours] = useState(false);
-
-  const handleSupprimerCompte = () => {
-    confirmAction(
-      'Supprimer mon compte',
-      'Ton nom, ton adresse e-mail, ton téléphone et tes connexions seront effacés, ' +
-        'et tu seras déconnecté.\n\n' +
-        'Tes commandes passées restent dans la comptabilité des clubs, sans ton nom : ' +
-        'elles ne peuvent pas être effacées sans fausser leurs comptes.',
-      () => {
-        confirmAction(
-          'Confirmer la suppression',
-          'Cette action est définitive. Tu pourras te réinscrire, mais tu repartiras ' +
-            'd’un compte vide : ni historique, ni points de fidélité.',
-          () => {
-            setSuppressionEnCours(true);
-            void apiSupprimerMonCompte()
-              .then(async () => {
-                await clearAuth();
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: 'Login', params: { defaultTab: 'login' } }],
-                });
-              })
-              .catch((e: unknown) => {
-                // Un refus du serveur est ACTIONNABLE — « vous êtes le dernier
-                // administrateur de tel club ». C'est sa phrase qu'il faut
-                // montrer, pas un « erreur » générique.
-                showAlert(
-                  'Suppression impossible',
-                  messageServeur(e, 'Réessaie dans un instant.'),
-                );
-              })
-              .finally(() => setSuppressionEnCours(false));
-          },
-          { confirmLabel: 'Supprimer définitivement', destructive: true },
-        );
-      },
-      { confirmLabel: 'Continuer', destructive: true },
-    );
-  };
 
   const handleLogout = () => {
     confirmAction(
@@ -215,22 +157,6 @@ export function ProfileScreen() {
               <Text style={styles.logoutText}>Se déconnecter</Text>
             </Pressable>
 
-            {/* En bas, et en rouge : il doit se TROUVER — Apple demande qu'il
-                soit facile à repérer — sans pour autant côtoyer la
-                déconnexion, dont il n'est pas la variante. */}
-            <Pressable
-              style={styles.supprimer}
-              onPress={handleSupprimerCompte}
-              disabled={suppressionEnCours}
-            >
-              <Text style={styles.supprimerTexte}>
-                {suppressionEnCours ? 'Suppression…' : 'Supprimer mon compte'}
-              </Text>
-            </Pressable>
-            <Text style={styles.supprimerNote}>
-              Définitif. Tes commandes passées restent dans la comptabilité des clubs,
-              sans ton nom.
-            </Text>
           </>
         )}
       </ScrollView>
@@ -540,17 +466,4 @@ const styles = StyleSheet.create({
 
   logout: { alignItems: 'center', paddingVertical: 18, marginTop: 8 },
   logoutText: { color: THEME.orange, fontSize: 15, fontFamily: FONT.semibold },
-
-  supprimer: { alignItems: 'center', paddingVertical: 12 },
-  // Rouge, mais SANS fond plein : un bouton rouge massif en bas d'un menu
-  // attire le doigt. On veut qu'il se trouve, pas qu'il se propose.
-  supprimerTexte: { color: '#b91c1c', fontSize: 14.5, fontFamily: FONT.semibold },
-  supprimerNote: {
-    color: THEME.grey,
-    fontSize: 12,
-    lineHeight: 17,
-    textAlign: 'center',
-    paddingHorizontal: 24,
-    marginTop: 2,
-  },
 });

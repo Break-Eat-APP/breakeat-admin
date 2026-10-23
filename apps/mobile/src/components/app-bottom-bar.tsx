@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -176,34 +176,33 @@ function Pastille({ compte }: { compte: number }) {
 const teinte = (actif: boolean) => (actif ? THEME.orange : THEME.inkSoft);
 
 /**
- * L'ICÔNE DU LIEU — une épingle de carte : une boule, et la hampe sous elle.
+ * L'ICÔNE DU LIEU — l'épingle officielle de la marque.
  *
- * Avant, un stade (`stadium-variant`). Il promettait un stade, alors que
- * l'écran liste des LIEUX — un bar, une salle, une buvette de club. Une
- * épingle ne promet rien d'autre qu'un endroit, et c'est exactement le sujet.
+ * Elle remplace celle que j'avais dessinée faute de fichier : une
+ * approximation à la main, qui n'engageait que moi. Ce tracé-ci vient du SVG
+ * livré par le client (« logo officiel break eat v2 »), et c'est lui qui fait
+ * foi.
  *
- * Dessinée plutôt que prise dans une police d'icônes : les épingles toutes
- * faites sont des gouttes pleines, où la boule ne se distingue pas de la
- * pointe. Ici la boule est une forme à part — c'est elle qui porte l'orange
- * quand l'onglet est actif, et c'est ce qu'on voit en premier.
+ * ON NE GARDE QUE L'ORANGE. Le fichier d'origine superpose des remplissages
+ * BLANCS sous chaque tracé coloré — ils servaient à poser l'épingle sur un
+ * fond blanc. Conservés ici, ils resteraient blancs quand l'onglet s'éteint,
+ * et l'icône grise aurait un cœur blanc au milieu d'une barre blanche. Les
+ * trois tracés orange suffisent à dessiner la forme, et se teintent d'un
+ * bloc.
  *
- * Le gris inactif est celui des deux autres onglets (`teinte`) : un onglet qui
- * s'éteindrait d'une autre couleur se lirait comme un état, pas comme un repos.
+ * Trois formes : l'ombre portée au sol, le contour de l'épingle, et l'œil.
+ * Elles arrivent dans cet ordre, donc l'œil se pose en dernier — c'est ce qui
+ * le rend visible.
  */
-function IconeLieu({ actif, taille = 23 }: { actif: boolean; taille?: number }) {
+function IconeLieu({ actif, taille = 24 }: { actif: boolean; taille?: number }) {
   const couleur = teinte(actif);
-  // Tracé pensé dans une boîte de 24, mis à l'échelle par le viewBox : les
-  // coordonnées restent lisibles quelle que soit la taille demandée.
+  // Le viewBox est celui de la boîte englobante des tracés dans le fichier
+  // source : il recadre l'épingle, qui y flottait au milieu d'un format 1440×810.
   return (
-    <Svg width={taille} height={taille} viewBox="0 0 24 24">
-      {/* La hampe : elle part de sous la boule et s'affine jusqu'au sol.
-          Un trait d'épaisseur constante donnait un clou ; l'effilé donne
-          une épingle qui se pose. */}
-      <Path d="M9.6 12.4 L14.4 12.4 L12.7 21.4 Q12 22.4 11.3 21.4 Z" fill={couleur} />
-      <Circle cx={12} cy={8.6} r={5.6} fill={couleur} />
-      {/* L'œil de l'épingle, évidé : sans lui la boule est un point plein et
-          l'ensemble ne se lit plus comme une épingle à cette taille. */}
-      <Circle cx={12} cy={8.6} r={2.1} fill={THEME.surface} />
+    <Svg width={taille * (202.7 / 330.5)} height={taille} viewBox="618.5 239.8 202.7 330.5">
+      <Path d="M 719.964844 567 C 694.140625 567 674.667969 557.765625 674.667969 545.519531 C 674.667969 533.277344 694.140625 524.039062 719.964844 524.039062 C 745.789062 524.039062 765.261719 533.277344 765.261719 545.519531 C 765.261719 557.765625 745.78125 567.007812 719.960938 567.007812 Z M 719.964844 530.84375 C 697.929688 530.84375 681.464844 538.59375 681.464844 545.523438 C 681.464844 552.453125 697.933594 560.203125 719.964844 560.203125 C 742 560.203125 758.464844 552.453125 758.464844 545.523438 C 758.464844 538.59375 741.992188 530.835938 719.960938 530.835938 Z M 719.964844 530.84375" fill={couleur} />
+      <Path d="M 719.914062 548.914062 C 718.652344 548.914062 717.492188 548.214844 716.90625 547.097656 L 631.097656 384.144531 C 625.070312 374.121094 621.785156 352.007812 621.785156 343.417969 C 621.785156 288.042969 665.058594 242.992188 718.246094 242.992188 C 718.621094 242.992188 718.992188 243.003906 719.359375 243.019531 L 719.976562 243.039062 L 720.464844 243.019531 C 720.835938 243.007812 721.207031 242.992188 721.578125 242.992188 C 774.765625 242.992188 818.039062 288.042969 818.039062 343.417969 C 818.039062 352.007812 814.753906 374.121094 808.726562 384.144531 L 722.921875 547.097656 C 722.324219 548.21875 721.167969 548.917969 719.910156 548.917969 Z M 718.246094 249.800781 C 668.808594 249.800781 628.585938 291.800781 628.585938 343.421875 C 628.585938 352.664062 632.183594 372.839844 636.96875 380.714844 C 637.003906 380.773438 637.035156 380.835938 637.070312 380.894531 L 719.914062 538.222656 L 802.761719 380.894531 C 802.792969 380.835938 802.828125 380.773438 802.863281 380.714844 C 807.644531 372.839844 811.242188 352.664062 811.242188 343.421875 C 811.242188 291.800781 771.019531 249.800781 721.582031 249.800781 C 721.289062 249.800781 721.003906 249.8125 720.714844 249.820312 L 719.980469 249.84375 L 719.113281 249.820312 C 718.808594 249.820312 718.519531 249.804688 718.230469 249.804688 Z M 718.246094 249.800781" fill={couleur} />
+      <Path d="M 719.914062 387.40625 C 689.699219 387.40625 665.117188 362.824219 665.117188 332.609375 C 665.117188 302.394531 689.699219 277.8125 719.914062 277.8125 C 750.128906 277.8125 774.707031 302.394531 774.707031 332.609375 C 774.707031 362.824219 750.128906 387.398438 719.921875 387.398438 Z M 719.914062 284.613281 C 693.449219 284.613281 671.917969 306.144531 671.917969 332.609375 C 671.917969 359.074219 693.449219 380.605469 719.914062 380.605469 C 746.378906 380.605469 767.90625 359.074219 767.90625 332.609375 C 767.90625 306.144531 746.386719 284.605469 719.921875 284.605469 Z M 719.914062 284.613281" fill={couleur} />
     </Svg>
   );
 }

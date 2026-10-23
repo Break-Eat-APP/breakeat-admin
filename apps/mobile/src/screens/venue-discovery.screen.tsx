@@ -404,16 +404,42 @@ export function VenueDiscoveryScreen() {
                         <Text style={styles.cardAdresse} numberOfLines={1}>{v.address}</Text>
                       </View>
                     </View>
-                    {/* Le plan reste accessible, en second rôle. */}
-                    {plan ? (
-                      <Pressable onPress={() => openPlan(v.name, plan)} hitSlop={8} style={styles.cardPlan}>
-                        <Ionicons name="map-outline" size={17} color={THEME.orange} />
-                      </Pressable>
-                    ) : null}
                     <View style={styles.cardFleche}>
                       <Ionicons name="chevron-forward" size={18} color={THEME.orange} />
                     </View>
                   </View>
+
+                  {/*
+                    LE PLAN DES BUVETTES — un bouton NOMMÉ.
+
+                    C'était une pastille ronde avec une carte dessinée dedans,
+                    coincée entre l'adresse et la flèche. Personne ne devine
+                    qu'une icône de carte mène au plan du stade, et elle se
+                    confondait avec la flèche voisine, de même taille et de
+                    même couleur.
+
+                    Il n'apparaît que si le club a DÉPOSÉ un plan
+                    (`buvettePlanUrl`) : un bouton qui ouvrirait une page vide
+                    vaut moins que pas de bouton.
+
+                    `stopPropagation` : la carte entière ouvre la commande.
+                    Sans cela, toucher le plan déclencherait aussi le parcours
+                    d'achat derrière lui.
+                  */}
+                  {plan ? (
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        openPlan(v.name, plan);
+                      }}
+                      style={({ pressed }) => [styles.cardPlanCta, pressed && styles.cardPlanPressee]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Voir le plan des buvettes de ${v.name}`}
+                    >
+                      <Ionicons name="map" size={15} color="#fff" />
+                      <Text style={styles.cardPlanTexte}>Plan buvette</Text>
+                    </Pressable>
+                  ) : null}
                 </Pressable>
               );
             })}
@@ -700,10 +726,21 @@ const styles = StyleSheet.create({
   cardNom: { color: THEME.ink, fontSize: 16.5, fontFamily: HEAD.bold },
   cardLieuRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   cardAdresse: { flex: 1, color: THEME.inkSoft, fontSize: 12.5, fontFamily: HEAD.medium },
-  cardPlan: {
-    width: 34, height: 34, borderRadius: 17,
-    alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.orangeTint,
+  // Orange PLEIN, et non la teinte pâle des pastilles : c'est une action
+  // qu'on propose, pas une icône de second plan. Pleine largeur sous la
+  // carte, elle ne peut plus se confondre avec la flèche.
+  cardPlanCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: THEME.orange,
   },
+  cardPlanPressee: { opacity: 0.8 },
+  cardPlanTexte: { color: '#fff', fontSize: 13.5, fontFamily: HEAD.bold },
   cardFleche: {
     width: 34, height: 34, borderRadius: 17,
     alignItems: 'center', justifyContent: 'center', backgroundColor: THEME.orangeTint,
