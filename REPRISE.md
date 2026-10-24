@@ -72,6 +72,59 @@ clients ; **Facebook ne le sera pas** — son jeton ne certifie pas l'adresse, e
 rattacher une inscription rapide à un compte existant sur une adresse non
 certifiée donnerait le compte d'un client à qui saurait en déclarer l'adresse.
 
+## ⛔ UNE MIGRATION ÉCRITE À LA MAIN SUIT LA BASE, PAS PRISMA — 25/10/2026
+
+**La production est restée à l'arrêt du 23 au 25 octobre** à cause d'un seul
+fichier : `20261023_note_de_commande`. À retenir avant d'écrire la prochaine
+migration SQL à la main.
+
+```
+ERROR:  foreign key constraint "order_ratings_order_id_fkey" cannot be implemented
+DETAIL: Key columns "order_id" and "id" are of incompatible types: text and uuid.
+```
+
+**Prisma rend `String @default(uuid())` en TEXT. Cette base déclare ses clés
+en UUID** — `orders`, `users`, `suppliers`, `organizations`, `venues`, toutes,
+depuis `20260527_phase5_stripe_connect`. Le schéma Prisma dit le type du
+LANGAGE ; le SQL doit dire celui de la COLONNE. Écrire la migration en
+suivant le défaut de l'outil, c'est écrire contre la base.
+
+Ce n'est pas qu'une contrainte qui saute : **Postgres refuse de comparer
+`uuid` et `text`**, donc des colonnes TEXT cassent toute jointure vers les
+tables existantes — souvent bien plus tard, dans un écran de lecture.
+
+**Ce qu'on a appris sur la panne elle-même :**
+
+- `P3009` au démarrage = une migration antérieure est marquée en échec et
+  bloque toutes les suivantes. L'API ne se met jamais à écouter, le
+  healthcheck échoue, et **Railway laisse l'ancienne version servir** — d'où
+  une API qui répond parfaitement tout en ignorant le code récent.
+- **Prisma exécute chaque migration dans une transaction** : un échec en
+  cours de fichier annule tout. Il n'y a pas de table à demi créée à
+  nettoyer. (`applied_steps_count = 0` le confirme dans `_prisma_migrations`.)
+- La réparation tient en deux gestes : marquer la migration annulée
+  (`UPDATE "_prisma_migrations" SET rolled_back_at = now() WHERE
+  migration_name = '…' AND finished_at IS NULL`, ou
+  `prisma migrate resolve --rolled-back …`), puis **reconstruire** — un
+  « Redeploy » rejoue la MÊME image, donc la même migration cassée.
+- Des déploiements marqués **SKIPPED** ne sont pas une panne : les
+  `watchPatterns` de `railway.json` ne surveillent que `/backend/**`, et un
+  commit qui ne touche que `apps/` est ignoré à juste titre.
+
+**La parade, désormais systématique** : avant de pousser une migration écrite
+à la main, la rejouer sur un Postgres vierge —
+
+```bash
+docker run -d --name mig -e POSTGRES_PASSWORD=test -e POSTGRES_DB=breakeat -p 55432:5432 postgres:16-alpine
+cd backend && DATABASE_URL="postgresql://postgres:test@localhost:55432/breakeat?schema=public" npx prisma migrate deploy
+```
+
+Toute l'histoire des migrations s'applique en quelques secondes. Ça aurait
+coûté une minute et évité deux jours d'arrêt.
+
+`migrer.sh` n'a PAS été modifié : il échoue toujours fort sur une migration
+fautive. Une reprise automatique aurait caché ce défaut au lieu de le dire.
+
 ## 🔓 SUJETS OUVERTS — à reprendre (liste tenue au 01/10/2026)
 
 Ce qui a été décidé mais pas fait, ou fait mais pas encore éprouvé. **Tenir
