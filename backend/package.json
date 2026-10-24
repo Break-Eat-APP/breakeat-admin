@@ -16,6 +16,7 @@
     "clean": "rimraf dist",
     "db:migrate": "prisma migrate dev",
     "db:migrate:prod": "prisma migrate deploy",
+    "db:verifier": "node scripts/verifier-migrations.js",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:seed": "ts-node prisma/seed.ts",
