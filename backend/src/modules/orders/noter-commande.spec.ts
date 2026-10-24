@@ -2,7 +2,6 @@ import { BadRequestException, ConflictException, NotFoundException } from '@nest
 import { OrderStatus } from '@prisma/client';
 
 import { OrdersService } from './orders.service';
-import type { PrismaService } from '../../database/prisma.service';
 
 /**
  * NOTER SA COMMANDE — et les trois façons d'obtenir une note qui ne vaut rien.
