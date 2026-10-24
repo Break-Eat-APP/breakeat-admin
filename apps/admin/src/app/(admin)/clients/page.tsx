@@ -15,7 +15,18 @@
  */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Download, RefreshCw, Users, Eye, ShoppingBag, TrendingUp, Sparkles } from 'lucide-react';
+import {
+  Download,
+  RefreshCw,
+  Users,
+  Eye,
+  ShoppingBag,
+  TrendingUp,
+  Sparkles,
+  CalendarDays,
+  ArrowUpRight,
+  ArrowDownRight,
+} from 'lucide-react';
 import {
   apiGetClients,
   apiGetFrequentation,
@@ -29,12 +40,23 @@ import {
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 import { JourParJour } from '@/components/jour-par-jour';
+import { Calendrier } from '@/components/calendrier';
 
 const EUR = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' });
 const INT = new Intl.NumberFormat('fr-FR');
 
 const euros = (cents: number) => EUR.format((cents ?? 0) / 100);
 const jour = (iso: string) => new Date(iso).toLocaleDateString('fr-FR');
+
+/**
+ * La période lue : un raccourci glissant, ou une plage posée au calendrier.
+ *
+ * Les deux coexistent parce qu'elles répondent à deux besoins : « comment
+ * va le mois » se lit d'un clic, « la soirée du 18 » demande une date.
+ */
+type Periode =
+  | { mode: 'raccourci'; jours: number | null }
+  | { mode: 'plage'; du: Date; au: Date };
 
 /** Les raccourcis de période. `null` = depuis toujours. */
 const PERIODES: { label: string; jours: number | null }[] = [
@@ -65,16 +87,86 @@ const carte: React.CSSProperties = {
   padding: 18,
 };
 
+/**
+ * L'ÉCART AVEC LA PÉRIODE PRÉCÉDENTE.
+ *
+ * Un chiffre seul ne dit pas s'il est bon. « 12 % de conversion » ne se juge
+ * que CONTRE quelque chose, et la seule référence honnête que nous
+ * possédions est le passé du club lui-même : il n'existe aucune norme
+ * publiée du « bon taux de conversion d'une buvette ». En inventer une
+ * transformerait un chiffre vrai en verdict faux.
+ *
+ * SOUS DIX, ON MONTRE L'ÉCART BRUT. Passer de 2 à 3 visiteurs n'est pas
+ * « +50 % » : c'est un visiteur de plus, et le pourcentage donnerait à du
+ * bruit l'allure d'une tendance.
+ *
+ * Un taux se compare en POINTS, jamais en pourcentage de pourcentage :
+ * « +3 pts » se comprend, « +25 % » sur un taux ne veut rien dire.
+ *
+ * Le vert vaut pour la hausse sur les cinq cartes : plus de monde, plus de
+ * commandes, plus de conversion — aucune ne s'améliore en baissant.
+ */
+function Ecart({
+  actuel,
+  precedent,
+  unite,
+}: {
+  actuel: number | null | undefined;
+  precedent: number | null | undefined;
+  unite?: 'points';
+}) {
+  if (actuel == null || precedent == null) return null;
+
+  const delta = actuel - precedent;
+  const base: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 2,
+    fontSize: 11.5,
+    fontWeight: 700,
+    borderRadius: 999,
+    padding: '2px 7px',
+  };
+
+  if (delta === 0) {
+    return <span style={{ ...base, color: BRAND.grey, background: BRAND.bgSubtle }}>stable</span>;
+  }
+
+  const hausse = delta > 0;
+  const abs = Math.abs(delta);
+  const texte =
+    unite === 'points'
+      ? `${hausse ? '+' : '−'}${abs.toFixed(abs < 10 ? 1 : 0).replace('.', ',')} pt${abs >= 2 ? 's' : ''}`
+      : precedent < 10
+        ? `${hausse ? '+' : '−'}${INT.format(abs)}`
+        : `${hausse ? '+' : '−'}${Math.round((abs / precedent) * 100)} %`;
+
+  return (
+    <span
+      style={{
+        ...base,
+        color: hausse ? BRAND.success : BRAND.danger,
+        background: hausse ? 'rgba(21, 128, 61, 0.09)' : 'rgba(194, 37, 31, 0.09)',
+      }}
+    >
+      {hausse ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+      {texte}
+    </span>
+  );
+}
+
 function Chiffre({
   icone: Icone,
   valeur,
   libelle,
   precision,
+  ecart,
 }: {
   icone: typeof Users;
   valeur: string;
   libelle: string;
   precision?: string;
+  ecart?: React.ReactNode;
 }) {
   return (
     <div style={carte}>
@@ -82,7 +174,10 @@ function Chiffre({
         <Icone size={15} />
         {libelle}
       </div>
-      <div style={{ fontSize: 26, fontWeight: 700, color: BRAND.ink, marginTop: 6 }}>{valeur}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 26, fontWeight: 700, color: BRAND.ink }}>{valeur}</span>
+        {ecart}
+      </div>
       {precision ? (
         <div style={{ fontSize: 11.5, color: BRAND.inkSoft, marginTop: 2 }}>{precision}</div>
       ) : null}
@@ -95,24 +190,55 @@ export default function ClientsPage() {
 
   const [lieux, setLieux] = useState<Venue[]>([]);
   const [venueId, setVenueId] = useState<string>('');
-  const [jours, setJours] = useState<number | null>(30);
+  const [periode, setPeriode] = useState<Periode>({ mode: 'raccourci', jours: 30 });
+  const [calendrierOuvert, setCalendrierOuvert] = useState(false);
 
   const [clients, setClients] = useState<FicheClient[]>([]);
   const [audience, setAudience] = useState<AudienceClub | null>(null);
+  /** La même mesure sur la période d'avant — la référence de lecture. */
+  const [precedent, setPrecedent] = useState<AudienceClub | null>(null);
   const [chargement, setChargement] = useState(true);
   const [telechargement, setTelechargement] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
 
+  /** La fenêtre lue. `null` de chaque côté = pas de borne. */
+  const fenetre = useCallback((): { du: Date | null; au: Date | null } => {
+    if (periode.mode === 'plage') return { du: periode.du, au: periode.au };
+    if (periode.jours === null) return { du: null, au: null };
+    const debut = new Date();
+    debut.setDate(debut.getDate() - periode.jours);
+    return { du: debut, au: null };
+  }, [periode]);
+
+  /**
+   * La fenêtre d'AVANT — même longueur, jointive, jamais chevauchante.
+   *
+   * Comparer 30 jours à 7 ne dirait rien, et une fenêtre qui déborde sur la
+   * période courante compterait deux fois les mêmes visites. « Tout » n'a
+   * pas d'avant : on renvoie `null` et la comparaison disparaît, plutôt que
+   * d'inventer une référence.
+   */
+  const fenetrePrecedente = useCallback((): { du: Date; au: Date } | null => {
+    const { du, au } = fenetre();
+    // « Tout » n'a pas d'avant : on renvoie `null` et la comparaison
+    // disparaît, plutôt que d'inventer une référence.
+    if (!du) return null;
+    // Sans fin posée, la fenêtre courante s'arrête maintenant. On DÉRIVE les
+    // deux bornes de la même lecture : deux `new Date()` séparés laisseraient
+    // quelques millisecondes de recouvrement entre les deux périodes.
+    const duree = (au ?? new Date()).getTime() - du.getTime();
+    const auPrecedent = new Date(du.getTime() - 1);
+    return { du: new Date(auPrecedent.getTime() - duree), au: auPrecedent };
+  }, [fenetre]);
+
   const filtre = useCallback((): FiltreDonnees => {
+    const { du, au } = fenetre();
     const f: FiltreDonnees = {};
     if (venueId) f.venueId = venueId;
-    if (jours !== null) {
-      const debut = new Date();
-      debut.setDate(debut.getDate() - jours);
-      f.du = debut.toISOString();
-    }
+    if (du) f.du = du.toISOString();
+    if (au) f.au = au.toISOString();
     return f;
-  }, [venueId, jours]);
+  }, [venueId, fenetre]);
 
   const charger = useCallback(async () => {
     if (!orgId) return;
@@ -122,18 +248,30 @@ export default function ClientsPage() {
       const f = filtre();
       // Les deux lectures ensemble : elles doivent décrire la MÊME fenêtre,
       // sinon le taux de conversion comparerait deux périodes différentes.
-      const [liste, mesure] = await Promise.all([
+      const avant = fenetrePrecedente();
+      const [liste, mesure, mesureAvant] = await Promise.all([
         apiGetClients(orgId, f),
         apiGetFrequentation(orgId, f),
+        // La comparaison est un CONFORT : si elle échoue, la page reste
+        // lisible sans elle. On ne fait pas tomber des chiffres justes
+        // parce qu'une référence manque.
+        avant
+          ? apiGetFrequentation(orgId, {
+              ...(venueId ? { venueId } : {}),
+              du: avant.du.toISOString(),
+              au: avant.au.toISOString(),
+            }).catch(() => null)
+          : Promise.resolve(null),
       ]);
       setClients(liste);
       setAudience(mesure);
+      setPrecedent(mesureAvant);
     } catch (e: unknown) {
       setErreur(e instanceof Error ? e.message : 'Lecture impossible');
     } finally {
       setChargement(false);
     }
-  }, [orgId, filtre]);
+  }, [orgId, filtre, fenetrePrecedente, venueId]);
 
   useEffect(() => {
     if (!orgId) return;
@@ -207,10 +345,33 @@ export default function ClientsPage() {
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span style={{ fontSize: 12.5, color: BRAND.inkSoft }}>Période</span>
           {PERIODES.map((p) => (
-            <button key={p.label} onClick={() => setJours(p.jours)} style={pilule(jours === p.jours)}>
+            <button
+              key={p.label}
+              onClick={() => {
+                setPeriode({ mode: 'raccourci', jours: p.jours });
+                setCalendrierOuvert(false);
+              }}
+              style={pilule(periode.mode === 'raccourci' && periode.jours === p.jours)}
+            >
               {p.label}
             </button>
           ))}
+          <button
+            onClick={() => setCalendrierOuvert((o) => !o)}
+            style={{
+              ...pilule(periode.mode === 'plage'),
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <CalendarDays size={14} />
+            {periode.mode === 'plage'
+              ? periode.du.toDateString() === periode.au.toDateString()
+                ? jour(periode.du.toISOString())
+                : `${jour(periode.du.toISOString())} → ${jour(periode.au.toISOString())}`
+              : 'Dates'}
+          </button>
         </div>
 
         {lieux.length > 1 ? (
@@ -240,6 +401,14 @@ export default function ClientsPage() {
         ) : null}
       </div>
 
+      {calendrierOuvert ? (
+        <Calendrier
+          du={periode.mode === 'plage' ? periode.du : null}
+          au={periode.mode === 'plage' ? periode.au : null}
+          onChange={(du, au) => setPeriode({ mode: 'plage', du, au })}
+        />
+      ) : null}
+
       {erreur ? (
         <div style={{ ...carte, borderColor: '#f3c2c2', background: '#fef4f4', color: '#8a2222', fontSize: 13 }}>
           {erreur}
@@ -251,24 +420,48 @@ export default function ClientsPage() {
         <Chiffre
           icone={Eye}
           libelle="Visiteurs anonymes"
+          ecart={
+            <Ecart
+              actuel={audience?.visiteursAnonymes}
+              precedent={precedent?.visiteursAnonymes}
+            />
+          }
           valeur={audience ? INT.format(audience.visiteursAnonymes) : '—'}
           precision="regardent sans compte"
         />
         <Chiffre
           icone={Users}
           libelle="Clients connectés"
+          ecart={
+            <Ecart
+              actuel={audience?.visiteursConnectes}
+              precedent={precedent?.visiteursConnectes}
+            />
+          }
           valeur={audience ? INT.format(audience.visiteursConnectes) : '—'}
           precision="comptés une fois, même s'ils reviennent"
         />
         <Chiffre
           icone={Sparkles}
           libelle="Nouveaux visiteurs"
+          ecart={
+            <Ecart
+              actuel={audience?.nouveauxVisiteurs}
+              precedent={precedent?.nouveauxVisiteurs}
+            />
+          }
           valeur={audience ? INT.format(audience.nouveauxVisiteurs) : '—'}
           precision="votre lieu est le 1er qu'ils ont ouvert"
         />
         <Chiffre
           icone={ShoppingBag}
           libelle="Ont commandé"
+          ecart={
+            <Ecart
+              actuel={audience?.clientsAyantCommande}
+              precedent={precedent?.clientsAyantCommande}
+            />
+          }
           valeur={audience ? INT.format(audience.clientsAyantCommande) : '—'}
           precision={
             audience && audience.clientsNouveaux > 0
@@ -281,6 +474,12 @@ export default function ClientsPage() {
         <Chiffre
           icone={TrendingUp}
           libelle="Taux de conversion"
+          ecart={
+            <Ecart
+              actuel={audience?.tauxConversion}
+              precedent={precedent?.tauxConversion} unite="points"
+            />
+          }
           valeur={audience?.tauxConversion !== null && audience ? `${audience.tauxConversion} %` : '—'}
           precision={
             audience && audience.visiteursConnectes > 0
@@ -293,6 +492,12 @@ export default function ClientsPage() {
           }
         />
       </section>
+
+      {precedent ? (
+        <p style={{ fontSize: 11.5, color: BRAND.grey, margin: '-10px 0 0' }}>
+          Les écarts comparent à la période précédente de même longueur, juste avant celle-ci.
+        </p>
+      ) : null}
 
       <p style={{ fontSize: 11.5, color: BRAND.inkSoft, margin: 0, lineHeight: 1.6 }}>
 <strong>Anonymes</strong> et <strong>connectés</strong> ne se recoupent jamais, et
