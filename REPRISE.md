@@ -190,6 +190,35 @@ commandes, de comptes et de comptabilité qui disparaît.** Tout le reste de la
 sécurité protège d'une intrusion ; ceci protège d'une perte, qui est
 irréversible.
 
+### ✅ AUTOMATISÉ LE 25/10/2026 — reste DEUX secrets à poser
+
+`.github/workflows/sauvegarde.yml` tourne chaque nuit à 03h00 UTC, et à la
+demande (Actions → Sauvegarde de la base → Run workflow) **avant un événement
+ou une migration délicate**. Il appelle le script du dépôt, chiffre le résultat
+en AES-256, efface le clair, vérifie que le fichier pèse quelque chose, et le
+dépose en artefact GitHub pour 90 jours.
+
+**Chez GitHub, pas chez Railway, et c'est le point** : une copie rangée chez
+l'hébergeur de la base partage son sort — incident de facturation, suspension,
+fausse manœuvre sur le projet.
+
+**Le workflow est INERTE tant que ces deux secrets ne sont pas posés**
+(Settings → Secrets and variables → Actions) :
+
+| Secret | Contenu |
+|---|---|
+| `DATABASE_URL_SAUVEGARDE` | Railway → Postgres → Variables → `DATABASE_URL` |
+| `SAUVEGARDE_PASSPHRASE` | une phrase longue, gardée AILLEURS que dans GitHub |
+
+Sans la phrase, les sauvegardes sont illisibles — **y compris par nous**.
+
+**Répété en entier le 25/10 sur une base Docker** : sauvegarde → chiffrement →
+déchiffrement → restauration dans une base vide. 45 tables, 47 migrations, les
+données, les types `uuid` et la contrainte `1..5` sont revenus à l'identique.
+La répétition a d'ailleurs révélé que le script n'avait **jamais tourné** :
+`pg_dump` refusait le `?schema=public` que Prisma ajoute à l'adresse
+(« invalid URI query parameter »). Corrigé le même jour.
+
 **Le filet posé en attendant :** `backend/scripts/sauvegarde.js`. Il exporte la
 base entière dans un fichier, passe par Docker quand `pg_dump` n'est pas
 installé, refuse un fichier vide, et rappelle où ranger le résultat.

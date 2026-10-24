@@ -45,6 +45,56 @@ if (!adresse) {
   process.exit(1);
 }
 
+/**
+ * L'ADRESSE DE PRISMA N'EST PAS CELLE DE `pg_dump`.
+ *
+ * Prisma ajoute des parametres que libpq ne connait pas — `schema`,
+ * `connection_limit`, `pgbouncer`. Et `pg_dump` ne les ignore pas : il refuse
+ * l'adresse entiere.
+ *
+ *   pg_dump: error: invalid URI query parameter: "schema"
+ *
+ * On ne garde donc que les parametres que libpq accepte, et on TRADUIT
+ * `schema=X` en `--schema=X`. Le laisser tomber en silence sauvegarderait le
+ * schema par defaut au lieu de celui demande — une sauvegarde qui rassure et
+ * ne contient pas ce qu'on croit.
+ */
+const PARAMETRES_LIBPQ = new Set([
+  'sslmode',
+  'sslcert',
+  'sslkey',
+  'sslrootcert',
+  'sslpassword',
+  'connect_timeout',
+  'application_name',
+  'options',
+  'target_session_attrs',
+  'channel_binding',
+  'gssencmode',
+  'passfile',
+  'service',
+  'hostaddr',
+]);
+
+function pourPgDump(brute) {
+  let u;
+  try {
+    u = new URL(brute);
+  } catch {
+    // Adresse non standard : on la passe telle quelle plutot que de la mutiler.
+    return { adresse: brute, options: [] };
+  }
+  const options = [];
+  const schema = u.searchParams.get('schema');
+  if (schema) options.push(`--schema=${schema}`);
+  for (const cle of [...u.searchParams.keys()]) {
+    if (!PARAMETRES_LIBPQ.has(cle)) u.searchParams.delete(cle);
+  }
+  return { adresse: u.toString(), options };
+}
+
+const { adresse: adressePropre, options: optionsSchema } = pourPgDump(adresse);
+
 const dossier = process.argv[2] || path.join(process.cwd(), 'sauvegardes');
 if (!existsSync(dossier)) mkdirSync(dossier, { recursive: true });
 
@@ -62,7 +112,14 @@ const fichier = path.join(dossier, `breakeat_${horodatage}.dump`);
  * besoin, il est compressé, et `pg_restore` sait le relire même sur une version
  * de PostgreSQL plus récente.
  */
-const arguments_ = ['--format=custom', '--no-owner', '--no-privileges', `--file=${fichier}`, adresse];
+const arguments_ = [
+  '--format=custom',
+  '--no-owner',
+  '--no-privileges',
+  ...optionsSchema,
+  `--file=${fichier}`,
+  adressePropre,
+];
 
 console.log(`Sauvegarde en cours → ${fichier}`);
 let resultat = spawnSync('pg_dump', arguments_, { stdio: ['ignore', 'inherit', 'inherit'] });
@@ -80,7 +137,7 @@ if (resultat.error && resultat.error.code === 'ENOENT') {
   // Depuis un conteneur, `localhost` désigne le conteneur LUI-MÊME : une base
   // locale ne s'atteint que par `host.docker.internal`. Sans cette traduction,
   // sauvegarder une base d'essai échouerait sans dire pourquoi.
-  const adresseDepuisConteneur = adresse
+  const adresseDepuisConteneur = adressePropre
     .replace('@localhost:', '@host.docker.internal:')
     .replace('@127.0.0.1:', '@host.docker.internal:');
 
@@ -96,6 +153,7 @@ if (resultat.error && resultat.error.code === 'ENOENT') {
       '--format=custom',
       '--no-owner',
       '--no-privileges',
+      ...optionsSchema,
       `--file=/sortie/${path.basename(fichier)}`,
       adresseDepuisConteneur,
     ],

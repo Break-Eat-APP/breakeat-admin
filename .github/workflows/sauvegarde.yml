@@ -1,0 +1,111 @@
+# UNE SAUVEGARDE QUI DEMANDE QU'ON Y PENSE N'EXISTE PAS.
+#
+# `backend/scripts/sauvegarde.js` est ecrit depuis le 18/09/2026 et n'a jamais
+# tourne tout seul : il fallait s'en souvenir. Railway, lui, ne sauvegarde pas
+# sur l'offre actuelle — l'onglet Backups affiche « No backup schedule », la
+# planification etant reservee au plan Pro.
+#
+# Ce fichier ferme ce trou. Il tourne chaque nuit, et a la demande avant un
+# evenement.
+#
+# POURQUOI GITHUB ET PAS RAILWAY : une sauvegarde rangee chez l'hebergeur de la
+# base partage son sort. Un incident de facturation, une suspension de compte,
+# une fausse manoeuvre sur le projet — et les deux disparaissent ensemble.
+# Celle-ci vit chez un autre fournisseur, ce qui est tout l'interet.
+#
+# LE FICHIER EST CHIFFRE avant d'etre televerse : il contient les noms, les
+# adresses, les telephones et les commandes de vrais clients. Un artefact
+# GitHub est prive, mais « prive » n'est pas « chiffre », et toute personne
+# ayant acces au depot pourrait le telecharger en clair.
+#
+# ────────────────────────────────────────────────────────────────────────────
+# CE QU'IL FAUT POSER UNE FOIS — Settings → Secrets and variables → Actions
+#
+#   DATABASE_URL_SAUVEGARDE   l'adresse de la base de production, copiee depuis
+#                             Railway → Postgres → Variables → DATABASE_URL
+#   SAUVEGARDE_PASSPHRASE     une phrase longue, gardee AILLEURS que dans
+#                             GitHub (gestionnaire de mots de passe). Sans
+#                             elle, les sauvegardes sont illisibles — y compris
+#                             par toi.
+#
+# ────────────────────────────────────────────────────────────────────────────
+# RESTAURER
+#
+#   gpg --batch --decrypt --passphrase "<la phrase>" \
+#       --output restauration.dump breakeat_AAAA-MM-JJ_hhmm.dump.gpg
+#
+#   pg_restore --clean --if-exists --no-owner --dbname="<adresse>" restauration.dump
+#
+# Une sauvegarde jamais restauree n'est pas une sauvegarde : c'est un fichier.
+# L'essayer UNE fois sur une base jetable, avant d'en avoir besoin.
+
+name: Sauvegarde de la base
+
+on:
+  schedule:
+    # 03h00 UTC, soit 04h ou 05h a Paris : apres les matchs du soir, dont les
+    # commandes sont ainsi dans la copie du jour meme.
+    - cron: '0 3 * * *'
+  # Avant un evenement, ou avant une migration delicate : Actions → Sauvegarde
+  # de la base → Run workflow.
+  workflow_dispatch:
+
+jobs:
+  sauvegarde:
+    name: Copie chiffree de la production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # La version du client doit atteindre celle du serveur : un pg_dump plus
+      # ancien que la base refuse de la lire.
+      - name: Outils client PostgreSQL 16
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-16 || sudo apt-get install -y -qq postgresql-client
+
+      - name: Sauvegarder
+        working-directory: backend
+        run: node scripts/sauvegarde.js "$GITHUB_WORKSPACE/sauvegardes"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL_SAUVEGARDE }}
+
+      # La phrase passe par un fichier, jamais en argument : les arguments d'un
+      # processus se lisent depuis un autre processus.
+      - name: Chiffrer, et effacer le clair
+        run: |
+          set -euo pipefail
+          printf '%s' "$PASSPHRASE" > /tmp/phrase
+          for f in "$GITHUB_WORKSPACE"/sauvegardes/*.dump; do
+            gpg --batch --yes --symmetric --cipher-algo AES256 \
+                --passphrase-file /tmp/phrase --output "$f.gpg" "$f"
+            rm -f "$f"
+          done
+          rm -f /tmp/phrase
+          ls -lh "$GITHUB_WORKSPACE"/sauvegardes/
+        env:
+          PASSPHRASE: ${{ secrets.SAUVEGARDE_PASSPHRASE }}
+
+      # Un artefact vide rassurerait sans rien contenir : c'est le pire des cas.
+      - name: Verifier que le fichier pese quelque chose
+        run: |
+          set -euo pipefail
+          taille=$(stat -c%s "$GITHUB_WORKSPACE"/sauvegardes/*.dump.gpg | sort -n | head -1)
+          echo "Plus petit fichier : ${taille} octets"
+          if [ "$taille" -lt 1024 ]; then
+            echo "::error::La sauvegarde chiffree pese moins de 1 Ko — elle ne vaut rien."
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sauvegarde-${{ github.run_id }}
+          path: sauvegardes/*.dump.gpg
+          # Le maximum que GitHub accorde. Au-dela, il faut un stockage a soi
+          # (S3, R2) — a decider quand le volume de commandes le justifiera.
+          retention-days: 90
+          if-no-files-found: error
