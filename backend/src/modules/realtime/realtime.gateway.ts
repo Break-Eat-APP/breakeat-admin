@@ -14,6 +14,7 @@ import { ConfigService } from '@nestjs/config';
 import { Server, Socket } from 'socket.io';
 import { JoinRoomDto } from './dto/join-room.dto';
 import { PrismaService } from '../../database/prisma.service';
+import { requireOrgAccess } from '../../common/helpers/require-org-access';
 
 /**
  * RealtimeGateway — Socket.IO entry point.
@@ -26,7 +27,12 @@ import { PrismaService } from '../../database/prisma.service';
  *  3. Expose `server` so RealtimeService can emit to rooms after DB commits.
  *
  * Auth: JWT verified on connect. Unauthenticated sockets are disconnected immediately.
- * No per-room authorization: room names are UUID-keyed and never published to clients.
+ *
+ * AUTORISATION PAR SALON : chaque type a sa regle (voir `peutRejoindre`), et le
+ * defaut est le REFUS. Ce commentaire affirmait l'inverse — « room names are
+ * UUID-keyed and never published to clients » — et c'etait un pari : un UUID
+ * circule dans une URL, un journal, une capture d'ecran. Il identifie, il
+ * n'autorise pas.
  */
 @WebSocketGateway({
   cors: {
@@ -109,19 +115,96 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
   }
 
   /**
+   * QUI A LE DROIT D'ECOUTER QUOI — une regle par type de salon.
+   *
+   * L'ancienne version n'examinait que `supplier:` et laissait passer TOUT le
+   * reste. Or `organization:`, `event:`, `order:` et `pickup-point:` portent
+   * des commandes, des montants et des noms de clients : un compte
+   * authentifie qui connaissait un UUID ecoutait le flux d'un autre club.
+   *
+   * LE SECRET D'UN IDENTIFIANT N'EST PAS UNE AUTORISATION. Un UUID circule —
+   * dans une URL, un journal, une capture d'ecran, un rapport. Il identifie,
+   * il n'autorise pas.
+   *
+   * LE DEFAUT EST LE REFUS. Un prefixe inconnu est rejete, pour qu'un salon
+   * ajoute demain reste ferme tant que sa regle n'est pas ecrite ici. Ouvrir
+   * par defaut, c'est ce qui a produit ce defaut.
+   *
+   * Les regles s'appuient sur `requireOrgAccess`, celle du REST : les deux
+   * chemins doivent repondre la meme chose, sinon le temps reel devient une
+   * porte derobee vers ce que l'API refuse.
+   */
+  private async peutRejoindre(userId: string, salon: string): Promise<boolean> {
+    const separateur = salon.indexOf(':');
+    if (separateur <= 0) return false;
+    const type = salon.slice(0, separateur);
+    const id = salon.slice(separateur + 1);
+    if (!id) return false;
+
+    switch (type) {
+      case 'supplier':
+        return this.accesBuvette(userId, id);
+
+      // Le tableau de bord porte l'identifiant de son club : meme portee.
+      case 'organization':
+      case 'dashboard':
+        return this.membreDu(userId, id);
+
+      case 'event': {
+        const evenement = await this.prisma.event.findUnique({
+          where: { id },
+          select: { organizationId: true },
+        });
+        return evenement ? this.membreDu(userId, evenement.organizationId) : false;
+      }
+
+      case 'pickup-point': {
+        const point = await this.prisma.pickupPoint.findUnique({
+          where: { id },
+          select: { organizationId: true },
+        });
+        return point ? this.membreDu(userId, point.organizationId) : false;
+      }
+
+      // Un client suit SA commande ; le personnel du club la suit aussi.
+      case 'order': {
+        const commande = await this.prisma.order.findUnique({
+          where: { id },
+          select: { userId: true, organizationId: true },
+        });
+        if (!commande) return false;
+        if (commande.userId === userId) return true;
+        return this.membreDu(userId, commande.organizationId);
+      }
+
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Membre du club — la MEME regle que le REST, pas une seconde ecriture.
+   *
+   * `requireOrgAccess` leve une exception ; ici il faut un booleen. On
+   * l'enveloppe plutot que de recopier sa logique : le contournement
+   * SUPER_ADMIN et la lecture du role en base vivent a UN endroit.
+   */
+  private async membreDu(userId: string, organizationId: string): Promise<boolean> {
+    try {
+      await requireOrgAccess(this.prisma, userId, organizationId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Qui a le droit d'ecouter le flux d'une buvette.
    *
    * Membre de l'organisation qui la detient — et, si le compte est rattache a
-   * un comptoir precis, celui-la et aucun autre. La meme regle que le tableau
-   * de bord applique deja cote REST : les deux chemins doivent repondre la
-   * meme chose, sinon le temps reel devient une porte derobee vers ce que
-   * l'API refuse.
+   * un comptoir precis, celui-la et aucun autre.
    */
-  private async peutRejoindre(userId: string, salon: string): Promise<boolean> {
-    const prefixe = 'supplier:';
-    if (!salon.startsWith(prefixe)) return true;
-
-    const supplierId = salon.slice(prefixe.length);
+  private async accesBuvette(userId: string, supplierId: string): Promise<boolean> {
     const buvette = await this.prisma.supplier.findUnique({
       where: { id: supplierId },
       select: { organizationId: true },

@@ -31,12 +31,19 @@ describe('RealtimeGateway', () => {
       providers: [
         RealtimeGateway,
         {
-          // Le gateway verifie desormais l'acces aux salons de buvette :
-          // membre du club, et son comptoir s'il est epingle.
+          // Le gateway verifie l'acces a CHAQUE type de salon, et le defaut
+          // est le refus — voir `acces-salons.spec.ts` pour les cas negatifs.
+          // Ici, la doublure represente un membre en regle de `org-1`.
           provide: PrismaService,
           useValue: {
+            user: { findUnique: jest.fn().mockResolvedValue({ globalRole: 'CUSTOMER' }) },
             supplier: { findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-1' }) },
-            organizationMember: { findUnique: jest.fn().mockResolvedValue({ supplierId: null }) },
+            organizationMember: {
+              findUnique: jest.fn().mockResolvedValue({ orgRole: 'MANAGER', supplierId: null }),
+            },
+            event: { findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-1' }) },
+            pickupPoint: { findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-1' }) },
+            order: { findUnique: jest.fn().mockResolvedValue({ userId: 'u1', organizationId: 'org-1' }) },
           },
         },
         {
@@ -132,6 +139,8 @@ describe('RealtimeGateway', () => {
   // ─── handleJoinRoom ───────────────────────────────────────────
 
   describe('handleJoinRoom', () => {
+    // La doublure ci-dessus fait de cet utilisateur un membre de `org-1` :
+    // sans appartenance, ce salon serait desormais REFUSE, et c'est voulu.
     it('joins the room and returns { joined } when authenticated', async () => {
       const roomId = 'organization:123e4567-e89b-12d3-a456-426614174000';
       const client = makeSocket();
