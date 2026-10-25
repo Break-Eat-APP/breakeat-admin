@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -55,6 +56,16 @@ export const MIN_PAYABLE_CENTS = 50;
  *  - une commande ne peut créditer qu'une fois et débiter qu'une fois
  *    (contrainte d'unicité `(orderId, kind)` → rejeu sans effet).
  */
+/**
+ * Signale qu'un AUTRE paiement a réservé ce panier le premier.
+ *
+ * Interne, et jamais rendue telle quelle à un client : elle sert à faire
+ * annuler la transaction — débit compris — puis à rendre la réservation du
+ * gagnant. Une exception plutôt qu'un code de retour, parce qu'elle doit
+ * traverser `$transaction` pour déclencher l'annulation.
+ */
+class CourseSurLePanier extends Error {}
+
 @Injectable()
 export class LoyaltyService {
   private readonly logger = new Logger(LoyaltyService.name);
@@ -284,6 +295,42 @@ export class LoyaltyService {
 
     if (params.points <= 0) return 0;
 
+    try {
+      return await this.reserver(params);
+    } catch (e) {
+      if (!(e instanceof CourseSurLePanier)) throw e;
+      /**
+       * L'autre requête a gagné la course. On rend SA réservation plutôt que
+       * d'échouer : l'appelant est un paiement, et deux clics sur « Payer »
+       * ne doivent ni débiter deux fois, ni afficher une erreur pour un
+       * geste que le client a fait de bonne foi.
+       */
+      const reserves = await this.reservationExistante(params.cartId);
+      if (reserves !== null) return reserves;
+      throw new ConflictException('Réservation de points en cours pour ce panier.');
+    }
+  }
+
+  /** Les points déjà réservés pour ce panier, ou `null` s'il n'y en a pas. */
+  private async reservationExistante(cartId: string): Promise<number | null> {
+    const panier = await this.prisma.cart.findUnique({
+      where: { id: cartId },
+      select: { loyaltyHoldId: true },
+    });
+    if (!panier?.loyaltyHoldId) return null;
+    const mouvement = await this.prisma.loyaltyTransaction.findUnique({
+      where: { id: panier.loyaltyHoldId },
+      select: { points: true },
+    });
+    return mouvement ? Math.abs(mouvement.points) : null;
+  }
+
+  private async reserver(params: {
+    cartId: string;
+    userId: string;
+    organizationId: string;
+    points: number;
+  }): Promise<number> {
     return this.prisma.$transaction(async (tx) => {
       const account = await this.upsertAccount(tx, params.userId, params.organizationId);
 
@@ -313,10 +360,29 @@ export class LoyaltyService {
           balanceAfter,
         },
       });
-      await tx.cart.update({
-        where: { id: params.cartId },
+      /**
+       * LE PANIER SE RÉSERVE, il ne se note pas.
+       *
+       * `cart.loyaltyHoldId` était lu AVANT la transaction, puis écrit sans
+       * condition. Deux paiements simultanés le voyaient tous deux à `null`,
+       * débitaient tous deux le solde, et le second écrasait le pointeur du
+       * premier : les points partaient en double et la première réservation
+       * devenait orpheline — plus rien ne la désignait, donc
+       * `releaseHoldForCart` ne la rendrait jamais.
+       *
+       * L'index unique sur `loyaltyHoldId` n'y pouvait rien : deux
+       * réservations portent deux identifiants différents, les deux écritures
+       * étaient donc valides.
+       *
+       * `updateMany` avec `loyaltyHoldId: null` fait du contrôle et de
+       * l'écriture UNE seule instruction, que PostgreSQL sérialise. Le perdant
+       * voit `count === 0` et fait tout annuler — débit compris.
+       */
+      const reservation = await tx.cart.updateMany({
+        where: { id: params.cartId, loyaltyHoldId: null },
         data: { loyaltyHoldId: mouvement.id },
       });
+      if (reservation.count === 0) throw new CourseSurLePanier();
 
       this.logger.log(`${params.points} point(s) réservé(s) pour le panier ${params.cartId}`);
       return params.points;

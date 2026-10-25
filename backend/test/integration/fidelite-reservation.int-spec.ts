@@ -299,4 +299,80 @@ decrire('réservation des points de fidélité (base réelle)', () => {
     expect(await solde(c.compte.id)).toBe(70);
     expect(await sommeDuRegistre(c.compte.id)).toBe(70);
   });
+  /**
+   * DEUX PAIEMENTS SIMULTANÉS SUR LE MÊME PANIER.
+   *
+   * Le défaut (P0-4 de l'audit du 25/10) : `cart.loyaltyHoldId` était lu AVANT
+   * la transaction. Deux requêtes concurrentes le voyaient toutes deux à
+   * `null`, débitaient toutes deux le solde, créaient deux HOLD, et la seconde
+   * écrasait le pointeur de la première — qui devenait orpheline, donc jamais
+   * rendue.
+   *
+   * Pour un client : 100 points débités au lieu de 50, et 50 points perdus
+   * pour toujours. L'index unique sur `loyaltyHoldId` n'y pouvait rien, les
+   * deux réservations portant deux identifiants différents.
+   *
+   * Ce test ne tient qu'avec une VRAIE base : c'est PostgreSQL qui sérialise
+   * l'écriture conditionnelle, pas le code.
+   */
+  it('deux paiements simultanés ne réservent les points QU’UNE FOIS', async () => {
+    const { o, client, compte, panier } = await clientAvecSolde(100);
+
+    const demande = () =>
+      fidelite.holdForCart({
+        cartId: panier.id,
+        userId: client.id,
+        organizationId: o.org.id,
+        points: 50,
+      });
+
+    // Les deux partent ensemble : c'est tout l'objet du test.
+    const [a, b] = await Promise.all([demande(), demande()]);
+
+    // Chacune rend bien 50 — la perdante rend la réservation de la gagnante,
+    // pas une erreur : deux clics sur « Payer » sont un geste de bonne foi.
+    expect(a).toBe(50);
+    expect(b).toBe(50);
+
+    // UNE seule réservation inscrite, et 50 points débités, pas 100.
+    const reservations = await s.prisma.loyaltyTransaction.count({
+      where: { accountId: compte.id, kind: LoyaltyEntryKind.HOLD },
+    });
+    expect(reservations).toBe(1);
+    expect(await solde(compte.id)).toBe(50);
+
+    // Et le registre reste égal au solde — l'invariant de ce fichier.
+    expect(await sommeDuRegistre(compte.id)).toBe(await solde(compte.id));
+  });
+
+  /**
+   * La réservation survivante doit être CELLE que le panier désigne, sinon
+   * elle est orpheline : `releaseHoldForCart` ne la rendrait jamais, et les
+   * points resteraient débités après l'abandon du panier.
+   */
+  it('la réservation retenue est bien celle que le panier désigne', async () => {
+    const { o, client, compte, panier } = await clientAvecSolde(100);
+
+    await Promise.all([
+      fidelite.holdForCart({ cartId: panier.id, userId: client.id, organizationId: o.org.id, points: 40 }),
+      fidelite.holdForCart({ cartId: panier.id, userId: client.id, organizationId: o.org.id, points: 40 }),
+    ]);
+
+    const { loyaltyHoldId } = await s.prisma.cart.findUniqueOrThrow({
+      where: { id: panier.id },
+      select: { loyaltyHoldId: true },
+    });
+    const inscrites = await s.prisma.loyaltyTransaction.findMany({
+      where: { accountId: compte.id, kind: LoyaltyEntryKind.HOLD },
+      select: { id: true },
+    });
+
+    expect(inscrites).toHaveLength(1);
+    expect(loyaltyHoldId).toBe(inscrites[0].id);
+
+    // Rendue, elle rend tout : aucun point ne reste bloqué.
+    await fidelite.releaseHoldForCart(panier.id);
+    expect(await solde(compte.id)).toBe(100);
+    expect(await sommeDuRegistre(compte.id)).toBe(100);
+  });
 });
