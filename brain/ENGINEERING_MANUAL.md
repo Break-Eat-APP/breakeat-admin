@@ -7222,3 +7222,356 @@ erreur restait visible sans aucun moyen de le retirer.
 Pas de suppression, et c'est délibéré : un lieu porte des commandes payées.
 Masquer est le seul geste réversible, et c'est le bon.
 
+
+## Phase 63 — Les informations légales, et leur export (23/10/2026)
+
+### Les textes vivent dans le code, pas derrière un navigateur
+
+`apps/mobile/src/lib/textes-legaux.ts` porte les quatre textes — mentions
+légales, confidentialité, CGU, CGV — et `informations-legales.screen.tsx` les
+affiche. Aucune WebView, aucune dépendance réseau : un client sans réseau doit
+pouvoir lire les conditions qu'il accepte.
+
+Apple regarde ce point de près sur une app qui crée des comptes, et les deux
+adresses affichaient encore « Disponible prochainement ».
+
+### Une seule adresse, et une explication sur le nom
+
+`contact@breakeatapp.com`, partout. Plusieurs adresses sur un document légal,
+c'est une question de client qui arrive là où personne ne la lit.
+
+Le texte explique aussi **pourquoi l'App Store affiche « Notta LLC »** : le
+compte développeur porte le nom de la société. Un client qui ne retrouve pas
+« Break Eat » sur la fiche a le droit de comprendre pourquoi, et l'apprendre
+dans l'app vaut mieux que de le deviner sur le Store.
+
+### L'export : une seule source, deux formats
+
+`outils/exporter-textes-legaux.js` génère le Markdown et le Word **depuis
+`textes-legaux.ts`**. Des textes recopiés à la main divergent, et un texte
+légal qui diverge de sa version affichée est pire qu'absent : il crée deux
+engagements contradictoires.
+
+Un `.docx` ouvert dans Word verrouille son fichier. L'outil le signale et
+**continue avec les autres** au lieu de s'arrêter net — sinon un document
+ouvert par distraction empêche de régénérer les trois autres.
+
+---
+
+## Phase 64 — La note d'une commande, et ce que le club en lit (23/10/2026)
+
+### La note porte sur la BUVETTE, pas sur le lieu
+
+Un stade compte six comptoirs. Une moyenne de stade ne dit à aucun d'eux ce
+qu'il doit corriger — c'est un chiffre qu'on regarde sans pouvoir agir dessus.
+
+`OrderRating` (`backend/prisma/schema.prisma:1747`) copie `supplier_id`,
+`organization_id` et `venue_id` **sur la ligne au moment de la note**, plutôt
+que de les relire par jointure. Une buvette qui change de main, un lieu
+renommé, une organisation transférée : rien de tout cela ne doit réécrire
+l'histoire des notes déjà laissées.
+
+### Trois gardes, qui protègent d'un chiffre FAUX
+
+`OrdersService.noterCommande()` — `backend/src/modules/orders/orders.service.ts:975`.
+
+C'est la raison d'être de ces gardes, et elle mérite d'être dite : **une note
+mal gardée ne produit pas une erreur, elle produit un chiffre faux.** Le club
+le lit, en tire une conclusion sur sa buvette, et personne ne saura jamais que
+la mesure était biaisée.
+
+| Garde | Réponse | Pourquoi |
+|---|---|---|
+| Commande pas encore récupérée | `400` | on ne juge pas un service qu'on n'a pas reçu |
+| Seconde note sur la même commande | `409` | une moyenne se fausse en votant deux fois |
+| Commande d'un autre client | `404` | un `403` confirmerait que la commande existe |
+
+Une commande **clôturée** est acceptée, pas seulement « récupérée » : le statut
+avance après le retrait, et refuser la note à ce moment-là la rendrait
+impossible pour les commandes les plus anciennes — justement celles sur
+lesquelles un avis est le plus réfléchi.
+
+### Deux contraintes posées en BASE, pas dans le code
+
+```sql
+CONSTRAINT "order_ratings_stars_range" CHECK ("stars" >= 1 AND "stars" <= 5)
+CREATE UNIQUE INDEX "order_ratings_order_id_key" ON "order_ratings"("order_id");
+```
+
+L'unicité est en base parce qu'une vérification applicative se contourne par
+**deux requêtes simultanées** : le club se retrouverait avec deux notes pour un
+même retrait. La borne 1..5 y est pour la même raison — une moyenne calculée
+sur un `0` ou un `7` serait fausse sans que rien ne le signale.
+
+### Une bonne note ouvre la demande d'avis Apple — pas l'inverse
+
+`apps/mobile/src/lib/note-app-store.ts`, appelé depuis
+`noter-commande.tsx:75` **uniquement à partir de 4 étoiles**.
+
+Aller chercher une note publique auprès de quelqu'un qui vient de mettre deux
+étoiles, c'est demander un mauvais avis. Ce que le système impose, et qui
+explique la forme du fichier :
+
+- on **demande**, on n'ouvre pas. Le système décide s'il affiche quoi que ce
+  soit, et ne dit jamais ce que la personne a répondu ;
+- trois fois par an au maximum, par appareil — les appels au-delà ne font rien,
+  silencieusement ;
+- interdit de la déclencher depuis un bouton « Notez-nous ». C'est pourquoi
+  elle part après un retour positif, jamais sur un appui direct.
+
+La fonction ne lève jamais : une fiche App Store est un confort, pas une étape
+du parcours. Simulateur, appareil sans App Store, module natif absent — rien de
+cela ne doit remonter à l'écran.
+
+### La lecture du club : la répartition vaut la moyenne
+
+`StatsService.getOrgRatings()` — `backend/src/modules/stats/stats.service.ts:155`,
+exposé par `stats.controller.ts:38` sur `GET /organizations/:orgId/avis`.
+
+L'écran (`apps/admin/src/app/(admin)/avis/page.tsx`) donne **autant de place à
+la répartition qu'à la moyenne**, et c'est le parti pris de la page. Un 3 de
+moyenne recouvre deux situations opposées : « tout le monde trouve ça moyen »
+et « la moitié adore, la moitié déteste ». La seconde se corrige — on sait quoi
+chercher ; la première se repense.
+
+Les barres se lisent **de 5 vers 1** : on voit d'abord ce qui va bien, et l'œil
+descend vers ce qui coince. L'inverse ouvrirait sur une mauvaise nouvelle à
+chaque chargement.
+
+Sans aucune note, l'écran **explique** au lieu d'afficher un zéro sec : la
+première question d'un club devant une page vide est « est-ce que ça marche ? ».
+
+### Le back-office lit le MÊME endpoint
+
+`apps/backoffice/src/app/(backoffice)/avis/page.tsx` appelle
+`GET /organizations/:id/avis` — la route du club. Un `SUPER_ADMIN` franchit la
+garde d'organisation, il n'y a donc qu'une route et **une seule façon de
+calculer**. Deux routes donneraient deux moyennes pour la même buvette, et
+personne ne saurait laquelle croire.
+
+Il fait **choisir un club** plutôt que d'agréger la plateforme : une moyenne
+tous clubs confondus mélange un stade de 60 000 places et une salle de
+quartier, et aucun des deux n'y reconnaît sa situation. L'écran le dit, plutôt
+que d'afficher un chiffre que personne ne pourrait utiliser.
+
+### Le commentaire part avec le compte, la note reste
+
+`AuthService.supprimerMonCompte()` — `backend/src/modules/auth/auth.service.ts:586` :
+
+```ts
+this.prisma.orderRating.updateMany({ where: { userId }, data: { comment: null } }),
+```
+
+La moyenne d'une buvette ne doit pas bouger parce qu'un client s'en va — ce
+serait réécrire la mesure d'un tiers. Mais un texte libre peut contenir
+n'importe quoi, y compris de quoi reconnaître son auteur. La note survit,
+anonyme ; le commentaire disparaît.
+
+---
+
+## Phase 65 — Choisir ses dates, lire contre le passé (24/10/2026)
+
+### Le calendrier : une fenêtre glissante ne décrit pas un match
+
+`apps/admin/src/components/calendrier.tsx`, posé dans la page « Mes clients ».
+
+« 30 jours » recouvre deux matchs et trois semaines creuses, et le club ne sait
+pas lesquels. Or un club vit au rythme de ses rencontres : il doit pouvoir
+demander « la soirée du 18 » ou « tout septembre ». Les raccourcis restent à
+côté, parce qu'ils répondent à une autre question — « comment va le mois » se
+lit d'un clic.
+
+Premier clic = début, second = fin. **Un clic avant le début recommence** au
+lieu d'inverser en silence : quelqu'un qui remonte dans le mois corrige son
+point de départ, il ne demande pas une plage à l'envers. Une plage d'un seul
+jour est déjà une réponse valable — cliquer « 18 octobre » affiche la soirée
+sans exiger un second clic.
+
+Les jours à venir sont éteints : il n'y a pas de fréquentation demain.
+
+### Comparer, sans inventer de norme
+
+Un chiffre seul ne dit pas s'il est bon. « 12 % de conversion » ne se juge que
+CONTRE quelque chose — et la seule référence honnête que nous possédions est le
+**passé du club lui-même**.
+
+> Il n'existe aucune norme publiée du « bon taux de conversion d'une buvette ».
+> En inventer une transformerait un chiffre vrai en verdict faux.
+
+Trois précautions font la différence entre une mesure et une illusion :
+
+- **sous dix, l'écart brut.** Passer de 2 à 3 visiteurs n'est pas « +50 % » :
+  c'est un visiteur de plus, et le pourcentage donnerait à du bruit l'allure
+  d'une tendance ;
+- **un taux se compare en POINTS.** « +3 pts » se comprend ; « +25 % » sur un
+  pourcentage ne veut rien dire ;
+- **les deux fenêtres dérivent d'une seule lecture de l'heure.** `fenetre()`
+  donne la période courante, et `fenetrePrecedente()` **en dérive** — deux
+  `new Date()` séparés laissaient quelques millisecondes de recouvrement, donc
+  des visites comptées des deux côtés.
+
+« Tout » n'a pas d'avant : `fenetrePrecedente()` renvoie `null` et la
+comparaison disparaît, plutôt que d'inventer une référence. Et la seconde
+lecture est en `.catch(() => null)` : on ne fait pas tomber des chiffres justes
+parce qu'une référence manque.
+
+Le vert vaut pour la hausse sur les cinq cartes — plus de monde, plus de
+commandes, plus de conversion : aucune ne s'améliore en baissant.
+
+**Aucun changement serveur** : `au` existait déjà dans `FiltreDonnees`.
+
+---
+
+## Phase 66 — La panne du 23, et les trois filets (25/10/2026)
+
+### Ce qui s'est passé
+
+La migration `20261023_note_de_commande` déclarait ses identifiants en `TEXT`.
+Cette base les déclare en `UUID` depuis `20260527_phase5_stripe_connect` —
+`orders`, `users`, `suppliers`, `organizations`, `venues`, toutes.
+
+```
+ERROR:  foreign key constraint "order_ratings_order_id_fkey" cannot be implemented
+DETAIL: Key columns "order_id" and "id" are of incompatible types: text and uuid.
+```
+
+> Prisma rend `String @default(uuid())` en TEXT. **Le schéma Prisma dit le type
+> du LANGAGE ; le SQL doit dire celui de la COLONNE.** Une migration écrite à
+> la main qui suit le défaut de l'outil écrit contre la base.
+
+Ce n'était pas qu'une contrainte qui saute : **Postgres refuse de comparer
+`uuid` et `text`**. Des colonnes TEXT auraient cassé toute jointure vers
+`orders`, `venues` ou `organizations` — probablement plus tard, dans un écran
+de lecture, loin de la cause.
+
+### Pourquoi personne ne l'a vu pendant deux jours
+
+`P3009` : une migration marquée en échec bloque **toutes** les suivantes.
+L'API ne se met jamais à écouter, le healthcheck échoue — et **Railway laisse
+l'ancienne version servir**. D'où une API qui répond parfaitement, en 6 ms, tout
+en ignorant trois jours de travail.
+
+**Les clients n'ont rien vu.** Ce n'était pas une panne, c'était un silence :
+les nouveautés ne sont jamais arrivées, et rien ne l'a dit.
+
+Deux constats utiles pour la prochaine fois :
+
+- **Prisma exécute chaque migration dans une transaction.** L'échec a tout
+  annulé : pas de table à demi créée. `applied_steps_count = 0` le confirme
+  dans `_prisma_migrations` ;
+- un **« Redeploy » rejoue la MÊME image** — donc la même migration cassée. Il
+  faut une construction neuve.
+
+La réparation, vérifiée en reproduisant la panne sur une base jetable :
+
+```sql
+UPDATE "_prisma_migrations" SET rolled_back_at = now()
+ WHERE migration_name = '20261023_note_de_commande' AND finished_at IS NULL;
+```
+— ou `prisma migrate resolve --rolled-back …`, qui écrit la même chose — puis
+reconstruire.
+
+### Filet 1 — `pnpm db:verifier`
+
+`backend/scripts/verifier-migrations.js`. Monte un Postgres 16 jetable, rejoue
+**toutes** les migrations, supprime la base. Vingt secondes.
+
+Rien d'autre ne pouvait voir ce défaut : le schéma Prisma était valide, la
+compilation passait, et les tests doublent la base — ils ne touchent pas une
+colonne réelle. **Seul un vrai Postgres le dit.**
+
+Deux pièges rencontrés en l'écrivant, et la leçon vaut d'être gardée :
+
+- `shell: true` pour lancer `npx` — Node le signale désormais, les arguments
+  n'y sont pas échappés ;
+- puis le lanceur `node_modules/.bin/prisma.cmd`, que Node **refuse** depuis la
+  CVE-2024-27980 en rendant `EINVAL`. Le script a alors échoué sur un dépôt
+  **sain**.
+
+> Un garde qui crie au loup ne sert à rien — pire, il apprend à être ignoré.
+
+D'où la distinction désormais explicite dans le code : **un lancement raté
+n'est pas une migration fautive.** Les confondre fait chercher l'erreur dans le
+SQL alors qu'elle est dans l'outillage.
+
+### Filet 2 — les sauvegardes, enfin automatiques
+
+`.github/workflows/sauvegarde.yml` — nocturne à 03h00 UTC, et **à la demande**
+avant un événement ou une migration délicate.
+
+`backend/scripts/sauvegarde.js` existait depuis le 18/09 et n'avait jamais
+tourné sans qu'on y pense. En l'éprouvant, on a découvert qu'il **n'avait
+jamais tourné du tout** :
+
+```
+pg_dump: error: invalid URI query parameter: "schema"
+```
+
+`pg_dump` ne connaît pas les paramètres que Prisma ajoute, et il **refuse
+l'adresse entière** au lieu de les ignorer. On ne garde donc que ceux que libpq
+accepte, et on **traduit** `schema=X` en `--schema=X` : le laisser tomber en
+silence aurait sauvegardé le schéma par défaut au lieu de celui demandé — une
+sauvegarde qui rassure sans contenir ce qu'on croit.
+
+**Chez GitHub, pas chez Railway**, délibérément : une copie rangée chez
+l'hébergeur de la base partage son sort — incident de facturation, suspension,
+fausse manœuvre sur le projet.
+
+**Chiffrée AES-256 avant d'être téléversée.** Le fichier contient noms,
+adresses, téléphones et commandes de vrais clients ; un artefact GitHub est
+privé, mais « privé » n'est pas « chiffré ». La phrase passe par un fichier et
+jamais en argument : les arguments d'un processus se lisent depuis un autre
+processus.
+
+Le workflow reste **inerte** tant que `DATABASE_URL_SAUVEGARDE` et
+`SAUVEGARDE_PASSPHRASE` ne sont pas posés dans les secrets du dépôt.
+
+**Répété en entier, restauration comprise** : 45 tables, 47 migrations, les
+données, les types `uuid` et la contrainte `1..5` sont revenus à l'identique
+dans une base vide. Une sauvegarde jamais restaurée n'est pas une sauvegarde,
+c'est un fichier.
+
+### Filet 3 — « Wait for CI », côté Railway
+
+La CI avait **déjà** le job qui attrape ce défaut : `Tests d'intégration (base
+réelle)` monte un Postgres et applique les migrations de production. Il a viré
+au rouge le 23. Le trou n'était pas là.
+
+**Railway déploie indépendamment de GitHub.** Il n'existe aucune porte entre
+les deux. Le réglage « Wait for CI » (service → Settings → Source) la pose : un
+déploiement attend en `WAITING` que tous les workflows du commit soient
+terminés, et un échec l'annule.
+
+Deux conditions pour que le toggle apparaisse — la première est remplie
+(`ci.yml` se déclenche sur `push` vers `main` sans filtre de chemins), la
+seconde demande d'accepter les permissions GitHub mises à jour sur
+`github.com/settings/installations`.
+
+**Conséquence à accepter** : Railway attend *tous* les workflows du commit. Un
+échec de `deploy-frontends.yml` pourra retenir un déploiement backend. C'est le
+sens même d'« attendre la CI », mais autant le savoir avant de chercher
+pourquoi un déploiement reste en `WAITING`.
+
+### Un import inutilisé tenait la CI rouge
+
+`PrismaService`, importé sans servir dans `noter-commande.spec.ts` depuis le
+23/10. C'est lui qui envoyait les courriels d'échec que personne ne lisait.
+
+Le lint du backend ne couvre que `{src,test}/**/*.ts` : les scripts ajoutés
+depuis (`sauvegarde.js`, `verifier-migrations.js`) passent à côté de ce
+contrôle, et ce défaut-là restait seul en cause.
+
+### Ce qui n'a PAS été fait, et pourquoi
+
+Restreindre les `watchPatterns` de `railway.json` avait été proposé pour
+économiser des constructions inutiles. **C'est le mauvais sens** : une
+construction de trop coûte des minutes, une construction manquée coûte des
+jours — on vient de le vivre. `scripts/migrer.sh` est d'ailleurs lu au
+démarrage ; un filtre trop zélé l'aurait exclu, et le serveur n'aurait plus
+démarré.
+
+`migrer.sh` n'a pas été modifié non plus : il échoue toujours fort sur une
+migration fautive. Une reprise automatique aurait caché ce défaut au lieu de le
+dire.
+
+---

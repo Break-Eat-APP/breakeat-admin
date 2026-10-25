@@ -4,6 +4,90 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-10-25] Les notes clients, les dates choisies, et deux jours d'arrêt
+
+> Détail dans `CHANGELOG.md` [0.93.0] → [0.96.0] ; analyse dans
+> `ENGINEERING_MANUAL.md` « Phases 63 à 66 » ; audit chirurgical dans
+> `brain/audits/AUDIT_CHIRURGICAL_2026-10-25.md`.
+
+### Livré
+
+- **Les informations légales dans l'app** (phase 63) — quatre textes en dur
+  dans `textes-legaux.ts`, sans WebView ni réseau. Une seule adresse de
+  contact. `outils/exporter-textes-legaux.js` génère Markdown + Word depuis
+  cette même source : des textes recopiés divergent.
+- **La note d'une commande** (phase 64) — `POST /orders/:id/avis`, la table
+  `order_ratings`, et **trois écrans** pour que la boucle existe : la question
+  au client après un retrait, la lecture du club, la lecture de la plateforme.
+  La note porte sur la **buvette**, jamais sur le lieu.
+- **La demande d'avis App Store** à partir de 4 étoiles seulement, via
+  `expo-store-review`.
+- **Choisir ses dates** (phase 65) — un calendrier dans « Mes clients », et
+  chaque carte comparée à la période précédente de même longueur.
+- **Les trois filets** (phase 66) — `pnpm db:verifier`, les sauvegardes
+  nocturnes chiffrées, et le réglage « Wait for CI » documenté.
+
+### Décisions d'architecture
+
+- **Un seul endpoint de lecture des notes.** `GET /organizations/:id/avis` sert
+  la console du club ET le back-office : un `SUPER_ADMIN` franchit la garde
+  d'organisation. Deux routes donneraient deux moyennes pour la même buvette.
+- **Les contraintes métier vont en BASE.** Unicité `order_id` et borne 1..5
+  sont des contraintes SQL, pas des `if`. Une vérification applicative se
+  contourne par deux requêtes simultanées.
+- **Les identifiants de la note sont COPIÉS, pas joints.** `supplier_id`,
+  `organization_id`, `venue_id` sont figés au moment de la note : une buvette
+  qui change de main ne réécrit pas l'histoire.
+- **Le back-office ne fait pas de moyenne plateforme.** Il fait choisir un
+  club : agréger un stade de 60 000 places et une salle de quartier produit un
+  chiffre que personne ne peut utiliser.
+- **Aucune norme inventée.** La comparaison se fait contre le passé du club,
+  jamais contre un seuil « recommandé » : il n'en existe aucun de publié pour
+  une buvette.
+
+### Tests
+
+- `backend/src/modules/orders/noter-commande.spec.ts` — **6 tests** : la note
+  va sur la buvette, le commentaire est facultatif, une commande non récupérée
+  est refusée, une commande clôturée est acceptée, une seconde note est
+  refusée, une commande d'autrui répond 404.
+- `suppression-compte.spec.ts` étendu : le commentaire part, la note reste.
+- Total dépôt au 25/10 : **894 tests verts** — 796 backend, 34 mobile, 27
+  back-office, 25 admin, 12 opérateur.
+
+### Erreur commise, à ne pas reproduire
+
+**La migration `20261023_note_de_commande` déclarait ses identifiants en
+`TEXT` alors que cette base les déclare en `UUID`.** Postgres a refusé la clé
+étrangère, `P3009` a bloqué toutes les migrations suivantes, et la production
+est restée **deux jours** sans recevoir aucune mise à jour.
+
+> Prisma rend `String @default(uuid())` en TEXT. Le schéma Prisma dit le type
+> du LANGAGE ; le SQL doit dire celui de la COLONNE.
+
+Aucun contrôle existant ne pouvait le voir : schéma valide, compilation verte,
+tests qui doublent la base. D'où `pnpm db:verifier`, qui rejoue les migrations
+sur un vrai Postgres en vingt secondes.
+
+**Les clients n'ont jamais été affectés** : Railway ne bascule que sur un
+healthcheck vert, donc l'ancienne version a continué de servir. Ce n'était pas
+une panne, c'était un silence — et c'est ce silence qui est le vrai défaut.
+
+Second manquement du même jour : un import inutilisé (`PrismaService`) a tenu
+la CI rouge sans que personne ne lise les courriels d'échec.
+
+### Reste à faire
+
+| Sujet | État |
+|---|---|
+| `DATABASE_URL_SAUVEGARDE` + `SAUVEGARDE_PASSPHRASE` | **à poser** — le workflow est inerte sans eux |
+| « Wait for CI » côté Railway | à activer (service → Settings → Source) |
+| Confidentialité App Store | déclaration « aucune donnée collectée » **fausse**, URL pointant encore vers Shapper |
+| Écran des avis non vu en conditions réelles | la logique est testée, le rendu avec données ne l'est pas |
+| Flaix Ops — 3 décisions | inchangé depuis le 01/10 |
+
+---
+
 ## [2026-08-29] Paiement réel, l'ardoise partagée, et le grand ménage
 
 > Détail dans `CHANGELOG.md` [0.51.0] → [0.55.0] ; analyse dans

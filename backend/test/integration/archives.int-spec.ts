@@ -29,7 +29,16 @@ decrire('comptes et organisations archivés ou supprimés (base réelle)', () =>
     s.auth.register({ email, password, displayName: 'Jo' } as never);
   const archiver = (id: string) => s.backoffice.setUserActive(id, false, sa);
   const viaApple = (subject: string, email: string) => {
-    s.apple.prochaine = { provider: 'apple', subject, email, emailVerifie: true };
+    s.apple.prochaine = {
+      provider: 'apple',
+      subject,
+      email,
+      emailVerifie: true,
+      // Apple ne met jamais l'identite dans le jeton : elle arrive par le
+      // DTO, a la premiere autorisation seulement.
+      firstName: null,
+      lastName: null,
+    };
     return s.auth.connexionSociale({ provider: 'apple', token: jeton });
   };
 
@@ -242,28 +251,40 @@ decrire('comptes et organisations archivés ou supprimés (base réelle)', () =>
   });
 
   describe('organisations', () => {
-    it('une organisation complète avec commandes se supprime ; les commandes restent lisibles', async () => {
+    it('une organisation porteuse de commandes REFUSE d’être supprimée', async () => {
       const client = await inscrire(mail('c'));
       const o = await creerOrganisationComplete(s.prisma, unique('org'), sa);
       const commande = await creerCommande(s.prisma, client.user.id, o);
 
-      await s.backoffice.deleteOrganization(o.org.id);
+      // Phase 62 : les commandes ne portent PAS de clé étrangère vers
+      // l'organisation (`Order.organizationId` est une colonne nue) et lui
+      // survivaient — orphelines, hors de tout écran, et toujours comptées
+      // dans les totaux de la plateforme.
+      await expect(
+        s.backoffice.deleteOrganization(o.org.id, o.org.name),
+      ).rejects.toThrow(/commande/);
 
-      // « Mes commandes » et le reçu ne doivent pas tomber sur une commande
-      // dont le club n'existe plus.
+      // Et elle reste lisible, puisqu'elle n'a pas été orphelinée.
       const mesCommandes = await OrdersService.prototype.withPickupGuidance.call(
         { prisma: s.prisma } as never,
         [commande],
       );
-      expect(mesCommandes[0].supplierName).toBeNull();
+      expect(mesCommandes[0]).toBeDefined();
       const recu = await new RecuService(s.prisma).html(commande.id);
       expect(recu).toContain(commande.publicOrderNumber);
+    });
+
+    it('la suppression exige le nom du club, recopié exactement', async () => {
+      const o = await creerOrganisationComplete(s.prisma, unique('org'), sa);
+      await expect(
+        s.backoffice.deleteOrganization(o.org.id, 'pas le bon nom'),
+      ).rejects.toThrow(/Confirmation incorrecte/);
     });
 
     it('le slug d’une organisation supprimée se réutilise', async () => {
       const slug = unique('org');
       const o = await creerOrganisationComplete(s.prisma, slug, sa);
-      await s.backoffice.deleteOrganization(o.org.id);
+      await s.backoffice.deleteOrganization(o.org.id, o.org.name);
       await expect(
         s.backoffice.createOrganization({ name: 'Club', slug } as never),
       ).resolves.toBeDefined();
@@ -295,7 +316,7 @@ decrire('comptes et organisations archivés ou supprimés (base réelle)', () =>
       const o = await creerOrganisationComplete(s.prisma, slug, sa);
       await s.backoffice.setOrganizationStatus(o.org.id, false);
       const neuve = await s.backoffice.createOrganization({ name: 'Club', slug } as never);
-      await s.backoffice.deleteOrganization(neuve.id);
+      await s.backoffice.deleteOrganization(neuve.id, neuve.name);
 
       const r = await s.backoffice.setOrganizationStatus(o.org.id, true);
 
@@ -326,7 +347,7 @@ decrire('comptes et organisations archivés ou supprimés (base réelle)', () =>
       const email = mail('membre');
       const a = await inscrire(email);
       const o = await creerOrganisationComplete(s.prisma, unique('org'), a.user.id);
-      await s.backoffice.deleteOrganization(o.org.id);
+      await s.backoffice.deleteOrganization(o.org.id, o.org.name);
 
       await expect(
         s.auth.login({ email, password: 'motdepasse1' } as never),

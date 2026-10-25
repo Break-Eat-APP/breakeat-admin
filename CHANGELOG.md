@@ -5,6 +5,258 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.96.0] — 2026-10-25 — La panne du 23, et les trois filets qui manquaient
+
+**La production est restée deux jours sans recevoir une seule mise à jour, et
+personne ne l'a su.** La migration `20261023_note_de_commande` déclarait ses
+identifiants en `TEXT` ; cette base les déclare en `UUID` depuis
+`20260527_phase5_stripe_connect`. Postgres a refusé la clé étrangère :
+
+```
+ERROR:  foreign key constraint "order_ratings_order_id_fkey" cannot be implemented
+DETAIL: Key columns "order_id" and "id" are of incompatible types: text and uuid.
+```
+
+Prisma rend `String @default(uuid())` en `TEXT`. **Le schéma Prisma dit le type
+du LANGAGE ; le SQL doit dire celui de la COLONNE.** Une migration écrite à la
+main qui suit le défaut de l'outil écrit contre la base. Et ce n'était pas
+qu'une contrainte : Postgres refuse de comparer `uuid` et `text`, donc ces
+colonnes auraient cassé toute jointure vers `orders`, `venues` ou
+`organizations` — plus tard, dans un écran de lecture.
+
+**Ce que la panne a appris, et qui vaut pour toutes les suivantes :**
+
+- `P3009` au démarrage = une migration antérieure marquée en échec bloque
+  **toutes** les suivantes. L'API ne se met jamais à écouter, le healthcheck
+  échoue, et **Railway laisse l'ancienne version servir**. D'où une API qui
+  répond parfaitement tout en ignorant trois jours de travail. Les clients
+  n'ont rien vu — ce n'était pas une panne, c'était un silence.
+- **Prisma exécute chaque migration dans une transaction.** Un échec en cours
+  de fichier annule tout : pas de table à demi créée à nettoyer.
+  `applied_steps_count = 0` le confirme dans `_prisma_migrations`.
+- La réparation tient en deux gestes : marquer la migration annulée
+  (`rolled_back_at`), puis **reconstruire** — un « Redeploy » rejoue la MÊME
+  image, donc la même migration cassée.
+- Des déploiements marqués `SKIPPED` ne sont pas une panne : les
+  `watchPatterns` ne surveillent que `/backend/**`, et un commit qui ne touche
+  que `apps/` est ignoré à juste titre.
+
+**Trois filets, là où il n'y en avait aucun.**
+
+`pnpm db:verifier` monte un Postgres 16 jetable, rejoue toutes les migrations,
+et supprime la base. Vingt secondes. Rien d'autre ne pouvait voir ce défaut :
+le schéma était valide, la compilation passait, et les tests doublent la base —
+ils ne touchent pas une colonne réelle. **Seul un vrai Postgres le dit.**
+
+Deux pièges rencontrés en l'écrivant, tous deux corrigés : `shell: true` pour
+lancer `npx` (Node le signale, les arguments n'y sont pas échappés), puis le
+lanceur `node_modules/.bin/prisma.cmd`, que Node **refuse** depuis la
+CVE-2024-27980 en rendant `EINVAL`. Le script a alors échoué sur un dépôt
+**sain**. Un garde qui crie au loup ne sert à rien — pire, il apprend à être
+ignoré. D'où la distinction désormais explicite dans le code : **un lancement
+raté n'est pas une migration fautive.**
+
+**Les sauvegardes tournent enfin toutes seules.** `backend/scripts/sauvegarde.js`
+existait depuis le 18/09 et n'avait jamais tourné sans qu'on y pense — et, on
+l'a découvert en l'éprouvant, **il n'avait jamais tourné du tout** : `pg_dump`
+refuse l'adresse de Prisma (`invalid URI query parameter: "schema"`). Il ne
+l'ignore pas, il refuse tout. On ne garde donc que les paramètres que libpq
+accepte, et on **traduit** `schema=X` en `--schema=X` — le laisser tomber en
+silence aurait sauvegardé le schéma par défaut au lieu de celui demandé.
+
+Chez GitHub et non chez Railway, délibérément : une copie rangée chez
+l'hébergeur de la base partage son sort. Chiffrée AES-256 avant d'être
+téléversée — le fichier contient noms, adresses, téléphones et commandes de
+vrais clients, et « privé » n'est pas « chiffré ». Phrase passée par fichier,
+jamais en argument : les arguments d'un processus se lisent depuis un autre.
+
+**Répétée en entier, restauration comprise** : 45 tables, 47 migrations, les
+données, les types `uuid` et la contrainte `1..5` sont revenus à l'identique
+dans une base vide. Une sauvegarde jamais restaurée n'est pas une sauvegarde.
+
+**Un import inutilisé rendait la CI rouge depuis le 23/10** — `PrismaService`
+dans `noter-commande.spec.ts`. C'est lui qui envoyait les courriels d'échec, et
+personne ne les lisait. Le lint du backend ne couvre que `{src,test}/**/*.ts` :
+les scripts ajoutés depuis passent à côté.
+
+**Les `watchPatterns` n'ont PAS été restreints**, bien que l'idée ait été posée.
+C'est le mauvais sens : une construction de trop coûte des minutes, une
+construction manquée coûte des jours. `scripts/migrer.sh` est d'ailleurs lu au
+démarrage — un filtre trop zélé l'aurait exclu.
+
+```
++ .github/workflows/sauvegarde.yml        ← nocturne 03h00 UTC + à la demande
++ backend/scripts/verifier-migrations.js  ← `pnpm db:verifier`
+~ backend/prisma/migrations/20261023_note_de_commande/migration.sql  (TEXT → UUID)
+~ backend/scripts/sauvegarde.js           (adresse nettoyée pour pg_dump)
+~ backend/package.json                    (script `db:verifier`)
+~ backend/src/modules/orders/noter-commande.spec.ts  (import inutilisé)
+~ REPRISE.md
+```
+
+---
+
+## [0.95.0] — 2026-10-24 — Choisir ses dates, et lire ses chiffres contre le passé
+
+**« 30 jours » est une fenêtre glissante** : elle recouvre deux matchs et trois
+semaines creuses, et le club ne sait pas lesquels. Or un club vit au rythme de
+ses rencontres. Le calendrier lui permet de demander « la soirée du 18 » ou
+« tout septembre ». Les raccourcis restent à côté — « comment va le mois » se
+lit d'un clic, « le 18 » demande une date.
+
+Premier clic = début, second = fin. Un clic **avant** le début recommence au
+lieu d'inverser en silence : quelqu'un qui remonte dans le mois corrige son
+point de départ, il ne demande pas une plage à l'envers. Les jours à venir sont
+éteints — il n'y a pas de fréquentation demain.
+
+**Un chiffre seul ne dit pas s'il est bon.** « 12 % de conversion » ne se juge
+que CONTRE quelque chose, et la seule référence honnête que nous possédions est
+le passé du club lui-même : **il n'existe aucune norme publiée du « bon taux de
+conversion d'une buvette »**, et en inventer une transformerait un chiffre vrai
+en verdict faux.
+
+Trois précautions font la différence entre une mesure et une illusion :
+
+- **sous dix, on montre l'écart BRUT.** Passer de 2 à 3 visiteurs n'est pas
+  « +50 % » : c'est un visiteur de plus, et le pourcentage donnerait à du bruit
+  l'allure d'une tendance ;
+- **un taux se compare en POINTS.** « +3 pts » se comprend ; « +25 % » sur un
+  pourcentage ne veut rien dire ;
+- **les deux fenêtres dérivent d'une seule lecture de l'heure.** Deux
+  `new Date()` séparés laissaient quelques millisecondes de recouvrement :
+  jointives, jamais chevauchantes, exactement de même durée.
+
+« Tout » n'a pas d'avant : la comparaison disparaît au lieu d'inventer une
+référence. Et si elle échoue, la page reste lisible sans elle — on ne fait pas
+tomber des chiffres justes parce qu'une référence manque.
+
+Aucun changement serveur : `au` existait déjà dans `FiltreDonnees`.
+
+```
++ apps/admin/src/components/calendrier.tsx
+~ apps/admin/src/app/(admin)/clients/page.tsx
+```
+
+---
+
+## [0.94.0] — 2026-10-23 — La note d'une commande, et ce que le club en lit
+
+**Les notes se collectaient, et rien ne les affichait.** Trois écrans ont été
+posés dans la même phase pour que la boucle existe de bout en bout : la
+question au client, la lecture du club, la lecture de la plateforme.
+
+**La note porte sur la BUVETTE qui a préparé, pas sur le lieu.** Un stade
+compte six comptoirs ; une moyenne de stade ne dit à aucun d'eux ce qu'il doit
+corriger. `supplier_id`, `organization_id` et `venue_id` sont copiés sur la
+ligne au moment de la note : une buvette qui change de main plus tard ne doit
+pas réécrire l'histoire des notes déjà laissées.
+
+**Trois gardes, et chacune protège d'un chiffre FAUX plutôt que d'une erreur.**
+Une note mal gardée ne lève pas d'exception : elle produit une moyenne que le
+club lit, dont il tire une conclusion, et personne ne saura jamais qu'elle était
+biaisée.
+
+- une commande **pas encore récupérée** ne se note pas — on ne juge pas un
+  service qu'on n'a pas reçu ;
+- une **seconde note** sur la même commande est refusée, et la contrainte est
+  en base (`order_ratings_order_id_key`) : une vérification applicative se
+  contourne par deux requêtes simultanées ;
+- une commande **qui n'est pas la sienne** répond `404`, jamais `403` — un
+  `403` confirmerait que la commande existe.
+
+La borne **1..5** est posée en base (`order_ratings_stars_range`) : une moyenne
+calculée sur un `0` ou un `7` serait fausse sans que rien ne le signale.
+
+**Une bonne note ouvre la demande d'avis Apple — pas l'inverse.** À partir de
+4 étoiles, `expo-store-review` demande au système d'afficher sa propre fenêtre.
+Aller chercher une note publique auprès de quelqu'un qui vient de mettre deux
+étoiles, c'est demander un mauvais avis. Apple limite à trois fois par an et
+par appareil, interdit de la déclencher depuis un bouton « Notez-nous », et ne
+dit jamais ce que la personne a répondu.
+
+**L'écran du club donne autant de place à la RÉPARTITION qu'à la moyenne.** Un
+3 de moyenne recouvre deux situations opposées : « tout le monde trouve ça
+moyen » et « la moitié adore, la moitié déteste ». La seconde se corrige — on
+sait quoi chercher ; la première se repense. Les barres se lisent de 5 vers 1 :
+l'inverse ouvrirait sur une mauvaise nouvelle à chaque chargement.
+
+**Le back-office lit le MÊME endpoint** (`GET /organizations/:id/avis`) : un
+`SUPER_ADMIN` franchit la garde d'organisation, il n'y a donc qu'une route et
+une seule façon de calculer. Deux routes donneraient deux moyennes pour la même
+buvette, et personne ne saurait laquelle croire. Il fait **choisir un club**
+plutôt que d'agréger la plateforme : une moyenne tous clubs confondus mélange
+un stade de 60 000 places et une salle de quartier, et aucun des deux n'y
+reconnaît sa situation.
+
+**Le commentaire est effacé à la suppression de compte**, la note reste. La
+moyenne d'une buvette ne doit pas bouger parce qu'un client s'en va ; mais un
+texte libre peut contenir n'importe quoi, y compris de quoi reconnaître son
+auteur.
+
+Au passage, trois corrections dans l'app : l'épingle officielle sur la carte,
+le bouton « Plan buvette » nommé, et la suppression de compte déplacée dans
+« Aide & contact » — elle était à portée de pouce dans le profil.
+
+```
++ backend/prisma/migrations/20261023_note_de_commande/migration.sql
++ backend/src/modules/orders/dto/noter-commande.dto.ts
++ backend/src/modules/orders/noter-commande.spec.ts    ← 6 tests
++ apps/mobile/src/components/noter-commande.tsx
++ apps/mobile/src/lib/note-app-store.ts
++ apps/admin/src/app/(admin)/avis/page.tsx
++ apps/backoffice/src/app/(backoffice)/avis/page.tsx
+~ backend/prisma/schema.prisma                         (modèle OrderRating)
+~ backend/src/modules/orders/orders.{controller,service}.ts
+~ backend/src/modules/stats/stats.{controller,service}.ts  (getOrgRatings)
+~ backend/src/modules/auth/auth.service.ts             (+ son spec)
+~ backend/src/modules/orders/recu.service.ts           (nom de buvette en orange)
+~ apps/mobile/src/{lib/api/mobile-api.ts,screens/order-history.screen.tsx}
+~ apps/mobile/src/screens/{profile,aide,venue-discovery}.screen.tsx
+~ apps/mobile/src/components/app-bottom-bar.tsx
+~ apps/{admin,backoffice} : clients d'API, menus
+~ apps/mobile/package.json + pnpm-lock.yaml            (expo-store-review)
+```
+
+---
+
+## [0.93.0] — 2026-10-23 — Les informations légales, et leur export en Word
+
+**Apple regarde ce point de près sur une app qui crée des comptes**, et les deux
+adresses affichaient encore « Disponible prochainement ». Les quatre textes
+(mentions légales, confidentialité, CGU, CGV) vivent désormais dans
+`apps/mobile/src/lib/textes-legaux.ts` et s'affichent dans l'app, sans
+navigateur ni dépendance réseau.
+
+**Une seule adresse de contact** — `contact@breakeatapp.com`. Plusieurs
+adresses sur un document légal, c'est une question de client qui arrive là où
+personne ne la lit.
+
+**Pourquoi l'App Store affiche « Notta LLC »** est expliqué dans le texte
+lui-même : le compte développeur porte le nom de la société, et un client qui
+ne retrouve pas « Break Eat » sur la fiche a le droit de comprendre pourquoi.
+
+**L'hébergeur du site est WIX, pas OVH** — une erreur dans les mentions
+légales, corrigée. Le serveur applicatif, lui, est détaillé au complet.
+
+`outils/exporter-textes-legaux.js` génère les quatre documents en Markdown et
+en Word depuis la même source : des textes recopiés à la main divergent, et un
+texte légal qui diverge de sa version affichée est pire qu'absent. Un `.docx`
+ouvert dans Word verrouille son fichier — l'outil le signale et continue avec
+les autres au lieu de s'arrêter net.
+
+```
++ apps/mobile/src/lib/textes-legaux.ts
++ apps/mobile/src/screens/informations-legales.screen.tsx
++ outils/exporter-textes-legaux.js
++ GUIDE_DEVELOPPEMENT/documents-legaux/*.{md,docx}      ← 4 textes × 2 formats
++ GUIDE_DEVELOPPEMENT/MENTIONS_LEGALES_SITE.md
+~ apps/mobile/src/screens/{profile,login,venue-discovery}.screen.tsx
+~ apps/mobile/src/navigation/root-navigator.tsx + App.expo.tsx
+~ outils/decliner-logo.py + les logos des 4 applications (lockup v2)
+```
+
+---
+
 ## [0.92.0] — 2026-10-19 — Le logo v2, et ce qu'Apple exige avant la mise en ligne
 
 **Il manquait la suppression de compte, et c'était un motif de rejet.** Apple
