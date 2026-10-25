@@ -148,7 +148,7 @@ if (resultat.error && resultat.error.code === 'ENOENT') {
       '--rm',
       '-v',
       `${dossier.split(path.sep).join('/')}:/sortie`,
-      'postgres:16',
+      'postgres:18',
       'pg_dump',
       '--format=custom',
       '--no-owner',

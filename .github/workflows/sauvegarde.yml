@@ -61,12 +61,28 @@ jobs:
         with:
           node-version: '22'
 
-      # La version du client doit atteindre celle du serveur : un pg_dump plus
-      # ancien que la base refuse de la lire.
-      - name: Outils client PostgreSQL 16
+      # LA VERSION DU CLIENT DOIT ATTEINDRE CELLE DU SERVEUR.
+      #
+      # `pg_dump` refuse de sauvegarder une base plus recente que lui, et le
+      # dit sans ambiguite :
+      #
+      #   pg_dump: error: aborting because of server version mismatch
+      #   detail: server version: 18.6 ; pg_dump version: 16.15
+      #
+      # Ubuntu 24.04 ne fournit pas encore le client 18 : il vient du depot
+      # officiel PostgreSQL (PGDG). A faire evoluer le jour ou Railway monte
+      # la base de version — c'est le seul endroit a changer ici.
+      - name: Outils client PostgreSQL 18
         run: |
+          set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq postgresql-client-16 || sudo apt-get install -y -qq postgresql-client
+          sudo apt-get install -y -qq curl ca-certificates lsb-release
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc             https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc]             https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main"             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-18
+          pg_dump --version
 
       - name: Sauvegarder
         working-directory: backend

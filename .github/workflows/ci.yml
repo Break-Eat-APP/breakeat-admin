@@ -108,7 +108,10 @@ jobs:
     # l'audit du 30/09.
     services:
       postgres:
-        image: postgres:16-alpine
+        # La MEME version majeure que la production (18) : une migration
+        # valide sur 16 peut se comporter autrement sur 18, et c'est
+        # precisement ce que ces tests doivent attraper.
+        image: postgres:18-alpine
         env:
           POSTGRES_USER: audit
           POSTGRES_PASSWORD: audit

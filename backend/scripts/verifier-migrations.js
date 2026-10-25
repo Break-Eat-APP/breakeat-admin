@@ -25,7 +25,9 @@ const { spawnSync } = require('child_process');
 const path = require('path');
 
 const CONTENEUR = `breakeat-verif-${process.pid}`;
-const IMAGE = 'postgres:16-alpine';
+// La MEME version majeure que la production. Verifier sur 16 ce qui tournera
+// sur 18 laisserait passer exactement le genre d'ecart qu'on cherche ici.
+const IMAGE = 'postgres:18-alpine';
 
 const executer = (commande, args, options = {}) =>
   spawnSync(commande, args, { encoding: 'utf8', ...options });
