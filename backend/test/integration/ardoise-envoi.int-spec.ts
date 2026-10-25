@@ -78,7 +78,10 @@ decrire('envoi d’ardoise (base réelle)', () => {
     const o = await creerOrganisationComplete(s.prisma, unique('bar'), sa.id);
     const split = await s.prisma.orderSplit.create({
       data: {
-        code: unique('AB').slice(0, 10).toUpperCase(),
+        // `unique()` contient une partie aléatoire après l'horodatage. Ne pas
+        // prendre les 10 premiers caractères : cela supprimait cette partie
+        // et faisait collisionner deux appels effectués dans la même ms en CI.
+        code: unique('AB').replace(/[^a-z0-9]/gi, '').slice(-10).toUpperCase(),
         organizationId: o.org.id,
         eventId: o.event.id,
         venueId: o.venue.id,
