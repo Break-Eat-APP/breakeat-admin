@@ -15,6 +15,8 @@ de plus.
 > **⚠ Lire d'abord la MISE À JOUR DU 25/10 à 16h30, en fin de document.**
 > Trois constats de cet audit ont été corrigés le jour même, et la CI passe
 > désormais au vert pour la première fois depuis la création du dépôt.
+> Puis le COMPLÉMENT DE 17h : staging était resté bloqué, et n'est de toute
+> façon pas un filet tant qu'il reçoit le même code au même instant.
 
 ## Verdict général
 
@@ -496,7 +498,9 @@ moitié n'est plus vraie :
 | Ordre | Action | Qui | État |
 |---|---|---|---|
 | 1 | Poser `DATABASE_URL_SAUVEGARDE` et `SAUVEGARDE_PASSPHRASE` | propriétaire | **à faire** |
-| 2 | Activer « Wait for CI » — désormais possible | propriétaire | **à faire** |
+| 2 | **Débloquer le Postgres de STAGING** puis redéployer (P1-6) | propriétaire | **en cours** |
+| 3 | Activer « Wait for CI » — désormais possible | propriétaire | **reporté** — décision du propriétaire, 25/10 |
+| 4 | Créer `develop` et y pointer staging (P2-6) | à décider | ouvert |
 | 3 | App Store : version 1.1.0, URL de confidentialité, questionnaire | propriétaire | **à faire** |
 | 4 | Étendre le lint backend à `scripts/**/*.js` (P2-2) | Codex | ouvert |
 | 5 | Recette manuelle des écrans d'avis avec données (P2-3) | propriétaire | ouvert |
@@ -510,3 +514,99 @@ moitié n'est plus vraie :
 
 *Mise à jour rédigée le 25/10/2026 à 16h30, après le premier run entièrement
 vert du dépôt.*
+
+---
+
+## COMPLÉMENT DU 25/10/2026, 17h — staging, et ce qu'il ne protège pas
+
+### P1-6 — La réparation de base n'a été faite que sur UN environnement
+
+**Constat.** Le 25/10 à 00h34, la migration `20261023_note_de_commande` a été
+marquée annulée sur le Postgres de **production**, qui a redémarré
+normalement. Personne n'a touché à celui de **staging**.
+
+Résultat : staging est resté bloqué sur `P3009` pendant toute la journée. Le
+constat se lit directement sur les routes :
+
+| | `/health` | `POST /orders/:id/avis` | `POST /orders/:id/arrived` |
+|---|---|---|---|
+| Production | 200 | **401** — présente | — |
+| Staging | 200 | **404** — absente | 401 — présente |
+
+Un `/health` à 200 des deux côtés : **l'ancienne version sert, et répond
+parfaitement.** C'est la même tromperie que du 23 au 25 en production — un
+environnement en bonne santé apparente qui ignore trois jours de travail.
+
+Railway l'a confirmé de son côté : *« The startup migration step fails with
+Prisma error P3009 […] The latest commit only changes a test file and did not
+cause this. »*
+
+**Cause.** Une omission de méthode, pas un défaut de code. L'environnement qui
+saignait a été réparé ; l'autre a été oublié parce que rien ne le réclamait.
+
+> Une réparation de base de données se fait sur **chaque** environnement, pas
+> seulement sur celui qui se plaint. Les bases sont distinctes par
+> construction — c'est le but d'un staging —, donc une correction appliquée à
+> l'une ne touche jamais l'autre.
+
+**Correction attendue.** Le même `UPDATE` sur le Postgres de
+`breakeat-staging`, puis un redéploiement. *(Lancé le 25/10 à 17h ; la route
+répondait encore `404` à la rédaction de ce complément.)*
+
+---
+
+### P2-6 — Staging reçoit le même code que la production, au même instant
+
+**Constat.** Les deux environnements déploient **la branche `main`**. Un commit
+poussé part donc simultanément vers staging et vers la production.
+
+> Un staging qui reçoit le même code au même moment que la production n'est
+> pas un filet : c'est une copie.
+
+Le 23/10 l'a démontré : la migration fautive a bloqué **les deux** en même
+temps. Staging n'a rien signalé en avance, puisqu'il n'a rien vu en avance.
+
+**Ce qui était prévu, et qui s'est perdu.** `ci.yml` se déclenche sur
+`push` **et** `pull_request` vers `main` **et `develop`** :
+
+```yaml
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+```
+
+**La branche `develop` n'existe pas.** Sur les 29 branches du dépôt, aucune ne
+porte ce nom — ce sont toutes des branches de fonctionnalité laissées en
+arrière depuis août 2026. L'intention d'un flux en deux temps était donc là
+dès la configuration de la CI, et n'a jamais été mise en œuvre.
+
+**Correction attendue.** Créer `develop`, y pointer l'environnement staging, et
+ne fusionner dans `main` qu'après vérification :
+
+```
+travail → develop → staging → (on vérifie) → main → production
+```
+
+Ce seul changement aurait rendu la panne du 23/10 impossible à atteindre la
+production : la migration aurait échoué sur staging, et `main` n'aurait jamais
+reçu le commit.
+
+**Effort estimé :** une demi-heure, dont l'essentiel est le réglage de
+l'environnement Railway.
+
+---
+
+### Ce que ce complément change au verdict
+
+Rien sur le code, qui reste sain. Mais il ajoute une nuance au bilan de la
+journée :
+
+> La chaîne d'intégration fonctionne désormais **de bout en bout sur un seul
+> environnement**. Le second existe, coûte des ressources, et ne protège de
+> rien tant qu'il reçoit le même code au même instant.
+
+---
+
+*Complément rédigé le 25/10/2026 à 17h.*

@@ -104,7 +104,9 @@ code (`OrderSplit.code` est `@unique`). Trouvé par Codex.
 | « Wait for CI » côté Railway | à activer (service → Settings → Source) |
 | Confidentialité App Store | déclaration « aucune donnée collectée » **fausse**, URL pointant encore vers Shapper |
 | Écran des avis non vu en conditions réelles | la logique est testée, le rendu avec données ne l'est pas |
-| « Wait for CI » côté Railway | **désormais activable** — impossible tant que la CI échouait |
+| « Wait for CI » côté Railway | activable depuis le 25/10 — **reporté** par le propriétaire |
+| Postgres de **staging** bloqué sur P3009 | débloqué le 25/10 à 17h, redéploiement à confirmer |
+| Branche `develop` | **n'existe pas**, alors que la CI l'attend — staging ne filtre donc rien |
 | Flaix Ops — 3 décisions | inchangé depuis le 01/10 |
 
 ---

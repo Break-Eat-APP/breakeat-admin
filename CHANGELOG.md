@@ -55,6 +55,17 @@ le job `Lint` rouge depuis le 23/10.
 > Les deux incidents de la semaine ont traversé une CI qui ne pouvait rien
 > détecter. Le filet n'était pas mal réglé : il n'existait pas.
 
+**STAGING, lui, est resté bloqué toute la journée.** La base de production avait
+été débloquée le 25 à 00h34, pas celle de staging — et les bases sont distinctes par
+construction. `P3009` l'y empêchait donc toujours de démarrer, avec un `/health` à
+200 qui servait l'ancienne version. **Une réparation de base se fait sur CHAQUE
+environnement, pas seulement sur celui qui se plaint.**
+
+Et il ne protège de rien en l'état : staging et production déploient **la même
+branche `main`, au même instant**. Un staging qui reçoit le même code au même moment
+est une copie, pas un filet — le 23/10 les a bloqués tous les deux ensemble. La
+branche `develop`, que `ci.yml` attend pourtant déjà, **n'existe pas**.
+
 **État mesuré :** 894 tests unitaires + 118 d'intégration = **1 012 verts**,
 lint et typecheck 5/5, les six jobs CI au vert, production qui répond.
 
