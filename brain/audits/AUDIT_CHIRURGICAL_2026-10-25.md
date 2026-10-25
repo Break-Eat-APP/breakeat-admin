@@ -116,12 +116,16 @@ sans elle les sauvegardes sont illisibles, y compris par leur propriétaire.
 
 ### P1-3 — Railway déploie indépendamment de la CI *(ouvert)*
 
-**Constat.** La CI possède déjà le job qui aurait attrapé la migration fautive :
+**Constat.** La CI possède le job qui aurait dû attraper la migration fautive :
 `Tests d'intégration (base réelle)` monte un Postgres et applique les
-migrations de production. Il est passé au rouge le 23/10.
+migrations de production.
 
-**Rien ne l'a empêché de déployer**, parce qu'aucune porte n'existe entre
-GitHub et Railway.
+**Mais ce job n'a jamais pu s'exécuter** — voir P1-5. Et rien n'a empêché
+Railway de déployer, parce qu'aucune porte n'existe entre GitHub et Railway.
+
+> Correction apportée le 25/10 après publication : la première version de cet
+> audit affirmait que « la CI avait déjà le job qui attrape ce défaut ». C'est
+> faux. Le job existait, il ne tournait pas.
 
 **Correction attendue.** Activer **« Wait for CI »** (service backend →
 Settings → Source). Deux conditions :
@@ -173,6 +177,48 @@ transaction Prisma a tout annulé — aucune table à demi créée ; la réparat
 `uuid`.
 
 **Parade livrée.** `pnpm db:verifier` (`backend/scripts/verifier-migrations.js`).
+
+---
+
+### P1-5 — La CI ne générait pas le client Prisma : trois jobs sur six n'ont JAMAIS pu s'exécuter
+
+**Constat.** Les jobs `TypeScript`, `Tests` et `Tests d'intégration` passent de
+`pnpm install --frozen-lockfile` directement à leur commande. **Aucun ne lance
+`prisma generate`.**
+
+Or les types de Prisma sont **générés**. Sans cette étape, `@prisma/client`
+n'expose que son ébauche :
+
+```
+error TS2305: Module '"@prisma/client"' has no exported member 'OrderStatus'.
+error TS2305: Module '"@prisma/client"' has no exported member 'OrgStatus'.
+error TS2694: Namespace '…Prisma' has no exported member 'OrderWhereInput'.
+```
+
+Conséquence mesurée sur le run #286 : **43 suites backend sur 58 ne démarrent
+pas**, et le typecheck échoue sur une douzaine de fichiers.
+
+**Depuis quand.** `git log -p` sur tout l'historique de `.github/workflows/ci.yml`
+rend **zéro** occurrence de `prisma generate` ou `db:generate`. Le fichier a été
+créé le 01/06/2026 et modifié pour la dernière fois le 11/10/2026. Ces trois
+jobs n'ont donc **jamais** pu réussir.
+
+**Pourquoi personne ne l'a vu.** Parce que personne ne lisait la CI. Les audits
+précédents (10/10) ont relevé « typecheck réussi sur les 5 packages » — mesuré
+en local, où le client est généré par le dernier build.
+
+**Portée.** C'est le défaut le plus grave de cet audit, et il dépasse la
+semaine auditée : **le dépôt n'a jamais eu de filet automatique fonctionnel sur
+le typage et les tests.** Les deux incidents de la semaine ont tous deux
+traversé une CI qui ne pouvait rien détecter.
+
+**Correction appliquée.** Une étape `pnpm db:generate` ajoutée aux trois jobs.
+Le hook `postinstall` a été essayé puis **retiré** : pnpm 11 ne le déclenche
+pas, et un réglage qui ne fait rien donne une fausse confiance.
+
+**Vérifié dans les deux sens** : sans le client généré, `pnpm turbo typecheck`
+reproduit exactement les erreurs du run #286 ; après `pnpm db:generate`,
+5 tâches sur 5 réussissent et les 894 tests passent.
 
 ---
 
@@ -322,6 +368,7 @@ de le dire.
 | 1 | Poser les deux secrets de sauvegarde, lancer le workflow une fois | propriétaire | 10 min |
 | 2 | Activer « Wait for CI » sur Railway | propriétaire | 10 min |
 | 3 | Créer la version 1.1.0 dans App Store Connect, corriger l'URL et le questionnaire de confidentialité | propriétaire | 30 min |
+| 3bis | **Vérifier que le run CI redevient vert** après l'ajout de `pnpm db:generate` (P1-5) | Codex | 5 min |
 | 4 | Étendre le lint backend à `scripts/**/*.js` (P2-2) | Codex | 15 min |
 | 5 | Recette manuelle des trois écrans d'avis avec données (P2-3) | propriétaire | 30 min |
 | 6 | Décider si `test/` entre dans un `typecheck` dédié (P2-1) | Codex | à arbitrer |

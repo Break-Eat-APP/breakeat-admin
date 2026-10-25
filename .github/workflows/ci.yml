@@ -50,6 +50,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Les types de Prisma sont GENERES : sans cette etape, `@prisma/client`
+      # n'expose que son ebauche, et tout ce qui importe `OrderStatus`,
+      # `OrgStatus` ou `Prisma.OrderWhereInput` ne compile pas.
+      #
+      # Elle n'a JAMAIS existe dans ce fichier (verifie sur tout l'historique
+      # au 25/10/2026) : les jobs TypeScript et Tests echouaient donc depuis
+      # toujours, et personne ne lisait la CI. `pnpm install` ne la declenche
+      # pas — le hook `postinstall` ne part pas sous pnpm 11.
+      - name: Generer le client Prisma
+        working-directory: backend
+        run: pnpm db:generate
+
       - name: Typecheck all packages
         run: pnpm turbo typecheck
 
@@ -70,6 +82,18 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      # Les types de Prisma sont GENERES : sans cette etape, `@prisma/client`
+      # n'expose que son ebauche, et tout ce qui importe `OrderStatus`,
+      # `OrgStatus` ou `Prisma.OrderWhereInput` ne compile pas.
+      #
+      # Elle n'a JAMAIS existe dans ce fichier (verifie sur tout l'historique
+      # au 25/10/2026) : les jobs TypeScript et Tests echouaient donc depuis
+      # toujours, et personne ne lisait la CI. `pnpm install` ne la declenche
+      # pas — le hook `postinstall` ne part pas sous pnpm 11.
+      - name: Generer le client Prisma
+        working-directory: backend
+        run: pnpm db:generate
 
       - name: Run tests
         run: pnpm turbo test
@@ -115,6 +139,18 @@ jobs:
 
       # Les MIGRATIONS de production, pas `db push` : c'est leur SQL qu'on veut
       # eprouver, y compris les contraintes que le schema Prisma n'exprime pas.
+      # Les types de Prisma sont GENERES : sans cette etape, `@prisma/client`
+      # n'expose que son ebauche, et tout ce qui importe `OrderStatus`,
+      # `OrgStatus` ou `Prisma.OrderWhereInput` ne compile pas.
+      #
+      # Elle n'a JAMAIS existe dans ce fichier (verifie sur tout l'historique
+      # au 25/10/2026) : les jobs TypeScript et Tests echouaient donc depuis
+      # toujours, et personne ne lisait la CI. `pnpm install` ne la declenche
+      # pas — le hook `postinstall` ne part pas sous pnpm 11.
+      - name: Generer le client Prisma
+        working-directory: backend
+        run: pnpm db:generate
+
       - name: Appliquer les migrations
         working-directory: backend
         # Le script du depot, pas un appel direct : si la commande change un
