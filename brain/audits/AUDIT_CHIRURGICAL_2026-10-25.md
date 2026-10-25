@@ -12,6 +12,10 @@ de plus.
 
 ---
 
+> **⚠ Lire d'abord la MISE À JOUR DU 25/10 à 16h30, en fin de document.**
+> Trois constats de cet audit ont été corrigés le jour même, et la CI passe
+> désormais au vert pour la première fois depuis la création du dépôt.
+
 ## Verdict général
 
 **La semaine a livré une fonctionnalité complète de bout en bout** — la note
@@ -395,3 +399,114 @@ tranquillité.**
 *Audit mené par Claude Code (architecte) le 25/10/2026. Les corrections
 appliquées pendant l'audit se limitent à `archives.int-spec.ts` (P2-1) ; tout
 le reste est constat.*
+
+---
+
+## MISE À JOUR DU 25/10/2026, 16h30 — la CI passe au vert pour la première fois
+
+> Cette section est ajoutée après la publication de l'audit. Rien n'y est
+> effacé plus haut : on garde ce qui a été constaté, et on dit ce qui a changé
+> depuis. Un audit réécrit après coup ne prouve plus rien.
+
+### Ce qui a été réparé dans la journée
+
+| Constat | État |
+|---|---|
+| **P1-5** — la CI ne générait pas le client Prisma | **RÉSOLU** (`3d7e580`) |
+| **P2-5** — course sur le code d'ardoise *(nouveau, ci-dessous)* | **RÉSOLU** (`0ca05ab`) |
+| **P2-1** — suite d'intégration qui ne compilait plus | **RÉSOLU** (`f7b065d`) |
+
+**Résultat : les six jobs passent, pour la première fois depuis la création du
+dépôt le 01/06/2026.** Deux d'entre eux n'avaient jamais pu s'exécuter, et le
+job `Build` n'avait jamais démarré — il attendait un `typecheck` qui ne
+réussissait pas.
+
+### P2-5 — Le code d'ardoise collisionnait dans la même milliseconde
+
+**Constat.** `ouvrirArdoise()` fabriquait le code d'une ardoise depuis les
+**dix premiers** caractères de `unique('AB')` :
+
+```
+AB-<horodatage36>-<aléa6>-<compteur>
+^^^^^^^^^^   les 10 premiers s'arrêtent dans l'horodatage
+```
+
+La partie aléatoire était donc tranchée avant d'être utilisée. `OrderSplit.code`
+étant `@unique` en base, deux appels tombés dans la **même milliseconde**
+produisaient le même code, et le second échouait en `P2002`.
+
+Cinq des sept tests de `ardoise-envoi.int-spec.ts` tombaient ensemble, tous sur
+le même `orderSplit.create`.
+
+**Pourquoi il a survécu si longtemps.** C'est une **course**, pas une erreur de
+logique. Une machine de développement est trop lente pour que deux appels
+partagent leur milliseconde ; un runner GitHub y arrive. Et la suite
+d'intégration n'avait jamais tourné en CI (P1-5) — personne n'avait donc jamais
+atteint ce test dans les conditions qui le révèlent.
+
+**Correction.** Les tirets sont retirés, puis ce sont les dix **derniers**
+caractères qui sont pris : l'aléa et le compteur entrent dans le code,
+l'horodatage ne décide plus seul.
+
+**Trouvé par Codex**, poussé après vérification sur base réelle.
+
+### Leçon de méthode, qui vaut d'être écrite
+
+Pendant la recherche de ce défaut, trois hypothèses ont été formulées puis
+**infirmées par l'expérience** — fuseau horaire, parallélisme à deux workers,
+client Prisma manquant dans ce job précis. À chaque fois le test a tranché, pas
+le raisonnement.
+
+Et la vraie cause est restée invisible une heure pour une raison bête : le
+correctif existait **déjà dans le dossier de travail**, sans être commité. Les
+essais locaux passaient donc, pendant que la CI tournait sur la version du
+dépôt.
+
+> Devant un échec qu'on ne reproduit pas, `git status` sur le fichier incriminé
+> vient avant toute hypothèse.
+
+### État mesuré après corrections
+
+| Vérification | Résultat |
+|---|---|
+| `pnpm turbo lint` | **5 tâches, 0 erreur** |
+| `pnpm turbo typecheck` | **5 tâches, 0 erreur** |
+| `pnpm turbo test` | **5 tâches — 894 tests** (796 backend, 34 mobile, 27 back-office, 25 admin, 12 opérateur) |
+| Tests d'intégration (base réelle, `TZ=UTC`) | **12 suites, 118 tests** |
+| CI GitHub, run du commit `0ca05ab` | **6 jobs verts** |
+| Production | `/health` **200**, routes des avis **401** |
+
+**Total : 1 012 tests verts, et une chaîne d'intégration qui les exécute
+réellement.**
+
+### Verdict révisé
+
+Le verdict général plus haut tient toujours sur le fond — « le code livré est
+sain, la chaîne qui l'amène en production ne l'était pas » — mais sa seconde
+moitié n'est plus vraie :
+
+> **La chaîne fonctionne désormais.** Elle compile, elle teste, elle construit,
+> et elle le dit. Reste à ce que quelqu'un l'écoute : « Wait for CI » n'était
+> pas activable tant que la CI échouait en permanence — l'activer aurait gelé
+> tous les déploiements. C'est maintenant possible, et c'est la première chose
+> à faire.
+
+### Plan de correction, révisé
+
+| Ordre | Action | Qui | État |
+|---|---|---|---|
+| 1 | Poser `DATABASE_URL_SAUVEGARDE` et `SAUVEGARDE_PASSPHRASE` | propriétaire | **à faire** |
+| 2 | Activer « Wait for CI » — désormais possible | propriétaire | **à faire** |
+| 3 | App Store : version 1.1.0, URL de confidentialité, questionnaire | propriétaire | **à faire** |
+| 4 | Étendre le lint backend à `scripts/**/*.js` (P2-2) | Codex | ouvert |
+| 5 | Recette manuelle des écrans d'avis avec données (P2-3) | propriétaire | ouvert |
+| 6 | Passer les actions GitHub en `@v5` (avertissement Node 20 déprécié) | Codex | ouvert |
+| 7 | Supprimer `backend/railway.json`, réglage mort et contradictoire | Codex | ouvert |
+| ~~P1-5~~ | ~~Générer le client Prisma en CI~~ | — | **fait** |
+| ~~P2-1~~ | ~~Suite d'intégration qui ne compile plus~~ | — | **fait** |
+| ~~P2-5~~ | ~~Course sur le code d'ardoise~~ | — | **fait** |
+
+---
+
+*Mise à jour rédigée le 25/10/2026 à 16h30, après le premier run entièrement
+vert du dépôt.*

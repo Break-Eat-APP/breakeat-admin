@@ -5,6 +5,69 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.97.0] — 2026-10-25 — La CI passe au vert pour la première fois
+
+**Six jobs verts, et c'est inédit depuis la création du dépôt le 01/06/2026.**
+Trois d'entre eux n'avaient jamais pu réussir ; un quatrième n'avait jamais
+démarré.
+
+**Le client Prisma n'était jamais généré en CI.** Les types de Prisma sont
+produits par `prisma generate` ; sans cette étape, `@prisma/client` n'expose
+que son ébauche :
+
+```
+error TS2305: Module '"@prisma/client"' has no exported member 'OrderStatus'.
+error TS2694: Namespace '…Prisma' has no exported member 'OrderWhereInput'.
+```
+
+Conséquence mesurée : **43 suites backend sur 58 ne démarraient pas**, et le
+typecheck échouait sur une douzaine de fichiers. `git log -p` sur tout
+l'historique de `ci.yml` rend **zéro** occurrence de `prisma generate` ou
+`db:generate` : les jobs `TypeScript`, `Tests` et `Tests d'intégration` n'ont
+donc **jamais** pu réussir. Personne ne l'avait vu parce que personne ne lisait
+la CI — les audits précédents mesuraient en local, où le client est généré par
+le dernier build.
+
+Une étape explicite est ajoutée aux trois jobs. Le hook `postinstall` a été
+essayé puis **retiré** : pnpm 11 ne le déclenche pas, et un réglage qui ne fait
+rien donne une fausse confiance.
+
+**Le code d'ardoise collisionnait dans la même milliseconde.**
+`ouvrirArdoise()` prenait les dix PREMIERS caractères de `unique('AB')` —
+`AB-<horodatage36>-<aléa6>-<compteur>` — ce qui s'arrête dans l'horodatage et
+tranche l'aléa. `OrderSplit.code` étant `@unique`, deux appels dans la même
+milliseconde produisaient le même code et le second échouait en `P2002`.
+
+C'est une **course**, pas une erreur de logique : une machine de développement
+est trop lente pour la déclencher, un runner GitHub y arrive. Elle a survécu
+parce que la suite d'intégration n'avait jamais tourné en CI. Les dix
+**derniers** caractères sont désormais pris, aléa et compteur compris.
+*Trouvé par Codex.*
+
+**La suite `archives.int-spec.ts` ne compilait plus depuis le 19/10** — la
+garde posée en phase 62 sur `deleteOrganization` avait changé sa signature, et
+`IdentiteVerifiee` gagné deux champs. Pire : le test documentait le
+comportement d'AVANT la garde. Il assert désormais le refus.
+
+**Un import inutilisé** (`PrismaService` dans `noter-commande.spec.ts`) tenait
+le job `Lint` rouge depuis le 23/10.
+
+> Les deux incidents de la semaine ont traversé une CI qui ne pouvait rien
+> détecter. Le filet n'était pas mal réglé : il n'existait pas.
+
+**État mesuré :** 894 tests unitaires + 118 d'intégration = **1 012 verts**,
+lint et typecheck 5/5, les six jobs CI au vert, production qui répond.
+
+```
+~ .github/workflows/ci.yml   ← `pnpm db:generate` dans 3 jobs
+~ backend/test/integration/ardoise-envoi.int-spec.ts   (course sur le code)
+~ backend/test/integration/archives.int-spec.ts        (signatures phase 62)
+~ backend/src/modules/orders/noter-commande.spec.ts    (import inutilisé)
+~ brain/audits/AUDIT_CHIRURGICAL_2026-10-25.md         (P1-5, P2-5, verdict révisé)
+```
+
+---
+
 ## [0.96.0] — 2026-10-25 — La panne du 23, et les trois filets qui manquaient
 
 **La production est restée deux jours sans recevoir une seule mise à jour, et

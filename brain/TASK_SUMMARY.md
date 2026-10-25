@@ -76,6 +76,26 @@ une panne, c'était un silence — et c'est ce silence qui est le vrai défaut.
 Second manquement du même jour : un import inutilisé (`PrismaService`) a tenu
 la CI rouge sans que personne ne lise les courriels d'échec.
 
+### La CI, réparée le soir même
+
+**Trois des six jobs n'avaient JAMAIS pu réussir depuis la création du dépôt
+(01/06/2026)** : `ci.yml` ne lançait pas `prisma generate`, et sans lui
+`@prisma/client` n'expose que son ébauche — 43 suites backend sur 58 ne
+démarraient pas. Le job `Build`, qui attend `typecheck`, n'avait jamais
+démarré non plus.
+
+> Le filet n'était pas mal réglé : il n'existait pas. Les deux incidents du
+> 23/10 ont traversé une chaîne incapable de les voir.
+
+Une fois la CI capable d'exécuter la suite d'intégration, elle a révélé une
+**course** qu'aucune machine de développement ne déclenche : le code d'ardoise
+était bâti sur les dix premiers caractères de `unique()`, donc sur
+l'horodatage seul. Deux appels dans la même milliseconde produisaient le même
+code (`OrderSplit.code` est `@unique`). Trouvé par Codex.
+
+**Résultat : les six jobs verts, pour la première fois.** 894 tests unitaires
++ 118 d'intégration = **1 012**.
+
 ### Reste à faire
 
 | Sujet | État |
@@ -84,6 +104,7 @@ la CI rouge sans que personne ne lise les courriels d'échec.
 | « Wait for CI » côté Railway | à activer (service → Settings → Source) |
 | Confidentialité App Store | déclaration « aucune donnée collectée » **fausse**, URL pointant encore vers Shapper |
 | Écran des avis non vu en conditions réelles | la logique est testée, le rendu avec données ne l'est pas |
+| « Wait for CI » côté Railway | **désormais activable** — impossible tant que la CI échouait |
 | Flaix Ops — 3 décisions | inchangé depuis le 01/10 |
 
 ---

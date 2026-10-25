@@ -7575,3 +7575,97 @@ migration fautive. Une reprise automatique aurait caché ce défaut au lieu de l
 dire.
 
 ---
+
+## Phase 67 — La CI qui n'avait jamais tourné (25/10/2026)
+
+### Le constat, et il dépasse la semaine
+
+Le dépôt existe depuis le 01/06/2026. Jusqu'au 25/10/2026, **trois de ses six
+jobs d'intégration continue n'ont jamais pu réussir une seule fois.**
+
+```
+error TS2305: Module '"@prisma/client"' has no exported member 'OrderStatus'.
+error TS2694: Namespace '…Prisma' has no exported member 'OrderWhereInput'.
+```
+
+Les types de Prisma sont **générés**. `pnpm install` ne les produit pas, et
+aucune étape de `ci.yml` ne lançait `prisma generate` — vérifié sur tout
+l'historique du fichier, zéro occurrence. Les jobs `TypeScript`, `Tests` et
+`Tests d'intégration` échouaient donc systématiquement, et le job `Build`, qui
+attend `typecheck`, n'a jamais démarré.
+
+**43 suites backend sur 58** ne démarraient pas.
+
+> Le filet n'était pas mal réglé. Il n'existait pas. Les deux incidents du
+> 23/10 — la migration `TEXT`/`UUID` et l'import inutilisé — ont traversé une
+> chaîne incapable de les voir.
+
+### Pourquoi personne ne l'a su pendant cinq mois
+
+Parce que personne ne lisait la CI. Les audits précédents relevaient
+« typecheck réussi sur les 5 packages » : mesuré **en local**, où le client
+Prisma est généré par le dernier `build`. L'écart entre le poste de travail et
+le runner n'était jamais regardé.
+
+### Pourquoi une étape explicite plutôt qu'un hook
+
+Un `postinstall` dans `backend/package.json` aurait tenu en un seul endroit, et
+aurait aussi servi un nouveau venu qui clone le dépôt. Il a été écrit, essayé,
+puis **retiré** : pnpm 11 ne le déclenche pas.
+
+> Un réglage qui ne fait rien est pire qu'un réglage absent : il donne une
+> fausse confiance.
+
+C'est le même reproche que l'audit adresse à `backend/railway.json`, dont
+Railway ne lit jamais rien.
+
+L'étape est donc explicite, dans les trois jobs, et appelle le script du
+dépôt — `pnpm db:generate` — plutôt que `npx prisma generate` : si la commande
+change un jour, elle change à un endroit.
+
+### La course sur le code d'ardoise
+
+Une fois la CI capable d'exécuter la suite d'intégration, elle a révélé un
+défaut qu'aucune machine de développement ne déclenche.
+
+`ouvrirArdoise()` fabriquait le code depuis les **dix premiers** caractères :
+
+```
+AB-<horodatage36>-<aléa6>-<compteur>
+^^^^^^^^^^   les 10 premiers s'arrêtent dans l'horodatage
+```
+
+L'aléa était tranché avant d'être utilisé. `OrderSplit.code` étant `@unique`,
+deux appels dans la même milliseconde produisaient le même code — le second
+échouait en `P2002`, et cinq des sept tests tombaient ensemble.
+
+**C'est une course, pas une erreur de logique.** Une machine de développement
+est trop lente pour que deux appels partagent leur milliseconde ; un runner
+GitHub y arrive. Le correctif retire les tirets puis prend les dix
+**derniers** caractères, aléa et compteur compris.
+
+Trouvé par Codex, vérifié sur base réelle avant d'être poussé.
+
+### Une leçon de méthode
+
+Trois hypothèses ont été formulées puis **infirmées par l'expérience** avant
+de trouver : fuseau horaire du runner, parallélisme à deux workers, client
+Prisma manquant dans ce job-là. À chaque fois l'essai a tranché, pas le
+raisonnement — et c'est ainsi qu'il faut procéder.
+
+La vraie cause est pourtant restée invisible une heure, pour une raison bête :
+le correctif existait **déjà dans le dossier de travail**, sans être commité.
+Les essais locaux passaient donc, pendant que la CI tournait sur la version du
+dépôt.
+
+> Devant un échec qu'on ne reproduit pas, `git status` sur le fichier
+> incriminé vient avant toute hypothèse.
+
+### Ce que ça débloque
+
+« Wait for CI » côté Railway n'était **pas activable** tant que la CI échouait
+en permanence : l'activer aurait gelé tous les déploiements. C'est désormais
+possible, et c'est la dernière porte qui manque entre un commit fautif et la
+production.
+
+---
