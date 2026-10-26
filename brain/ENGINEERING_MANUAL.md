@@ -8032,3 +8032,82 @@ essais locaux passaient pendant que la CI tournait sur la version du dépôt.
 > vient avant toute hypothèse.
 
 ---
+
+## Phase 70 — Les P2 retenus, et l'audit clos (26/10/2026)
+
+### Un interrupteur qui ne coupait rien
+
+`FeatureFlagsService` savait résoudre des flags globaux, par club et par
+événement. Il n'était utilisé par **aucun** module métier : `OrderSplitsService`
+lisait une variable d'environnement.
+
+L'ardoise touche à de l'argent déjà encaissé — elle rembourse quand un envoi
+échoue. Si elle se comporte mal un soir de match, il faut pouvoir la couper en
+**secondes**, pas en cinq minutes de redéploiement et un risque de plus au pire
+moment.
+
+**« Aucun flag » n'est pas « flag à faux ».** `resolve()` rend `false` dans les
+deux cas. Y brancher l'ardoise l'aurait désactivée **partout** tant que
+personne n'avait créé la ligne : une panne immédiate, le jour de la mise en
+service. D'où `resolveOuRien`, qui rend `null` — l'environnement garde alors le
+dernier mot, et un flag ne supplante que s'il existe vraiment.
+
+### La régression que j'ai failli livrer
+
+En rendant `assertActive()` asynchrone, **trois appels sont restés sans
+`await`**. La promesse flottait, l'exécution continuait, et l'ardoise serait
+restée **ouverte même coupée**.
+
+Le typecheck ne l'a pas vu : une promesse flottante est du TypeScript valide.
+Et en production, ce serait passé inaperçu — le filet `unhandledRejection` de
+`main.ts` aurait journalisé le rejet et laissé l'API debout, ardoise ouverte,
+pendant que l'exploitant la croyait fermée.
+
+> Rendre une garde asynchrone, c'est changer le contrat de tous ses appelants.
+> Le compilateur ne le dira pas.
+
+Les tests, eux, le voient : sans les `await`, le processus meurt et la suite ne
+rend aucun résultat.
+
+### Flaix n'était pas concerné
+
+Vérifié avant de toucher quoi que ce soit : `flaixEnabled` n'est **pas un
+flag** mais une colonne sur `Venue`, lue en base à chaque requête. Le basculer
+depuis le back-office agit déjà immédiatement.
+
+### Le jeton ne suffisait pas
+
+La connexion WebSocket vérifiait la signature et l'expiration, mais pas l'état
+du compte en base — là où `JwtStrategy` le relit à **chaque** requête REST.
+
+Un compte désactivé gardait donc sa connexion temps réel jusqu'à l'expiration
+de son jeton : quelqu'un qu'on venait d'écarter continuait de voir arriver les
+commandes, leurs montants et les noms des clients. Pendant des heures.
+
+### Deux lectures d'une même variable
+
+`main.ts` nettoyait les origines CORS ; la passerelle faisait un `split(',')`.
+
+```
+CORS_ORIGINS="https://a.fr, https://b.fr"
+```
+
+Écrit ainsi — naturellement, avec l'espace — les deux origines passaient en
+HTTP et **seule la première** en WebSocket. La console du second club chargeait
+ses données par REST et son temps réel restait muet, **sans erreur côté
+serveur** : le navigateur refuse en silence. On cherche ce genre de panne du
+côté du réseau pendant une heure.
+
+Une seule lecture désormais, dans `common/helpers/origines-cors.ts`.
+
+### Ce qui reste ouvert, et pourquoi c'est un choix
+
+**P2-4 — lectures back-office non bornées.** `ClientsService.lister` agrège
+tout l'historique. Cela gênera quand le volume montera ; aujourd'hui, avec un
+club et quelques centaines de commandes, non. Repoussé sciemment plutôt
+qu'oublié.
+
+Les autres P2 — healthcheck purement *liveness*, historique du dépôt trop
+lourd — relèvent du confort d'exploitation.
+
+---

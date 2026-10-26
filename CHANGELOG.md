@@ -5,6 +5,53 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.0.0] — 2026-10-26 — Les P2 retenus, et l'audit clos
+
+**L'ardoise se coupe désormais sans redéployer.** `FeatureFlagsService` savait
+résoudre des flags par club et par événement, et n'était utilisé par **aucun**
+module métier. L'ardoise touche à de l'argent déjà encaissé — elle rembourse
+quand un envoi échoue : si elle se comporte mal un soir de match, il faut
+pouvoir la couper en secondes, pas en cinq minutes de redéploiement.
+
+Le piège était dans le détail : `resolve()` rend `false` aussi bien pour « flag
+à faux » que pour « aucun flag ». Y brancher l'ardoise l'aurait **désactivée
+partout** tant que personne n'avait créé la ligne. D'où `resolveOuRien`, qui
+rend `null` et laisse l'environnement décider.
+
+**Et j'ai failli livrer une régression.** En rendant la garde asynchrone, trois
+appels sont restés sans `await` : la promesse flottait et **l'ardoise serait
+restée ouverte même coupée**. Le typecheck ne l'a pas vu. En production, le
+filet `unhandledRejection` l'aurait avalée en silence.
+
+**Flaix n'était pas concerné**, vérifié : `flaixEnabled` n'est pas un flag mais
+une colonne sur `Venue`, lue en base à chaque requête.
+
+**Un compte désactivé gardait son temps réel.** La connexion WebSocket
+vérifiait la signature du jeton, pas l'état du compte — là où le REST le relit
+à chaque requête. Quelqu'un qu'on venait d'écarter continuait de voir arriver
+les commandes et les noms des clients, pendant des heures.
+
+**HTTP et WebSocket ne lisaient pas la même liste d'origines.**
+`CORS_ORIGINS="https://a.fr, https://b.fr"` — écrit naturellement, avec
+l'espace — autorisait les deux en HTTP et **seule la première** en WebSocket.
+La console du second club chargeait ses données par REST et son temps réel
+restait muet, sans erreur côté serveur.
+
+**P2-4 reste ouvert, délibérément** : les lectures back-office non bornées
+gêneront quand le volume montera, pas avant.
+
+```
++ backend/src/common/helpers/origines-cors.ts  (+ son spec)
++ backend/src/modules/order-splits/interrupteur-ardoise.spec.ts
++ brain/CALENDRIER_SAISON.md                   ← spec du prochain chantier
+~ backend/src/modules/feature-flags/feature-flags.service.ts  (resolveOuRien)
+~ backend/src/modules/order-splits/{service,controller,module}.ts
+~ backend/src/modules/realtime/realtime.gateway.ts  ← compte relu, CORS partagé
+~ backend/src/main.ts
+```
+
+---
+
 ## [0.99.0] — 2026-10-26 — Les neuf P1 de l'audit, et ce qu'il se trompait
 
 **La faille la plus grave n'était pas dans les bloquants.** `next` 15.5.25

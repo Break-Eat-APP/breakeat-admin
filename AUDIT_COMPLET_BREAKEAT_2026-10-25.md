@@ -21,6 +21,13 @@
 > | P1-7 configuration contradictoire | ✅ une seule commande de démarrage (`1779c39`) |
 > | P1-8 migrations au démarrage | ◐ inchangé — `migrer.sh` reste au démarrage, délibérément |
 > | P1-9 dépendances vulnérables | ✅ 4 critiques → **0** (`4aa96b9`) |
+> | P2-1 flags qui ne pilotent rien | ✅ l'ardoise se coupe sans redéployer (`240cf9a`) |
+> | P2-2 WebSocket et comptes désactivés | ✅ le compte est relu à la connexion (`297d2fa`) |
+> | P2-3 CORS WebSocket ≠ CORS HTTP | ✅ une seule lecture (`297d2fa`) |
+> | P2-4 lectures back-office non bornées | ◻ **ouvert, sciemment** — gênera avec le volume, pas aujourd'hui |
+> | P2-5 healthcheck liveness | ◻ ouvert — confort d'exploitation |
+> | P2-6 build fragile selon la mémoire | ✅ parallélisme borné en CI (`a508a80`) |
+> | P2-7 historique du dépôt lourd | ◻ ouvert — ménage |
 >
 > **Ce que l'audit n'avait pas vu** : `NODE_ENV` valait `staging` en
 > production, donc tout le « mode production » du backend était inactif — dont
