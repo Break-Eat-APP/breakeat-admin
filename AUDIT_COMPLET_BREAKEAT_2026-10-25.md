@@ -1,5 +1,42 @@
 # Audit complet BreakEat — 25 octobre 2026
 
+> ## ⚑ SUITE DONNÉE — 26/10/2026
+>
+> **Les 4 bloquants et les 9 risques élevés sont traités.** Ce document garde
+> ses constats d'origine ; ce bandeau dit ce qu'il en est advenu. Un audit
+> réécrit après coup ne prouve plus rien.
+>
+> | Constat | Sort |
+> |---|---|
+> | P0-1 autorisation WebSocket | ✅ règle par salon, défaut = refus (`14ca877`) |
+> | P0-2 Socket.IO mono-instance | ✅ adaptateur Redis (`9a0920e`) |
+> | P0-3 configuration silencieuse | ✅ `estEnLigne()` + refus sur secret JWT faible (`4472889`) |
+> | P0-4 double réservation des points | ✅ écriture conditionnelle (`930c5a1`) |
+> | P1-1 limitation en mémoire | ✅ compteurs partagés, script Lua (`dbbf09f`) |
+> | P1-2 tâches planifiées bloquées | ✅ statut honnête + relevé des abandons (`3624df3`) |
+> | P1-3 campagnes non bornées | ⚠️ **le constat était FAUX** — voir l'encadré dans la section |
+> | P1-4 pool PostgreSQL | ✅ explicite, l'exploitant gardant le dernier mot (`c7190c1`) |
+> | P1-5 outbox temps réel | ◐ **partiel, et assumé** — réconciliation permanente, outbox non faite (`c7327cc`) |
+> | P1-6 concurrence panier/stock | ✅ refus sans mutation (`59e31cb`) |
+> | P1-7 configuration contradictoire | ✅ une seule commande de démarrage (`1779c39`) |
+> | P1-8 migrations au démarrage | ◐ inchangé — `migrer.sh` reste au démarrage, délibérément |
+> | P1-9 dépendances vulnérables | ✅ 4 critiques → **0** (`4aa96b9`) |
+>
+> **Ce que l'audit n'avait pas vu** : `NODE_ENV` valait `staging` en
+> production, donc tout le « mode production » du backend était inactif — dont
+> le masquage des erreurs, qui renvoyait au client le message brut de
+> PostgreSQL. Et la production tourne sur **Postgres 18**, pas 16 : le
+> vérificateur de migrations et les tests d'intégration éprouvaient sur la
+> mauvaise version.
+>
+> **Ce sur quoi l'audit se trompait** : P1-3. La limite de 65 535 paramètres
+> n'est jamais atteinte — mesuré, Prisma découpant lui-même. Le correctif a
+> tout de même été gardé, pour une autre raison, et dite.
+>
+> État mesuré : **840 tests backend**, **130 d'intégration** (Postgres 18 +
+> Redis), **0 vulnérabilité critique**. Détail dans `ENGINEERING_MANUAL.md`
+> phases 68 et 69.
+
 ## Verdict exécutif
 
 L'application est fonctionnelle sur les tests actuels, mais elle n'est pas encore prête à être déclarée sûre pour 100 000 utilisateurs, 50 lieux simultanés et plusieurs milliers de profils connectés.

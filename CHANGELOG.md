@@ -5,6 +5,152 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [0.99.0] — 2026-10-26 — Les neuf P1 de l'audit, et ce qu'il se trompait
+
+**La faille la plus grave n'était pas dans les bloquants.** `next` 15.5.25
+porte une **exécution de code à distance non authentifiée** via l'optimisation
+d'images ; les trois consoles tournent dessus en production. Corrigée en
+15.5.28 — un saut de patch. Elle était classée P1-9, noyée dans une liste de
+108.
+
+**Le backend est propre de toute vulnérabilité critique et élevée** :
+`proxy-addr` (usurpation d'IP, qui fausse la limitation de débit), `ws`,
+`engine.io`, `socket.io-parser` (trois dénis de service sur la couche
+WebSocket), `body-parser`, `multer`, `brace-expansion`, `deepmerge-ts`. De
+**4 critiques et 71 élevées à 0 et 55** — les restantes sont dans l'outillage
+de build des frontends, jamais exposées à une requête.
+
+Toutes transitives : les corriger directement imposerait de faire monter
+NestJS, Prisma et Sentry. D'où des `overrides` **bornées par plage**, pour ne
+pas déplacer les arbres voisins — `ws@7`, `brace-expansion@1` et `@5`
+cohabitent ici. Et elles vivent dans `pnpm-workspace.yaml` : **pnpm 11 ne lit
+plus le champ `pnpm` du manifeste**, ce qui a fait échouer la première
+tentative en silence.
+
+**Les compteurs de limitation étaient par instance.** La limite était
+multipliée par le nombre de replicas — 8 tentatives de mot de passe par quart
+d'heure devenaient 16 — et **il suffisait de changer d'instance pour repartir
+à zéro**. Tout se joue désormais dans un script Lua que Redis exécute d'un
+seul tenant. Le piège était ailleurs : entrées en millisecondes, sorties en
+secondes, un facteur mille.
+
+**L'AUDIT SE TROMPAIT SUR P1-3, ET MOI AVEC.** Il annonçait qu'à
+100 000 destinataires on dépasserait les 65 535 paramètres de PostgreSQL. Le
+correctif et les tests ont été écrits sur cette base, puis éprouvés en
+neutralisant le découpage pour voir l'échec. **Il n'y a pas eu d'échec** :
+`IN` de 100 000 valeurs et `createMany` de 50 000 lignes passent tous deux,
+Prisma découpant lui-même. Ce qui reste vrai : un `createMany` géant tient une
+seule transaction, donc ses verrous, pendant que les buvettes servent. C'est
+une question de **disponibilité**, pas de capacité — et l'audit porte la
+correction à l'endroit de son constat.
+
+**Le pool de connexions était deviné par la machine hôte.** `cœurs × 2 + 1`,
+or dans un conteneur le nombre de cœurs rapporté est celui de l'hôte : la même
+image ouvrait 9 connexions ici et 33 ailleurs. Dix par instance désormais, et
+un `?connection_limit=` déjà posé dans Railway l'emporte toujours.
+
+**Un refus de stock modifiait quand même le panier.** Le code écrivait la
+quantité demandée, la ramenait au stock, puis levait une erreur — le client
+voyait un échec et son panier avait changé. Le commentaire portait
+l'hésitation en toutes lettres : *« Cap is friendlier? »*. Elle est tranchée :
+**on refuse sans rien changer**, et le message dit ce qui reste.
+
+**Quatre commandes de démarrage disaient des choses différentes**, et les
+trois mortes contournaient toutes `scripts/migrer.sh`. Une seule subsiste.
+
+**« Envoyée » se disait même quand rien n'était parti** : `ExpoPushService`
+n'échoue jamais, il rend un résumé. Une campagne dont tous les lots avaient
+échoué était marquée `SENT`. Et une campagne interrompue restait « en cours »
+pour toujours.
+
+**Un événement temps réel perdu n'était JAMAIS rattrapé** : le tableau de bord
+ne sondait le REST que socket déconnecté. La réconciliation ne s'arrête plus,
+et diffuser ne peut plus casser une commande payée — `server.to(...)` pouvait
+lever, et l'erreur remontait jusqu'au webhook Stripe, qui rejouait.
+
+L'outbox durable **n'est pas faite**, et c'est dit plutôt que coché.
+
+```
++ backend/src/common/securite/limitation-redis.ts    ← compteurs partagés (Lua)
++ backend/src/common/helpers/par-lots.ts
++ backend/src/database/pool.ts  (+ son spec)
++ backend/src/modules/notifications/campagne-statut.spec.ts
++ backend/src/modules/realtime/diffusion-sure.spec.ts
++ backend/test/integration/{campagne-de-masse,panier-stock,limitation-partagee}.int-spec.ts
+~ pnpm-workspace.yaml                    ← 9 overrides bornées par plage
+~ apps/{admin,backoffice,operator}/package.json   next 15.5.28
+~ apps/operator/package.json             @sentry/nextjs 9.47.2
+~ apps/operator/src/hooks/useDashboard.ts  ← réconciliation permanente
+~ backend/src/database/prisma.service.ts
+~ backend/src/modules/cart/cart.service.ts
+~ backend/src/modules/notifications/{scheduled-push,push-tokens,user-notifications}.service.ts
+~ backend/src/modules/realtime/realtime.service.ts
+~ railway.json + nixpacks.toml + backend/Dockerfile
+~ .github/workflows/ci.yml               ← Redis, concurrence bornée
+- backend/railway.json                   ← réglage mort et contradictoire
+- .github/workflows/deploy-frontends.yml ← second chemin de déploiement, cassé
+```
+
+---
+
+## [0.98.0] — 2026-10-25 — Les quatre bloquants de l'audit Codex
+
+Un audit extérieur a relevé quatre bloquants avant toute montée en charge.
+Tous confirmés dans le code avant correction — un audit se contrôle, même
+excellent.
+
+**Le temps réel autorisait tout salon qui n'était pas une buvette.**
+`peutRejoindre` n'examinait que `supplier:` et laissait passer tout le reste.
+Un compte authentifié qui connaissait un UUID écoutait **le flux d'un autre
+club** — commandes, montants, noms de clients — sans jamais toucher l'API
+REST, qui le lui aurait refusé.
+
+L'en-tête du fichier assumait ce pari : *« room names are UUID-keyed and never
+published to clients »*. Un UUID circule — dans une URL, un journal, une
+capture d'écran. **Il identifie, il n'autorise pas.** Une règle par type
+désormais, et le défaut est le **refus**.
+
+**Socket.IO gardait ses salons en mémoire.** Dès la seconde instance, une
+commande encaissée par l'une n'atteint pas le comptoir branché sur l'autre —
+et c'est le soir du gros match qu'on ajoute des instances. `REDIS_URL`
+existait dans la configuration **sans qu'aucune ligne ne la lise**.
+
+**`NODE_ENV` valait « staging » EN PRODUCTION** — trouvaille que l'audit
+n'avait pas faite, il la supposait correcte. Tout ce qui en dépendait était
+inactif en ligne, dont le masquage des erreurs : la production renvoyait au
+client **le message brut de PostgreSQL**. On ne se fie plus à une variable que
+quelqu'un doit penser à régler.
+
+**Et le démarrage est refusé sur un secret JWT faible.** Avec le repli
+`insecure-dev-secret`, écrit en clair dans ce dépôt, n'importe qui forge un
+jeton de SUPER_ADMIN. L'API ne servirait pas « mal » : elle servirait
+l'attaquant aussi bien que le client.
+
+**Deux paiements simultanés réservaient les points de fidélité deux fois** :
+100 débités au lieu de 50, et 50 **perdus pour toujours**. L'index unique n'y
+pouvait rien — deux réservations portent deux identifiants différents. Une
+contrainte d'unicité protège d'un doublon, pas d'une course.
+
+**La production tournait sur Postgres 18, pas 16.** Supposé sans vérifier, le
+décalage dépassait la sauvegarde : le vérificateur de migrations et la base
+des tests d'intégration éprouvaient sur 16 ce qui tourne sur 18. Un filet
+réglé sur la mauvaise version est un filet qui ment.
+
+```
++ backend/src/common/helpers/est-en-ligne.ts  (+ son spec)
++ backend/src/modules/realtime/adaptateur-redis.ts
++ backend/src/modules/realtime/acces-salons.spec.ts        ← 13 tests
++ backend/test/integration/temps-reel-multi-instances.int-spec.ts
+~ backend/src/modules/realtime/realtime.gateway.ts         ← règle par salon
+~ backend/src/modules/loyalty/loyalty.service.ts           ← réservation conditionnelle
+~ backend/src/common/filters/all-exceptions.filter.ts
+~ backend/src/main.ts                                      ← refus sur secret faible
+~ backend/test/integration/fidelite-reservation.int-spec.ts
+~ .github/workflows/{ci,sauvegarde}.yml + backend/scripts/*  ← Postgres 18
+```
+
+---
+
 ## [0.97.0] — 2026-10-25 — La CI passe au vert pour la première fois
 
 **Six jobs verts, et c'est inédit depuis la création du dépôt le 01/06/2026.**

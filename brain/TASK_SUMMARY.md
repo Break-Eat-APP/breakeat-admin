@@ -4,6 +4,100 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-10-26] L'audit Codex traité de bout en bout — 4 bloquants, 9 risques élevés
+
+> Détail dans `CHANGELOG.md` [0.98.0] → [0.99.0] ; analyse dans
+> `ENGINEERING_MANUAL.md` « Phases 68 et 69 » ; constats d'origine dans
+> `AUDIT_COMPLET_BREAKEAT_2026-10-25.md`.
+
+### Livré
+
+**Les quatre bloquants (P0)** — autorisation par salon temps réel avec refus
+par défaut ; adaptateur Redis pour le multi-instance ; détection de la mise en
+ligne qui ne dépend plus de `NODE_ENV`, et refus de démarrer sur un secret JWT
+faible ; réservation conditionnelle des points de fidélité.
+
+**Les neuf risques élevés (P1)** — zéro vulnérabilité critique (dont une RCE
+non authentifiée dans Next) ; compteurs de limitation partagés via Redis ;
+campagnes de masse par lots ; pool de connexions explicite ; refus de stock
+sans mutation ; une seule commande de déploiement ; statut de campagne
+honnête ; réconciliation temps réel permanente.
+
+**En chemin** — la production tournait sur Postgres 18 et non 16 ; le job
+`Build` n'avait jamais tourné ; un second chemin de déploiement Vercel, cassé,
+supprimé.
+
+### Décisions d'architecture
+
+- **Le défaut est le refus.** Un salon temps réel dont le préfixe est inconnu
+  est rejeté. Ouvrir par défaut est ce qui a produit la faille.
+- **Un UUID identifie, il n'autorise pas.** Le secret d'un identifiant n'est
+  pas un contrôle d'accès.
+- **Une seule écriture de la règle d'accès.** Le temps réel appelle
+  `requireOrgAccess`, celle du REST. Deux écritures auraient divergé.
+- **On ne se fie pas à une variable que quelqu'un doit penser à régler.**
+  `estEnLigne()` lit ce que l'hébergeur pose lui-même.
+- **Un seul motif de refus de démarrage : le secret JWT.** Pour tout le reste,
+  une API dégradée sert encore ; avec un secret forgeable, elle sert aussi
+  l'attaquant.
+- **L'exploitant garde le dernier mot.** Un `connection_limit` posé dans
+  Railway l'emporte sur le code.
+- **On refuse sans muter.** La réponse correspond toujours à l'état.
+- **On ne rejoue pas ce qui a pu partir.** Une campagne interrompue est marquée
+  échouée, pas réessayée : l'archivage précède l'envoi.
+
+### Tests
+
+| | |
+|---|---|
+| Backend | **63 suites, 840 tests** |
+| Intégration (Postgres 18 + Redis) | **16 suites, 130+ tests** |
+| Opérateur | 12 |
+| Admin / back-office / mobile | 25 / 27 / 34 |
+
+Tests neufs notables : 13 sur l'accès aux salons (un refus par type), 5 sur la
+limitation partagée entre instances, 3 sur le temps réel multi-instances, 7 sur
+le panier et le stock, 8 sur le statut des campagnes, 9 sur le pool, 6 sur la
+diffusion sûre.
+
+### Erreurs commises, à ne pas reproduire
+
+**J'ai cru l'audit sans vérifier d'abord.** Sur P1-3, il annonçait un
+dépassement de la limite de paramètres PostgreSQL. Correctif et tests écrits
+sur cette base, puis éprouvés en neutralisant le découpage — et il n'y a pas eu
+d'échec. Prisma découpe lui-même. Le correctif reste défendable pour une autre
+raison (la durée de transaction), et la documentation porte la correction.
+
+> Un constat d'audit se vérifie dans le code avant d'être corrigé. Même
+> excellent. Même quand il sonne juste.
+
+**Trois hypothèses infirmées avant de trouver** la course sur le code
+d'ardoise. La vraie cause était invisible parce que le correctif existait déjà
+dans le dossier de travail, sans être commité : les essais locaux passaient
+pendant que la CI tournait sur la version du dépôt.
+
+> Devant un échec qu'on ne reproduit pas, `git status` sur le fichier incriminé
+> vient avant toute hypothèse.
+
+**Du code mort écrit puis retiré** : une branche pour le stock à zéro, jamais
+atteinte. Le test l'a montré.
+
+### Reste à faire
+
+| Sujet | État |
+|---|---|
+| `DATABASE_URL_SAUVEGARDE` + `SAUVEGARDE_PASSPHRASE` | **à poser** — sans eux, aucune sauvegarde automatique |
+| `NODE_ENV=production` sur les deux environnements Railway | à poser — le code n'en dépend plus, les outils tiers oui |
+| « Wait for CI » | activable depuis le 25/10 — **reporté** par le propriétaire |
+| Confidentialité App Store | déclaration « aucune donnée collectée » **fausse et publique** |
+| Outbox durable (P1-5) | **non faite**, assumé — la réconciliation couvre la conséquence |
+| 55 vulnérabilités élevées | outillage de build des frontends, jamais exposé |
+| P2 de l'audit | flags en base, CORS WebSocket, lectures non bornées, healthcheck liveness |
+| Branche `develop` | n'existe pas, alors que la CI l'attend — staging ne filtre rien |
+| Flaix Ops — 3 décisions | inchangé depuis le 01/10 |
+
+---
+
 ## [2026-10-25] Les notes clients, les dates choisies, et deux jours d'arrêt
 
 > Détail dans `CHANGELOG.md` [0.93.0] → [0.96.0] ; analyse dans

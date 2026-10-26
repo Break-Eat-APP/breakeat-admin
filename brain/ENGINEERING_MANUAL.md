@@ -7669,3 +7669,366 @@ possible, et c'est la dernière porte qui manque entre un commit fautif et la
 production.
 
 ---
+
+## Phase 68 — Les quatre bloquants de l'audit Codex (25–26/10/2026)
+
+Un audit extérieur a relevé quatre bloquants avant toute montée en charge.
+Tous confirmés dans le code avant d'être corrigés — un audit se contrôle, même
+excellent, et celui-ci s'est trompé une fois (voir phase 69, P1-3).
+
+### P0-1 — Le temps réel autorisait tout salon qui n'était pas une buvette
+
+`peutRejoindre` n'examinait que `supplier:` :
+
+```ts
+const prefixe = 'supplier:';
+if (!salon.startsWith(prefixe)) return true;   // ← tout le reste passait
+```
+
+Or `organization:`, `event:`, `order:` et `pickup-point:` portent des
+commandes, des montants et des noms de clients. **Un compte authentifié qui
+connaissait un UUID écoutait le flux d'un autre club**, en direct, sans jamais
+toucher l'API REST — qui le lui aurait refusé.
+
+Ce n'est pas une fuite abstraite : c'est le carnet de commandes d'un
+concurrent et les allées et venues de ses clients.
+
+L'en-tête du fichier assumait ce pari — *« No per-room authorization: room
+names are UUID-keyed and never published to clients »*. **Un UUID circule** :
+dans une URL, un journal, une capture d'écran, un rapport. Il identifie, il
+n'autorise pas.
+
+Une règle par type désormais, et **le défaut est le refus** :
+
+| Salon | Qui peut l'écouter |
+|---|---|
+| `organization:` / `dashboard:` | membre du club |
+| `event:` | membre du club qui porte l'événement |
+| `pickup-point:` | membre du club qui porte le point |
+| `supplier:` | membre, et son comptoir s'il est épinglé |
+| `order:` | **son** client, ou le personnel du club |
+| *(préfixe inconnu)* | **refus** |
+
+Les règles appellent `requireOrgAccess`, celle du REST, enveloppée en booléen :
+le contournement SUPER_ADMIN et la lecture du rôle en base restent à **un**
+endroit. Deux écritures auraient fini par diverger, et le temps réel serait
+redevenu une porte dérobée.
+
+**Vérifié que la correction ne casse pas le produit** avant de la poser : seule
+l'app opérateur rejoint des salons, toujours authentifiée. La page publique
+`/public/[eventId]` se connecte avec un jeton **vide** — la passerelle la
+rejetait déjà, son socket n'a jamais fonctionné, et elle vit sur son repli
+REST.
+
+### P0-2 — Socket.IO gardait ses salons en mémoire
+
+Avec une seule instance, cela suffit et personne ne voit le problème. Dès la
+seconde, chaque instance ne connaît que les sockets qui lui sont connectés.
+
+**Le soir où ça compte, c'est-à-dire le soir où l'on ajoute des instances** :
+le client paie sur l'instance A, le comptoir est branché sur la B, et la
+commande n'apparaît qu'au prochain rafraîchissement REST. Personne ne comprend
+pourquoi « ça marche une fois sur deux » — cela dépend de l'instance sur
+laquelle le proxy a posé chaque partie.
+
+`REDIS_URL` existait dans `app.config.ts` **depuis toujours sans qu'aucune
+ligne ne la lise**. Du réglage mort, comme `backend/railway.json`.
+
+La preuve, avec deux vrais serveurs et un client branché sur **un seul** des
+deux — aucune doublure ne répond à cette question :
+
+```
+SANS adaptateur (mémoire) : RIEN REÇU
+AVEC adaptateur Redis     : reçu -> {"numero":"BE-42"}
+```
+
+**On ne tombe pas si Redis manque** : on garde l'adaptateur mémoire et on le
+dit, en `error` quand on est en ligne. Une API qui sert une seule instance vaut
+mieux qu'une API qui refuse de démarrer.
+
+### P0-3 — `NODE_ENV` valait « staging » EN PRODUCTION
+
+Trouvaille que l'audit n'avait pas faite — il supposait `NODE_ENV=production`.
+`/health` disait le contraire, sur les **deux** services Railway.
+
+Tout ce qui en dépendait était donc inactif en ligne :
+
+- `all-exceptions.filter.ts` renvoyait au client **le message d'erreur brut** —
+  messages PostgreSQL, noms de colonnes, chemins de fichiers ;
+- le rapport de configuration journalisait en `warn` au lieu de `error` ;
+- le niveau de journalisation restait `debug` ;
+- Sentry échantillonnait à 100 % au lieu de 20 %.
+
+Aucun de ces comportements ne se signale : ils se contentent d'être trop
+bavards. C'est pourquoi personne ne l'a vu.
+
+**On ne se fie plus à une variable que quelqu'un doit penser à régler.**
+`estEnLigne()` lit ce que Railway pose lui-même (`RAILWAY_*`), et accepte
+encore `NODE_ENV=production` pour les hébergeurs qui le renseignent. En local,
+rien de cela n'existe : le développeur garde ses messages complets.
+
+**Et le démarrage est refusé sur un secret JWT faible** — absent, égal au repli
+`insecure-dev-secret` (écrit en clair dans ce dépôt), ou sous 32 caractères.
+
+Le commentaire du fichier plaidait contre tout arrêt : *« une API debout mais
+mal configurée sert encore l'app mobile »*. L'argument tient pour Stripe ou
+CORS — une clé absente empêche d'encaisser, elle n'ouvre rien. Il ne tient pas
+ici : avec ce secret, **n'importe qui forge un jeton de SUPER_ADMIN**. L'API ne
+servirait pas « mal », elle servirait l'attaquant aussi bien que le client.
+
+**Rien d'autre n'est rendu fatal**, délibérément : staging n'a pas de
+`STRIPE_PUBLISHABLE_KEY`, en faire un motif de refus l'empêcherait de démarrer.
+Un correctif de sécurité qui coupe un environnement sain n'en est pas un.
+
+### P0-4 — Deux paiements simultanés réservaient les points DEUX FOIS
+
+`cart.loyaltyHoldId` était lu **avant** la transaction. Deux requêtes
+concurrentes le voyaient toutes deux à `null`, débitaient toutes deux le solde,
+créaient deux HOLD, et la seconde écrasait le pointeur de la première.
+
+**Pour un client : 100 points débités au lieu de 50, et 50 points perdus pour
+toujours** — plus rien ne désignait la première réservation, donc
+`releaseHoldForCart` ne la rendrait jamais.
+
+L'index unique sur `loyaltyHoldId` n'y pouvait rien : deux réservations portent
+deux identifiants différents, les deux écritures étaient valides. **Une
+contrainte d'unicité protège d'un doublon, pas d'une course.**
+
+Le panier se **réserve** désormais : `updateMany` avec `loyaltyHoldId: null`
+fait du contrôle et de l'écriture une seule instruction, que PostgreSQL
+sérialise. Le perdant fait tout annuler, débit compris — **et rend la
+réservation du gagnant, pas une erreur**. Deux clics sur « Payer » ne doivent
+ni débiter deux fois, ni afficher une erreur pour un geste de bonne foi.
+
+Vérifié dans les deux sens sur un vrai PostgreSQL 18 : sans la condition,
+2 tests échouent avec « Expected: 1, Received: 2 ».
+
+### Et la production tournait sur Postgres 18, pas 16
+
+`pg_dump` a refusé la première sauvegarde :
+
+```
+server version: 18.6 ; pg_dump version: 16.15
+```
+
+J'avais supposé 16 **partout** sans le vérifier, et le décalage dépassait la
+sauvegarde : le vérificateur de migrations et la base des tests d'intégration
+éprouvaient sur 16 ce qui tourne sur 18. **Un filet réglé sur la mauvaise
+version est un filet qui ment.** Quatre endroits alignés.
+
+---
+
+## Phase 69 — Les neuf P1, et ce que l'audit se trompait (26/10/2026)
+
+### P1-9 — La plus grave n'était pas dans les bloquants
+
+`next` 15.5.25 porte une **exécution de code à distance non authentifiée** via
+l'optimisation d'images. Les trois consoles tournent dessus en production.
+Corrigée en 15.5.28 — un saut de patch.
+
+C'est la seule faille de tout l'audit qui permet à un inconnu d'exécuter du
+code. Elle était classée P1-9, noyée dans une liste de 108.
+
+**Le backend est propre** de toute critique et de toute élevée : `proxy-addr`
+(usurpation d'IP, qui fausse la limitation de débit), `ws`, `engine.io`,
+`socket.io-parser` (trois dénis de service sur la couche WebSocket),
+`body-parser`, `multer`, `brace-expansion`, `deepmerge-ts`.
+
+Toutes **transitives** : les corriger directement imposerait de faire monter
+NestJS, Prisma et Sentry. D'où des `overrides` **bornées par plage**, pour ne
+pas déplacer les arbres voisins — `ws@7`, `brace-expansion@1` et `@5`
+cohabitent ici.
+
+**Elles vivent dans `pnpm-workspace.yaml`, pas dans `package.json`** : pnpm 11
+ne lit plus le champ `pnpm` du manifeste. Il le dit en clair, et c'est ainsi
+que la première tentative a échoué en silence — overrides écrites, lockfile
+intact, versions inchangées.
+
+De **4 critiques et 71 élevées** à **0 et 55**. Les 55 restantes sont dans
+l'outillage de build des frontends, jamais exposées à une requête.
+
+### P1-1 — Les compteurs de limitation étaient par instance
+
+Le fichier `limitation.ts` l'annonçait lui-même : *« le jour où l'API se
+dédouble, il faudra les déporter dans Redis »*. C'était ce jour-là.
+
+Deux conséquences opposées, toutes deux fâcheuses : la limite est
+**multipliée** par le nombre d'instances — les 8 tentatives de mot de passe par
+quart d'heure deviennent 16 avec deux replicas, et **il suffit de changer
+d'instance pour repartir à zéro** ; et un redéploiement efface les blocages au
+moment précis où ils servaient.
+
+Tout se joue dans **un script Lua**, que Redis exécute d'un seul tenant. Lire
+puis écrire en deux allers-retours laisserait deux instances compter le même
+coup une seule fois.
+
+**Le piège, ce sont les unités** : `ttl` et `blockDuration` arrivent en
+millisecondes, `timeToExpire` se rend en secondes. Les confondre fausserait les
+limites d'un facteur mille. Vérifié dans le code d'origine avant d'écrire une
+ligne, et un test le verrouille.
+
+### P1-3 — L'audit se trompait, et moi avec
+
+Il annonçait qu'à 100 000 destinataires on dépasserait la limite de
+**65 535 paramètres** du protocole PostgreSQL et que la requête échouerait net.
+J'ai écrit le correctif et les tests sur cette base, puis je les ai éprouvés en
+neutralisant le découpage pour voir l'échec.
+
+**Il n'y a pas eu d'échec :**
+
+```
+findMany IN avec 100 000 valeurs        passe
+createMany 50 000 lignes × 4 colonnes   passe
+```
+
+Prisma découpe lui-même ce qu'il envoie.
+
+**Ce qui reste vrai**, et qui justifie le découpage : un `createMany` géant
+tient **une seule transaction**, donc ses verrous, du début à la fin. Or un
+club annonce un match quand les buvettes servent — c'est le pire moment pour
+immobiliser la base.
+
+> C'est une question de **disponibilité**, pas de capacité. Sans cette nuance,
+> on croirait avoir réparé une panne alors qu'on a lissé une contention.
+
+L'audit porte la correction à l'endroit même de son constat. Un commentaire
+confortable qui ment coûte plus cher que pas de commentaire : il arrête la
+réflexion de celui qui le lit.
+
+### P1-4 — Le pool de connexions était deviné par la machine hôte
+
+`new PrismaClient()` sans option laisse Prisma choisir `cœurs × 2 + 1`. **Le
+défaut n'est pas que la valeur soit mauvaise, c'est qu'elle soit
+imprévisible** : dans un conteneur, le nombre de cœurs rapporté est souvent
+celui de l'hôte. La même image ouvre 9 connexions ici et 33 ailleurs.
+
+Dix par instance désormais, et **l'exploitant garde le dernier mot** : poser
+`?connection_limit=25` dans Railway l'emporte sur le code. Un correctif qui
+écrase un réglage délibéré se retourne contre celui qui l'a posé.
+
+**Ce qui n'est pas vérifié** : que Prisma honore réellement `connection_limit`
+à l'exécution. C'est son comportement documenté, mais trois tentatives de
+mesure sont restées inexploitables — le montage ne produisait pas assez de
+concurrence pour saturer un pool. Dit plutôt qu'habillé.
+
+### P1-6 — Un refus de stock modifiait quand même le panier
+
+Le code écrivait la quantité demandée, la ramenait au stock, **puis levait une
+erreur**. Le client voyait un échec — et son panier avait changé.
+
+Le commentaire portait l'hésitation en toutes lettres :
+
+```ts
+// Roll back the over-quantity by capping at stock OR removing? Cap is friendlier.
+```
+
+La question n'avait jamais été tranchée, alors le code faisait **les deux** :
+la mutation du plafonnement, le signal du refus.
+
+**Elle est tranchée : on refuse sans rien changer.** Quelqu'un qui commande dix
+bières pour son rang et repart avec trois sans l'avoir vu ne l'apprend qu'au
+comptoir. Ce n'est pas « plus aimable » — c'est une commande à laquelle il n'a
+pas consenti.
+
+Le message dit ce qui reste : *« Il n'en reste que 3. Ton panier n'a pas été
+modifié. »* Et la vérification porte sur le **cumul** : trois fois deux bute au
+même endroit que six d'un coup.
+
+**Du code mort retiré au passage** : j'avais écrit une branche pour le stock à
+zéro ; elle ne s'exécute jamais, `assertProductOrderable` refusant plus haut.
+Le test l'a montré.
+
+### P1-7 — Quatre commandes de démarrage disaient des choses différentes
+
+| Fichier | Ce qu'il disait |
+|---|---|
+| `railway.json` *(racine)* | `db:generate && sh scripts/migrer.sh && node dist/main` — **la seule active** |
+| `backend/railway.json` | `db:migrate:prod && …` — supprimé |
+| `nixpacks.toml [start]` | encore une autre — retiré |
+| `backend/Dockerfile` | `pnpm@latest` là où le dépôt verrouille 11.3.0 |
+
+**Les trois mortes contournaient toutes `scripts/migrer.sh`** — donc ses douze
+tentatives sur base injoignable. Le défaut qu'il répare serait revenu intact.
+
+Le danger n'était pas qu'elles tournent, c'est **qu'elles auraient pu** : il
+suffisait que quelqu'un touche à `railway.json` pour que le déploiement reparte
+silencieusement sur une autre commande.
+
+Sans aucun `[start]` ni script `start` à la racine, un `railway.json` amputé
+**fait échouer** le déploiement au lieu d'en inventer un autre. C'est le bon
+mode de panne : bruyant.
+
+### P1-2 — « Envoyée » se disait même quand rien n'était parti
+
+`ExpoPushService.send()` ne lève **jamais** : il absorbe les erreurs réseau et
+rend un résumé. Une campagne dont tous les lots avaient échoué était donc
+enregistrée `SENT` avec `sentCount: 0`.
+
+Le club lisait « envoyé » pour une annonce que personne n'avait reçue. Il ne
+s'en apercevait **qu'au silence du stade**.
+
+Désormais : des appareils visés et rien de parti → **échoué**. Un seul reçu →
+envoyé. Et **zéro destinataire n'est pas un échec** : il n'y avait rien à
+envoyer, et l'annonce vit sur la cloche. Sans cette distinction, un club dont
+aucun client n'a autorisé les notifications verrait *toutes* ses campagnes en
+échec et cesserait d'y croire.
+
+**Et une campagne restée « en cours » n'avait plus personne pour la finir.** Si
+le processus meurt entre le passage en `PROCESSING` et la fin, le cron ne la
+reprend jamais. On ne la rejoue pas — l'archivage précède l'envoi, la rejouer
+dupliquerait la cloche — on la **marque échouée et on le journalise**.
+
+### P1-5 — Un événement perdu n'était JAMAIS rattrapé
+
+Le commentaire annonçait une « outbox rule » et il n'y avait pas d'outbox.
+**J'ai mesuré l'exposition avant de construire**, et elle était pire
+qu'annoncée : le tableau de bord ne sondait le REST que socket **déconnecté**.
+
+```js
+if (status === 'connected') stopPolling();
+```
+
+Un socket « connecté » était pris pour la preuve que rien ne manquait. Or un
+événement se perd sans que la connexion tombe. La commande existait, elle était
+payée, et elle n'apparaissait **jamais** au comptoir.
+
+Deux corrections, qui visent la **conséquence** plutôt que la seule cause : la
+réconciliation ne s'arrête plus (10 s déconnecté, 60 s connecté, en filet), et
+diffuser ne peut plus casser l'opération — `server.to(...)` pouvait lever, et
+cette erreur remontait jusqu'au webhook Stripe, **qui rejouait sur une commande
+déjà créée**.
+
+**L'outbox durable n'est pas faite**, et c'est dit plutôt que coché. Son apport
+au-delà de ce qui précède est étroit : la réconciliation rattrape un événement
+perdu quelle qu'en soit la cause, y compris celles qu'une outbox ne couvrirait
+pas.
+
+### Ce que la CI a révélé en chemin
+
+Trois défauts de chaîne, tous invisibles jusqu'à ce qu'on la regarde :
+
+- le **job Build** lançait cinq compilations à la fois sur deux cœurs. Il
+  n'avait jamais tourné avant le 25/10 : son instabilité n'était pas une
+  régression, c'était sa première exécution ;
+- `deploy-frontends.yml` tournait sur **Node 20**, que le dépôt déclare non
+  supporté, puis échouait sur `Project not found`. Il déployait `admin` et
+  `operator` **en parallèle de l'intégration Git de Vercel**, qui fait déjà le
+  travail. Supprimé : un second chemin de déploiement ne double pas la
+  fiabilité, il double les endroits où chercher ;
+- il ne figurait pas dans ses **propres** `paths` : ses corrections ne
+  s'éprouvaient jamais.
+
+### Une leçon de méthode, qui a coûté une heure
+
+Sur le défaut de concurrence des ardoises, trois hypothèses ont été formulées
+puis **infirmées par l'expérience** — fuseau horaire, parallélisme, client
+Prisma. À chaque fois l'essai a tranché, pas le raisonnement.
+
+La vraie cause est pourtant restée invisible pour une raison bête : le
+correctif existait **déjà dans le dossier de travail**, sans être commité. Les
+essais locaux passaient pendant que la CI tournait sur la version du dépôt.
+
+> Devant un échec qu'on ne reproduit pas, `git status` sur le fichier incriminé
+> vient avant toute hypothèse.
+
+---
