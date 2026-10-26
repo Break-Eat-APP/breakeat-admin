@@ -7,6 +7,15 @@ on:
       - 'apps/admin/**'
       - 'apps/operator/**'
       - 'pnpm-lock.yaml'
+      # CE FICHIER SE SURVEILLE LUI-MEME.
+      #
+      # Le correctif Node 20 -> 22 n'a touche que ce workflow, donc il ne
+      # figurait dans AUCUN de ses propres chemins : la correction etait
+      # poussee et le deploiement restait rouge, en attendant qu'un commit
+      # sans rapport vienne le reveiller.
+      - '.github/workflows/deploy-frontends.yml'
+  # Et un declenchement manuel, pour rejouer sans attendre un commit.
+  workflow_dispatch:
 
 jobs:
   deploy-admin:
