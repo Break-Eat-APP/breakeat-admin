@@ -172,6 +172,13 @@ if (resultat.error && resultat.error.code === 'ENOENT') {
 
 if (resultat.status !== 0) {
   console.error('\nLa sauvegarde a ÉCHOUÉ. Rien ne garantit le fichier produit — ne pas s’y fier.');
+  console.error('');
+  console.error('  Cause frequente — « server version mismatch » juste au-dessus :');
+  console.error('  `pg_dump` refuse une base PLUS RECENTE que lui. Et installer le bon');
+  console.error('  client ne suffit pas : il faut aussi etre trouve en premier. Un');
+  console.error('  runner GitHub place son PostgreSQL 16 en tete du PATH.');
+  console.error('  Verifier avec : command -v pg_dump ; pg_dump --version');
+  console.error('');
   process.exit(resultat.status || 1);
 }
 
