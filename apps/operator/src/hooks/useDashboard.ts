@@ -154,6 +154,10 @@ interface UseDashboardOptions {
   /** Fallback polling interval when socket is disconnected (ms). Default 10_000 */
   pollInterval?: number;
   /**
+   * Rythme de RECONCILIATION, socket connecté. Voir `startPolling`.
+   */
+  reconciliationInterval?: number;
+  /**
    * Phase 12.9 — when set, only orders for this supplier are fetched.
    * An OPERATOR assigned to a specific supplier passes their supplierId here.
    */
@@ -165,6 +169,7 @@ export function useDashboard({
   token,
   apiUrl,
   pollInterval = 10_000,
+  reconciliationInterval = 60_000,
   supplierId,
 }: UseDashboardOptions) {
   const [state, dispatch] = useReducer(dashboardReducer, INITIAL_STATE);
@@ -239,16 +244,38 @@ export function useDashboard({
 
   // ─── Polling fallback ─────────────────────────────────────────
 
+  /**
+   * ON CONTINUE DE RELIRE, MÊME SOCKET CONNECTÉ.
+   *
+   * Avant, le sondage s'ARRÊTAIT dès la connexion : le tableau s'en remettait
+   * entièrement aux événements. Un socket « connecté » était pris pour la
+   * preuve que rien ne manquait.
+   *
+   * Or un événement se perd sans que la connexion tombe : le serveur peut
+   * mourir entre le commit de la commande et sa diffusion, Redis peut
+   * hoqueter, l'adaptateur échouer. Dans ce cas, la commande existait, elle
+   * était payée — et elle n'apparaissait JAMAIS au comptoir. Pas « en
+   * retard » : jamais, jusqu'à ce que quelqu'un recharge la page.
+   *
+   * Deux rythmes, donc :
+   *   • déconnecté — toutes les 10 s, c'est la seule source ;
+   *   • connecté   — toutes les 60 s, en filet. Une commande oubliée
+   *     réapparaît dans la minute au lieu de disparaître.
+   *
+   * Le coût est une requête par minute et par poste. C'est le prix d'un
+   * comptoir qui ne rate pas une commande payée.
+   */
   const startPolling = useCallback(() => {
     if (pollTimerRef.current) return;
-    pollTimerRef.current = setInterval(() => {
-      if (socketRef.current?.isConnected()) {
-        stopPolling();
-        return;
-      }
+    const relire = () => {
+      const connecte = socketRef.current?.isConnected() ?? false;
       void loadSnapshot();
-    }, pollInterval);
-  }, [loadSnapshot, pollInterval]);
+      // Le rythme change avec l'état : on repose un minuteur au bon tempo.
+      stopPolling();
+      pollTimerRef.current = setInterval(relire, connecte ? reconciliationInterval : pollInterval);
+    };
+    pollTimerRef.current = setInterval(relire, pollInterval);
+  }, [loadSnapshot, pollInterval, reconciliationInterval]);
 
   function stopPolling() {
     if (pollTimerRef.current) {
@@ -278,11 +305,9 @@ export function useDashboard({
       onEvent: handleRealtimeEvent,
       onStatusChange: (status) => {
         dispatch({ type: 'SOCKET_STATUS', status });
-        if (status === 'disconnected' || status === 'error') {
-          startPolling();
-        } else if (status === 'connected') {
-          stopPolling();
-        }
+        // On ne s'arrête plus à la connexion : le sondage se contente de
+        // ralentir, et reste le filet sous les événements.
+        startPolling();
       },
       onResync: () => void loadSnapshot(),
     });

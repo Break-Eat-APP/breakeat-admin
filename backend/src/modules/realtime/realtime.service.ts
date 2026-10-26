@@ -63,6 +63,42 @@ export class RealtimeService {
 
   constructor(private readonly gateway: RealtimeGateway) {}
 
+  /**
+   * DIFFUSER NE DOIT JAMAIS CASSER CE QUI VIENT D'ETRE FAIT.
+   *
+   * Toutes ces emissions ont lieu APRES le commit : la commande existe, elle
+   * est payee, l'argent est encaisse. Prevenir les ecrans est une
+   * COURTOISIE — pas une etape de l'operation.
+   *
+   * Or `this.gateway.server` peut ne pas etre pret (passerelle pas encore
+   * initialisee) et `server.to(...)` lever un TypeError. Cette erreur
+   * remontait jusqu'au webhook Stripe, qui repondait en echec — et Stripe
+   * rejouait, sur une commande deja creee.
+   *
+   * On journalise donc, et on laisse passer. Une commande reussie ne doit
+   * pas devenir un echec parce qu'un ecran n'a pas ete prevenu.
+   *
+   * CE QUI RATTRAPE UN EVENEMENT PERDU, c'est la reconciliation REST du
+   * tableau de bord : il recharge son instantane regulierement, meme socket
+   * connecte. Voir `apps/operator/src/hooks/useDashboard.ts`.
+   */
+  private diffuser(salons: string[], nom: string, enveloppe: unknown): void {
+    try {
+      const { server } = this.gateway;
+      if (!server) {
+        this.logger.warn(`${nom} non diffuse : passerelle temps reel pas encore prete.`);
+        return;
+      }
+      for (const salon of salons) server.to(salon).emit(nom, enveloppe);
+      this.logger.debug(`Emitted ${nom} to ${salons.length} rooms`);
+    } catch (e) {
+      this.logger.error(
+        `${nom} non diffuse : ${e instanceof Error ? e.message : String(e)}. ` +
+          `L'operation elle-meme a abouti ; les ecrans se rattraperont par REST.`,
+      );
+    }
+  }
+
   /** Emitted once after Order is created from a successful PaymentIntent. */
   emitNewOrder(payload: NewOrderPayload): void {
     const envelope = {
@@ -78,12 +114,15 @@ export class RealtimeService {
       status: 'PAID',
     };
 
-    const { server } = this.gateway;
-    server.to(`organization:${payload.organizationId}`).emit('new_order', envelope);
-    server.to(`event:${payload.eventId}`).emit('new_order', envelope);
-    server.to(`supplier:${payload.supplierId}`).emit('new_order', envelope);
-
-    this.logger.debug(`Emitted new_order [${payload.orderId}] to 3 rooms`);
+    this.diffuser(
+      [
+        `organization:${payload.organizationId}`,
+        `event:${payload.eventId}`,
+        `supplier:${payload.supplierId}`,
+      ],
+      'new_order',
+      envelope,
+    );
   }
 
   /** Emitted after every successful state transition. */
@@ -99,17 +138,19 @@ export class RealtimeService {
       reason: payload.reason ?? null,
     };
 
-    const { server } = this.gateway;
-    server.to(`order:${payload.orderId}`).emit('order_updated', envelope);
-    server.to(`organization:${payload.organizationId}`).emit('order_updated', envelope);
-    server.to(`event:${payload.eventId}`).emit('order_updated', envelope);
-    // Salon de la BUVETTE : c'est celui qu'un poste ecoute. Sans lui, un
-    // comptoir abonne a sa seule buvette ne verrait jamais avancer ses propres
-    // commandes — il resterait fige jusqu'au prochain rafraichissement complet.
-    server.to(`supplier:${payload.supplierId}`).emit('order_updated', envelope);
-
-    this.logger.debug(
-      `Emitted order_updated [${payload.orderId}] ${payload.previousStatus} → ${payload.nextStatus}`,
+    this.diffuser(
+      [
+        `order:${payload.orderId}`,
+        `organization:${payload.organizationId}`,
+        `event:${payload.eventId}`,
+        // Salon de la BUVETTE : c'est celui qu'un poste ecoute. Sans lui, un
+        // comptoir abonne a sa seule buvette ne verrait jamais avancer ses
+        // propres commandes — il resterait fige jusqu'au prochain
+        // rafraichissement complet.
+        `supplier:${payload.supplierId}`,
+      ],
+      'order_updated',
+      envelope,
     );
   }
 
@@ -132,10 +173,15 @@ export class RealtimeService {
       arrivedAt: payload.arrivedAt,
     };
 
-    const { server } = this.gateway;
-    server.to(`organization:${payload.organizationId}`).emit('customer_arrived', envelope);
-    server.to(`event:${payload.eventId}`).emit('customer_arrived', envelope);
-    server.to(`supplier:${payload.supplierId}`).emit('customer_arrived', envelope);
+    this.diffuser(
+      [
+        `organization:${payload.organizationId}`,
+        `event:${payload.eventId}`,
+        `supplier:${payload.supplierId}`,
+      ],
+      'customer_arrived',
+      envelope,
+    );
 
     this.logger.debug(`Emitted customer_arrived [${payload.orderId}] to 3 rooms`);
   }
@@ -154,12 +200,17 @@ export class RealtimeService {
       pickupPointId: payload.pickupPointId,
     };
 
-    const { server } = this.gateway;
-    server.to(`order:${payload.orderId}`).emit('order_ready', envelope);
-    server.to(`pickup-point:${payload.pickupPointId}`).emit('order_ready', envelope);
-    server.to(`organization:${payload.organizationId}`).emit('order_ready', envelope);
-    server.to(`event:${payload.eventId}`).emit('order_ready', envelope);
-    server.to(`supplier:${payload.supplierId}`).emit('order_ready', envelope);
+    this.diffuser(
+      [
+        `order:${payload.orderId}`,
+        `pickup-point:${payload.pickupPointId}`,
+        `organization:${payload.organizationId}`,
+        `event:${payload.eventId}`,
+        `supplier:${payload.supplierId}`,
+      ],
+      'order_ready',
+      envelope,
+    );
 
     this.logger.debug(`Emitted order_ready [${payload.orderId}] → pickup-point ${payload.pickupPointId}`);
   }
