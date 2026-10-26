@@ -448,7 +448,20 @@ function CaseMatch({
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.case, match.passe && styles.casePassee]}
+      /*
+        OUVERT L'EMPORTE SUR PASSÉ.
+
+        Les deux peuvent être vrais en même temps, et ce n'est pas un défaut
+        de calcul : un club qui laisse son événement au statut ACTIVE après
+        le match le garde commandable — c'est la règle du parcours Break Eat
+        (`cheminDeCommande`), et `ouvert` la reflète fidèlement.
+
+        Mais estomper une case tout en la cerclant d'orange, avec « ouvert »
+        écrit dessous, c'est se contredire à l'écran. Entre « c'est fini » et
+        « tu peux commander », le supporter n'a besoin que du second : c'est
+        le seul des deux sur lequel il peut agir.
+      */
+      style={[styles.case, match.passe && !match.ouvert && styles.casePassee]}
       accessibilityRole="button"
       accessibilityLabel={`${match.opponentName ?? match.name}, ${libelleDateLongue(match.startAt)}`}
       accessibilityState={{ selected: selectionne }}
