@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { parLots } from '../../common/helpers/par-lots';
 
 /**
  * Les notifications d'un client, telles que la cloche les compte.
@@ -22,9 +23,20 @@ export class UserNotificationsService {
   /**
    * Archive un message pour chacun de ses destinataires.
    *
-   * Appelé au moment de l'envoi d'une campagne. En une seule écriture : une
-   * campagne peut viser des milliers de clients, et autant d'allers-retours
-   * tiendraient la base occupée pendant tout l'envoi.
+   * Appelé au moment de l'envoi d'une campagne. PAR LOTS, et la raison n'est
+   * pas celle qu'on croyait : un `createMany` de 50 000 lignes passe très
+   * bien (vérifié le 26/10/2026 — Prisma découpe lui-même ce qu'il envoie).
+   *
+   * Mais il reste UNE SEULE TRANSACTION, qui tient ses verrous du début à la
+   * fin. Or un club annonce un match quand les buvettes servent : c'est le
+   * pire moment pour immobiliser la base. Par lots, chaque écriture se
+   * termine et rend la main — la campagne prend un peu plus longtemps, les
+   * commandes continuent de passer.
+   *
+   * SI UN LOT ÉCHOUE, LES PRÉCÉDENTS RESTENT ARCHIVÉS. C'est délibéré : une
+   * notification à moitié distribuée vaut mieux qu'une campagne entièrement
+   * perdue, et rien ici ne touche à de l'argent. Le compte rendu dit combien
+   * sont réellement passées.
    */
   async archiver(params: {
     userIds: string[];
@@ -33,16 +45,20 @@ export class UserNotificationsService {
     body: string;
   }): Promise<number> {
     if (params.userIds.length === 0) return 0;
-    const { count } = await this.prisma.userNotification.createMany({
-      data: params.userIds.map((userId) => ({
-        userId,
-        organizationId: params.organizationId,
-        title: params.title,
-        body: params.body,
-      })),
-    });
-    this.logger.log(`${count} notification(s) archivée(s) : « ${params.title} »`);
-    return count;
+    let total = 0;
+    for (const lot of parLots(params.userIds)) {
+      const { count } = await this.prisma.userNotification.createMany({
+        data: lot.map((userId) => ({
+          userId,
+          organizationId: params.organizationId,
+          title: params.title,
+          body: params.body,
+        })),
+      });
+      total += count;
+    }
+    this.logger.log(`${total} notification(s) archivée(s) : « ${params.title} »`);
+    return total;
   }
 
   /** La liste et le nombre de non-lues, en un appel — la cloche a besoin des deux. */

@@ -121,6 +121,24 @@ Une diffusion globale charge tous les tokens en mémoire. Une campagne ciblée c
 
 Correction : pagination par curseur, snapshot de campagne, lots limités, idempotency key par campagne et utilisateur, worker asynchrone.
 
+> **Vérifié le 26/10/2026 — la limite de paramètres est une FAUSSE PISTE.**
+>
+> Mesuré sur un PostgreSQL 18 réel : `findMany` avec un `IN` de **100 000**
+> valeurs passe, et `createMany` de **50 000 lignes × 4 colonnes** passe
+> aussi. Prisma découpe lui-même ce qu'il envoie : le plafond de 65 535
+> paramètres n'est jamais atteint par ce code.
+>
+> Ce qui reste vrai, et qui a été corrigé : un `createMany` géant tient UNE
+> SEULE transaction, donc ses verrous, pendant que les buvettes servent. Le
+> découpage par lots (`common/helpers/par-lots.ts`) rend la main entre chaque
+> écriture. C'est une question de **disponibilité**, pas de capacité.
+>
+> La pagination par curseur et le worker asynchrone restent des sujets
+> ouverts, mais pour la durée d'envoi — pas pour éviter un échec.
+>
+> Trois tests d'intégration couvrent désormais une campagne de 25 000
+> destinataires : `test/integration/campagne-de-masse.int-spec.ts`.
+
 ### P1-4 — Pool PostgreSQL non explicite
 
 Fichier : backend/src/database/prisma.service.ts.

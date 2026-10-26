@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { parLots } from '../../common/helpers/par-lots';
 import { ExpoPushService } from './expo-push.service';
 
 /**
@@ -35,16 +36,33 @@ export class PushTokensService {
   /** Jetons d'un ensemble d'utilisateurs (pour cibler un envoi). */
   async tokensForUsers(userIds: string[]): Promise<string[]> {
     if (userIds.length === 0) return [];
-    const rows = await this.prisma.pushToken.findMany({
-      where: { userId: { in: userIds } },
-      select: { token: true },
-    });
-    return rows.map((r) => r.token);
+
+    /**
+     * PAR LOTS, pour rendre la main — pas pour contourner une limite.
+     *
+     * Vérifié le 26/10/2026 : un `IN` de 100 000 valeurs passe sans broncher,
+     * Prisma découpant lui-même ce qu'il envoie. La raison est ailleurs : une
+     * campagne de masse ne doit pas retenir la base pendant que les buvettes
+     * servent. Voir `common/helpers/par-lots.ts`.
+     */
+    const tokens: string[] = [];
+    for (const lot of parLots(userIds)) {
+      const rows = await this.prisma.pushToken.findMany({
+        where: { userId: { in: lot } },
+        select: { token: true },
+      });
+      tokens.push(...rows.map((r) => r.token));
+    }
+    return tokens;
   }
 
   /** Purge les jetons rejetés par Expo (DeviceNotRegistered). */
   async purgeInvalid(tokens: string[]): Promise<void> {
     if (tokens.length === 0) return;
-    await this.prisma.pushToken.deleteMany({ where: { token: { in: tokens } } });
+    // Même raison : une purge suit une campagne de masse, donc elle tombe au
+    // même moment — celui où la base doit rester disponible.
+    for (const lot of parLots(tokens)) {
+      await this.prisma.pushToken.deleteMany({ where: { token: { in: lot } } });
+    }
   }
 }
