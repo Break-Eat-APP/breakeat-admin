@@ -59,6 +59,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # LE JETON D'ABORD, LE RESTE ENSUITE.
+      #
+      # Sans `EXPO_TOKEN`, le build echoue de toute facon — mais il echouait
+      # APRES le checkout, l'installation de Node, de pnpm et de tout le
+      # monorepo : cinq minutes pour apprendre qu'un secret manque. Et le
+      # message d'EAS, « An Expo user account is required to proceed », se lit
+      # comme un probleme de compte plutot que comme un secret absent.
+      #
+      # Ici la verification coute une seconde et nomme le remede. Le jeton
+      # n'est jamais affiche : on teste seulement s'il est vide.
+      - name: Verifier le jeton Expo
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "## Secret EXPO_TOKEN absent" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Aucun build ne peut partir sans lui. Pour le poser :" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "1. Creer un jeton d'acces sur https://expo.dev/accounts/break-eat-app-spe/settings/access-tokens" >> "$GITHUB_STEP_SUMMARY"
+            echo "2. Depot GitHub : Settings > Secrets and variables > Actions > New repository secret" >> "$GITHUB_STEP_SUMMARY"
+            echo "3. Nom exact : \`EXPO_TOKEN\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Un secret pose sur un ENVIRONNEMENT, et non sur le depot, reste invisible ici." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Le secret EXPO_TOKEN est absent ou vide — voir le resume du run."
+            exit 1
+          fi
+          echo "Jeton Expo present."
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
