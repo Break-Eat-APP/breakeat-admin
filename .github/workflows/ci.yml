@@ -1,5 +1,15 @@
 name: CI
 
+# `develop` N'EXISTE PAS ENCORE, et c'est volontairement qu'elle reste ici.
+#
+# La configuration decrivait un circuit en deux temps — on travaille sur
+# `develop`, ca se teste, puis ca passe sur `main` — qui n'est pas celui du
+# depot aujourd'hui : tout va sur `main`. L'audit du 26/10 l'a releve.
+#
+# On ne RETIRE pas la mention pour autant. Une branche `develop` creee plus
+# tard serait alors sans aucun controle, en silence : le pire des deux. La
+# garder ne coute rien — une branche absente ne declenche jamais rien — et
+# le jour ou elle existe, la CI la couvre des le premier commit.
 on:
   push:
     branches: [main, develop]
