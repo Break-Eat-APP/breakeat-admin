@@ -18,7 +18,10 @@ jobs:
           version: 11.3.0
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # 22, comme `engines.node` l'exige (>=22.13.0) et comme le fait
+          # tout le reste de la CI. Ce workflow etait reste sur 20 : une
+          # version non supportee par le depot lui-meme.
+          node-version: '22'
           cache: 'pnpm'
       - name: Pull Vercel env
         run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
@@ -42,7 +45,10 @@ jobs:
           version: 11.3.0
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # 22, comme `engines.node` l'exige (>=22.13.0) et comme le fait
+          # tout le reste de la CI. Ce workflow etait reste sur 20 : une
+          # version non supportee par le depot lui-meme.
+          node-version: '22'
           cache: 'pnpm'
       - name: Pull Vercel env
         run: npx vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
