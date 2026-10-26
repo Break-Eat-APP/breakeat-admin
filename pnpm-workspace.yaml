@@ -28,3 +28,42 @@ packageExtensions:
   '@bacons/apple-targets':
     dependencies:
       '@expo/plist': '^0.5.4'
+
+# ─────────────────────────────────────────────────────────────────────────
+# VULNERABILITES TRANSITIVES — corrigees sans toucher a NestJS ni a Prisma.
+#
+# Toutes ces failles arrivent par des dependances de dependances : on ne peut
+# pas les mettre a jour directement sans faire monter leur parent, ce qui
+# serait un bien plus gros changement pour un bien plus gros risque.
+#
+# LES PLAGES SONT BORNEES, deliberement. Un override global deplacerait des
+# arbres voisins qui n'ont rien demande — `ws@7`, `brace-expansion@1` et `@5`
+# cohabitent ici et doivent rester ou ils sont.
+#
+# A RELIRE a chaque montee de NestJS : le jour ou le parent embarque deja la
+# version corrigee, l'override devient inutile et doit partir. Un override
+# oublie fige une version et finit par empecher une mise a jour legitime.
+overrides:
+  # La seule CRITIQUE qui touche le serveur : usurpation d'IP via une adresse
+  # IPv4 encapsulee en IPv6. Elle fausse tout ce qui se fie a l'IP, dont la
+  # limitation de debit.
+  'proxy-addr@<2.0.8': '^2.0.8'
+  # Deni de service par octets residuels apres un corps compresse.
+  'body-parser@>=2.0.0 <2.4.0': '^2.4.0'
+  # Deni de service par noms de champs profondement imbriques.
+  'multer@>=1.0.0 <2.2.0': '^2.2.0'
+  # Les trois suivantes visent la couche WebSocket — celle qui porte le temps
+  # reel un soir de match, quand une interruption se voit tout de suite.
+  'ws@>=8.0.0 <8.21.0': '^8.21.0'
+  'engine.io@>=6.6.0 <6.6.10': '^6.6.10'
+  'socket.io-parser@>=4.0.0 <4.2.7': '^4.2.7'
+  # Expansion exponentielle sur des accolades consecutives.
+  'brace-expansion@>=2.0.0 <2.1.2': '^2.1.2'
+  # Epuisement de pile sur des graphes recursifs. SAUT DE MAJEURE (7 -> 8),
+  # dans le chargeur de configuration de Prisma — eprouve avant d'etre garde :
+  # migrations rejouees sur une base vierge, suite complete, build.
+  'deepmerge-ts@<8.0.0': '^8.0.0'
+  # Injection de commande via un terminateur de ligne. Outillage de build
+  # Expo : jamais expose a une requete, mais une chaine de build compromise
+  # signe les binaires qui partent sur les telephones.
+  'shell-quote@<1.11.0': '^1.11.0'
