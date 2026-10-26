@@ -1,0 +1,17 @@
+{
+  // LES TESTS D'INTÉGRATION, COMPILÉS EUX AUSSI.
+  //
+  // `tsconfig.json` exclut `test/` : ces fichiers n'étaient donc compilés que
+  // par le job d'intégration, qui a besoin d'un Postgres 18 et tourne en
+  // dernier. Résultat le 26/10 : le constructeur d'`OrderSplitsService` a gagné
+  // un argument, le job « TypeScript » est passé au vert, les tests unitaires
+  // aussi — et c'est le job le plus lourd, quinze minutes plus tard, qui a
+  // signalé un appel à quatre arguments.
+  //
+  // Un feu vert qui ne couvre pas tout le code compilé est pire qu'une absence
+  // de feu : on s'y fie. Ce fichier remet `test/` sous le compilateur, dans le
+  // job rapide, avant qu'on dépense une base de données pour l'apprendre.
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*", "test/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

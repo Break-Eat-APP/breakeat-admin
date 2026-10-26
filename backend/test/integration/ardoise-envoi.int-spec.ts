@@ -40,6 +40,19 @@ decrire('envoi d’ardoise (base réelle)', () => {
         stripe as never,
         {} as never,
         { get: (cle: string) => (cle === 'app.split.enabled' ? true : '') } as never,
+        // L'INTERRUPTEUR DE L'ARDOISE, ajouté le 26/10 — et resté manquant ici.
+        //
+        // `resolveOuRien` rend `null` : « aucun flag en base », donc c'est la
+        // variable d'environnement juste au-dessus qui décide, et l'ardoise
+        // est ouverte. C'est bien ce que ces tests veulent éprouver — le
+        // comportement de l'interrupteur lui-même a son propre fichier
+        // (`modules/order-splits/interrupteur-ardoise.spec.ts`).
+        //
+        // Pourquoi ce fichier a échappé au typecheck : `backend/tsconfig.json`
+        // ne couvre pas `test/`, et ces tests ne tournent QUE dans le job
+        // d'intégration, avec une vraie base. Le compilateur ne les voit donc
+        // qu'à ce moment-là — bien après le feu vert des autres jobs.
+        { resolveOuRien: async () => null } as never,
       )
     : (null as never);
 
