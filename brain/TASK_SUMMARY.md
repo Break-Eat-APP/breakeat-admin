@@ -93,7 +93,7 @@ atteinte. Le test l'a montré.
 | Outbox durable (P1-5) | **non faite**, assumé — la réconciliation couvre la conséquence |
 | 55 vulnérabilités élevées | outillage de build des frontends, jamais exposé |
 | P2 de l'audit | **3 traités** (flags, compte désactivé en WS, CORS partagé). Restent : lectures non bornées (P2-4), healthcheck liveness, historique du dépôt |
-| **Calendrier de la saison** | **à construire** — spec posée le 26/10 dans `brain/CALENDRIER_SAISON.md` |
+| **Calendrier de la saison** | **à construire** — spec posée ET révisée le 26/10 dans `brain/CALENDRIER_SAISON.md` — domicile seulement, une seule vue, et le vocabulaire arrêté (c’est LA COMMANDE qui ouvre, pas les buvettes) |
 | Branche `develop` | n'existe pas, alors que la CI l'attend — staging ne filtre rien |
 | Flaix Ops — 3 décisions | inchangé depuis le 01/10 |
 

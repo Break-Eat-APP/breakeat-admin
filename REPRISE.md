@@ -155,37 +155,62 @@ sert plus finit par faire croire qu'il sert.
 
 ## 🔓 SUJETS OUVERTS — à reprendre (liste tenue au 01/10/2026)
 
-## 📅 LE CALENDRIER DE LA SAISON — à construire (posé le 26/10/2026)
+## 📅 LE CALENDRIER DE LA SAISON — à construire (posé et révisé le 26/10/2026)
 
-**Spec complète : `brain/CALENDRIER_SAISON.md`.**
+**Spec complète : `brain/CALENDRIER_SAISON.md`. Tout est tranché ; il reste à
+écrire le code.**
 
-Cliquer sur un lieu doit mener à sa saison : une grille où **le logo de
-l'adversaire remplace le numéro du jour**, un basculement vers une liste au
-choix du supporter, et un décompte qui n'apparaît que lorsqu'il veut dire
-quelque chose.
+Cliquer sur un lieu mène à sa saison : **une liste verticale groupée par mois,
+où le logo de l'adversaire tient la place de la date**, les matchs passés
+estompés, et un bandeau fixe qui dit si l'on peut commander.
 
-**Ce que ça doit servir, et qui décide de tout** : Break Eat n'est pas une app
-de club. On n'ouvre pas ce calendrier pour consulter la saison, mais pour
-savoir **quand commander**. L'état « match en cours » est le seul qui compte
-vraiment — c'est celui qui mène au bouton.
+**Ce qui décide de tout** : Break Eat n'est pas une app de club. On n'ouvre pas
+ce calendrier pour consulter la saison, mais pour savoir **quand commander**.
 
-**Deux questions à trancher avant d'écrire une ligne :**
+### Les quatre arbitrages du 26/10
 
-1. **D'où vient le logo de l'adversaire ?** `Event.logoUrl` existe mais sert
-   déjà de *branding* et retombe sur le logo du club : le détourner ferait
-   porter au club le blason de son rival. Trois options dans la spec —
-   recommandation : commencer **sans logos**, la forme se valide sans eux.
-2. ~~Un lieu sait-il lister sa saison ?~~ **TRANCHE le 26/10 : oui, et
-   c'est deja le cas.** `flaixOrderUrl` est un champ d'`Event`, pas de
-   `Venue` : pour que le relais Flaix fonctionne, le club cree DEJA chaque
-   match dans Break Eat et y colle son lien (phase 59). Rien a dupliquer,
-   aucune API Flaix a attendre — ce qui manque est une LISTE, pas une
-   source.
+1. **Les matchs à l'extérieur n'apparaissent pas.** Break Eat ne tient pas la
+   buvette du stade adverse : afficher un déplacement promettrait une commande
+   qui n'existe pas. Domicile uniquement, et la tentation reviendra.
+2. **Une seule vue, pas deux.** Le choix grille/liste est abandonné : une case
+   de grille fait 60 px, le nom de l'adversaire n'y tient pas ; élargie, elle
+   devient une ligne, et une suite de lignes est une liste. Les deux idées
+   menaient au même objet — un seul composant à tenir.
+3. **Le nombre de buvettes sort du bandeau.** Il change d'un match à l'autre et
+   ne répond à aucune question du supporter.
+4. **CE QUI OUVRE, C'EST LA COMMANDE — PAS LES BUVETTES.** Trois moments
+   distincts, et Break Eat n'en possède qu'un :
 
-**Et le calendrier repare un ecran qui se tait.** Aujourd'hui, un lieu Flaix
-dont la commande ouvre plus tard affiche « ferme » — trois heures avant le
-coup d'envoi, sans dire que ca ouvrira. Le calendrier montre le match, dit
-quand la commande ouvre, et mene au bon endroit le moment venu.
+| Le moment | Qui le décide | Où |
+|---|---|---|
+| le lien du match existe | le club, 3 à 6 jours avant | `Event.flaixOrderUrl` |
+| **la commande ouvre** | **Break Eat** | `Venue.ordersOpenAt` |
+| les créneaux de retrait | **Flaix** | chez Flaix |
+
+   **Rien de plus à saisir** : `ordersOpenAt` (« 08:00 » par défaut) se règle
+   **une fois par lieu**, pas par match — ainsi l'heure ne bouge pas quand
+   l'horaire du coup d'envoi change. On écrit « la commande ouvre à 8 h », jamais
+   « les buvettes ouvrent » : le client commande la veille et retire à la
+   mi-temps. Et Break Eat n'annonce **jamais** l'heure de retrait — elle vit dans
+   Flaix et peut y changer sans qu'on l'apprenne.
+
+### Les deux questions de source, tranchées elles aussi
+
+- **Le logo adverse** : deux champs neufs sur `Event` — `opponentName`,
+  `opponentLogoUrl` — téléversés par le club à la création du match, avec le
+  lien. Pas `Event.logoUrl`, qui sert de *branding* et retombe sur le logo du
+  club : le détourner ferait porter au club le blason de son rival. Champ
+  facultatif, absence rendue par un disque aux initiales — jamais un trou.
+- ~~Un lieu sait-il lister sa saison ?~~ **Oui, et c'est déjà le cas.**
+  `flaixOrderUrl` est un champ d'`Event`, pas de `Venue` : pour que le relais
+  Flaix fonctionne, le club crée DÉJÀ chaque match dans Break Eat et y colle son
+  lien (phase 59). Rien à dupliquer, aucune API Flaix à attendre — ce qui manque
+  est une **liste**, pas une source.
+
+**Et le calendrier répare un écran qui se tait.** Aujourd'hui, un lieu Flaix dont
+la commande ouvre plus tard affiche « fermé » — trois heures avant le coup
+d'envoi, sans dire que ça ouvrira. Le calendrier montre le match, dit quand la
+commande ouvre, et mène au bon endroit le moment venu.
 
 ---
 
