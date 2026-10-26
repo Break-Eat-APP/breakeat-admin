@@ -125,6 +125,34 @@ coûté une minute et évité deux jours d'arrêt.
 `migrer.sh` n'a PAS été modifié : il échoue toujours fort sur une migration
 fautive. Une reprise automatique aurait caché ce défaut au lieu de le dire.
 
+## 🚀 DÉPLOIEMENT DES FRONTENDS — un seul chemin depuis le 26/10/2026
+
+**`deploy-frontends.yml` a été supprimé.** Il déployait `admin` et `operator`
+sur Vercel via la CLI, en parallèle de l'intégration Git de Vercel qui fait
+déjà exactement la même chose.
+
+Deux chemins pour la même mise en ligne, dont un cassé : il échouait sur
+`Project not found` — des identifiants de projet périmés — pendant que
+l'intégration Git déployait normalement. C'est ainsi qu'on l'a vu : le
+workflow était rouge au moment même où le panneau Deployments affichait
+`breakeat-admin` et `breakeat-operator` déployés avec succès.
+
+**Qui déploie quoi, désormais :**
+
+| Application | Chemin |
+|---|---|
+| admin, back-office, operator, mobile (web) | intégration Git de Vercel, automatique |
+| backend | Railway, sur `watchPatterns: /backend/**` |
+| app native iOS | EAS, à la demande |
+
+**Trois secrets GitHub ne servent plus** et peuvent être retirés :
+`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID_ADMIN`,
+`VERCEL_PROJECT_ID_OPERATOR`. Les laisser ne casse rien, mais un secret qui ne
+sert plus finit par faire croire qu'il sert.
+
+> Un second chemin de déploiement ne double pas la fiabilité : il double les
+> endroits où chercher quand ça casse, et personne ne sait lequel a fait quoi.
+
 ## 🔓 SUJETS OUVERTS — à reprendre (liste tenue au 01/10/2026)
 
 Ce qui a été décidé mais pas fait, ou fait mais pas encore éprouvé. **Tenir
