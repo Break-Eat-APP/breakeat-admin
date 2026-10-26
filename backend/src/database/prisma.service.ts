@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { adresseAvecPool, resumePool } from './pool';
 
 /**
  * PrismaService wraps PrismaClient and integrates with NestJS lifecycle.
@@ -11,9 +12,30 @@ import { PrismaClient } from '@prisma/client';
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PrismaService.name);
 
+  /**
+   * LE POOL EST DÉCIDÉ ICI, PAS DEVINÉ.
+   *
+   * Sans option, Prisma ouvre `cœurs × 2 + 1` connexions — et dans un
+   * conteneur, le nombre de cœurs rapporté est souvent celui de l'hôte. La
+   * même image ouvrait donc 9 connexions sur une machine et 33 sur une autre.
+   *
+   * Multiplié par le nombre d'instances, c'est la panne qui arrive un soir de
+   * gros match : on ajoute un replica pour encaisser l'affluence, et c'est lui
+   * qui épuise les connexions. Voir `pool.ts` pour le raisonnement complet.
+   *
+   * L'adresse déjà paramétrée dans `DATABASE_URL` l'emporte : on remplit ce
+   * qui n'a pas été dit, on n'écrase rien.
+   */
+  constructor() {
+    const adresse = adresseAvecPool(process.env.DATABASE_URL);
+    super(adresse ? { datasources: { db: { url: adresse } } } : {});
+  }
+
   async onModuleInit(): Promise<void> {
     await this.$connect();
-    this.logger.log('Database connected');
+    // La valeur retenue se lit au démarrage plutôt que de se déduire d'une
+    // panne. Sans l'adresse : cette ligne part dans les journaux.
+    this.logger.log(`Database connected — ${resumePool(process.env.DATABASE_URL)}`);
   }
 
   async onModuleDestroy(): Promise<void> {
