@@ -309,6 +309,19 @@ export class CartService {
 
     await this.assertProductOrderable(dto.productId, cart.supplierId, cart.pickupPointId);
 
+    // AVANT d'écrire : la quantité visée est ce qu'il y a déjà, plus ce qui
+    // est demandé. Ajouter trois fois deux bières doit buter sur le stock au
+    // même endroit qu'en demander six d'un coup.
+    const dejaAuPanier = await this.prisma.cartItem.findUnique({
+      where: { cartId_productId: { cartId, productId: dto.productId } },
+      select: { quantity: true },
+    });
+    await this.verifierStockDisponible(
+      dto.productId,
+      cart.pickupPointId,
+      (dejaAuPanier?.quantity ?? 0) + dto.quantity,
+    );
+
     await this.prisma.cartItem.upsert({
       where: {
         cartId_productId: { cartId, productId: dto.productId },
@@ -323,9 +336,6 @@ export class CartService {
         quantity: { increment: dto.quantity },
       },
     });
-
-    // After upsert, re-check that the cumulative quantity doesn't exceed stock
-    await this.assertCumulativeQuantityWithinStock(cartId, dto.productId, cart.pickupPointId);
 
     this.logger.log(`Cart item added: cart=${cartId} product=${dto.productId} +${dto.quantity}`);
     return this.computeView(cartId);
@@ -347,12 +357,12 @@ export class CartService {
 
     await this.assertProductOrderable(item.productId, cart.supplierId, cart.pickupPointId);
 
+    await this.verifierStockDisponible(item.productId, cart.pickupPointId, dto.quantity);
+
     await this.prisma.cartItem.update({
       where: { id: itemId },
       data: { quantity: dto.quantity },
     });
-
-    await this.assertCumulativeQuantityWithinStock(cartId, item.productId, cart.pickupPointId);
 
     return this.computeView(cartId);
   }
@@ -978,27 +988,46 @@ export class CartService {
    * After upsert/update, verify that the total cart quantity for this product
    * does not exceed the resolved stock.quantity. Roll back on overage.
    */
-  private async assertCumulativeQuantityWithinStock(
-    cartId: string,
+  /**
+   * REFUSER SANS RIEN CHANGER.
+   *
+   * L'ancienne version écrivait la quantité demandée, la ramenait au stock,
+   * PUIS levait une erreur. Le client voyait donc un échec — et son panier
+   * avait changé quand même, à une valeur qu'il n'avait pas demandée.
+   *
+   * Le commentaire d'alors portait l'hésitation en toutes lettres : « Cap is
+   * friendlier? ». La question n'avait jamais été tranchée, et le code faisait
+   * les deux : la mutation du plafonnement, le signal du refus.
+   *
+   * Pour quelqu'un qui commande dix bières pour son rang et repart avec
+   * trois sans l'avoir vu, ce n'est pas « plus aimable » : c'est une commande
+   * à laquelle il n'a pas consenti, et qu'il découvrira au comptoir.
+   *
+   * On vérifie donc AVANT d'écrire, et on refuse en disant ce qui reste —
+   * le client décide s'il veut ces trois-là. **La réponse correspond
+   * toujours à l'état du panier.**
+   *
+   * Cette garde reste une COURTOISIE, pas une réservation : le stock peut
+   * changer entre le panier et le paiement. Ce qui protège réellement
+   * l'inventaire est le décrément conditionnel, dans la transaction de
+   * commande.
+   */
+  private async verifierStockDisponible(
     productId: string,
     pickupPointId: string | null,
+    quantiteVoulue: number,
   ): Promise<void> {
     const stock = await this.resolveStock(productId, pickupPointId);
-    if (!stock) return; // assertProductOrderable already handled missing stock
+    // Pas de stock déclaré : `assertProductOrderable` a déjà tranché.
+    if (!stock) return;
 
-    const item = await this.prisma.cartItem.findFirst({
-      where: { cartId, productId },
-    });
-    if (!item) return;
-
-    if (item.quantity > stock.quantity) {
-      // Roll back the over-quantity by capping at stock OR removing? Cap is friendlier.
-      await this.prisma.cartItem.update({
-        where: { id: item.id },
-        data: { quantity: stock.quantity },
-      });
+    // Un stock à zéro n'arrive jamais jusqu'ici : `assertProductOrderable`
+    // l'a déjà refusé, plus haut, avec son propre message. Ne pas écrire de
+    // branche pour ce cas — elle ne s'exécuterait jamais, et donnerait à
+    // croire qu'elle protège de quelque chose.
+    if (quantiteVoulue > stock.quantity) {
       throw new BadRequestException(
-        `Requested quantity exceeds stock — capped at ${stock.quantity}`,
+        `Il n’en reste que ${stock.quantity}. Ton panier n’a pas été modifié.`,
       );
     }
   }
