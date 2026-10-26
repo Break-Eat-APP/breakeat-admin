@@ -1,8 +1,19 @@
 version: '3.9'
 
 services:
+  # PostgreSQL 18 — LA MEME VERSION MAJEURE QUE LA PRODUCTION.
+  #
+  # Elle est restee en 16 pendant que Railway et la CI passaient en 18. Un
+  # environnement local qui ne reproduit pas la production ne sert qu'a
+  # donner confiance : une migration valide sur 16 peut se comporter
+  # autrement sur 18, et c'est precisement ce qu'on veut attraper ici
+  # plutot qu'un soir de match.
+  #
+  # Changer de majeure rend le volume existant ILLISIBLE : au premier
+  # demarrage, supprimer le volume (`docker compose down -v`) puis rejouer
+  # les migrations. C'est une base de developpement, il n'y a rien a sauver.
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: breakeat_postgres
     restart: unless-stopped
     environment:

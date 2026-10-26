@@ -1,6 +1,6 @@
 import { Logger } from '@nestjs/common';
 import { Redis } from 'ioredis';
-import type { ThrottlerStorage } from '@nestjs/throttler';
+import { ThrottlerStorageService, type ThrottlerStorage } from '@nestjs/throttler';
 import type { ThrottlerStorageRecord } from '@nestjs/throttler/dist/throttler-storage-record.interface';
 
 /**
@@ -84,6 +84,33 @@ const enSecondes = (ms: number) => Math.ceil(ms / 1000);
 export class LimitationRedis implements ThrottlerStorage {
   private readonly logger = new Logger('Limitation');
 
+  /**
+   * LE REPLI, QUAND REDIS TOMBE EN PLEIN SERVICE.
+   *
+   * Ce fichier affirmait qu'une panne de Redis laissait passer les requêtes
+   * avec une limitation dégradée. **C'était faux** : `increment` attendait le
+   * script Lua sans rien rattraper, et le garde Throttler attend cette
+   * promesse directement. Redis coupé un soir de match, et toutes les routes
+   * protégées renvoyaient une erreur — la connexion comprise.
+   *
+   * Un commentaire qui promet une propriété que le code n'a pas est pire
+   * qu'une absence de commentaire : on cesse de vérifier.
+   *
+   * Pourquoi les compteurs EN MÉMOIRE plutôt que de laisser tout passer : une
+   * panne Redis ne doit pas ouvrir la porte à l'essai de mots de passe. La
+   * limite redevient alors locale à l'instance — donc multipliée par leur
+   * nombre, exactement comme au démarrage sans `REDIS_URL`. C'est dégradé,
+   * mais ça compte encore. Et ce n'est pas un choix nouveau : c'est le même
+   * arbitrage, au même endroit, pour la même raison.
+   *
+   * Pourquoi pas fail-closed : refuser toutes les requêtes parce que le
+   * compteur est injoignable, c'est éteindre la vente pour protéger un
+   * compteur.
+   */
+  private readonly memoire = new ThrottlerStorageService();
+  /** Quand la dernière alerte est partie — une panne ne doit pas noyer le journal. */
+  private derniereAlerte = 0;
+
   constructor(private readonly redis: Redis) {
     this.redis.defineCommand('limiter', { numberOfKeys: 2, lua: SCRIPT });
   }
@@ -99,26 +126,52 @@ export class LimitationRedis implements ThrottlerStorage {
     // pas la même chose et ne doivent jamais se mélanger.
     const racine = `limite:${nom}:${cle}`;
 
-    const [coups, reste, bloque, resteBlocage] = (await (
-      this.redis as unknown as {
-        limiter: (...args: unknown[]) => Promise<[number, number, number, number]>;
-      }
-    ).limiter(racine, `${racine}:bloque`, ttl, limite, dureeBlocage)) as [
-      number,
-      number,
-      number,
-      number,
-    ];
+    try {
+      const [coups, reste, bloque, resteBlocage] = (await (
+        this.redis as unknown as {
+          limiter: (...args: unknown[]) => Promise<[number, number, number, number]>;
+        }
+      ).limiter(racine, `${racine}:bloque`, ttl, limite, dureeBlocage)) as [
+        number,
+        number,
+        number,
+        number,
+      ];
 
-    return {
-      totalHits: coups,
-      timeToExpire: enSecondes(reste),
-      isBlocked: bloque === 1,
-      timeToBlockExpire: enSecondes(resteBlocage),
-    };
+      return {
+        totalHits: coups,
+        timeToExpire: enSecondes(reste),
+        isBlocked: bloque === 1,
+        timeToBlockExpire: enSecondes(resteBlocage),
+      };
+    } catch (e) {
+      this.signalerPanne(e);
+      // On réessaie Redis à CHAQUE requête : dès qu'il répond de nouveau, les
+      // compteurs redeviennent communs sans qu'on ait à redémarrer quoi que
+      // ce soit. Un drapeau « en panne » qu'il faudrait lever à la main
+      // survivrait au rétablissement.
+      return this.memoire.increment(cle, ttl, limite, dureeBlocage, nom);
+    }
+  }
+
+  /** Une ligne par minute au plus : une panne produit une requête par client. */
+  private signalerPanne(e: unknown): void {
+    const maintenant = Date.now();
+    if (maintenant - this.derniereAlerte < 60_000) return;
+    this.derniereAlerte = maintenant;
+    this.logger.error(
+      'Compteurs de limitation EN MÉMOIRE — Redis injoignable en cours de service : ' +
+        `${e instanceof Error ? e.message : String(e)}. ` +
+        'La limite redevient locale à chaque instance, donc multipliée par leur nombre.',
+    );
   }
 
   async fermer(): Promise<void> {
+    // Le stockage en mémoire pose des minuteries pour purger ses compteurs.
+    // Construit à la main, il n'est pas câblé au cycle de vie de Nest : son
+    // arrêt ne partirait jamais, et le processus resterait en vie après un
+    // `SIGTERM` — un déploiement qui ne se termine pas.
+    this.memoire.onApplicationShutdown();
     await this.redis.quit().catch(() => undefined);
   }
 }
@@ -154,8 +207,9 @@ export async function creerStockageLimitation(
       connectTimeout: 5_000,
     });
     await redis.connect();
-    // Un Redis qui tombe en cours de service ne doit pas couper l'API : les
-    // requêtes passent, la limitation se dégrade.
+    // Un Redis qui tombe en cours de service ne doit pas couper l'API.
+    // `LimitationRedis.increment` rattrape la panne et bascule sur des
+    // compteurs EN MÉMOIRE — dégradés, mais ils comptent encore.
     redis.on('error', (e: Error) => logger.error(`Redis: ${e.message}`));
     logger.log('Compteurs de limitation partagés via Redis.');
     return new LimitationRedis(redis);

@@ -24,9 +24,21 @@ x-logging: &default-logging
 # ─── Services ─────────────────────────────────────────────────────────────────
 services:
 
-  # ── PostgreSQL 16 ───────────────────────────────────────────────────────────
+  # PostgreSQL 18 — LA MEME VERSION MAJEURE QUE LA PRODUCTION.
+  #
+  # Elle est restee en 16 pendant que Railway et la CI passaient en 18. Un
+  # environnement local qui ne reproduit pas la production ne sert qu'a
+  # donner confiance : une migration valide sur 16 peut se comporter
+  # autrement sur 18, et c'est precisement ce qu'on veut attraper ici
+  # plutot qu'un soir de match.
+  #
+  # ⚠️ CHANGER DE MAJEURE REND LE VOLUME EXISTANT ILLISIBLE. Sur une base
+  # qui porte des commandes, on ne supprime pas le volume : on fait un
+  # `pg_dump` avec le client 18, on monte le nouveau conteneur, on
+  # restaure. Un auto-heberge deja en 16 doit donc planifier sa bascule,
+  # pas la subir au prochain `docker compose up`.
   postgres:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     container_name: break-eat-postgres-prod
     restart: unless-stopped
     environment:
