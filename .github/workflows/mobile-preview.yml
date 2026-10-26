@@ -116,7 +116,9 @@ jobs:
           fi
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "- Commit : \`$(echo '${{ github.sha }}' | cut -c1-7)\`" >> "$GITHUB_STEP_SUMMARY"
-          echo "- QR code et telechargement : https://expo.dev/accounts/breakeat/projects/break-eat/builds" >> "$GITHUB_STEP_SUMMARY"
+          # Le compte est `break-eat-app-spe` (app.config.js, cle `owner`), et
+          # non `breakeat` : l'ancien lien du commentaire pointait dans le vide.
+          echo "- QR code et telechargement : https://expo.dev/accounts/break-eat-app-spe/projects/break-eat/builds" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "> Le premier build prend une dizaine de minutes ; les suivants reutilisent le cache." >> "$GITHUB_STEP_SUMMARY"
 
