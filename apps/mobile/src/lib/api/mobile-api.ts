@@ -509,6 +509,33 @@ export const apiFournisseursSociaux = () =>
 
 // ─── Découverte des lieux (public, no auth required) ───────────
 
+/**
+ * UN MATCH DU CALENDRIER.
+ *
+ * `passe` et `ouvert` sont calculés par le SERVEUR, et ce n'est pas une
+ * coquetterie : un téléphone à l'heure de Tokyo, ou simplement en retard,
+ * estomperait le match du jour ou cerclerait le mauvais.
+ */
+export interface EvenementDeSaison {
+  id: string;
+  name: string;
+  /** ISO. */
+  startAt: string;
+  endAt: string;
+  /** Le nom de l'adversaire, quand le club l'a saisi. */
+  opponentName: string | null;
+  /** Son blason. Nul : l'écran rend un disque aux initiales, jamais un trou. */
+  opponentLogoUrl: string | null;
+  /** Le match est joué — il s'estompe dans le ruban. */
+  passe: boolean;
+  /**
+   * La commande de CE match est ouverte : la case cerclée, et la seule dont
+   * le bouton mène quelque part. Le lien à ouvrir reste `flaixOrderUrl` du
+   * lieu — un seul endroit d'où part la commande.
+   */
+  ouvert: boolean;
+}
+
 export interface PublicVenue {
   id: string;
   name: string;
@@ -545,6 +572,26 @@ export interface PublicVenue {
   commandeOuvreA: string | null;
   /** Le prochain événement annoncé sur ce lieu — Flaix ou non. */
   prochainEvenement: { id: string; name: string; startAt: string } | null;
+  /**
+   * LA SAISON de ce lieu — ses matchs à domicile, bornés à une saison.
+   *
+   * Ce que l'écran du lieu affiche en ruban, un blason par match. Vide pour un
+   * lieu ouvert en continu (restaurant), qui n'a pas de saison : l'écran rend
+   * alors directement le bouton de commande.
+   */
+  saison: EvenementDeSaison[];
+  /**
+   * L'heure à laquelle LA COMMANDE ouvre, le jour du match (« 08:00 »).
+   *
+   * Un réglage du LIEU, valable pour tous ses matchs — d'où l'heure brute et
+   * non une date : « la commande ouvre à 8 h » reste vrai pour un match dans
+   * trois mois.
+   *
+   * ⚠️ CE N'EST PAS L'HEURE DES BUVETTES, ni celle des créneaux de retrait —
+   * ceux-là se règlent dans Flaix et peuvent y changer sans que Break Eat
+   * l'apprenne. Ne jamais les annoncer ici.
+   */
+  heureOuvertureCommande: string;
   /** URL de l'image du plan des buvettes (null si le lieu n'en a pas). */
   buvettePlanUrl: string | null;
   /** Événement actif sur ce lieu → cible de navigation (null si aucun). */

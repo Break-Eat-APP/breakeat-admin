@@ -50,6 +50,14 @@ export type RootStackParamList = {
   QRScanner: undefined;
   EventHome: { eventId: string };
   /**
+   * LA SAISON D'UN LIEU — le calendrier, et la porte de la commande.
+   *
+   * `venueName` n'est qu'un repli pour le bandeau pendant le chargement :
+   * l'écran relit le lieu au serveur, car tout ce qui compte (la case ouverte,
+   * l'heure d'ouverture, le lien du jour) change avec l'horloge.
+   */
+  Saison: { venueId: string; venueName?: string };
+  /**
    * Le relais Flaix. `url` est l'adresse RESOLUE par le serveur pour le match
    * en cours — l'app ne la fabrique jamais elle-meme.
    */

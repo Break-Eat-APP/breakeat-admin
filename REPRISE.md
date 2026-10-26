@@ -155,62 +155,49 @@ sert plus finit par faire croire qu'il sert.
 
 ## 🔓 SUJETS OUVERTS — à reprendre (liste tenue au 01/10/2026)
 
-## 📅 LE CALENDRIER DE LA SAISON — à construire (posé et révisé le 26/10/2026)
+## 📅 LE CALENDRIER DE LA SAISON — ÉCRIT le 26/10/2026, à éprouver en vrai
 
-**Spec complète : `brain/CALENDRIER_SAISON.md`. Tout est tranché ; il reste à
-écrire le code.**
+**Spec : `brain/CALENDRIER_SAISON.md`. Code : phase 70 du CHANGELOG.**
 
-Cliquer sur un lieu mène à sa saison : **une liste verticale groupée par mois,
-où le logo de l'adversaire tient la place de la date**, les matchs passés
-estompés, et un bandeau fixe qui dit si l'on peut commander.
+Toucher un lieu ne va plus DIRECTEMENT chez Flaix : il ouvre la **saison du
+lieu** — un ruban de blasons, un par match à domicile, groupés par mois. Le
+match touché s'écrit en entier dans la carte du bas, avec le bouton.
 
-**Ce qui décide de tout** : Break Eat n'est pas une app de club. On n'ouvre pas
-ce calendrier pour consulter la saison, mais pour savoir **quand commander**.
+Vérifié en faisant tourner l'app (bundle web + fausse API locale) : le ruban,
+le repli en initiales, le choix d'un match, « Commande ouverte », « La commande
+ouvre à 8 h le jour du match », et le lieu dont la suite n'est pas programmée.
 
-### Les quatre arbitrages du 26/10
+### Ce qui reste à faire, dans l'ordre
 
-1. **Les matchs à l'extérieur n'apparaissent pas.** Break Eat ne tient pas la
-   buvette du stade adverse : afficher un déplacement promettrait une commande
-   qui n'existe pas. Domicile uniquement, et la tentation reviendra.
-2. **Une seule vue, pas deux.** Le choix grille/liste est abandonné : une case
-   de grille fait 60 px, le nom de l'adversaire n'y tient pas ; élargie, elle
-   devient une ligne, et une suite de lignes est une liste. Les deux idées
-   menaient au même objet — un seul composant à tenir.
-3. **Le nombre de buvettes sort du bandeau.** Il change d'un match à l'autre et
-   ne répond à aucune question du supporter.
-4. **CE QUI OUVRE, C'EST LA COMMANDE — PAS LES BUVETTES.** Trois moments
-   distincts, et Break Eat n'en possède qu'un :
+1. **Relancer Railway.** L'API répond 404 depuis l'expiration de l'essai : sans
+   elle, rien de tout ça n'est testable sur un vrai téléphone.
+2. **Passer la migration** `20261026_adversaire_du_match` (deux colonnes
+   nullables sur `events`, rien à réécrire).
+3. **Saisir un adversaire** dans le back-office, sur l'écran des événements :
+   le nom et le blason sont sur la même ligne que le lien Flaix.
+4. **Build EAS** et retour d'usage.
 
-| Le moment | Qui le décide | Où |
-|---|---|---|
-| le lien du match existe | le club, 3 à 6 jours avant | `Event.flaixOrderUrl` |
-| **la commande ouvre** | **Break Eat** | `Venue.ordersOpenAt` |
-| les créneaux de retrait | **Flaix** | chez Flaix |
+### Le point à savoir avant de saisir
 
-   **Rien de plus à saisir** : `ordersOpenAt` (« 08:00 » par défaut) se règle
-   **une fois par lieu**, pas par match — ainsi l'heure ne bouge pas quand
-   l'horaire du coup d'envoi change. On écrit « la commande ouvre à 8 h », jamais
-   « les buvettes ouvrent » : le client commande la veille et retire à la
-   mi-temps. Et Break Eat n'annonce **jamais** l'heure de retrait — elle vit dans
-   Flaix et peut y changer sans qu'on l'apprenne.
+**Il n'y a pas de téléversement d'image dans Break Eat** — ni ici ni ailleurs :
+tous les logos du produit se saisissent en ADRESSE (`https://…/logo.png`). Les
+blasons adverses doivent donc être hébergés quelque part avant d'être collés.
+L'adresse doit être en **https** : iOS refuse le http simple, et un blason en
+http ne s'afficherait sur aucun iPhone — le back-office le refuse à la saisie
+plutôt que de laisser un trou le jour du match.
 
-### Les deux questions de source, tranchées elles aussi
+### Les règles posées, à ne pas défaire
 
-- **Le logo adverse** : deux champs neufs sur `Event` — `opponentName`,
-  `opponentLogoUrl` — téléversés par le club à la création du match, avec le
-  lien. Pas `Event.logoUrl`, qui sert de *branding* et retombe sur le logo du
-  club : le détourner ferait porter au club le blason de son rival. Champ
-  facultatif, absence rendue par un disque aux initiales — jamais un trou.
-- ~~Un lieu sait-il lister sa saison ?~~ **Oui, et c'est déjà le cas.**
-  `flaixOrderUrl` est un champ d'`Event`, pas de `Venue` : pour que le relais
-  Flaix fonctionne, le club crée DÉJÀ chaque match dans Break Eat et y colle son
-  lien (phase 59). Rien à dupliquer, aucune API Flaix à attendre — ce qui manque
-  est une **liste**, pas une source.
-
-**Et le calendrier répare un écran qui se tait.** Aujourd'hui, un lieu Flaix dont
-la commande ouvre plus tard affiche « fermé » — trois heures avant le coup
-d'envoi, sans dire que ça ouvrira. Le calendrier montre le match, dit quand la
-commande ouvre, et mène au bon endroit le moment venu.
+- **Domicile uniquement.** Les événements appartiennent au LIEU : les
+  déplacements n'y sont pas, et ne doivent pas y entrer. Un match affiché sans
+  commande possible est une promesse en l'air.
+- **Une seule vue.** Pas de bascule grille/liste : les deux menaient au même
+  objet (le nom ne tient pas dans une case de 60 px).
+- **La commande part d'UN SEUL endroit**, le bouton de la carte. Toucher un
+  blason ne fait que choisir.
+- **Ce qui ouvre, c'est LA COMMANDE** (`Venue.ordersOpenAt`, réglé une fois par
+  LIEU) — jamais les buvettes, jamais les créneaux de retrait, qui vivent chez
+  Flaix et peuvent y changer sans que Break Eat l'apprenne.
 
 ---
 

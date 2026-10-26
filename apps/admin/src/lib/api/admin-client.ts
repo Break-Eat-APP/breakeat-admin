@@ -320,6 +320,18 @@ export interface AdminEvent {
    */
   flaixOrderUrl?: string | null;
   /**
+   * L'ADVERSAIRE DU MATCH — son nom et son blason.
+   *
+   * Ce que le CALENDRIER de l'app montre a la place du numero du jour.
+   * Saisis au meme endroit que le lien : une rencontre se renseigne d'un
+   * geste.
+   *
+   * A ne pas confondre avec `logoUrl` juste au-dessus, qui est le branding
+   * de l'evenement et retombe sur le logo du CLUB quand il est vide.
+   */
+  opponentName?: string | null;
+  opponentLogoUrl?: string | null;
+  /**
    * Vrai pour le contenant unique d'un lieu OUVERT EN CONTINU (restaurant).
    * Il n'a ni date ni fin : son lien Flaix vaut tous les jours.
    */
@@ -460,10 +472,31 @@ export async function apiDefinirRapportFlaix(
  * Tout ou rien : un seul lien refusé, et rien n'est enregistré. Le message du
  * serveur nomme l'événement fautif.
  */
+/** Ce qu'un enregistrement de ligne de match rend : seuls les champs ecrits. */
+export interface LigneMatchFlaix {
+  id: string;
+  flaixOrderUrl?: string | null;
+  opponentName?: string | null;
+  opponentLogoUrl?: string | null;
+}
+
+/**
+ * LE LIEN ET L'ADVERSAIRE D'UN MATCH, enregistres ensemble.
+ *
+ * Un champ ABSENT n'est pas touche ; `null` ou vide l'efface. C'est ce qui
+ * permet de corriger un blason sans reenvoyer le lien — et la reponse ne
+ * rend QUE les champs ecrits, pour que l'ecran n'efface pas localement ce
+ * qui est toujours en base.
+ */
 export async function apiDefinirLiensCommandeFlaix(
   orgId: string,
-  liens: { eventId: string; url: string | null }[],
-): Promise<{ id: string; flaixOrderUrl: string | null }[]> {
+  liens: {
+    eventId: string;
+    url?: string | null;
+    opponentName?: string | null;
+    opponentLogoUrl?: string | null;
+  }[],
+): Promise<LigneMatchFlaix[]> {
   return req('PATCH', `/organizations/${orgId}/events/flaix/liens-commande`, { liens });
 }
 

@@ -5,6 +5,72 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.1.0] — 2026-10-26 — Le calendrier de la saison (phase 70)
+
+**Toucher un lieu menait DIRECTEMENT chez Flaix.** On quittait Break Eat sans
+savoir contre qui on jouait, ni même qu'un match avait lieu. Et un lieu dont la
+commande ouvrait plus tard n'avait qu'une alerte « pas encore ouvert » à offrir,
+sans dire ce qui venait : un écran qui se tait fait partir le client.
+
+Entre les deux s'intercale désormais **la saison du lieu** : un ruban de blasons,
+un par match à domicile, groupés par mois — le blason de l'adversaire à la place
+du numéro du jour. Le match touché s'écrit en entier dans la carte du bas, avec
+son nom, son heure et le bouton.
+
+**Une seule vue, pas deux.** Le choix grille/liste a été écarté après mesure :
+une case fait soixante pixels, le nom de l'adversaire n'y tient pas ; élargie,
+la case devient une ligne, et une suite de lignes est une liste. Les deux idées
+menaient au même objet — un seul composant à tenir.
+
+**La commande part d'UN SEUL endroit** : le bouton de cette carte. Toucher un
+blason ne fait que choisir. Tout ce qui décidait du chemin — le lien Flaix du
+jour, l'identité à glisser dedans, l'événement actif — a QUITTÉ l'écran des
+lieux pour vivre là. Rien n'est écrit deux fois : c'est la divergence du 10/10
+qu'on évite, quand un lieu s'annonçait « Ouvert » et refusait au doigt.
+
+**Ce qui ouvre, c'est LA COMMANDE — pas les buvettes.** Trois moments distincts,
+et Break Eat n'en possède qu'un : le lien existe (collé 3 à 6 jours avant), la
+commande ouvre (`Venue.ordersOpenAt`, réglé une fois par LIEU), les créneaux de
+retrait ouvrent (chez Flaix). L'app n'annonce jamais le troisième : il peut
+changer sans qu'elle l'apprenne. Le vocabulaire est fixé dans
+`brain/CALENDRIER_SAISON.md` et tenu par `lib/calendrier-saison.ts`.
+
+**L'adversaire se saisit avec le lien**, sur la même ligne du back-office : le
+club ouvre sa saison et renseigne chaque rencontre d'un geste. Deux champs neufs
+sur `Event` — et pas `logoUrl`, qui est le *branding* de l'événement et retombe
+sur le logo du CLUB : le détourner ferait porter au club le blason de son rival.
+
+**Trois défauts trouvés en regardant l'écran tourner**, pas en relisant le code :
+
+- `initialesAdversaire('ASM - Racing')` rendait **« A-R »** : le tiret comptait
+  comme un mot, et c'est la forme de TOUS les noms d'événements du dépôt ;
+- un nom de lieu long poussait la rangée du bandeau plus large que l'écran sur
+  react-native-web — bandeau tronqué, page de travers. `minWidth: 0` ;
+- « Match terminé » s'affichait en orange, la couleur qui annonce ce qui VA
+  arriver. Il attirait l'œil vers la seule ligne où il n'y a rien à faire.
+
+**Un effacement silencieux corrigé au passage** : une ligne de `liens-commande`
+qui omettait `url` VIDAIT le lien du match. Un club venu corriger un blason
+aurait perdu sa commande du samedi, sans un mot. Champ absent = on ne touche pas.
+
+```
++ backend/prisma/migrations/20261026_adversaire_du_match/   ← opponent_name, opponent_logo_url
++ backend/src/common/helpers/saison-du-lieu.ts              (+ son spec, 14 cas)
++ backend/src/modules/events/adversaire.ts                  ← https obligatoire (ATS iOS)
++ apps/mobile/src/screens/saison.screen.tsx                 ← l'écran
++ apps/mobile/src/lib/calendrier-saison.ts                  (+ son test, 23 cas)
+~ backend/prisma/schema.prisma                              ← Event.opponentName/opponentLogoUrl
+~ backend/src/modules/venues/public-venues.controller.ts    ← saison, heureOuvertureCommande
+~ backend/src/modules/events/events.service.ts              ← champ absent ≠ effacement
+~ backend/src/modules/events/dto/definir-liens-commande-flaix.dto.ts
+~ apps/admin/src/components/liens-commande-flaix.tsx        ← nom + blason + aperçu
+~ apps/mobile/src/screens/venue-discovery.screen.tsx        ← mène à la saison
+~ apps/mobile/src/lib/api/mobile-api.ts                     ← EvenementDeSaison
+~ App.expo.tsx, src/navigation/root-navigator.tsx           ← route Saison
+```
+
+---
+
 ## [1.0.0] — 2026-10-26 — Les P2 retenus, et l'audit clos
 
 **L'ardoise se coupe désormais sans redéployer.** `FeatureFlagsService` savait

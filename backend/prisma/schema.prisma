@@ -485,6 +485,22 @@ model Event {
   description          String?
   logoUrl              String?         @map("logo_url")
   primaryColor         String?         @map("primary_color")
+  /// L'ADVERSAIRE DU JOUR — ce que le calendrier de la saison montre.
+  ///
+  /// Le club les saisit au même moment qu'il colle `flaixOrderUrl` : une
+  /// rencontre se renseigne d'un geste, lien et blason ensemble.
+  ///
+  /// Pourquoi deux champs neufs et pas `logoUrl` juste au-dessus : celui-là
+  /// est le *branding* de l'événement, et il retombe sur le logo du CLUB
+  /// quand il est vide (`public-events.controller.ts`). Le détourner ferait
+  /// porter au club le blason de son rival sur son propre écran. Deux sens
+  /// dans un même champ, et l'un des deux finirait par mentir.
+  ///
+  /// Les deux restent FACULTATIFS : un calendrier sans blason reste utile, et
+  /// l'app rend un disque aux initiales plutôt qu'un trou. Ce qui serait pire
+  /// que pas de logo, c'est un calendrier dont la moitié manque.
+  opponentName         String?         @map("opponent_name")
+  opponentLogoUrl      String?         @map("opponent_logo_url")
   /// Le lien de COMMANDE Flaix de cet événement — la page que le client
   /// ouvre quand il touche le lieu.
   ///

@@ -14,6 +14,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { CLUB_EN_SERVICE } from '../../common/helpers/organisation-ouverte';
 import { fenetreDeCommande } from '../../common/helpers/fenetre-commande';
+import { saisonDuLieu } from '../../common/helpers/saison-du-lieu';
 import { personnaliserLien, porteDesEtiquettes } from '../../common/helpers/personnaliser-lien';
 
 /**
@@ -55,6 +56,10 @@ const SELECTION_LIEU = {
       endAt: true,
       isPermanentContainer: true,
       flaixOrderUrl: true,
+      // L'adversaire : ce que le calendrier de la saison montre à la place
+      // d'un numéro de jour (`common/helpers/saison-du-lieu.ts`).
+      opponentName: true,
+      opponentLogoUrl: true,
     },
   },
 } satisfies Prisma.VenueSelect;
@@ -241,6 +246,28 @@ export class PublicVenuesController {
         // qui permet à la carte de dire « samedi 20 h » au lieu de « Bientôt ».
         const prochain = accessible.find((e) => e.startAt.getTime() > maintenant.getTime());
 
+        // QUELLE CASE DU CALENDRIER EST OUVERTE — le miroir exact de
+        // `cheminDeCommande` (apps/mobile/src/lib/ouverture-lieu.ts).
+        //
+        // Écrit ici plutôt que déduit dans l'app : c'est la même règle que le
+        // bouton, et deux écritures finiraient par se contredire — un
+        // calendrier qui cercle un match dont le bouton refuse, c'est la panne
+        // du 10/10 à nouveau, en pire.
+        //
+        //  · 'ouvert'  : Flaix a un lien pour maintenant → cette case ;
+        //  · 'bientot' : lieu Flaix dont la commande ouvre plus tard. FERMÉ,
+        //                et surtout pas rabattu sur le parcours Break Eat :
+        //                c'est Flaix qui vend, le club ne tient plus ni carte
+        //                ni prix ;
+        //  · 'aucun'   : pas de relais Flaix ici → le parcours Break Eat
+        //                reprend la main sur l'événement actif.
+        const idOuvert =
+          fenetre.etat === 'ouvert'
+            ? fenetre.evenement.id
+            : fenetre.etat === 'bientot'
+              ? null
+              : (currentEvent?.id ?? null);
+
         const distanceKm =
           position && v.latitude !== null && v.longitude !== null
             ? haversineKm(position.lat, position.lng, v.latitude, v.longitude)
@@ -265,6 +292,26 @@ export class PublicVenuesController {
           prochainEvenement: prochain
             ? { id: prochain.id, name: prochain.name, startAt: prochain.startAt.toISOString() }
             : null,
+          /**
+           * LA SAISON — les matchs à domicile de ce lieu, bornés à une saison.
+           *
+           * Sur les événements ACCESSIBLES, comme le lien : un calendrier ne
+           * doit pas révéler qu'un événement réservé existe.
+           */
+          saison: saisonDuLieu(accessible, maintenant, idOuvert),
+          /**
+           * L'HEURE à laquelle la commande ouvre, le jour du match (« 08:00 »).
+           *
+           * Brute, et non une date : c'est un réglage du LIEU, valable pour
+           * tous ses matchs. L'app écrit « la commande ouvre à 8 h », ce qui
+           * reste vrai pour un match dans trois mois — là où une date calculée
+           * pour le prochain match serait fausse dès le suivant.
+           *
+           * À ne pas confondre avec les CRÉNEAUX DE RETRAIT, qui se règlent
+           * dans Flaix. Ce qui ouvre ici, c'est la possibilité de commander —
+           * jamais la buvette, que Break Eat ne modélise pas.
+           */
+          heureOuvertureCommande: v.ordersOpenAt,
           buvettePlanUrl: v.buvettePlanUrl,
           currentEventId: currentEvent?.id ?? null,
           distanceKm: distanceKm === null ? null : Math.round(distanceKm * 10) / 10,

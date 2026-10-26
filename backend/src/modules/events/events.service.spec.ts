@@ -517,5 +517,143 @@ describe('EventsService', () => {
         service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [{ eventId: 'e1', url: LIEN }]),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
+
+    // ─── L'ADVERSAIRE — nom et blason, saisis avec le lien ────────
+
+    /**
+     * Lien et blason partent ENSEMBLE, parce qu'ils se saisissent ensemble.
+     * Deux enregistrements separes, c'est deux fois plus d'occasions d'en
+     * oublier un — et un calendrier a moitie rempli.
+     */
+    it('enregistre le lien, le nom et le blason en un seul geste', async () => {
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([
+        { id: 'e1', name: 'OM - Lyon', isPermanentContainer: false },
+      ]);
+
+      const res = await service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [
+        {
+          eventId: 'e1',
+          url: LIEN,
+          opponentName: '  Racing 92  ',
+          opponentLogoUrl: 'https://cdn.example.com/r92.png',
+        },
+      ]);
+
+      expect(res).toEqual([
+        {
+          id: 'e1',
+          flaixOrderUrl: LIEN,
+          opponentName: 'Racing 92',
+          opponentLogoUrl: 'https://cdn.example.com/r92.png',
+        },
+      ]);
+    });
+
+    /**
+     * UN CHAMP ABSENT NE S'EFFACE PAS.
+     *
+     * Avant, une ligne qui omettait `url` VIDAIT le lien du match : un club
+     * venu corriger un blason perdait sa commande du samedi, sans un mot.
+     * Corriger un champ ne doit jamais toucher les autres.
+     */
+    it('ne touche PAS au lien quand la ligne ne parle que du blason', async () => {
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([
+        { id: 'e1', name: 'OM - Lyon', isPermanentContainer: false },
+      ]);
+
+      const res = await service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [
+        { eventId: 'e1', opponentName: 'Stade Rochelais' },
+      ]);
+
+      expect(res).toEqual([{ id: 'e1', opponentName: 'Stade Rochelais' }]);
+      expect(prisma.event.update).toHaveBeenCalledWith({
+        where: { id: 'e1' },
+        data: { opponentName: 'Stade Rochelais' },
+      });
+    });
+
+    it('un nom fait d’espaces EFFACE le nom, il n’est pas enregistre tel quel', async () => {
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([
+        { id: 'e1', name: 'OM - Lyon', isPermanentContainer: false },
+      ]);
+
+      const res = await service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [
+        { eventId: 'e1', opponentName: '   ' },
+      ]);
+
+      expect(res).toEqual([{ id: 'e1', opponentName: null }]);
+    });
+
+    /**
+     * iOS refuse le http simple : un blason en http ne s'afficherait sur
+     * AUCUN iPhone, et le club chercherait la panne du cote de son image.
+     * On refuse a la saisie, ou le message se lit.
+     */
+    it('refuse un blason en http — il ne s’afficherait pas sur iPhone', async () => {
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([
+        { id: 'e1', name: 'OM - Lyon', isPermanentContainer: false },
+      ]);
+
+      await expect(
+        service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [
+          { eventId: 'e1', opponentLogoUrl: 'http://cdn.example.com/r92.png' },
+        ]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Le blason, lui, part dans la reponse PUBLIQUE de l'app : une adresse
+     * porteuse d'identifiants les y exposerait.
+     */
+    it('refuse un blason qui porte des identifiants', async () => {
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([
+        { id: 'e1', name: 'OM - Lyon', isPermanentContainer: false },
+      ]);
+
+      await expect(
+        service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [
+          { eventId: 'e1', opponentLogoUrl: 'https://moi:secret@cdn.example.com/r92.png' },
+        ]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    /**
+     * Un blason refuse ne doit pas enregistrer le LIEN de la meme ligne :
+     * le club verrait sa commande posee et son calendrier vide, sans savoir
+     * ce qui est passe.
+     */
+    it('TOUT OU RIEN s’applique aussi au blason', async () => {
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([
+        { id: 'e1', name: 'OM - Lyon', isPermanentContainer: false },
+        { id: 'e2', name: 'OM - Nice', isPermanentContainer: false },
+      ]);
+
+      await expect(
+        service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [
+          { eventId: 'e1', url: LIEN, opponentName: 'Racing 92' },
+          { eventId: 'e2', opponentLogoUrl: 'pas-une-adresse' },
+        ]),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(prisma.event.update).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Une ligne qui ne demande rien ne doit pas toucher `updatedAt` : le
+     * club verrait son match « modifie » sans l'avoir change.
+     */
+    it('une ligne sans aucun champ n’ecrit rien', async () => {
+      (prisma.event.findMany as jest.Mock).mockResolvedValue([
+        { id: 'e1', name: 'OM - Lyon', isPermanentContainer: false },
+      ]);
+
+      const res = await service.definirLiensCommandeFlaix(ORG_ID, USER_ID, [{ eventId: 'e1' }]);
+
+      expect(res).toEqual([]);
+      expect(prisma.event.update).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
   });
 });

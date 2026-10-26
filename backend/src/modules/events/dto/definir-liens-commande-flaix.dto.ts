@@ -10,7 +10,16 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-/** Le lien de commande d'UN événement. `null` ou vide : on le retire. */
+/**
+ * UNE LIGNE DE MATCH : son lien de commande, et son adversaire.
+ *
+ * Les trois voyagent ensemble parce qu'ils se saisissent ensemble — le club
+ * ouvre sa saison et renseigne chaque rencontre d'un geste, lien et blason
+ * compris. Trois enregistrements séparés, c'est trois fois plus d'occasions
+ * d'en oublier un, et un calendrier à moitié rempli.
+ *
+ * Chaque champ absent laisse la valeur en place ; `null` ou vide l'efface.
+ */
 export class LienCommandeFlaixDto {
   @IsUUID()
   eventId!: string;
@@ -19,6 +28,18 @@ export class LienCommandeFlaixDto {
   @IsString()
   @MaxLength(1000)
   url?: string | null;
+
+  /** Le nom de l'équipe adverse, tel qu'il s'écrira sous le blason. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  opponentName?: string | null;
+
+  /** L'adresse du blason (https, voir `events/adversaire.ts`). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  opponentLogoUrl?: string | null;
 }
 
 /**

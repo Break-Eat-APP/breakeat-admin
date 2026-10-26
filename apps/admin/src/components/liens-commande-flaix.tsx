@@ -2,7 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import { Check, Link2 } from 'lucide-react';
-import { apiDefinirLiensCommandeFlaix, type AdminEvent } from '@/lib/api/admin-client';
+import {
+  apiDefinirLiensCommandeFlaix,
+  type AdminEvent,
+  type LigneMatchFlaix,
+} from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 import { alertesDeSaisie } from '@/lib/alertes-liens';
 
@@ -36,7 +40,7 @@ export function LiensCommandeFlaix({
    */
   modeContinu: boolean;
   events: AdminEvent[];
-  onSaved: (maj: { id: string; flaixOrderUrl: string | null }[]) => void;
+  onSaved: (maj: LigneMatchFlaix[]) => void;
 }) {
   // Les matchs à venir ou en cours, du plus proche au plus lointain. Un match
   // terminé n'a plus de commande à prendre : l'afficher noierait les autres.
@@ -57,12 +61,43 @@ export function LiensCommandeFlaix({
   }, [events, modeContinu]);
 
   const [saisies, setSaisies] = useState<Record<string, string>>({});
+  // L'ADVERSAIRE, saisi sur la même ligne que le lien.
+  //
+  // Deux états séparés plutôt qu'un objet par match : chaque champ se corrige
+  // seul, et l'enregistrement n'envoie que ce qui a bougé — réécrire un lien
+  // ancien devenu invalide ferait refuser tout le lot.
+  const [noms, setNoms] = useState<Record<string, string>>({});
+  const [logos, setLogos] = useState<Record<string, string>>({});
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState('');
   const [enregistre, setEnregistre] = useState(false);
+  /**
+   * Les adresses de blason qui ne rendent AUCUNE image.
+   *
+   * Retenues par adresse et non par match : corriger l'adresse doit réessayer
+   * — sinon un club qui répare sa faute de frappe continuerait de voir les
+   * initiales et croirait son logo refusé.
+   */
+  const [casses, setCasses] = useState<Set<string>>(new Set());
 
   const valeur = (e: AdminEvent) => saisies[e.id] ?? e.flaixOrderUrl ?? '';
-  const modifie = aVenir.some((e) => valeur(e).trim() !== (e.flaixOrderUrl ?? ''));
+  const valeurNom = (e: AdminEvent) => noms[e.id] ?? e.opponentName ?? '';
+  const valeurLogo = (e: AdminEvent) => logos[e.id] ?? e.opponentLogoUrl ?? '';
+
+  const aChange = (e: AdminEvent) =>
+    valeur(e).trim() !== (e.flaixOrderUrl ?? '') ||
+    valeurNom(e).trim() !== (e.opponentName ?? '') ||
+    valeurLogo(e).trim() !== (e.opponentLogoUrl ?? '');
+  const modifie = aVenir.some(aChange);
+
+  /** Repli quand le club n'a pas (encore) de blason : les initiales, comme dans l'app. */
+  const initiales = (nom: string) =>
+    nom
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 3)
+      .map((m) => m[0]?.toUpperCase() ?? '')
+      .join('');
 
   // Ce qui cloche dans la saisie EN COURS — pas seulement dans ce qui est
   // enregistré : l'erreur doit se voir au moment où on la commet, pas le jour
@@ -90,14 +125,28 @@ export function LiensCommandeFlaix({
     try {
       // On n'envoie QUE ce qui a bougé : réécrire des lignes inchangées, c'est
       // risquer de refuser tout le lot pour un lien ancien devenu invalide.
-      const liens = aVenir
-        .filter((e) => valeur(e).trim() !== (e.flaixOrderUrl ?? ''))
-        .map((e) => ({ eventId: e.id, url: valeur(e).trim() || null }));
+      //
+      // Et champ par champ, pas ligne par ligne : un champ non envoyé n'est pas
+      // touché par le serveur. Envoyer les trois dès qu'un seul change ferait
+      // repasser un lien ancien dans la validation, et le lot entier serait
+      // refusé à cause d'une ligne qu'on ne voulait pas modifier.
+      const liens = aVenir.filter(aChange).map((e) => ({
+        eventId: e.id,
+        ...(valeur(e).trim() !== (e.flaixOrderUrl ?? '') ? { url: valeur(e).trim() || null } : {}),
+        ...(valeurNom(e).trim() !== (e.opponentName ?? '')
+          ? { opponentName: valeurNom(e).trim() || null }
+          : {}),
+        ...(valeurLogo(e).trim() !== (e.opponentLogoUrl ?? '')
+          ? { opponentLogoUrl: valeurLogo(e).trim() || null }
+          : {}),
+      }));
       if (liens.length === 0) return;
 
       const maj = await apiDefinirLiensCommandeFlaix(orgId, liens);
       onSaved(maj);
       setSaisies({});
+      setNoms({});
+      setLogos({});
       setEnregistre(true);
     } catch (e) {
       // Le serveur NOMME l'événement fautif : à dix lignes, « ce n'est pas un
@@ -131,6 +180,10 @@ export function LiensCommandeFlaix({
             Colle l&apos;adresse de commande que Flaix fournit pour chaque match.
             L&apos;application ouvre <strong>celle du match en cours</strong> — tu n&apos;as rien
             à changer le jour J. La commande ouvre à l&apos;avance selon le réglage du lieu.
+            <br />
+            Dis aussi <strong>contre qui on joue</strong> : le nom et le blason de
+            l&apos;adversaire remplissent le calendrier de la saison dans l&apos;app. Les deux
+            sont optionnels — sans blason, l&apos;app affiche les initiales.
           </>
         )}
       </p>
@@ -146,6 +199,8 @@ export function LiensCommandeFlaix({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {aVenir.map((e) => {
           const v = valeur(e);
+          const nom = valeurNom(e);
+          const logo = valeurLogo(e);
           return (
             <div
               key={e.id}
@@ -204,6 +259,116 @@ export function LiensCommandeFlaix({
                 <Check size={17} color="#16a34a" aria-label="Lien enregistré" />
               ) : (
                 <Link2 size={17} color={BRAND.grey} />
+              )}
+
+              {/*
+                L'ADVERSAIRE — sur la même ligne que le lien, et pas ailleurs.
+
+                C'est le même geste : le club ouvre sa saison, et pour chaque
+                match il colle l'adresse de commande et dit contre qui on
+                joue. Un second écran « adversaires » obligerait à repasser
+                treize fois sur la même liste, et le calendrier de l'app
+                resterait à moitié vide.
+
+                Le contenant d'un lieu ouvert en continu n'a pas d'adversaire :
+                il n'y a pas de match.
+              */}
+              {e.isPermanentContainer ? null : (
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    flexWrap: 'wrap',
+                    flexBasis: '100%',
+                    paddingTop: 10,
+                    borderTop: `1px dashed ${BRAND.border}`,
+                  }}
+                >
+                  {/* L'aperçu du blason, à la taille où l'app le rend. Un
+                      logo qui ne charge pas se voit ICI, pas le jour du
+                      match sur le téléphone d'un supporter. */}
+                  {logo.trim() && !casses.has(logo.trim()) ? (
+                    <img
+                      src={logo.trim()}
+                      alt=""
+                      width={38}
+                      height={38}
+                      // Une adresse qui ne rend pas d'image donne les
+                      // INITIALES, pas un carré brisé : c'est exactement ce
+                      // que l'app affichera, et le club le voit tout de suite.
+                      onError={() => setCasses((s) => new Set(s).add(logo.trim()))}
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: '50%',
+                        objectFit: 'contain',
+                        background: '#fff',
+                        border: `1px solid ${BRAND.border}`,
+                        flex: '0 0 auto',
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: '50%',
+                        background: BRAND.bgSubtle,
+                        color: BRAND.grey,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        flex: '0 0 auto',
+                      }}
+                      aria-hidden
+                    >
+                      {initiales(nom) || '—'}
+                    </div>
+                  )}
+
+                  <input
+                    value={nom}
+                    onChange={(ev) => {
+                      setNoms((s) => ({ ...s, [e.id]: ev.target.value }));
+                      setErreur('');
+                      setEnregistre(false);
+                    }}
+                    placeholder="Adversaire (ex. Racing 92)"
+                    aria-label={`Adversaire du match ${e.name}`}
+                    style={{
+                      flex: '1 1 150px',
+                      minWidth: 140,
+                      padding: '8px 11px',
+                      borderRadius: 9,
+                      border: `1px solid ${BRAND.border}`,
+                      fontSize: 13,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                  <input
+                    type="url"
+                    value={logo}
+                    onChange={(ev) => {
+                      setLogos((s) => ({ ...s, [e.id]: ev.target.value }));
+                      setErreur('');
+                      setEnregistre(false);
+                    }}
+                    placeholder="https://…/logo-adverse.png"
+                    aria-label={`Logo de l’adversaire du match ${e.name}`}
+                    style={{
+                      flex: '1 1 200px',
+                      minWidth: 180,
+                      padding: '8px 11px',
+                      borderRadius: 9,
+                      border: `1px solid ${BRAND.border}`,
+                      fontSize: 13,
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                </div>
               )}
             </div>
           );

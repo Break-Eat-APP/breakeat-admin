@@ -5,7 +5,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
-import { EventStatus } from '@prisma/client';
+import { EventStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import {
   requireOrgAccess,
@@ -17,6 +17,22 @@ import type { UpdateEventDto } from './dto/update-event.dto';
 import type { UpdateEventStatusDto } from './dto/update-event-status.dto';
 import type { Event, EventSupplier, Supplier } from '@prisma/client';
 import { verifierLienFlaix } from './lien-flaix';
+import { nettoyerNomAdversaire, verifierLogoAdversaire } from './adversaire';
+
+/**
+ * CE QUE L'ENREGISTREMENT D'UNE LIGNE DE MATCH REND.
+ *
+ * Les champs ABSENTS sont ceux qu'on n'a pas touches : l'admin ne remplace
+ * dans son etat local que ce qui a reellement change. Rendre `null` pour un
+ * champ laisse en place lui ferait effacer a l'ecran ce qui est toujours en
+ * base — et le club rechargerait la page pour comprendre.
+ */
+export interface LigneMatchFlaix {
+  id: string;
+  flaixOrderUrl?: string | null;
+  opponentName?: string | null;
+  opponentLogoUrl?: string | null;
+}
 
 export type EventWithSuppliers = Event & {
   eventSuppliers: (EventSupplier & { supplier: Supplier })[];
@@ -323,8 +339,13 @@ export class EventsService {
   async definirLiensCommandeFlaix(
     organizationId: string,
     userId: string,
-    liens: { eventId: string; url?: string | null }[],
-  ): Promise<{ id: string; flaixOrderUrl: string | null }[]> {
+    liens: {
+      eventId: string;
+      url?: string | null;
+      opponentName?: string | null;
+      opponentLogoUrl?: string | null;
+    }[],
+  ): Promise<LigneMatchFlaix[]> {
     await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
 
     // Un même événement cité deux fois, avec deux liens : laquelle des deux
@@ -344,38 +365,78 @@ export class EventsService {
     const parId = new Map(evenements.map((e) => [e.id, e]));
 
     // On valide TOUT avant d'écrire quoi que ce soit.
-    const aEcrire: { id: string; url: string | null }[] = [];
+    //
+    // CHAMP ABSENT = ON NE TOUCHE PAS ; `null` ou vide = on efface. C'est ce
+    // qui permet de corriger un blason sans réenvoyer le lien, et surtout
+    // d'éviter l'effacement silencieux : une ligne qui omettait `url` vidait
+    // le lien du match sans que personne ne l'ait demandé.
+    const aEcrire: {
+      id: string;
+      data: Prisma.EventUpdateInput;
+      retour: LigneMatchFlaix;
+    }[] = [];
     for (const l of liens) {
       const ev = parId.get(l.eventId);
       // Un événement d'une AUTRE organisation est traité comme inexistant :
       // repondre « pas a vous » confirmerait son existence a qui devine un UUID.
       if (!ev) throw new NotFoundException(`Événement introuvable : ${l.eventId}`);
 
-      const saisie = l.url?.trim();
-      if (!saisie) {
-        aEcrire.push({ id: ev.id, url: null });
-        continue;
+      const data: Prisma.EventUpdateInput = {};
+      const retour: LigneMatchFlaix = { id: ev.id };
+
+      if (l.url !== undefined) {
+        const saisie = l.url?.trim();
+        if (!saisie) {
+          data.flaixOrderUrl = null;
+          retour.flaixOrderUrl = null;
+        } else {
+          const verdict = verifierLienFlaix(saisie);
+          // Le nom de l'événement dans le message : à dix lignes, « ce n'est pas
+          // un lien Flaix » sans dire LEQUEL oblige à tout relire.
+          if (!verdict.valide) throw new BadRequestException(`${ev.name} — ${verdict.raison}`);
+          data.flaixOrderUrl = verdict.url;
+          retour.flaixOrderUrl = verdict.url;
+        }
       }
-      const verdict = verifierLienFlaix(saisie);
-      // Le nom de l'événement dans le message : à dix lignes, « ce n'est pas un
-      // lien Flaix » sans dire LEQUEL oblige à tout relire.
-      if (!verdict.valide) throw new BadRequestException(`${ev.name} — ${verdict.raison}`);
-      aEcrire.push({ id: ev.id, url: verdict.url });
+
+      if (l.opponentName !== undefined) {
+        const nom = nettoyerNomAdversaire(l.opponentName);
+        data.opponentName = nom;
+        retour.opponentName = nom;
+      }
+
+      if (l.opponentLogoUrl !== undefined) {
+        const saisie = l.opponentLogoUrl?.trim();
+        if (!saisie) {
+          data.opponentLogoUrl = null;
+          retour.opponentLogoUrl = null;
+        } else {
+          const verdict = verifierLogoAdversaire(saisie);
+          if (!verdict.valide) throw new BadRequestException(`${ev.name} — ${verdict.raison}`);
+          data.opponentLogoUrl = verdict.url;
+          retour.opponentLogoUrl = verdict.url;
+        }
+      }
+
+      // Une ligne qui ne demande rien n'a rien à faire dans la transaction :
+      // `update` avec un `data` vide touche `updatedAt` pour rien.
+      if (Object.keys(data).length > 0) aEcrire.push({ id: ev.id, data, retour });
     }
 
+    if (aEcrire.length === 0) return [];
+
     await this.prisma.$transaction(
-      aEcrire.map((e) =>
-        this.prisma.event.update({ where: { id: e.id }, data: { flaixOrderUrl: e.url } }),
-      ),
+      aEcrire.map((e) => this.prisma.event.update({ where: { id: e.id }, data: e.data })),
     );
 
-    const poses = aEcrire.filter((e) => e.url).length;
+    const poses = aEcrire.filter((e) => e.data.flaixOrderUrl).length;
+    const blasons = aEcrire.filter((e) => e.data.opponentLogoUrl).length;
     this.logger.log(
-      `Liens de commande Flaix : ${poses} posé(s), ${aEcrire.length - poses} retiré(s) ` +
+      `Liens de commande Flaix : ${poses} posé(s), ${blasons} blason(s) ` +
         `sur ${aEcrire.length} événement(s) (org ${organizationId}) par ${userId}`,
     );
 
-    return aEcrire.map((e) => ({ id: e.id, flaixOrderUrl: e.url }));
+    return aEcrire.map((e) => e.retour);
   }
 
   // ─── Private guards ───────────────────────────────────────────

@@ -489,7 +489,12 @@ ${msg}`);
             setEvents((cur) =>
               cur.map((e) => {
                 const m = maj.find((x) => x.id === e.id);
-                return m ? { ...e, flaixOrderUrl: m.flaixOrderUrl } : e;
+                // `{ ...e, ...m }` et non une liste de champs : le serveur ne
+                // rend QUE ce qu'il a écrit, et une clé absente ne doit pas
+                // écraser localement ce qui est toujours en base. Écrire
+                // `flaixOrderUrl: m.flaixOrderUrl` effacerait le lien à
+                // l'écran dès qu'on ne corrige qu'un blason.
+                return m ? { ...e, ...m } : e;
               }),
             )
           }

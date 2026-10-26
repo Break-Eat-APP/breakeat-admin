@@ -48,6 +48,7 @@ import { PartnersScreen } from '@screens/partners.screen';
 import { LoginScreen } from '@screens/login.screen';
 import { FlaixOrderScreen } from '@screens/flaix-order.screen';
 import { EventHomeScreen } from '@screens/event-home.screen';
+import { SaisonScreen } from '@screens/saison.screen';
 import { SupplierCatalogScreen } from '@screens/supplier-catalog.screen';
 import { SlotSelectorScreen } from '@screens/slot-selector.screen';
 import { CheckoutScreen } from '@screens/checkout.screen';
@@ -258,6 +259,7 @@ export default function AppPreview() {
 
               {/* Stubs (caméra / événement live) */}
               <Stack.Screen name="EventHome" component={EventHomeScreen} />
+              <Stack.Screen name="Saison" component={SaisonScreen} />
               <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
               <Stack.Screen name="Notifications" component={NotificationsScreen} />
               <Stack.Screen name="QRScanner" component={QRScannerStub} />
