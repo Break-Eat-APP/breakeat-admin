@@ -74,6 +74,55 @@ describe('Accès aux salons temps réel', () => {
     gateway = module.get(RealtimeGateway);
   });
 
+  // ─── La CONNEXION elle-même ─────────────────────────────────────
+
+  /**
+   * LE JETON NE SUFFIT PAS.
+   *
+   * La passerelle vérifiait la signature et l'expiration, mais pas l'état du
+   * compte — là où `JwtStrategy` le relit à chaque requête REST. Un compte
+   * désactivé gardait donc sa connexion temps réel jusqu'à l'expiration de
+   * son jeton : quelqu'un qu'on venait d'écarter continuait de voir arriver
+   * les commandes, leurs montants et les noms des clients.
+   */
+  describe('connexion', () => {
+    const socket = () => ({
+      id: 's1',
+      handshake: { auth: { token: 'jeton' }, headers: {} },
+      data: {} as Record<string, unknown>,
+      disconnect: jest.fn(),
+    });
+
+    it('REFUSE un compte désactivé, même avec un jeton valide', async () => {
+      prisma.user.findUnique.mockResolvedValue({ isActive: false });
+      const client = socket();
+
+      await gateway.handleConnection(client as never);
+
+      expect(client.disconnect).toHaveBeenCalled();
+      expect(client.data.user).toBeUndefined();
+    });
+
+    it('REFUSE un compte qui n’existe plus', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+      const client = socket();
+
+      await gateway.handleConnection(client as never);
+
+      expect(client.disconnect).toHaveBeenCalled();
+    });
+
+    it('accepte un compte actif', async () => {
+      prisma.user.findUnique.mockResolvedValue({ isActive: true });
+      const client = socket();
+
+      await gateway.handleConnection(client as never);
+
+      expect(client.disconnect).not.toHaveBeenCalled();
+      expect(client.data.user).toEqual({ sub: MOI });
+    });
+  });
+
   // ─── Ce qui doit être REFUSÉ ────────────────────────────────────
 
   it('REFUSE le salon d’une organisation dont on n’est pas membre', async () => {

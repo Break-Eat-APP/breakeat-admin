@@ -7,6 +7,7 @@ import { optionsHelmet } from './common/securite/entetes';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { estEnLigne, secretJwtFaible } from './common/helpers/est-en-ligne';
+import { originesCors } from './common/helpers/origines-cors';
 import { AdaptateurRedis } from './modules/realtime/adaptateur-redis';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JsonLogger } from './logger/json-logger';
@@ -73,15 +74,10 @@ async function bootstrap(): Promise<void> {
   // Ce n'est pas de la précaution gratuite : une entrée malformée bloque
   // SILENCIEUSEMENT toute une app (le navigateur refuse, le serveur ne dit
   // rien), et c'est arrivé deux fois sur ce projet.
-  const corsOrigins = (
-    process.env.CORS_ORIGINS?.split(',') ?? [
-      'http://localhost:3001',
-      'http://localhost:3002',
-      'http://localhost:3003',
-    ]
-  )
-    .map((o) => o.trim().replace(/\/+$/, ''))
-    .filter(Boolean);
+  // La MEME lecture que la passerelle WebSocket — voir `origines-cors.ts`.
+  // Les deux divergeaient : un espace apres une virgule autorisait une origine
+  // en HTTP et la refusait en temps reel.
+  const corsOrigins = originesCors();
 
   // Tracé au démarrage : la seule façon de vérifier ce que le serveur a
   // RÉELLEMENT retenu, sans avoir à deviner depuis un échec côté navigateur.

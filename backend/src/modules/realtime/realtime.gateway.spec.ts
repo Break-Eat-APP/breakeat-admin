@@ -36,7 +36,11 @@ describe('RealtimeGateway', () => {
           // Ici, la doublure represente un membre en regle de `org-1`.
           provide: PrismaService,
           useValue: {
-            user: { findUnique: jest.fn().mockResolvedValue({ globalRole: 'CUSTOMER' }) },
+            // `isActive` : la passerelle relit le compte a la connexion, comme
+            // `JwtStrategy` le fait cote REST. Un compte desactive est refuse.
+            user: {
+              findUnique: jest.fn().mockResolvedValue({ globalRole: 'CUSTOMER', isActive: true }),
+            },
             supplier: { findUnique: jest.fn().mockResolvedValue({ organizationId: 'org-1' }) },
             organizationMember: {
               findUnique: jest.fn().mockResolvedValue({ orgRole: 'MANAGER', supplierId: null }),
@@ -64,26 +68,26 @@ describe('RealtimeGateway', () => {
   // ─── handleConnection ─────────────────────────────────────────
 
   describe('handleConnection', () => {
-    it('stores user payload in client.data when token is valid', () => {
+    it('stores user payload in client.data when token is valid', async () => {
       const client = makeSocket({ handshake: { auth: { token: 'valid-jwt' }, headers: {} } as never });
       jwtService.verify.mockReturnValue(VALID_PAYLOAD);
 
-      gateway.handleConnection(client);
+      await gateway.handleConnection(client);
 
       expect(client.data.user).toEqual(VALID_PAYLOAD);
       expect(client.disconnect).not.toHaveBeenCalled();
     });
 
-    it('disconnects client when handshake has no token', () => {
+    it('disconnects client when handshake has no token', async () => {
       const client = makeSocket({ handshake: { auth: {}, headers: {} } as never });
 
-      gateway.handleConnection(client);
+      await gateway.handleConnection(client);
 
       expect(client.disconnect).toHaveBeenCalledWith(true);
       expect(client.data.user).toBeUndefined();
     });
 
-    it('disconnects client when Bearer header token is present but invalid', () => {
+    it('disconnects client when Bearer header token is present but invalid', async () => {
       const client = makeSocket({
         handshake: {
           auth: {},
@@ -92,12 +96,12 @@ describe('RealtimeGateway', () => {
       });
       jwtService.verify.mockImplementation(() => { throw new Error('invalid'); });
 
-      gateway.handleConnection(client);
+      await gateway.handleConnection(client);
 
       expect(client.disconnect).toHaveBeenCalledWith(true);
     });
 
-    it('accepts token from Authorization: Bearer header', () => {
+    it('accepts token from Authorization: Bearer header', async () => {
       const client = makeSocket({
         handshake: {
           auth: {},
@@ -106,13 +110,13 @@ describe('RealtimeGateway', () => {
       });
       jwtService.verify.mockReturnValue(VALID_PAYLOAD);
 
-      gateway.handleConnection(client);
+      await gateway.handleConnection(client);
 
       expect(client.data.user).toEqual(VALID_PAYLOAD);
       expect(jwtService.verify).toHaveBeenCalledWith('header-token', expect.any(Object));
     });
 
-    it('prefers handshake.auth.token over Authorization header', () => {
+    it('prefers handshake.auth.token over Authorization header', async () => {
       const client = makeSocket({
         handshake: {
           auth: { token: 'auth-token' },
@@ -121,7 +125,7 @@ describe('RealtimeGateway', () => {
       });
       jwtService.verify.mockReturnValue(VALID_PAYLOAD);
 
-      gateway.handleConnection(client);
+      await gateway.handleConnection(client);
 
       expect(jwtService.verify).toHaveBeenCalledWith('auth-token', expect.any(Object));
     });
@@ -130,7 +134,7 @@ describe('RealtimeGateway', () => {
   // ─── handleDisconnect ─────────────────────────────────────────
 
   describe('handleDisconnect', () => {
-    it('does not throw for any socket', () => {
+    it('does not throw for any socket', async () => {
       const client = makeSocket();
       expect(() => gateway.handleDisconnect(client)).not.toThrow();
     });

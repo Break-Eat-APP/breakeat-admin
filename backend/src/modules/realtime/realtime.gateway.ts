@@ -15,6 +15,7 @@ import { Server, Socket } from 'socket.io';
 import { JoinRoomDto } from './dto/join-room.dto';
 import { PrismaService } from '../../database/prisma.service';
 import { requireOrgAccess } from '../../common/helpers/require-org-access';
+import { originesCors } from '../../common/helpers/origines-cors';
 
 /**
  * RealtimeGateway — Socket.IO entry point.
@@ -36,9 +37,15 @@ import { requireOrgAccess } from '../../common/helpers/require-org-access';
  */
 @WebSocketGateway({
   cors: {
-    // Mirror the HTTP-level CORS_ORIGINS env: same origins allowed for WS and HTTP.
-    // Falls back to localhost:3001 (local dev operator app) if env is unset.
-    origin: process.env['CORS_ORIGINS']?.split(',') ?? ['http://localhost:3001'],
+    // LA MEME LECTURE QUE LE HTTP, et c'est tout l'objet de ce helper.
+    //
+    // Il y avait ici un simple `split(',')` la ou `main.ts` nettoyait les
+    // espaces et la barre oblique finale. `CORS_ORIGINS="https://a.fr, https://b.fr"`
+    // — ecrit naturellement, avec l'espace — autorisait donc les deux en HTTP
+    // et SEULE LA PREMIERE en WebSocket. La console du second club chargeait
+    // ses donnees par REST et son temps reel restait muet, sans erreur cote
+    // serveur. On cherche ce genre de panne du cote du reseau pendant une heure.
+    origin: originesCors(),
     credentials: true,
   },
   transports: ['websocket', 'polling'],
@@ -58,7 +65,21 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
 
   // ─── Lifecycle ───────────────────────────────────────────────
 
-  handleConnection(client: Socket): void {
+  /**
+   * LE JETON NE SUFFIT PAS : ON RELIT LE COMPTE.
+   *
+   * La signature et l'expiration etaient verifiees, mais pas l'etat du compte
+   * en base — la ou `JwtStrategy` le fait a CHAQUE requete REST.
+   *
+   * Un compte desactive gardait donc sa connexion temps reel jusqu'a
+   * l'expiration de son jeton. Quelqu'un qu'on vient d'ecarter continuait de
+   * voir arriver les commandes, leurs montants et les noms des clients —
+   * pendant des heures, selon la duree du jeton.
+   *
+   * Les deux chemins doivent repondre la meme chose, sinon le temps reel
+   * redevient une porte derobee vers ce que l'API refuse.
+   */
+  async handleConnection(client: Socket): Promise<void> {
     const token = this.extractToken(client);
     if (!token) {
       this.logger.warn(`WS [${client.id}] rejected — no token`);
@@ -69,6 +90,17 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       const payload = this.jwtService.verify<{ sub: string }>(token, {
         secret: this.configService.get<string>('jwt.secret'),
       });
+
+      const compte = await this.prisma.user.findUnique({
+        where: { id: payload.sub },
+        select: { isActive: true },
+      });
+      if (!compte?.isActive) {
+        this.logger.warn(`WS [${client.id}] rejected — compte absent ou desactive`);
+        client.disconnect(true);
+        return;
+      }
+
       client.data.user = payload;
       this.logger.debug(`WS [${client.id}] connected — user ${payload.sub}`);
     } catch {
