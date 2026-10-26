@@ -258,7 +258,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # DEUX A LA FOIS, PAS CINQ.
+      #
+      # turbo lance jusqu'a dix taches en parallele. Ici cela ferait trois
+      # applications Next, le backend et l'export web ensemble, sur un
+      # runner a deux coeurs : chacune passe seule, l'ensemble sature.
+      #
+      # Ce job n'avait JAMAIS tourne avant le 25/10 — il attendait un
+      # `typecheck` qui echouait depuis la creation du depot. Son
+      # instabilite n'est donc pas une regression : c'est la premiere fois
+      # qu'on le voit s'executer.
       - name: Build all packages
-        run: pnpm turbo build
+        run: pnpm turbo build --concurrency=2
         env:
           NODE_ENV: production
+          # Next compile en memoire ; la valeur par defaut de Node ne suffit
+          # pas pour l'admin, qui porte le plus d'ecrans.
+          NODE_OPTIONS: --max-old-space-size=4096
