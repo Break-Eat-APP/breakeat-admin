@@ -6,6 +6,7 @@ import helmet from 'helmet';
 import { optionsHelmet } from './common/securite/entetes';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { estEnLigne, secretJwtFaible } from './common/helpers/est-en-ligne';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JsonLogger } from './logger/json-logger';
 
@@ -124,11 +125,36 @@ async function bootstrap(): Promise<void> {
  * Aucune de ces pannes ne se signale d'elle-même. Ce rapport les rend visibles
  * dans les journaux, au démarrage, avant que quiconque ne commande.
  *
- * On n'interrompt PAS le démarrage : une API debout mais mal configurée sert
- * encore l'app mobile ; une API refusant de démarrer ne sert plus personne.
+ * ON N'INTERROMPT PAS LE DÉMARRAGE — SAUF POUR LE SECRET JWT.
+ *
+ * Pour tout le reste, l'arbitrage tient : une API debout mais mal configurée
+ * sert encore l'app mobile ; une API refusant de démarrer ne sert plus
+ * personne. Une clé Stripe absente empêche d'encaisser, elle n'ouvre rien.
+ *
+ * `JWT_SECRET` est d'une autre nature. Avec le repli de développement — une
+ * chaîne publique, lisible dans ce dépôt — **n'importe qui forge un jeton**,
+ * y compris celui d'un SUPER_ADMIN, qui franchit toutes les gardes
+ * d'organisation. L'API ne servirait pas « mal » : elle servirait l'attaquant
+ * aussi bien que le client. Là, ne pas démarrer est le moindre mal.
+ *
+ * Le test ne porte PAS sur `NODE_ENV` : il vaut `staging` sur les deux
+ * services Railway (constaté le 26/10/2026), donc tout ce qui en dépendait
+ * était inactif en ligne. Voir `estEnLigne()`.
  */
 function verifierConfigurationProduction(logger: LoggerService): void {
-  const enProduction = process.env.NODE_ENV === 'production';
+  const enProduction = estEnLigne();
+
+  // ─── Le seul motif de refus ───────────────────────────────────
+  const faiblesse = secretJwtFaible(process.env.JWT_SECRET);
+  if (enProduction && faiblesse) {
+    logger.error(
+      `JWT_SECRET ${faiblesse}. Démarrage REFUSÉ : avec ce secret, n'importe qui ` +
+        `forge un jeton valide, y compris celui d'un administrateur. ` +
+        `Poser une chaîne aléatoire d'au moins 32 caractères dans les variables ` +
+        `du service, puis redéployer.`,
+    );
+    process.exit(1);
+  }
 
   const requises: Array<[string, string | undefined]> = [
     ['DATABASE_URL', process.env.DATABASE_URL],

@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { estEnLigne } from '../helpers/est-en-ligne';
 import type { Request, Response } from 'express';
 
 /**
@@ -59,7 +60,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
       pile,
     );
 
-    const enProduction = process.env.NODE_ENV === 'production';
+    /**
+     * EN LIGNE, LE CLIENT N'A DROIT QU'A LA REFERENCE.
+     *
+     * Ce test lisait `NODE_ENV === 'production'`. Or il vaut `staging` sur les
+     * DEUX services Railway (constate le 26/10/2026) : la production renvoyait
+     * donc le message d'erreur BRUT a chaque client — messages PostgreSQL,
+     * noms de colonnes, chemins de fichiers.
+     *
+     * `estEnLigne()` se fie a ce que l'hebergeur pose lui-meme, que personne
+     * n'a a penser a regler.
+     */
+    const enProduction = estEnLigne();
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       // La référence suffit à retrouver la trace complète dans les journaux.

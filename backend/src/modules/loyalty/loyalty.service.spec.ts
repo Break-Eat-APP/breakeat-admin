@@ -32,7 +32,12 @@ describe('LoyaltyService', () => {
       updateMany: jest.Mock;
     };
     loyaltyTransaction: { create: jest.Mock; findUnique: jest.Mock; update: jest.Mock };
-    cart: { findUnique: jest.Mock; findMany: jest.Mock; update: jest.Mock };
+    cart: {
+      findUnique: jest.Mock;
+      findMany: jest.Mock;
+      update: jest.Mock;
+      updateMany: jest.Mock;
+    };
     order: { update: jest.Mock };
     $transaction: jest.Mock;
   };
@@ -61,6 +66,12 @@ describe('LoyaltyService', () => {
         findUnique: jest.fn().mockResolvedValue({ loyaltyHoldId: null }),
         findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn(),
+        // Le panier se RÉSERVE : écriture conditionnelle sur
+        // `loyaltyHoldId: null`. `count: 1` = cette requête a gagné la course.
+        // Le cas `count: 0` se joue sur une vraie base, dans
+        // `test/integration/fidelite-reservation.int-spec.ts` : c'est
+        // PostgreSQL qui sérialise, une doublure ne démontrerait rien.
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       order: { update: jest.fn() },
       // La vraie transaction passe un client au callback : on lui donne le
@@ -277,11 +288,20 @@ describe('LoyaltyService', () => {
           }),
         }),
       );
-      // Le panier garde le lien : c'est par lui que la réservation devient
-      // dépense, ou revient au solde.
-      expect(prisma.cart.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { loyaltyHoldId: 'mvt-1' } }),
-      );
+      /**
+       * Le panier garde le lien : c'est par lui que la réservation devient
+       * dépense, ou revient au solde.
+       *
+       * Et il se RÉSERVE — `loyaltyHoldId: null` dans le `where`. Sans cette
+       * condition, deux paiements simultanés débitaient tous deux le solde et
+       * le second écrasait le pointeur du premier, qui devenait orpheline.
+       * C'est le cœur du correctif : l'assertion porte sur la condition
+       * autant que sur la valeur écrite.
+       */
+      expect(prisma.cart.updateMany).toHaveBeenCalledWith({
+        where: { id: 'panier-1', loyaltyHoldId: null },
+        data: { loyaltyHoldId: 'mvt-1' },
+      });
     });
 
     it('REFUSE avant le paiement quand le solde ne suit pas', async () => {
