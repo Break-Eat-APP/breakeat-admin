@@ -235,6 +235,19 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
    *
    * Membre de l'organisation qui la detient — et, si le compte est rattache a
    * un comptoir precis, celui-la et aucun autre.
+   *
+   * ── POURQUOI LA PORTE PASSE PAR `membreDu` ──────────────────────────
+   *
+   * Cette methode lisait `organizationMember` DIRECTEMENT. Un SUPER_ADMIN n'a
+   * pas de ligne d'adhesion : il etait donc refuse ici, alors qu'il franchit
+   * la garde sur tous les autres salons — organisation, evenement, point de
+   * retrait, commande — et sur le REST. La supervision marchait partout sauf
+   * sur une buvette, c'est-a-dire precisement la ou on regarde quand un
+   * comptoir ne suit plus un soir de match.
+   *
+   * Deux ecritures de la meme autorisation finissent toujours par diverger.
+   * Ici c'etait fait. La porte est desormais la MEME que partout ailleurs,
+   * et le rattachement au comptoir ne s'applique qu'ensuite.
    */
   private async accesBuvette(userId: string, supplierId: string): Promise<boolean> {
     const buvette = await this.prisma.supplier.findUnique({
@@ -243,13 +256,19 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     });
     if (!buvette) return false;
 
+    if (!(await this.membreDu(userId, buvette.organizationId))) return false;
+
     const membre = await this.prisma.organizationMember.findUnique({
       where: {
         userId_organizationId: { userId, organizationId: buvette.organizationId },
       },
       select: { supplierId: true },
     });
-    if (!membre) return false;
+
+    // Pas de ligne alors que la porte s'est ouverte : c'est un SUPER_ADMIN.
+    // Aucun comptoir ne lui est assigne, donc aucune restriction de comptoir
+    // ne s'applique — on ne peut pas restreindre a un rattachement absent.
+    if (!membre) return true;
 
     return !membre.supplierId || membre.supplierId === supplierId;
   }

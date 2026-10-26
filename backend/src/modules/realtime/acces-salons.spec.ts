@@ -203,4 +203,49 @@ describe('Accès aux salons temps réel', () => {
     prisma.user.findUnique.mockResolvedValue({ globalRole: 'SUPER_ADMIN' });
     await expect(rejoindre(`organization:${AUTRE_CLUB}`)).resolves.toBeDefined();
   });
+
+  // ─── La BUVETTE — la meme porte que les autres salons ──────────
+
+  /**
+   * `accesBuvette` lisait la table des membres DIRECTEMENT. Un SUPER_ADMIN
+   * n'a pas de ligne d'adhesion : il etait donc refuse ici, alors qu'il
+   * franchit la garde partout ailleurs. La supervision marchait sur le
+   * tableau de bord d'un club et PAS sur une de ses buvettes — c'est-a-dire
+   * precisement la ou on regarde quand un comptoir ne suit plus.
+   */
+  it('laisse un SUPER_ADMIN ecouter une buvette, comme les autres salons', async () => {
+    prisma.user.findUnique.mockResolvedValue({ globalRole: 'SUPER_ADMIN' });
+    prisma.supplier.findUnique.mockResolvedValue({ organizationId: AUTRE_CLUB });
+    await expect(rejoindre('supplier:b-autre')).resolves.toBeDefined();
+  });
+
+  it('REFUSE la buvette d’un autre club a un simple membre', async () => {
+    prisma.supplier.findUnique.mockResolvedValue({ organizationId: AUTRE_CLUB });
+    await expect(rejoindre('supplier:b-autre')).rejects.toThrow(WsException);
+  });
+
+  it('accepte la buvette de SON club', async () => {
+    prisma.supplier.findUnique.mockResolvedValue({ organizationId: MON_CLUB });
+    await expect(rejoindre('supplier:b-mien')).resolves.toBeDefined();
+  });
+
+  /**
+   * Le rattachement a UN comptoir reste la regle pour les comptes qui en
+   * ont un : l'ouverture au SUPER_ADMIN ne doit pas la lever.
+   */
+  it('un compte rattache a UN comptoir n’ecoute que le sien', async () => {
+    prisma.supplier.findUnique.mockResolvedValue({ organizationId: MON_CLUB });
+    prisma.organizationMember.findUnique.mockResolvedValue({
+      orgRole: 'OPERATOR',
+      supplierId: 'b-le-sien',
+    });
+
+    await expect(rejoindre('supplier:b-le-sien')).resolves.toBeDefined();
+    await expect(rejoindre('supplier:b-un-autre')).rejects.toThrow(WsException);
+  });
+
+  it('REFUSE une buvette qui n’existe pas', async () => {
+    prisma.supplier.findUnique.mockResolvedValue(null);
+    await expect(rejoindre('supplier:fantome')).rejects.toThrow(WsException);
+  });
 });

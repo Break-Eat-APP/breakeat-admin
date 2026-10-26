@@ -85,9 +85,12 @@ async function bootstrap(): Promise<void> {
 
   app.enableCors({ origin: corsOrigins, credentials: true });
 
-  // Global prefix — /health and /webhooks are excluded so they remain at their root paths.
-  // /webhooks/stripe must stay stable for Stripe; /health for Docker/monitoring.
-  app.setGlobalPrefix('api/v1', { exclude: ['health', 'webhooks/(.*)'] });
+  // Global prefix — /health, /ready et /webhooks restent a la racine.
+  //
+  // /webhooks/stripe doit rester stable pour Stripe ; /health est la preuve
+  // de vie interrogee par Railway ; /ready dit si le conteneur peut
+  // REELLEMENT prendre une commande (base joignable, migrations finies).
+  app.setGlobalPrefix('api/v1', { exclude: ['health', 'ready', 'webhooks/(.*)'] });
 
   verifierConfigurationProduction(logger);
 
@@ -116,6 +119,7 @@ async function bootstrap(): Promise<void> {
   logger.log(`BREAK EAT backend running on port ${port}`);
   logger.log(`Environment: ${process.env.NODE_ENV ?? 'development'}`);
   logger.log(`Health check: GET http://localhost:${port}/health`);
+  logger.log(`Pret a servir: GET http://localhost:${port}/ready`);
   logger.log(`Stripe hook:  POST http://localhost:${port}/webhooks/stripe`);
   logger.log(`API base:     http://localhost:${port}/api/v1`);
 }

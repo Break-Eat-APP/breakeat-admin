@@ -116,13 +116,27 @@ export class OrderSplitsService {
    * flags l'aurait desactivee partout tant que personne n'avait cree la ligne.
    * Une panne immediate, le jour de la mise en service.
    */
-  async estActive(): Promise<boolean> {
-    const dit = await this.flags.resolveOuRien('app.split.enabled');
+  /**
+   * @param portee Le club et l'evenement concernes, quand on les connait.
+   *
+   * SANS EUX, SEUL LE FLAG GLOBAL COMPTE. Le systeme de flags sait pourtant
+   * resoudre EVENEMENT > ORGANISATION > GLOBAL : l'ardoise ne lui passait
+   * simplement rien. On ne pouvait donc pas la couper pour UN club dont le
+   * comptoir deraille un soir — il fallait l'eteindre pour tout le monde.
+   *
+   * La portee n'est connue qu'APRES avoir charge le panier ou l'ardoise :
+   * c'est pour cela que les gardes, plus bas, viennent apres la lecture et
+   * non avant. Un identifiant qui n'existe pas se fait refuser pour cette
+   * raison-la, et c'est plus juste : on ne peut pas savoir de quel club
+   * relevait une ardoise introuvable.
+   */
+  async estActive(portee: { orgId?: string; eventId?: string } = {}): Promise<boolean> {
+    const dit = await this.flags.resolveOuRien('app.split.enabled', portee);
     return dit ?? this.config.get<boolean>('app.split.enabled') === true;
   }
 
-  private async assertActive(): Promise<void> {
-    if (!(await this.estActive())) {
+  private async assertActive(portee: { orgId?: string; eventId?: string } = {}): Promise<void> {
+    if (!(await this.estActive(portee))) {
       throw new BadRequestException('Le partage d’addition n’est pas activé.');
     }
   }
@@ -146,8 +160,6 @@ export class OrderSplitsService {
    * le moment où il coche et celui où il paie.
    */
   async ouvrir(userId: string, cartId: string) {
-    await this.assertActive();
-
     const cart = await this.prisma.cart.findUnique({
       where: { id: cartId },
       include: {
@@ -156,6 +168,9 @@ export class OrderSplitsService {
       },
     });
     if (!cart) throw new NotFoundException('Cart not found');
+    // La portee du club et de l'evenement : c'est elle qui permet de couper
+    // l'ardoise pour UN club sans l'eteindre pour les autres.
+    await this.assertActive({ orgId: cart.event.organizationId, eventId: cart.eventId });
     if (cart.userId !== userId) throw new ForbiddenException('You do not own this cart');
     if (cart.status !== CartStatus.OPEN) {
       throw new BadRequestException(`Cart is ${cart.status} — only OPEN carts can be shared`);
@@ -291,7 +306,6 @@ export class OrderSplitsService {
     claimantName?: string;
     isHost?: boolean;
   }): Promise<{ shareId: string; checkoutUrl: string; amountCents: number }> {
-    await this.assertActive();
     if (params.unitIds.length === 0) {
       throw new BadRequestException('Aucun article sélectionné');
     }
@@ -300,6 +314,7 @@ export class OrderSplitsService {
       where: { code: params.code.trim().toUpperCase() },
     });
     if (!split) throw new NotFoundException('Addition introuvable');
+    await this.assertActive({ orgId: split.organizationId, eventId: split.eventId });
     if (split.status !== OrderSplitStatus.OPEN) {
       throw new BadRequestException('Cette addition est close');
     }
@@ -442,13 +457,12 @@ export class OrderSplitsService {
    * atomique : un seul appel l'obtient, les autres sont refusés.
    */
   async envoyer(userId: string, code: string) {
-    await this.assertActive();
-
     const split = await this.prisma.orderSplit.findUnique({
       where: { code: code.trim().toUpperCase() },
       include: { units: true, shares: true },
     });
     if (!split) throw new NotFoundException('Addition introuvable');
+    await this.assertActive({ orgId: split.organizationId, eventId: split.eventId });
     if (split.hostUserId !== userId) {
       throw new ForbiddenException('Seul celui qui a lancé l’addition peut l’envoyer');
     }

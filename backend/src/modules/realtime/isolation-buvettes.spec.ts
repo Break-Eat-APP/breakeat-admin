@@ -64,12 +64,18 @@ describe('Isolation des buvettes', () => {
     let prisma: {
       supplier: { findUnique: jest.Mock };
       organizationMember: { findUnique: jest.Mock };
+      user: { findUnique: jest.Mock };
     };
 
     beforeEach(async () => {
       prisma = {
         supplier: { findUnique: jest.fn() },
         organizationMember: { findUnique: jest.fn() },
+        // L'acces a une buvette passe par `requireOrgAccess`, comme tous les
+        // autres salons depuis le 26/10 : il lit d'abord le role GLOBAL (le
+        // contournement SUPER_ADMIN), puis l'adhesion. Un equipier ordinaire
+        // n'est pas super-administrateur.
+        user: { findUnique: jest.fn().mockResolvedValue({ globalRole: 'CUSTOMER' }) },
       };
       const module = await Test.createTestingModule({
         providers: [
@@ -87,7 +93,7 @@ describe('Isolation des buvettes', () => {
 
     it('laisse entrer un équipier rattaché à CETTE buvette', async () => {
       prisma.supplier.findUnique.mockResolvedValue({ organizationId: CLUB });
-      prisma.organizationMember.findUnique.mockResolvedValue({ supplierId: NORD });
+      prisma.organizationMember.findUnique.mockResolvedValue({ orgRole: 'OPERATOR', supplierId: NORD });
 
       const c = client();
       await gateway.handleJoinRoom(c as never, { room: `supplier:${NORD}` } as never);
@@ -101,7 +107,7 @@ describe('Isolation des buvettes', () => {
       // choisisse son stand : n'importe quel equipier pouvait ecouter le flux
       // du voisin, et preparer ses commandes.
       prisma.supplier.findUnique.mockResolvedValue({ organizationId: CLUB });
-      prisma.organizationMember.findUnique.mockResolvedValue({ supplierId: NORD });
+      prisma.organizationMember.findUnique.mockResolvedValue({ orgRole: 'OPERATOR', supplierId: NORD });
 
       const c = client();
       await expect(
@@ -113,7 +119,7 @@ describe('Isolation des buvettes', () => {
     it('laisse un responsable NON rattaché écouter n’importe lequel de SES comptoirs', async () => {
       // Un gerant suit ses quatre buvettes : il n'est epingle a aucune.
       prisma.supplier.findUnique.mockResolvedValue({ organizationId: CLUB });
-      prisma.organizationMember.findUnique.mockResolvedValue({ supplierId: null });
+      prisma.organizationMember.findUnique.mockResolvedValue({ orgRole: 'MANAGER', supplierId: null });
 
       const c = client();
       await gateway.handleJoinRoom(c as never, { room: `supplier:${SUD}` } as never);

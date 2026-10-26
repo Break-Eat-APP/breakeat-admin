@@ -24,16 +24,34 @@ import { OrderSplitsService } from './order-splits.service';
  * est du TypeScript valide. Les tests ci-dessous, eux, le voient.
  */
 describe('OrderSplitsService — l’interrupteur', () => {
+  const CLUB = 'org-1';
+  const MATCH = 'ev-1';
+
   function monter(flagEnBase: boolean | null, variableEnv: boolean) {
     const flags = { resolveOuRien: jest.fn().mockResolvedValue(flagEnBase) };
+    // La garde vient APRES la lecture du panier : c'est de lui que vient la
+    // portee (club, evenement), et sans portee seul le flag global comptait.
+    // Le panier suffit donc a atteindre la garde ; rien n'est jamais ecrit.
+    const prisma = {
+      cart: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'panier-1',
+          userId: 'u1',
+          status: 'OPEN',
+          eventId: MATCH,
+          items: [],
+          event: { organizationId: CLUB, venueId: 'lieu-1' },
+        }),
+      },
+    };
     const service = new OrderSplitsService(
-      {} as never,
+      prisma as never,
       {} as never,
       {} as never,
       { get: (cle: string) => (cle === 'app.split.enabled' ? variableEnv : undefined) } as never,
       flags as never,
     );
-    return { service, flags };
+    return { service, flags, prisma };
   }
 
   describe('qui décide', () => {
@@ -64,7 +82,40 @@ describe('OrderSplitsService — l’interrupteur', () => {
     it('interroge bien la clé attendue', async () => {
       const { service, flags } = monter(null, true);
       await service.estActive();
-      expect(flags.resolveOuRien).toHaveBeenCalledWith('app.split.enabled');
+      expect(flags.resolveOuRien).toHaveBeenCalledWith('app.split.enabled', {});
+    });
+  });
+
+  /**
+   * COUPER L'ARDOISE POUR UN SEUL CLUB.
+   *
+   * `estActive()` n'envoyait AUCUNE portee. Le systeme de flags sait pourtant
+   * resoudre EVENEMENT > ORGANISATION > GLOBAL : seul le flag global pouvait
+   * donc agir. Un club dont le comptoir deraille un soir de match obligeait
+   * a eteindre l'ardoise pour TOUT LE MONDE.
+   */
+  describe('la portée', () => {
+    it('transmet le club ET l’événement du panier', async () => {
+      const { service, flags } = monter(null, true);
+
+      await service.ouvrir('u1', 'panier-1').catch(() => undefined);
+
+      expect(flags.resolveOuRien).toHaveBeenCalledWith('app.split.enabled', {
+        orgId: CLUB,
+        eventId: MATCH,
+      });
+    });
+
+    /**
+     * Le flag du club l'emporte sur la variable d'environnement : c'est tout
+     * l'interet, couper en quelques secondes sans redeployer.
+     */
+    it('un flag à FAUX sur ce club ferme, même si l’environnement dit ouverte', async () => {
+      const { service } = monter(false, true);
+
+      await expect(service.ouvrir('u1', 'panier-1')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
     });
   });
 
