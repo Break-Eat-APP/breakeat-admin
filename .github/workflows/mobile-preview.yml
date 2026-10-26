@@ -88,6 +88,42 @@ jobs:
           fi
           echo "Jeton Expo present."
 
+      # UN ARBRE SALE SUR UN CHECKOUT NEUF, C'EST TOUJOURS LES FINS DE LIGNE.
+      #
+      # `eas.json` pose `requireCommit: true` : EAS refuse de construire si le
+      # moindre fichier differe de ce qui est commite. Sur un runner Linux,
+      # rien n'a ete touche — donc la seule facon d'etre sale, c'est que Git
+      # RENORMALISE un fichier au checkout.
+      #
+      # C'est arrive le 26/10 : `brain/TASK_SUMMARY.md` etait stocke en fins de
+      # ligne MIXTES (une seule ligne en LF au milieu de 2636 en CRLF, laissee
+      # par un script d'edition). `.gitattributes` imposant `eol=lf`, le
+      # checkout rendait un fichier tout en LF, different du blob stocke :
+      # arbre sale, build refuse. Un octet, et plus aucun build EAS ne partait.
+      #
+      # Le message d'EAS nomme le fichier mais pas la cause, et on cherche un
+      # changement qu'on n'a pas fait. Ici on dit le remede.
+      - name: Verifier que l'arbre est propre
+        working-directory: .
+        run: |
+          SALE="$(git status --porcelain)"
+          if [ -n "$SALE" ]; then
+            echo "## L'arbre de travail est sale sur un checkout neuf" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Personne n'a modifie ces fichiers : Git les a RENORMALISES au checkout." >> "$GITHUB_STEP_SUMMARY"
+            echo "Ils sont stockes avec des fins de ligne qui contredisent \`.gitattributes\`." >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$SALE" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Pour les retrouver en local : \`git ls-files --eol | grep '^i/mixed'\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "Pour corriger : reecrire le fichier en LF, puis le commiter." >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Arbre sale au checkout (fins de ligne) — voir le resume du run."
+            exit 1
+          fi
+          echo "Arbre propre."
+
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
