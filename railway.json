@@ -1,5 +1,6 @@
 {
   "$schema": "https://schema.railway.app/railway.schema.json",
+  "_lire": "CE FICHIER FAIT AUTORITE pour le deploiement du backend. Il y en avait trois autres qui disaient des choses differentes : backend/railway.json (supprime le 26/10/2026), le [start] de nixpacks.toml (retire le meme jour) et backend/Dockerfile (que Railway n ouvre jamais). Toutes contournaient scripts/migrer.sh, donc ses tentatives sur base injoignable. Si une commande de demarrage doit changer, elle change ICI.",
   "build": {
     "builder": "NIXPACKS",
     "watchPatterns": [

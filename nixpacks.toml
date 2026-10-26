@@ -9,5 +9,17 @@ cmds = [
 [phases.build]
 cmds = ["pnpm --filter @break-eat/backend build"]
 
-[start]
-cmd = "pnpm --filter @break-eat/backend db:migrate:prod && node backend/dist/main"
+# PAS DE [start] ICI — la commande de demarrage vit dans `railway.json`,
+# et une seule fois.
+#
+# Il y en avait une, et elle DIFFERAIT : elle appelait `db:migrate:prod`
+# directement, sans passer par `scripts/migrer.sh` — donc sans les douze
+# tentatives sur base injoignable que ce script existe pour faire.
+#
+# Elle ne s'executait jamais : le `startCommand` de `railway.json`
+# l'emporte. Mais le jour ou quelqu'un aurait touche a `railway.json`,
+# le deploiement serait silencieusement reparti sur une autre commande.
+#
+# Sans [start] et sans script `start` a la racine, un `railway.json`
+# ampute fait echouer le deploiement au lieu d'en inventer un autre.
+# C'est le bon mode de panne : bruyant.

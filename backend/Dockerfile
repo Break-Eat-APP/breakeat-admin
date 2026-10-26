@@ -17,7 +17,14 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 
 # Install pnpm globally
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# La MEME version que `packageManager` dans package.json. `pnpm@latest`
+# faisait de chaque construction une loterie : la version du jour, dont le
+# format de lockfile peut differer de celui que le depot a verrouille.
+#
+# Ce Dockerfile n'est utilise par AUCUNE configuration de build du depot —
+# Railway passe par Nixpacks. Il est garde pour un usage local, et
+# verrouille pour que cet usage donne le meme resultat qu'ailleurs.
+RUN corepack enable && corepack prepare pnpm@11.3.0 --activate
 
 # Copy workspace manifests first (layer cache)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -45,7 +52,9 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 
 # Install pnpm (needed for production install)
-RUN corepack enable && corepack prepare pnpm@latest --activate
+# Meme version qu a l etape precedente : deux etapes sur deux versions de
+# pnpm produiraient deux arbres de dependances dans la meme image.
+RUN corepack enable && corepack prepare pnpm@11.3.0 --activate
 
 # Create a non-root user for security
 RUN addgroup --system --gid 1001 breakeat && \
