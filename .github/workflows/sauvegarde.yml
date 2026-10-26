@@ -76,12 +76,16 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq curl ca-certificates lsb-release
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl --fail -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc             https://www.postgresql.org/media/keys/ACCC4CF8.asc
-          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc]             https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main"             | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get install -y -qq curl ca-certificates gnupg
+          # Le nom de code vient d'/etc/os-release : pas besoin de lsb-release,
+          # et ca suit tout seul le jour ou le runner passe a Ubuntu 26.
+          CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"
+          sudo install -d /usr/share/keyrings
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt ${CODENAME}-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
           sudo apt-get update -qq
           sudo apt-get install -y -qq postgresql-client-18
+          # Trace utile : si la version n'est pas 18, l'echec suivant est explique.
           pg_dump --version
 
       - name: Sauvegarder
