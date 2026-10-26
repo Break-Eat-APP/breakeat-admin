@@ -181,20 +181,97 @@ export class ScheduledPushService {
         tokens.map((to) => ({ to, title: sp.title, body: sp.body, data: { kind: sp.kind, eventId: sp.eventId } })),
       );
       if (result.invalidTokens.length > 0) await this.pushTokens.purgeInvalid(result.invalidTokens);
+
+      /**
+       * « ENVOYÉ » NE DOIT SE DIRE QUE SI QUELQUE CHOSE EST PARTI.
+       *
+       * `ExpoPushService.send()` ne lève jamais : il absorbe les erreurs
+       * réseau et rend un résumé. Une campagne dont TOUS les lots avaient
+       * échoué — Expo injoignable, coupure réseau — était donc marquée
+       * `SENT` avec `sentCount: 0`. Le club lisait « envoyé » pour une
+       * annonce que personne n'avait reçue, et ne s'en apercevait qu'au
+       * silence du stade.
+       *
+       * ZÉRO DESTINATAIRE N'EST PAS UN ÉCHEC, en revanche : si personne
+       * n'a de jeton — appareils neufs, notifications refusées —, il n'y
+       * avait rien à envoyer, et l'annonce vit déjà sur la cloche, archivée
+       * plus haut. La distinction se joue sur ce qu'on a TENTÉ.
+       */
+      const tente = tokens.length;
+      const abouti = tente === 0 || result.sent > 0;
+
       await this.prisma.scheduledPush.update({
         where: { id },
-        data: { status: 'SENT', sentAt: new Date(), sentCount: result.sent },
+        data: {
+          status: abouti ? 'SENT' : 'FAILED',
+          sentAt: new Date(),
+          sentCount: result.sent,
+        },
       });
-      this.logger.log(`ScheduledPush ${id} (${sp.kind}) envoyé à ${result.sent} appareil(s)`);
+
+      if (!abouti) {
+        this.logger.error(
+          `ScheduledPush ${id} (${sp.kind}) ÉCHOUÉ : ${tente} jeton(s) visé(s), aucun envoi abouti.`,
+        );
+      } else if (result.failed > 0) {
+        // Succès partiel : il est dans `sentCount`, mais il doit aussi se lire
+        // dans les journaux — un envoi à moitié passé ne se devine pas.
+        this.logger.warn(
+          `ScheduledPush ${id} (${sp.kind}) partiel : ${result.sent} envoyé(s), ${result.failed} échoué(s).`,
+        );
+      } else {
+        this.logger.log(`ScheduledPush ${id} (${sp.kind}) envoyé à ${result.sent} appareil(s)`);
+      }
     } catch (err) {
       this.logger.error(`ScheduledPush ${id} a échoué: ${err instanceof Error ? err.message : err}`);
       await this.prisma.scheduledPush.update({ where: { id }, data: { status: 'FAILED' } }).catch(() => {});
     }
   }
 
+  /**
+   * Une campagne restée en PROCESSING n'a plus personne pour la finir.
+   *
+   * Le passage `PENDING` → `PROCESSING` empêche deux instances de traiter la
+   * même campagne. Mais si le processus meurt entre ce passage et la fin, la
+   * ligne reste `PROCESSING` POUR TOUJOURS : `processDue` ne regarde que les
+   * `PENDING`, et plus rien ne la reprend. Un redéploiement au mauvais
+   * moment suffisait — et la campagne disparaissait en silence.
+   *
+   * ON NE LA REJOUE PAS, ON LA MARQUE ÉCHOUÉE. L'archivage a lieu AVANT
+   * l'envoi : la rejouer dupliquerait les entrées de la cloche, et peut-être
+   * les notifications elles-mêmes si la mort est survenue après l'envoi.
+   * Une annonce reçue deux fois agace ; une annonce manquée se rattrape en
+   * la recréant, ce que le club peut faire lui-même — à condition de le
+   * savoir, et c'est tout l'objet de ce relevé.
+   *
+   * Un quart d'heure : bien au-delà de la durée d'un envoi normal, donc une
+   * ligne encore `PROCESSING` après ce délai n'est plus en cours, elle est
+   * abandonnée.
+   */
+  private async libererLesBloquees(): Promise<void> {
+    const limite = new Date(Date.now() - 15 * 60_000);
+    const bloquees = await this.prisma.scheduledPush.findMany({
+      where: { status: 'PROCESSING', updatedAt: { lt: limite } },
+      select: { id: true, kind: true },
+    });
+    if (bloquees.length === 0) return;
+
+    await this.prisma.scheduledPush.updateMany({
+      where: { id: { in: bloquees.map((b) => b.id) } },
+      data: { status: 'FAILED' },
+    });
+    for (const { id, kind } of bloquees) {
+      this.logger.error(
+        `ScheduledPush ${id} (${kind}) abandonné : resté en cours plus de 15 minutes, ` +
+          `probablement interrompu par un redéploiement. Marqué ÉCHOUÉ — à recréer si besoin.`,
+      );
+    }
+  }
+
   /** Cron : traite les pushs/campagnes dont l'heure est passée. */
   @Cron(CronExpression.EVERY_MINUTE)
   async processDue(): Promise<void> {
+    await this.libererLesBloquees();
     const due = await this.prisma.scheduledPush.findMany({
       where: { status: 'PENDING', scheduledAt: { lte: new Date() } },
       select: { id: true },
