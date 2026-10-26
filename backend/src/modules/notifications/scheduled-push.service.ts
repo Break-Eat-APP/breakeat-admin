@@ -200,11 +200,24 @@ export class ScheduledPushService {
       const tente = tokens.length;
       const abouti = tente === 0 || result.sent > 0;
 
+      /**
+       * `sentAt` EST UNE DATE D'ENVOI, PAS UNE DATE DE TENTATIVE.
+       *
+       * Elle était posée dans les deux cas. Une campagne `FAILED` portait
+       * donc une heure d'envoi — « échouée, envoyée à 18 h 42 ». Le club qui
+       * relit ses annonces ne sait plus laquelle est partie, et un rapport
+       * qui compte les envois par date compte des envois qui n'ont pas eu
+       * lieu.
+       *
+       * Rien n'est perdu : `updatedAt` garde l'heure de la tentative, et
+       * l'échec est journalisé juste en dessous. Ici, l'absence de date EST
+       * l'information — c'est ce qui distingue « jamais parti » de « parti ».
+       */
       await this.prisma.scheduledPush.update({
         where: { id },
         data: {
           status: abouti ? 'SENT' : 'FAILED',
-          sentAt: new Date(),
+          ...(abouti ? { sentAt: new Date() } : {}),
           sentCount: result.sent,
         },
       });

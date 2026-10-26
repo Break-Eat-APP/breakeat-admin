@@ -1,15 +1,22 @@
 name: Mobile Preview Build (EAS)
 
-# Triggers:
-#   - Auto on push to main when mobile code changes
-#   - Manual dispatch to build any platform on demand
-
+# A LA DEMANDE SEULEMENT — bouton « Run workflow ».
+#
+# Il partait sur CHAQUE push touchant `apps/mobile`. Deux raisons d'arreter :
+#
+#  · CE N'EST PAS L'APP QU'ON TESTE. Ce workflow construit le profil
+#    `preview`, dont l'identifiant est `com.shapper.breakeat.preview` : une
+#    application DISTINCTE, qui s'installe a cote. Ce qui va sur TestFlight,
+#    c'est le profil `beta`, lance separement ;
+#  · UN BUILD CLOUD SE PAIE. Deux par push — iOS et Android — pour un artefact
+#    que personne n'installait.
+#
+# Et en echouant a chaque push, il mettait du rouge sur des commits parfaitement
+# sains. Une CI qui crie pour rien, on cesse de la lire — et le jour ou elle a
+# raison, personne ne regarde.
+#
+# Le bouton reste : Actions > Mobile Preview Build (EAS) > Run workflow.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/mobile/**'
-      - '.github/workflows/mobile-preview.yml'
   workflow_dispatch:
     inputs:
       platform:

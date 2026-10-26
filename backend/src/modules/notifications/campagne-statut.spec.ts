@@ -96,6 +96,47 @@ describe('ScheduledPushService — le statut dit la vérité', () => {
 
     expect(ecrit[0]).toMatchObject({ status: 'SENT', sentCount: 42 });
   });
+
+  // ─── `sentAt` est une date d'ENVOI, pas de tentative ──────────────
+
+  /**
+   * Elle était posée même en échec total : une campagne `FAILED` portait une
+   * heure d'envoi — « échouée, envoyée à 18 h 42 ». Le club qui relit ses
+   * annonces ne sait plus laquelle est partie, et un rapport qui compte les
+   * envois par date compte des envois qui n'ont pas eu lieu.
+   *
+   * L'ABSENCE de date est l'information : c'est elle qui distingue « jamais
+   * parti » de « parti ». `updatedAt` garde l'heure de la tentative.
+   */
+  it('ne pose AUCUNE date d’envoi quand rien n’est parti', async () => {
+    const { service, ecrit } = monter({ sent: 0, failed: 3 }, ['j1', 'j2', 'j3']);
+
+    await service.process(ID);
+
+    expect(ecrit[0].status).toBe('FAILED');
+    expect(ecrit[0]).not.toHaveProperty('sentAt');
+  });
+
+  it('pose la date dès qu’un appareil a reçu', async () => {
+    const { service, ecrit } = monter({ sent: 1, failed: 2 }, ['j1', 'j2']);
+
+    await service.process(ID);
+
+    expect(ecrit[0].sentAt).toBeInstanceOf(Date);
+  });
+
+  /**
+   * Zéro destinataire reste un ENVOI abouti — il n'y avait rien à envoyer.
+   * La date doit donc être là, sinon le rapport verrait un trou.
+   */
+  it('pose la date même quand il n’y avait personne à joindre', async () => {
+    const { service, ecrit } = monter({ sent: 0, failed: 0 }, []);
+
+    await service.process(ID);
+
+    expect(ecrit[0].status).toBe('SENT');
+    expect(ecrit[0].sentAt).toBeInstanceOf(Date);
+  });
 });
 
 /**
