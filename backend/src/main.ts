@@ -7,6 +7,7 @@ import { optionsHelmet } from './common/securite/entetes';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { estEnLigne, secretJwtFaible } from './common/helpers/est-en-ligne';
+import { AdaptateurRedis } from './modules/realtime/adaptateur-redis';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { JsonLogger } from './logger/json-logger';
 
@@ -93,6 +94,26 @@ async function bootstrap(): Promise<void> {
   app.setGlobalPrefix('api/v1', { exclude: ['health', 'webhooks/(.*)'] });
 
   verifierConfigurationProduction(logger);
+
+  /**
+   * LE TEMPS RÉEL AVANT D'ÉCOUTER.
+   *
+   * Socket.IO garde ses salons en mémoire : avec deux instances, une commande
+   * encaissée par l'une n'atteint pas le comptoir branché sur l'autre. Posé
+   * ici parce que l'adaptateur doit exister AVANT `listen` — après, le serveur
+   * Socket.IO est déjà construit.
+   *
+   * `REDIS_URL` existait dans la configuration depuis toujours sans qu'aucune
+   * ligne ne la lise. Elle sert enfin.
+   */
+  const adaptateur = new AdaptateurRedis(app);
+  await adaptateur.connecter(process.env.REDIS_URL);
+  app.useWebSocketAdapter(adaptateur);
+
+  // Un arrêt propre rend ses connexions Redis : sans cela, un redéploiement
+  // laisse des clients suspendus le temps de leur expiration.
+  app.enableShutdownHooks();
+  process.once('beforeExit', () => void adaptateur.fermer());
 
   const port = process.env.PORT ?? 3000;
   await app.listen(port);

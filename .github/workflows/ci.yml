@@ -125,6 +125,18 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      # Le temps reel a plusieurs instances se verifie avec un VRAI Redis :
+      # c'est lui qui transporte l'evenement d'une instance a l'autre, et
+      # aucune doublure ne demontre ce passage.
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -170,6 +182,9 @@ jobs:
           # touche jamais une base qu'on ne lui a pas designee. La ligne
           # ci-dessous est donc ce qui fait exister ce job.
           DATABASE_URL_TEST: postgresql://audit:audit@localhost:5432/audit
+          # Sans elle, la suite temps reel s'IGNORE au lieu d'echouer : on ne
+          # fait jamais echouer quelqu'un qui n'a pas monte l'infrastructure.
+          REDIS_URL_TEST: redis://localhost:6379
 
   export-web:
     name: Export web de l'app client
