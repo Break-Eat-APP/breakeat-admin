@@ -248,4 +248,87 @@ describe('Accès aux salons temps réel', () => {
     prisma.supplier.findUnique.mockResolvedValue(null);
     await expect(rejoindre('supplier:fantome')).rejects.toThrow(WsException);
   });
+
+  // ─── Ce que coute un `join_room` ───────────────────────────────
+
+  /**
+   * LE LIMITEUR HTTP NE VOIT PAS SOCKET.IO.
+   *
+   * Chaque `join_room` declenchait une a deux lectures Prisma, sans aucune
+   * borne. Une socket authentifiee pouvait marteler ce message et faire
+   * tourner la base autant qu'elle voulait — une amplification SQL offerte
+   * a qui a un compte, et il en suffit d'un.
+   *
+   * Rejoindre deux fois le meme salon est d'ailleurs SANS EFFET cote
+   * Socket.IO : la seconde lecture etait deja du travail pour rien, meme
+   * sans intention de nuire — une reconnexion en rejoue plusieurs.
+   */
+  describe('le cout d’un join_room', () => {
+    /** Une socket qui VIT : `client.data` porte la memoire des salons. */
+    const socket = () => ({ data: { user: { sub: MOI } }, id: 's1', join: jest.fn() });
+
+    it('ne relit PAS la base quand on rejoint le meme salon', async () => {
+      const c = socket();
+      const salon = `organization:${MON_CLUB}`;
+
+      for (let i = 0; i < 5; i += 1) {
+        await gateway.handleJoinRoom(c as never, { room: salon } as never);
+      }
+
+      // Une seule verification, cinq entrees : Socket.IO deduplique de son
+      // cote, mais c'est la LECTURE qu'on voulait economiser.
+      expect(prisma.organizationMember.findUnique).toHaveBeenCalledTimes(1);
+      expect(c.join).toHaveBeenCalledTimes(5);
+    });
+
+    /**
+     * Sans borne, la memoire se retourne contre nous : il suffirait de
+     * demander des salons TOUJOURS DIFFERENTS pour relire la base a chaque
+     * fois, et faire enfler le cache au passage.
+     */
+    it('refuse au-dela de 30 salons distincts', async () => {
+      const c = socket();
+      prisma.event.findUnique.mockResolvedValue({ organizationId: MON_CLUB });
+
+      for (let i = 0; i < 30; i += 1) {
+        await gateway.handleJoinRoom(c as never, { room: `event:e${i}` } as never);
+      }
+
+      await expect(
+        gateway.handleJoinRoom(c as never, { room: 'event:e30' } as never),
+      ).rejects.toThrow(WsException);
+    });
+
+    /**
+     * La borne ne doit pas devenir une porte : un salon refuse ne s'inscrit
+     * PAS dans la memoire, sinon un refus ouvrirait l'acces au suivant.
+     */
+    it('un salon REFUSE ne s’inscrit pas dans la memoire', async () => {
+      const c = socket();
+      prisma.event.findUnique.mockResolvedValue({ organizationId: AUTRE_CLUB });
+
+      await expect(
+        gateway.handleJoinRoom(c as never, { room: 'event:e-autre' } as never),
+      ).rejects.toThrow(WsException);
+      // Une seconde tentative doit RE-verifier, et refuser de nouveau.
+      await expect(
+        gateway.handleJoinRoom(c as never, { room: 'event:e-autre' } as never),
+      ).rejects.toThrow(WsException);
+
+      expect(prisma.event.findUnique).toHaveBeenCalledTimes(2);
+      expect(c.join).not.toHaveBeenCalled();
+    });
+
+    /** La memoire est portee par LA SOCKET : une autre repart de zero. */
+    it('deux sockets ne partagent pas leur memoire', async () => {
+      const a = socket();
+      const b = socket();
+      const salon = `organization:${MON_CLUB}`;
+
+      await gateway.handleJoinRoom(a as never, { room: salon } as never);
+      await gateway.handleJoinRoom(b as never, { room: salon } as never);
+
+      expect(prisma.organizationMember.findUnique).toHaveBeenCalledTimes(2);
+    });
+  });
 });

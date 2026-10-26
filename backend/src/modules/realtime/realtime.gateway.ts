@@ -18,6 +18,23 @@ import { requireOrgAccess } from '../../common/helpers/require-org-access';
 import { originesCors } from '../../common/helpers/origines-cors';
 
 /**
+ * COMBIEN DE SALONS DISTINCTS UNE SOCKET PEUT FAIRE VERIFIER, EN TOUT.
+ *
+ * Chaque verification coute une a deux lectures Prisma, et le limiteur HTTP
+ * ne voit pas les messages Socket.IO : une socket authentifiee pouvait donc
+ * marteler `join_room` et faire tourner la base autant qu'elle voulait.
+ *
+ * Le compte ne RETOMBE PAS quand on quitte un salon, et c'est voulu : sinon
+ * un cycle quitter/rejoindre relancerait les lectures sans fin. La borne est
+ * donc un plafond pour la duree de vie de la socket — reconnecter en ouvre
+ * une autre, mais cela coute une poignee de main et un jeton a verifier.
+ *
+ * Trente est tres au-dessus de l'usage reel : un poste de comptoir suit son
+ * club, son evenement, son point de retrait et les commandes du moment.
+ */
+const MAX_SALONS_PAR_SOCKET = 30;
+
+/**
  * RealtimeGateway — Socket.IO entry point.
  *
  * Responsibilities:
@@ -136,14 +153,63 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const utilisateur = client.data.user as { sub?: string } | undefined;
     if (!utilisateur?.sub) throw new WsException('Unauthorized');
 
+    /**
+     * DEJA VERIFIE, DEJA ENTRE — on ne redemande pas a la base.
+     *
+     * Chaque `join_room` declenchait une a deux lectures Prisma, sans aucune
+     * limite : le limiteur HTTP ne voit pas les messages Socket.IO. Une
+     * socket authentifiee pouvait donc marteler ce message et faire tourner
+     * la base autant qu'elle voulait — une amplification SQL offerte a qui a
+     * un compte, et il en suffit d'un.
+     *
+     * Rejoindre deux fois le meme salon est d'ailleurs SANS EFFET cote
+     * Socket.IO : la seconde lecture etait deja du travail pour rien, meme
+     * sans intention de nuire (une reconnexion en rejoue plusieurs).
+     *
+     * La memoire est portee par la SOCKET : elle meurt avec elle. Une
+     * autorisation retiree prend donc effet a la reconnexion — et un compte
+     * desactive est deja coupe des `handleConnection`.
+     */
+    const dejaAutorises = this.salonsAutorises(client);
+    if (dejaAutorises.has(dto.room)) {
+      client.join(dto.room);
+      return { joined: dto.room };
+    }
+
+    /**
+     * ET UNE BORNE DURE AU NOMBRE DE SALONS.
+     *
+     * Sans elle, la memoire ci-dessus se retourne contre nous : il suffirait
+     * de demander des salons TOUJOURS DIFFERENTS pour relire la base a chaque
+     * fois, et faire enfler le cache au passage.
+     *
+     * Trente est tres au-dessus de l'usage reel — un poste de comptoir suit
+     * son club, son evenement, son point de retrait et les commandes du
+     * moment. Qui depasse n'utilise pas l'application.
+     */
+    if (dejaAutorises.size >= MAX_SALONS_PAR_SOCKET) {
+      this.logger.warn(
+        `WS [${client.id}] refuse sur ${dto.room} — ${MAX_SALONS_PAR_SOCKET} salons deja ouverts`,
+      );
+      throw new WsException('Too many rooms');
+    }
+
     if (!(await this.peutRejoindre(utilisateur.sub, dto.room))) {
       this.logger.warn(`WS [${client.id}] refuse sur ${dto.room} — pas sa buvette`);
       throw new WsException('Forbidden');
     }
 
+    dejaAutorises.add(dto.room);
     client.join(dto.room);
     this.logger.debug(`WS [${client.id}] joined room ${dto.room}`);
     return { joined: dto.room };
+  }
+
+  /** Les salons deja verifies pour CETTE socket, crees a la premiere demande. */
+  private salonsAutorises(client: Socket): Set<string> {
+    const data = client.data as { salonsAutorises?: Set<string> };
+    data.salonsAutorises ??= new Set<string>();
+    return data.salonsAutorises;
   }
 
   /**
