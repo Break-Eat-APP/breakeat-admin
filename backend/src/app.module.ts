@@ -27,6 +27,8 @@ import { GroupsModule } from './modules/groups/groups.module';
 import { BackofficeModule } from './modules/backoffice/backoffice.module';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { COMPTEURS } from './common/securite/limitation';
+import { creerStockageLimitation } from './common/securite/limitation-redis';
+import { estEnLigne } from './common/helpers/est-en-ligne';
 import { APP_GUARD } from '@nestjs/core';
 import { StatsModule } from './modules/stats/stats.module';
 import { ClientsModule } from './modules/clients/clients.module';
@@ -86,7 +88,16 @@ import appConfig from './config/app.config';
     // Limitation de débit : deux compteurs, décrits et justifiés dans
     // `common/securite/limitation.ts`. Un large par IP, un serré par adresse
     // e-mail sur l'authentification — parce qu'un stade entier partage une IP.
-    ThrottlerModule.forRoot(COMPTEURS),
+    // Les compteurs sont PARTAGÉS via Redis quand il est là. En mémoire,
+    // chaque instance a les siens : la limite est multipliée par leur nombre,
+    // et il suffit de changer d'instance pour repartir à zéro. Sans Redis, on
+    // garde la mémoire et on le dit — voir `limitation-redis.ts`.
+    ThrottlerModule.forRootAsync({
+      useFactory: async () => ({
+        throttlers: COMPTEURS,
+        storage: await creerStockageLimitation(process.env.REDIS_URL, estEnLigne()),
+      }),
+    }),
     StatsModule,
     ClientsModule,
     DocumentsModule,
