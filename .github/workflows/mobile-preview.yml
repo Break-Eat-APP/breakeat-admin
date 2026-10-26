@@ -28,6 +28,15 @@ concurrency:
   group: mobile-preview-${{ github.ref }}
   cancel-in-progress: true
 
+# LECTURE SEULE, et c'est ecrit noir sur blanc.
+#
+# Ce workflow n'a rien a ecrire sur GitHub : il lance un build chez Expo et
+# resume ou le trouver. Le declarer evite qu'une etape ajoutee demain herite
+# d'un jeton capable de pousser du code ou de fermer des issues — sur un depot
+# ou le meme jeton voit tout le monorepo.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: EAS Preview (${{ matrix.platform }})
@@ -82,32 +91,34 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-      # Retrieve the QR/download URL and post it as a commit comment
-      - name: Post build link as commit comment
-        uses: actions/github-script@v7
+      # Ou trouver le build — ECRIT DANS LE RESUME DU RUN, pas en commentaire.
+      #
+      # C'etait un `createCommitComment`, et il echouait a tous les coups :
+      # « Resource not accessible by integration ». Le jeton d'Actions est en
+      # LECTURE SEULE par defaut, et ecrire un commentaire demande
+      # `contents: write`. Comme l'etape est en `if: always()`, elle partait
+      # pour iOS et pour Android — deux erreurs, et le job rouge meme quand le
+      # build Expo avait reussi.
+      #
+      # Le resume du run ne demande AUCUNE permission : c'est un fichier ou on
+      # ecrit. Et il s'affiche sur la page du run, celle qu'on ouvre deja quand
+      # on vient chercher son build — la ou un commentaire de commit sur `main`
+      # se serait empile sans que personne ne le lise.
+      - name: Ou trouver ce build
         if: always()
-        with:
-          script: |
-            const platform = '${{ matrix.platform }}';
-            const sha = context.sha;
-            const runUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const expoUrl = `https://expo.dev/accounts/breakeat/projects/break-eat/builds`;
-            const body = [
-              `## 📱 Mobile Preview — ${platform.toUpperCase()}`,
-              '',
-              `- **Commit:** \`${sha.slice(0, 7)}\``,
-              `- **Build log:** ${runUrl}`,
-              `- **Expo dashboard (QR + download):** ${expoUrl}`,
-              '',
-              `> Scan the QR code in the Expo dashboard to install on a physical device.`,
-              `> First build takes ~10 min; subsequent builds use cache.`,
-            ].join('\n');
-            await github.rest.repos.createCommitComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              commit_sha: sha,
-              body,
-            });
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "## Build ${{ matrix.platform }} — lance" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Build ${{ matrix.platform }} — ECHEC" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Le build n'est pas parti. Le journal ci-dessus dit pourquoi." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit : \`$(echo '${{ github.sha }}' | cut -c1-7)\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- QR code et telechargement : https://expo.dev/accounts/breakeat/projects/break-eat/builds" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "> Le premier build prend une dizaine de minutes ; les suivants reutilisent le cache." >> "$GITHUB_STEP_SUMMARY"
 
   # ─── Required secret ─────────────────────────────────────────────────────
   # EXPO_TOKEN — generate at https://expo.dev/accounts/[account]/settings/access-tokens
