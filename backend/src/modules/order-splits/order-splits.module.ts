@@ -3,6 +3,7 @@ import { OrderSplitsService } from './order-splits.service';
 import { OrderSplitsController } from './order-splits.controller';
 import { PaymentsModule } from '../payments/payments.module';
 import { OrdersModule } from '../orders/orders.module';
+import { FeatureFlagsModule } from '../feature-flags/feature-flags.module';
 
 /**
  * PHASE 25 — « l'ardoise ». Module ENTIEREMENT additif : rien du parcours de
@@ -10,7 +11,7 @@ import { OrdersModule } from '../orders/orders.module';
  * la ligne correspondante dans `app.module.ts`.
  */
 @Module({
-  imports: [PaymentsModule, OrdersModule],
+  imports: [PaymentsModule, OrdersModule, FeatureFlagsModule],
   controllers: [OrderSplitsController],
   providers: [OrderSplitsService],
   exports: [OrderSplitsService],

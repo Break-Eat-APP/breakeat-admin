@@ -72,6 +72,47 @@ export class FeatureFlagsService {
   }
 
   /**
+   * CE QUE LES FLAGS DISENT — ou RIEN s'ils ne disent rien.
+   *
+   * `resolve()` rend `false` dans deux cas qu'il ne faut surtout pas
+   * confondre : « un flag existe et il est à faux » et « aucun flag n'existe ».
+   *
+   * Pour un interrupteur de secours, la différence décide de tout. Brancher un
+   * module sur `resolve()` le DÉSACTIVERAIT partout tant que personne n'a créé
+   * la ligne — une panne immédiate, le jour de la mise en service.
+   *
+   * `null` laisse donc l'appelant garder son défaut (la variable
+   * d'environnement), et n'être supplanté que si quelqu'un a vraiment posé un
+   * flag. Même ordre de priorité que `resolve` : ÉVÉNEMENT → CLUB → GLOBAL.
+   */
+  async resolveOuRien(
+    key: string,
+    context: { orgId?: string; eventId?: string } = {},
+  ): Promise<boolean | null> {
+    const { orgId, eventId } = context;
+
+    if (eventId) {
+      const flag = await this.prisma.featureFlag.findUnique({
+        where: { key_scope_scopeId: { key, scope: FlagScope.EVENT, scopeId: eventId } },
+        select: { enabled: true },
+      });
+      if (flag !== null) return flag.enabled;
+    }
+    if (orgId) {
+      const flag = await this.prisma.featureFlag.findUnique({
+        where: { key_scope_scopeId: { key, scope: FlagScope.ORGANIZATION, scopeId: orgId } },
+        select: { enabled: true },
+      });
+      if (flag !== null) return flag.enabled;
+    }
+    const global = await this.prisma.featureFlag.findFirst({
+      where: { key, scope: FlagScope.GLOBAL, scopeId: null },
+      select: { enabled: true },
+    });
+    return global?.enabled ?? null;
+  }
+
+  /**
    * List all flags, optionally filtered by scope / scopeId.
    */
   async list(

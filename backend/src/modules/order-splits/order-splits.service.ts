@@ -22,6 +22,7 @@ import {
   resoudreCompteEncaisseur,
 } from '../../common/helpers/compte-stripe';
 import { OrdersService } from '../orders/orders.service';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 
 /**
  * OrderSplitsService — « l'ardoise » : une tournée composée par un hôte, réglée
@@ -97,15 +98,31 @@ export class OrderSplitsService {
     private readonly stripe: StripeService,
     private readonly orders: OrdersService,
     private readonly config: ConfigService,
+    private readonly flags: FeatureFlagsService,
   ) {}
 
-  /** La fonction est-elle ouverte ? (interrupteur d'environnement) */
-  estActive(): boolean {
-    return this.config.get<boolean>('app.split.enabled') === true;
+  /**
+   * LA FONCTION EST-ELLE OUVERTE ?
+   *
+   * Un flag en base l'emporte ; à défaut, la variable d'environnement décide.
+   *
+   * L'ardoise touche a de l'argent deja encaisse — elle rembourse quand un
+   * envoi echoue. Si elle se comporte mal un soir de match, il faut pouvoir la
+   * couper EN QUELQUES SECONDES. Avec la seule variable d'environnement, il
+   * fallait redeployer : cinq minutes, et un risque de plus au pire moment.
+   *
+   * L'ORDRE COMPTE, ET LE DEFAUT AUSSI. `resolveOuRien` rend `null` quand
+   * aucun flag n'existe — sans cette distinction, brancher l'ardoise sur les
+   * flags l'aurait desactivee partout tant que personne n'avait cree la ligne.
+   * Une panne immediate, le jour de la mise en service.
+   */
+  async estActive(): Promise<boolean> {
+    const dit = await this.flags.resolveOuRien('app.split.enabled');
+    return dit ?? this.config.get<boolean>('app.split.enabled') === true;
   }
 
-  private assertActive(): void {
-    if (!this.estActive()) {
+  private async assertActive(): Promise<void> {
+    if (!(await this.estActive())) {
       throw new BadRequestException('Le partage d’addition n’est pas activé.');
     }
   }
@@ -129,7 +146,7 @@ export class OrderSplitsService {
    * le moment où il coche et celui où il paie.
    */
   async ouvrir(userId: string, cartId: string) {
-    this.assertActive();
+    await this.assertActive();
 
     const cart = await this.prisma.cart.findUnique({
       where: { id: cartId },
@@ -274,7 +291,7 @@ export class OrderSplitsService {
     claimantName?: string;
     isHost?: boolean;
   }): Promise<{ shareId: string; checkoutUrl: string; amountCents: number }> {
-    this.assertActive();
+    await this.assertActive();
     if (params.unitIds.length === 0) {
       throw new BadRequestException('Aucun article sélectionné');
     }
@@ -425,7 +442,7 @@ export class OrderSplitsService {
    * atomique : un seul appel l'obtient, les autres sont refusés.
    */
   async envoyer(userId: string, code: string) {
-    this.assertActive();
+    await this.assertActive();
 
     const split = await this.prisma.orderSplit.findUnique({
       where: { code: code.trim().toUpperCase() },

@@ -59,8 +59,8 @@ export class OrderSplitsController {
    * ce qui arriverait à chaque fois que l'interrupteur est coupé.
    */
   @Get('public/order-splits/enabled')
-  estActive() {
-    return { enabled: this.service.estActive() };
+  async estActive() {
+    return { enabled: await this.service.estActive() };
   }
 
   /** GET /api/v1/public/order-splits/:code — la liste, telle qu'elle est. */

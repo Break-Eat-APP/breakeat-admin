@@ -6,6 +6,7 @@ import { OrderSplitsService } from './order-splits.service';
 import { PrismaService } from '../../database/prisma.service';
 import { StripeService } from '../payments/stripe.service';
 import { OrdersService } from '../orders/orders.service';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 
 const HOTE = 'user-hote';
 const CART = 'cart-1';
@@ -136,6 +137,13 @@ describe('OrderSplitsService — l’ardoise', () => {
             get: (cle: string) =>
               cle === 'app.split.enabled' ? actif : 'https://app.breakeat.test',
           },
+        },
+        {
+          // `null` = aucun flag en base, donc c'est la variable
+          // d'environnement ci-dessus qui décide. La précédence elle-même se
+          // teste dans `interrupteur-ardoise.spec.ts`.
+          provide: FeatureFlagsService,
+          useValue: { resolveOuRien: jest.fn().mockResolvedValue(null) },
         },
       ],
     }).compile();
