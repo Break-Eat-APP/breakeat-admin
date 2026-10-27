@@ -7,6 +7,8 @@ import {
   CustomerArrivedPayload,
 } from './realtime.service';
 import { RealtimeGateway } from './realtime.gateway';
+import { OutboxService } from './outbox.service';
+import { PrismaService } from '../../database/prisma.service';
 
 // ─── Mock server with a chainable to() ───────────────────────────
 
@@ -73,6 +75,15 @@ function makeCustomerArrivedPayload(): CustomerArrivedPayload {
   };
 }
 
+/**
+ * L'emission DEPOSE d'abord la ligne dans l'outbox, puis emet — c'est ce
+ * qui fait qu'un evenement rate se rejoue au lieu de disparaitre. Elle
+ * part donc au tour de boucle suivant, et chaque test doit le laisser
+ * passer AVANT de lire le mock : sinon il observe un serveur qui n'a
+ * encore rien recu.
+ */
+const vider = () => new Promise((r) => setImmediate(r));
+
 describe('RealtimeService', () => {
   let service: RealtimeService;
   let serverMock: ReturnType<typeof makeServerMock>;
@@ -87,6 +98,16 @@ describe('RealtimeService', () => {
           provide: RealtimeGateway,
           useValue: { server: serverMock },
         },
+        // L'outbox est doublee : ce fichier juge le CIBLAGE et l'enveloppe.
+        // Ce qu'elle garantit se teste dans `outbox.service.spec.ts`.
+        {
+          provide: OutboxService,
+          useValue: {
+            deposer: jest.fn().mockResolvedValue(undefined),
+            marquerLivre: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        { provide: PrismaService, useValue: {} },
       ],
     }).compile();
 
@@ -96,8 +117,9 @@ describe('RealtimeService', () => {
   // ─── emitNewOrder ─────────────────────────────────────────────
 
   describe('emitNewOrder', () => {
-    it('emits to organization, event, and supplier rooms', () => {
+    it('emits to organization, event, and supplier rooms', async () => {
       service.emitNewOrder(makeNewOrderPayload());
+      await vider();
 
       const rooms = serverMock._toSpy.mock.calls.map(([r]: [string]) => r);
       expect(rooms).toContain(`organization:${ORG_ID}`);
@@ -105,8 +127,9 @@ describe('RealtimeService', () => {
       expect(rooms).toContain(`supplier:${SUPPLIER_ID}`);
     });
 
-    it('envelope has eventName, eventId (UUID), occurredAt, and all order fields', () => {
+    it('envelope has eventName, eventId (UUID), occurredAt, and all order fields', async () => {
       service.emitNewOrder(makeNewOrderPayload());
+      await vider();
 
       const [, emittedEvent, envelope] = serverMock._toSpy.mock.results[0]
         ? (serverMock._emitSpy.mock.calls[0] as [string, string, unknown])
@@ -124,9 +147,10 @@ describe('RealtimeService', () => {
       void emittedEvent; void envelope;
     });
 
-    it('generates a unique eventId per call (idempotency key for clients)', () => {
+    it('generates a unique eventId per call (idempotency key for clients)', async () => {
       service.emitNewOrder(makeNewOrderPayload());
       service.emitNewOrder(makeNewOrderPayload());
+      await vider();
 
       const firstId = (serverMock._emitSpy.mock.calls[0] as [string, Record<string, unknown>])[1].eventId;
       // Each call emits 3 rooms; events[3] belongs to the second emitNewOrder call
@@ -138,8 +162,9 @@ describe('RealtimeService', () => {
   // ─── emitOrderUpdated ─────────────────────────────────────────
 
   describe('emitOrderUpdated', () => {
-    it('emits to order, organization, and event rooms', () => {
+    it('emits to order, organization, and event rooms', async () => {
       service.emitOrderUpdated(makeOrderUpdatedPayload());
+      await vider();
 
       const rooms = serverMock._toSpy.mock.calls.map(([r]: [string]) => r);
       expect(rooms).toContain(`order:${ORDER_ID}`);
@@ -147,8 +172,9 @@ describe('RealtimeService', () => {
       expect(rooms).toContain(`event:${EVENT_ID}`);
     });
 
-    it('envelope includes previousStatus, nextStatus, actorType, reason', () => {
+    it('envelope includes previousStatus, nextStatus, actorType, reason', async () => {
       service.emitOrderUpdated(makeOrderUpdatedPayload());
+      await vider();
 
       const [, payload] = serverMock._emitSpy.mock.calls[0] as [string, Record<string, unknown>];
       expect(payload.eventName).toBe('order_updated');
@@ -162,8 +188,9 @@ describe('RealtimeService', () => {
   // ─── emitOrderReady ───────────────────────────────────────────
 
   describe('emitOrderReady', () => {
-    it('emits to order, pickup-point, organization, and event rooms', () => {
+    it('emits to order, pickup-point, organization, and event rooms', async () => {
       service.emitOrderReady(makeOrderReadyPayload());
+      await vider();
 
       const rooms = serverMock._toSpy.mock.calls.map(([r]: [string]) => r);
       expect(rooms).toContain(`order:${ORDER_ID}`);
@@ -172,8 +199,9 @@ describe('RealtimeService', () => {
       expect(rooms).toContain(`event:${EVENT_ID}`);
     });
 
-    it('envelope has eventName=order_ready and pickupPointId', () => {
+    it('envelope has eventName=order_ready and pickupPointId', async () => {
       service.emitOrderReady(makeOrderReadyPayload());
+      await vider();
 
       const [, payload] = serverMock._emitSpy.mock.calls[0] as [string, Record<string, unknown>];
       expect(payload.eventName).toBe('order_ready');
@@ -190,8 +218,9 @@ describe('RealtimeService', () => {
   // sauter la carte d'une colonne à l'autre alors que le statut n'a pas bougé.
 
   describe('emitCustomerArrived', () => {
-    it('émet vers les rooms organisation, événement et point de vente', () => {
+    it('émet vers les rooms organisation, événement et point de vente', async () => {
       service.emitCustomerArrived(makeCustomerArrivedPayload());
+      await vider();
 
       const rooms = serverMock._toSpy.mock.calls.map(([r]: [string]) => r);
       expect(rooms).toContain(`organization:${ORG_ID}`);
@@ -199,15 +228,17 @@ describe('RealtimeService', () => {
       expect(rooms).toContain(`supplier:${SUPPLIER_ID}`);
     });
 
-    it('n’émet PAS vers la room de la commande — le client n’a rien à apprendre', () => {
+    it('n’émet PAS vers la room de la commande — le client n’a rien à apprendre', async () => {
       service.emitCustomerArrived(makeCustomerArrivedPayload());
+      await vider();
 
       const rooms = serverMock._toSpy.mock.calls.map(([r]: [string]) => r);
       expect(rooms).not.toContain(`order:${ORDER_ID}`);
     });
 
-    it('enveloppe : eventName=customer_arrived, eventId UUID, horodatage d’arrivée', () => {
+    it('enveloppe : eventName=customer_arrived, eventId UUID, horodatage d’arrivée', async () => {
       service.emitCustomerArrived(makeCustomerArrivedPayload());
+      await vider();
 
       const [evtName, payload] = serverMock._emitSpy.mock.calls[0] as [
         string,
@@ -223,8 +254,9 @@ describe('RealtimeService', () => {
       expect(payload.arrivedAt).toBe(ARRIVED_AT);
     });
 
-    it('ne porte aucun statut : la présence ne pilote pas le cycle de vie', () => {
+    it('ne porte aucun statut : la présence ne pilote pas le cycle de vie', async () => {
       service.emitCustomerArrived(makeCustomerArrivedPayload());
+      await vider();
 
       const [, payload] = serverMock._emitSpy.mock.calls[0] as [string, Record<string, unknown>];
       expect(payload).not.toHaveProperty('nextStatus');
@@ -232,9 +264,10 @@ describe('RealtimeService', () => {
       expect(payload).not.toHaveProperty('status');
     });
 
-    it('génère un eventId par appel — clé d’idempotence côté client', () => {
+    it('génère un eventId par appel — clé d’idempotence côté client', async () => {
       service.emitCustomerArrived(makeCustomerArrivedPayload());
       service.emitCustomerArrived(makeCustomerArrivedPayload());
+      await vider();
 
       const calls = serverMock._emitSpy.mock.calls as [string, Record<string, unknown>][];
       // 3 rooms par appel : on compare la 1re émission de chaque appel.

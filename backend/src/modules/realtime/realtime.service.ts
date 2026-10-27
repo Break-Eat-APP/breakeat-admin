@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { RealtimeGateway } from './realtime.gateway';
+import { OutboxService } from './outbox.service';
+import { PrismaService } from '../../database/prisma.service';
 
 // ─── Payload types (from REALTIME_CONTRACTS.md) ─────────────────
 
@@ -61,7 +63,11 @@ export interface CustomerArrivedPayload {
 export class RealtimeService {
   private readonly logger = new Logger(RealtimeService.name);
 
-  constructor(private readonly gateway: RealtimeGateway) {}
+  constructor(
+    private readonly gateway: RealtimeGateway,
+    private readonly outbox: OutboxService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /**
    * DIFFUSER NE DOIT JAMAIS CASSER CE QUI VIENT D'ETRE FAIT.
@@ -78,15 +84,60 @@ export class RealtimeService {
    * On journalise donc, et on laisse passer. Une commande reussie ne doit
    * pas devenir un echec parce qu'un ecran n'a pas ete prevenu.
    *
-   * CE QUI RATTRAPE UN EVENEMENT PERDU, c'est la reconciliation REST du
-   * tableau de bord : il recharge son instantane regulierement, meme socket
-   * connecte. Voir `apps/operator/src/hooks/useDashboard.ts`.
+   * CE QUI RATTRAPE UN EVENEMENT PERDU — et ce n'est plus seulement la
+   * reconciliation REST du tableau de bord.
+   *
+   * Elle existe toujours (`apps/operator/src/hooks/useDashboard.ts` recharge
+   * son instantane regulierement, socket connecte ou non), mais elle ne
+   * suffisait pas : il faut que quelqu'un regarde l'ecran au bon moment, et
+   * rien ne rattrapait les autres consommateurs.
+   *
+   * Chaque emission depose desormais une ligne dans `realtime_outbox` AVANT
+   * de partir, et `OutboxService` rejoue tout ce qui n'est pas marque livre.
+   * Un ecran de comptoir ne depend plus de la presence d'une socket a la
+   * seconde pres.
    */
-  private diffuser(salons: string[], nom: string, enveloppe: unknown): void {
+  private diffuser(salons: string[], nom: string, enveloppe: { eventId: string }): void {
+    // Fire-and-forget ASSUME : l'appelant vient d'encaisser, il n'attend
+    // pas que l'ecran soit prevenu pour lui rendre la main. Tout est
+    // rattrape a l'interieur — rien ne remonte, et l'outbox garantit que
+    // l'evenement finira par arriver meme si tout echoue ici.
+    void this.deposerPuisDiffuser(salons, nom, enveloppe);
+  }
+
+  private async deposerPuisDiffuser(
+    salons: string[],
+    nom: string,
+    enveloppe: { eventId: string },
+  ): Promise<void> {
+    // 1. DEPOSER D'ABORD. C'est cette ligne qui transforme une emission
+    //    perdue en emission differee. Si elle echoue, on tente quand meme
+    //    l'emission immediate : sans filet, mais pas sans rien.
+    let depose = false;
+    try {
+      await this.outbox.deposer(this.prisma, {
+        eventId: enveloppe.eventId,
+        eventName: nom,
+        rooms: salons,
+        payload: enveloppe,
+      });
+      depose = true;
+    } catch (e) {
+      this.logger.error(
+        `${nom} non depose dans l'outbox : ${e instanceof Error ? e.message : String(e)}. ` +
+          `L'emission immediate reste tentee, mais sans rattrapage possible.`,
+      );
+    }
+
+    // 2. EMETTRE TOUT DE SUITE. L'ouvrier passe a la minute ; un comptoir
+    //    ne doit pas attendre une minute pour voir arriver une commande.
     try {
       const { server } = this.gateway;
       if (!server) {
-        this.logger.warn(`${nom} non diffuse : passerelle temps reel pas encore prete.`);
+        this.logger.warn(
+          `${nom} non diffuse : passerelle temps reel pas encore prete. ` +
+            (depose ? `Rejoue dans la minute.` : `ET non depose — perdu.`),
+        );
         return;
       }
       for (const salon of salons) server.to(salon).emit(nom, enveloppe);
@@ -94,9 +145,16 @@ export class RealtimeService {
     } catch (e) {
       this.logger.error(
         `${nom} non diffuse : ${e instanceof Error ? e.message : String(e)}. ` +
-          `L'operation elle-meme a abouti ; les ecrans se rattraperont par REST.`,
+          (depose ? `Rejoue dans la minute.` : `ET non depose — perdu.`),
       );
+      return;
     }
+
+    // 3. MARQUER LIVRE, et seulement maintenant. Si ce marquage echoue,
+    //    l'ouvrier rejouera : un doublon, que l'`eventId` rend
+    //    reconnaissable. L'inverse — marquer avant d'emettre — perdrait
+    //    l'evenement en silence.
+    if (depose) await this.outbox.marquerLivre(enveloppe.eventId);
   }
 
   /** Emitted once after Order is created from a successful PaymentIntent. */

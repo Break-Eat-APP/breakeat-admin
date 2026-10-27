@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { WsException } from '@nestjs/websockets';
 import { RealtimeGateway } from './realtime.gateway';
 import { RealtimeService } from './realtime.service';
+import { OutboxService } from './outbox.service';
 import { PrismaService } from '../../database/prisma.service';
 
 /**
@@ -36,10 +37,20 @@ describe('Isolation des buvettes', () => {
           },
         },
       };
-      return new RealtimeService(gateway as never);
+      // L'outbox et la base sont doublees : ce test ne juge QUE le ciblage
+      // des salons. Ce que l'outbox garantit se teste dans
+      // `diffusion-sure.spec.ts`.
+      return new RealtimeService(
+        gateway as never,
+        {
+          deposer: jest.fn().mockResolvedValue(undefined),
+          marquerLivre: jest.fn().mockResolvedValue(undefined),
+        } as never,
+        {} as never,
+      );
     }
 
-    it('adresse une nouvelle commande au salon de SA buvette', () => {
+    it('adresse une nouvelle commande au salon de SA buvette', async () => {
       const salons: string[] = [];
       serviceAvecSalons(salons).emitNewOrder({
         orderId: 'o1',
@@ -51,6 +62,8 @@ describe('Isolation des buvettes', () => {
         totalCents: 250,
         createdAt: new Date().toISOString(),
       } as never);
+      // L'emission part apres le depot dans l'outbox : un tour de boucle.
+      await new Promise((r) => setImmediate(r));
 
       expect(salons).toContain(`supplier:${NORD}`);
       // Et jamais celui du voisin.
@@ -81,6 +94,15 @@ describe('Isolation des buvettes', () => {
         providers: [
           RealtimeGateway,
           RealtimeService,
+          // `RealtimeService` depend desormais de l'outbox : ce bloc ne juge
+          // que l'ACCES aux salons, elle est donc doublee.
+          {
+            provide: OutboxService,
+            useValue: {
+              deposer: jest.fn().mockResolvedValue(undefined),
+              marquerLivre: jest.fn().mockResolvedValue(undefined),
+            },
+          },
           { provide: PrismaService, useValue: prisma },
           { provide: JwtService, useValue: { verify: jest.fn() } },
           { provide: ConfigService, useValue: { get: jest.fn() } },

@@ -1783,3 +1783,46 @@ model OrderRating {
   @@index([organizationId, createdAt])
   @@map("order_ratings")
 }
+
+/// L'OUTBOX DU TEMPS RÉEL — pour qu'un événement ne se perde jamais.
+///
+/// Une commande payée, c'est DEUX gestes : l'écrire en base, et prévenir
+/// l'écran de la buvette. Entre les deux, tout peut arriver — un redémarrage,
+/// une passerelle pas encore prête (`RealtimeService` le journalise déjà), un
+/// réseau qui hoquette. La commande existe alors, encaissée, et le comptoir
+/// n'en sait rien. Personne ne la prépare ; le client attend devant une
+/// buvette qui ignore qu'il a commandé.
+///
+/// Chaque émission dépose donc d'abord une ligne ICI. Un ouvrier la relit et
+/// la rejoue tant qu'elle n'est pas marquée livrée. Rien ne repose plus sur le
+/// fait que la socket était là au bon moment.
+///
+/// `eventId` est l'identifiant de déduplication que l'enveloppe porte DÉJÀ
+/// (`RealtimeService`). Unique : une même émission ne peut pas être inscrite
+/// deux fois, et un client qui recevrait le doublon d'un rejeu le reconnaît.
+///
+/// Les lignes livrées se purgent (voir `OutboxOuvrier`) : c'est une file
+/// d'attente, pas un journal. Le registre immuable, c'est `OrderAuditTrail`,
+/// et les deux ne doivent pas se confondre.
+model RealtimeOutbox {
+  id          String    @id @default(uuid())
+  eventId     String    @unique @map("event_id")
+  /// `new_order`, `order_updated`, `order_ready`, `customer_arrived`.
+  eventName   String    @map("event_name")
+  /// Les salons visés, tels que la passerelle les nomme.
+  rooms       String[]
+  /// L'enveloppe COMPLÈTE, telle qu'elle partira. Rejouer ne doit rien
+  /// recalculer : les données d'alors ont pu changer depuis.
+  payload     Json
+  createdAt   DateTime  @default(now()) @map("created_at")
+  /// Nul tant que l'émission n'a pas abouti — c'est ce que l'ouvrier cherche.
+  deliveredAt DateTime? @map("delivered_at")
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error")
+
+  /// L'index de l'ouvrier : les non-livrées, dans l'ordre d'arrivée. L'ordre
+  /// compte — un `order_updated` rejoué avant son `new_order` afficherait une
+  /// commande qui avance avant d'exister.
+  @@index([deliveredAt, createdAt])
+  @@map("realtime_outbox")
+}
