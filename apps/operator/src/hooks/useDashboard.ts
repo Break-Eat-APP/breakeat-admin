@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { SocketClient, type SocketStatus, type RealtimeEvent } from '@/lib/realtime/socket-client';
+import { creerLectureGroupee, type LectureGroupee } from '@/lib/realtime/lecture-groupee';
 import { fetchDashboard, type DashboardData, type Order } from '@/lib/api/orders-client';
 import type { NotificationData } from '@/components/NotificationPopup';
 
@@ -43,6 +44,14 @@ function dashboardReducer(state: DashboardState, action: DashboardAction): Dashb
     case 'SOCKET_STATUS':
       return { ...state, socketStatus: action.status };
 
+    /**
+     * PERSONNE NE POSE CETTE ACTION AUJOURD'HUI.
+     *
+     * L'evenement `new_order` ne porte qu'une partie de la commande — pas ses
+     * lignes. Le tableau attend donc l'instantane REST, et c'est lui qui fait
+     * apparaitre la carte. Garde ici de quoi l'inserer sans relire, le jour ou
+     * l'evenement portera la commande entiere.
+     */
     case 'NEW_ORDER': {
       if (!state.data) return state;
       const paidOrders = [action.order, ...state.data.orders.PAID.filter((o) => o.id !== action.order.id)];
@@ -176,26 +185,66 @@ export function useDashboard({
   const socketRef = useRef<SocketClient | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ─── REST snapshot ────────────────────────────────────────────
+  // ─── Instantané REST ──────────────────────────────────────────
 
-  const loadSnapshot = useCallback(async () => {
-    dispatch({ type: 'FETCH_START' });
-    try {
-      const data = await fetchDashboard(eventId, token, supplierId);
-      dispatch({ type: 'FETCH_SUCCESS', payload: data });
-    } catch (err) {
-      dispatch({ type: 'FETCH_ERROR', error: String(err) });
-    }
-  }, [eventId, token, supplierId]);
+  /**
+   * CE QU'ON LIT, dans une référence.
+   *
+   * Son identité ne change QUE lorsque l'opératrice passe à un autre événement
+   * ou à une autre buvette — pas à chaque rendu. C'est le jeton qui permet de
+   * jeter une réponse dépassée : celle de l'ancien comptoir, revenue après le
+   * changement, mettrait les commandes du voisin sur son écran.
+   */
+  const cibleRef = useRef({ eventId, token, supplierId });
+  if (
+    cibleRef.current.eventId !== eventId ||
+    cibleRef.current.token !== token ||
+    cibleRef.current.supplierId !== supplierId
+  ) {
+    cibleRef.current = { eventId, token, supplierId };
+  }
+
+  /**
+   * UNE SEULE LECTURE À LA FOIS, UNE SEULE EN ATTENTE, ET LES ARRIVÉES
+   * GROUPÉES. Toute la politique est dans `lecture-groupee.ts`, avec le détail
+   * de ce que coûtait l'ancienne — une lecture COMPLÈTE du tableau par
+   * commande reçue, soit 8 000 lectures intégrales un soir à 2 000 commandes
+   * sur quatre écrans.
+   *
+   * Le lecteur est créé UNE fois et vit dans une référence : il lit la cible
+   * courante au moment de partir. Avant, `loadSnapshot` changeait d'identité
+   * avec ses dépendances, et le socket — créé une seule fois — gardait la
+   * version d'origine. Un changement de buvette laissait donc le socket
+   * recharger l'ancienne.
+   */
+  const lecteurRef = useRef<LectureGroupee | null>(null);
+  if (!lecteurRef.current) {
+    lecteurRef.current = creerLectureGroupee({
+      lire: () => {
+        const cible = cibleRef.current;
+        return fetchDashboard(cible.eventId, cible.token, cible.supplierId);
+      },
+      jeton: () => cibleRef.current,
+      surDebut: () => dispatch({ type: 'FETCH_START' }),
+      surSucces: (data) => dispatch({ type: 'FETCH_SUCCESS', payload: data }),
+      surEchec: (err) => dispatch({ type: 'FETCH_ERROR', error: String(err) }),
+    });
+  }
+  const lecteur = lecteurRef.current;
+
+  /** Lit MAINTENANT : premier affichage, sondage, reprise de socket. */
+  const loadSnapshot = lecteur.lire;
 
   // ─── Socket event handler ─────────────────────────────────────
 
   const handleRealtimeEvent = useCallback((event: RealtimeEvent) => {
     switch (event.eventName) {
       case 'new_order': {
-        // A new order arrived — we only have partial data from the socket.
-        // Trigger a REST resync to get the full order with items.
-        void loadSnapshot();
+        // L'événement ne porte qu'une partie de la commande : il faut
+        // l'instantané REST pour avoir ses lignes. GROUPÉ, donc — trois
+        // commandes à la même seconde ne valent qu'une lecture, et le
+        // serveur n'en reçoit jamais deux à la fois.
+        lecteur.lireBientot();
         dispatch({
           type: 'SET_NOTIFICATION',
           notification: {
@@ -216,7 +265,7 @@ export function useDashboard({
         // un rechargement montre les lignes concernées, sur tous les écrans de
         // la buvette — pas seulement celui qui a signalé.
         if (String(event.reason ?? '').startsWith('missing_items')) {
-          void loadSnapshot();
+          lecteur.lireBientot();
         }
         break;
       }
@@ -240,7 +289,7 @@ export function useDashboard({
         break;
       }
     }
-  }, [loadSnapshot]);
+  }, [lecteur]);
 
   // ─── Polling fallback ─────────────────────────────────────────
 
@@ -319,6 +368,8 @@ export function useDashboard({
       client.disconnect();
       socketRef.current = null;
       stopPolling();
+      // Une lecture programmée n'a plus personne à servir.
+      lecteur.annuler();
     };
   }, [eventId, token, apiUrl, supplierId]);
 
