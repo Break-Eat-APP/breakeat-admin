@@ -523,6 +523,69 @@ describe('CartService', () => {
       (prisma.stock.findFirst as jest.Mock).mockResolvedValue(mockStock(50));
     }
 
+    // ─── Ce que le paiement doit refuser AVANT d'encaisser ────
+
+    /**
+     * LE STOCK N'ÉTAIT VÉRIFIÉ QU'À L'AJOUT.
+     *
+     * Entre le moment où le client coche sa bière et celui où il paie, un
+     * autre peut avoir pris la dernière. Le paiement passait, et
+     * `decrementerStock` — qui ne refuse jamais rien, l'argent étant déjà
+     * encaissé — ne faisait que CONSTATER. Le client payait pour un
+     * article que personne ne lui servirait.
+     *
+     * Ici, refuser ne coûte qu'un message : rien n'a été débité.
+     */
+    it('REFUSE quand le stock est passé sous la quantité du panier', async () => {
+      setupValidCheckout();
+      // Deux exemplaires au panier, il n'en reste qu'un.
+      (prisma.stock.findFirst as jest.Mock).mockResolvedValue(mockStock(1));
+
+      await expect(service.checkout(CART_ID, USER_ID)).rejects.toThrow(BadRequestException);
+    });
+
+    /**
+     * `expiresAt` était ÉCRIT et jamais lu ; le statut `EXPIRED` existait
+     * sans que rien ne le pose. Un panier d'avant-hier pouvait encore
+     * partir au paiement, avec les prix et les stocks d'avant-hier.
+     */
+    it('REFUSE un panier périmé, et le marque EXPIRED', async () => {
+      setupValidCheckout();
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue({
+        ...mockCart(),
+        expiresAt: new Date(Date.now() - 1_000),
+        items: [{ id: ITEM_ID, productId: PRODUCT_ID, quantity: 2, product: mockProduct() }],
+      });
+
+      await expect(service.checkout(CART_ID, USER_ID)).rejects.toThrow(/expiré/);
+      expect(prisma.cart.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { status: CartStatus.EXPIRED } }),
+      );
+    });
+
+    /**
+     * UN PAIEMENT DÉJÀ ENGAGÉ NE S'EXPIRE PAS. Couper pendant une
+     * authentification bancaire encaisserait l'argent sans créer la
+     * commande — le pire des deux mondes.
+     */
+    it('n’expire PAS un panier dont le paiement est engagé', async () => {
+      setupValidCheckout();
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue({
+        ...mockCart(),
+        status: CartStatus.CHECKOUT_PENDING,
+        expiresAt: new Date(Date.now() - 60_000),
+        items: [{ id: ITEM_ID, productId: PRODUCT_ID, quantity: 2, product: mockProduct() }],
+      });
+      const stripe = (service as unknown as { stripe: { createHostedCheckout: jest.Mock } }).stripe;
+      stripe.createHostedCheckout.mockResolvedValue({
+        id: 'cs_test',
+        url: 'https://stripe/pay/cs_test',
+        payment_intent: 'pi_test',
+      });
+
+      await expect(service.checkout(CART_ID, USER_ID)).resolves.toBeDefined();
+    });
+
     it('ouvre une page Stripe et engage le panier', async () => {
       setupValidCheckout();
       const stripe = (service as unknown as { stripe: { createHostedCheckout: jest.Mock } }).stripe;

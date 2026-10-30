@@ -33,8 +33,28 @@ import {
   assertPointDeRetraitCompatible,
 } from '../../common/helpers/retrait-compatible';
 
-/** Cart TTL — 30 minutes from creation. */
-const CART_TTL_MS = 30 * 60 * 1000;
+/**
+ * COMBIEN DE TEMPS UN PANIER RESTE VALABLE — cinq minutes d'inactivité.
+ *
+ * Il était de trente minutes, et surtout : `expiresAt` était ÉCRIT et
+ * jamais lu. Le statut `EXPIRED` existait dans le schéma sans que rien ne
+ * le pose. Un panier d'avant-hier pouvait donc encore être payé.
+ *
+ * Ramené à cinq minutes à la demande du propriétaire, et pour une raison
+ * qui tient : entre le moment où un client choisit et celui où il paie,
+ * un autre peut avoir pris le dernier article. Plus l'écart est long,
+ * plus on encaisse pour quelque chose qu'on ne servira pas.
+ *
+ * CINQ MINUTES D'INACTIVITÉ, et non depuis l'ouverture : chaque geste sur
+ * le panier repousse l'échéance. Quelqu'un qui compose sa commande
+ * tranquillement n'est pas coupé au milieu.
+ *
+ * ET L'ÉCHÉANCE NE S'APPLIQUE JAMAIS À UN PAIEMENT ENGAGÉ. Un panier passé
+ * en `CHECKOUT_PENDING` est protégé : expirer pendant une
+ * authentification bancaire encaisserait l'argent sans créer la commande —
+ * très exactement le pire des deux mondes.
+ */
+const CART_TTL_MS = 5 * 60 * 1000;
 
 /** Shape returned to the API: cart + items + computed totals. */
 export interface CartWithTotals {
@@ -485,6 +505,28 @@ export class CartService {
       throw new BadRequestException(`Cart is ${cart.status} and cannot be checked out`);
     }
 
+    /**
+     * UN PANIER PÉRIMÉ NE SE PAIE PAS.
+     *
+     * `expiresAt` était écrit à chaque ouverture et n'était LU nulle part ;
+     * le statut `EXPIRED` existait dans le schéma sans que rien ne le pose.
+     * Un panier d'avant-hier pouvait encore partir au paiement, avec les
+     * prix et les stocks d'avant-hier.
+     *
+     * Seul un panier `OPEN` est concerné. Un `CHECKOUT_PENDING` a déjà son
+     * paiement engagé : l'expirer encaisserait l'argent sans créer la
+     * commande.
+     */
+    if (cart.status === CartStatus.OPEN && cart.expiresAt.getTime() <= Date.now()) {
+      await this.prisma.cart.update({
+        where: { id: cartId },
+        data: { status: CartStatus.EXPIRED },
+      });
+      throw new BadRequestException(
+        'Ton panier a expiré — reprends ta commande, les stocks ont pu changer.',
+      );
+    }
+
     if (!cart.pickupPointId) {
       throw new BadRequestException(
         'Aucun point de retrait n’est associé à cette commande. ' +
@@ -516,6 +558,21 @@ export class CartService {
     }
     for (const item of view.items) {
       await this.assertProductOrderable(item.productId, cart.supplierId, cart.pickupPointId);
+      /**
+       * ET LA QUANTITÉ, pas seulement « ce produit se commande-t-il ? ».
+       *
+       * Elle n'était vérifiée qu'à l'AJOUT. Entre le moment où le client
+       * coche sa bière et celui où il paie, un autre peut avoir pris la
+       * dernière : le paiement passait, et `decrementerStock` — qui ne
+       * refuse jamais rien, l'argent étant déjà encaissé — ne faisait que
+       * CONSTATER. Le client payait pour un article que personne ne lui
+       * servirait.
+       *
+       * Le commentaire de `decrementerStock` affirmait pourtant que le
+       * refus existait « au départ du paiement ». Il n'y était pas. Ici,
+       * refuser ne coûte qu'un message : rien n'a encore été débité.
+       */
+      await this.verifierStockDisponible(item.productId, cart.pickupPointId, item.quantity);
     }
     // Même seuil que la remise fidélité : le paiement refuse en dessous, autant
     // le dire ici avec un message compréhensible plutôt que de laisser Stripe
