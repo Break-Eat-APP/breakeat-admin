@@ -769,4 +769,50 @@ describe('la destination de commande d’un match', () => {
     expect(prisma.user.findUnique).toHaveBeenCalled();
     expect(r.url).toContain('Remi');
   });
+
+  // ─── CE QU'ON NE REND JAMAIS : une adresse encore etiquetee ──────
+
+  /**
+   * LE CAS QUI PARTAIT EN CLAIR CHEZ LE PARTENAIRE.
+   *
+   * La substitution ne se faisait que pour un client CONNECTE. Un visiteur
+   * sans session recevait le lien BRUT — `phone=[#Votre portable]` — et l'app
+   * l'ouvrait quand meme. Flaix ecrivait ce texte dans son formulaire ; et
+   * comme le `#` d'une etiquette ouvre un FRAGMENT d'URL, tout ce qui suivait
+   * la premiere ne lui arrivait meme pas. Le bouton est accessible depuis
+   * l'ecran public : le cas n'etait pas theorique.
+   */
+  it('RETIRE les etiquettes pour un visiteur SANS session', async () => {
+    (prisma.event.findFirst as jest.Mock).mockResolvedValue(
+      match({ flaixOrderUrl: `${LIEN}?firstname=[#firstname]&phone=[#Votre portable]` }),
+    );
+
+    const r = await demander();
+
+    expect(r.url).not.toContain('[#');
+    expect(r.attendIdentite).toBe(true);
+    // L'adresse NUE, pas une adresse a trous : Flaix lui demandera ses
+    // coordonnees, ce qui est le repli correct.
+    expect(r.url).toBe(LIEN);
+  });
+
+  /**
+   * ET LE MEME TROU POUR UN CLIENT CONNECTE SANS TELEPHONE. L'etiquette
+   * `[#phone]` n'avait personne pour la remplir : elle partait en clair.
+   */
+  it('RETIRE l’etiquette qu’un client connecte ne peut pas remplir', async () => {
+    (prisma.event.findFirst as jest.Mock).mockResolvedValue(
+      match({ flaixOrderUrl: `${LIEN}?firstname=[#firstname]&phone=[#Votre portable]` }),
+    );
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+      firstName: 'Remi',
+      phone: null,
+    });
+
+    const r = await demander({ sub: 'client' });
+
+    expect(r.url).not.toContain('[#');
+    expect(r.url).toContain('Remi');
+    expect(r.url).not.toContain('phone=');
+  });
 });

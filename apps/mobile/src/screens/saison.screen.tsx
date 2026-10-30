@@ -153,6 +153,33 @@ export function SaisonScreen({ route, navigation }: Props) {
 
   const ouvrirFlaix = (url: string) => {
     if (!lieu) return;
+
+    /**
+     * ON N'OUVRE JAMAIS UNE ADRESSE QUI PORTE ENCORE UNE ÉTIQUETTE.
+     *
+     * Le serveur ne substituait l'identité que pour un client CONNECTÉ : un
+     * visiteur recevait le lien brut — `phone=[#Votre portable]` — et cet
+     * écran l'ouvrait quand même. Flaix écrivait ce texte dans son
+     * formulaire ; et comme le `#` d'une étiquette ouvre un FRAGMENT d'URL,
+     * tout ce qui suivait la première ne lui arrivait même pas.
+     *
+     * Le serveur est corrigé et retire désormais ce qu'il ne peut pas
+     * remplir. Ce garde-ci reste, et il n'est pas redondant : une réponse
+     * mise en cache, une version ancienne de l'API ou une régression future
+     * referaient le même trou. Mieux vaut annoncer que la commande est
+     * indisponible que d'envoyer le client chez un partenaire avec une
+     * adresse cassée.
+     */
+    if (url.includes('[#')) {
+      console.warn('Lien Flaix encore étiqueté — ouverture refusée');
+      showAlert(
+        'Commande indisponible',
+        'La commande de ce match n’est pas prête. Réessaie dans un instant, ' +
+          'ou mets à jour l’application.',
+      );
+      return;
+    }
+
     navigation.navigate('FlaixOrder', {
       venueId: lieu.id,
       flaixVenueId: lieu.flaixVenueId,

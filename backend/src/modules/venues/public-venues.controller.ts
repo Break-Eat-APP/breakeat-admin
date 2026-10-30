@@ -580,19 +580,40 @@ export class PublicVenuesController {
      */
     const attendIdentite = porteDesEtiquettes(evenement.flaixOrderUrl);
 
-    // L'identité n'est cherchée QUE si l'adresse l'attend.
+    /**
+     * ON NE REND JAMAIS UNE ADRESSE QUI PORTE ENCORE SES ÉTIQUETTES.
+     *
+     * La substitution ne se faisait que pour un client CONNECTÉ. Un visiteur
+     * sans session recevait donc le lien BRUT — `phone=[#Votre portable]` — et
+     * l'application l'ouvrait quand même : Flaix écrivait ce texte dans son
+     * formulaire, et le `#` d'une étiquette ouvrant un FRAGMENT d'URL, tout ce
+     * qui suivait la première ne lui arrivait même pas. Le bouton est
+     * accessible depuis l'écran public : le cas n'était pas théorique.
+     *
+     * `personnaliserLien` sait déjà quoi faire d'un client absent : il RETIRE
+     * les paramètres qu'il ne peut pas remplir, et rend l'adresse nue. Son
+     * propre commentaire le dit — « le client non connecté obtient donc
+     * l'adresse nue : Flaix lui demandera ses coordonnées, ce qui est le repli
+     * correct ». Il suffisait de l'appeler.
+     *
+     * On l'appelle donc TOUJOURS, avec `null` quand il n'y a pas de session.
+     * Cela couvre du même geste le client connecté dont le téléphone n'est pas
+     * renseigné : l'étiquette disparaît au lieu de partir en clair.
+     */
     let url = evenement.flaixOrderUrl;
-    if (attendIdentite && user?.sub) {
-      const client = await this.prisma.user.findUnique({
-        where: { id: user.sub },
-        select: {
-          firstName: true,
-          lastName: true,
-          email: true,
-          phone: true,
-          displayName: true,
-        },
-      });
+    if (attendIdentite) {
+      const client = user?.sub
+        ? await this.prisma.user.findUnique({
+            where: { id: user.sub },
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              displayName: true,
+            },
+          })
+        : null;
       url = personnaliserLien(url, client);
     }
 
