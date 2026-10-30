@@ -188,7 +188,7 @@ export class OrdersService {
     const publicOrderNumber = await this.generatePublicOrderNumber();
 
     // ─── Single transaction: cart→CONVERTED + Order + Items + Payment + Audit + Stock ───
-    const order = await this.prisma.$transaction(async (tx) => {
+    const { order, annonce } = await this.prisma.$transaction(async (tx) => {
       // Le numero du jour est pris DANS la transaction : si la commande echoue,
       // le numero revient au compteur. Hors transaction, un echec laisserait un
       // trou dans la numerotation criee au comptoir.
@@ -324,7 +324,28 @@ export class OrdersService {
         }
       }
 
-      return createdOrder;
+      // ─── L'ANNONCE TOMBE OU PASSE AVEC LA COMMANDE ────────────
+      //
+      // Déposée APRÈS le commit, elle laissait une fenêtre — étroite, mais
+      // réelle — où la commande existait et l'annonce n'existait pas. Un arrêt
+      // brutal dans cet intervalle donnait une commande PAYÉE que le comptoir
+      // n'apprendrait jamais : ni par la socket, ni par l'ouvrier de l'outbox,
+      // puisque rien n'avait été déposé. Le client avait son reçu, et sa
+      // commande ne partait pas.
+      //
+      // Écrite ici, elle est soumise au même commit que la commande.
+      const annonce = this.realtimeService.preparerNewOrder({
+        orderId: createdOrder.id,
+        publicOrderNumber: createdOrder.publicOrderNumber,
+        organizationId: createdOrder.organizationId,
+        venueId: createdOrder.venueId,
+        eventId: createdOrder.eventId,
+        supplierId: createdOrder.supplierId,
+        pickupPointId: createdOrder.pickupPointId,
+      });
+      await this.realtimeService.deposer(tx, annonce);
+
+      return { order: createdOrder, annonce };
     }).catch(async (e: unknown) => {
       // `orders_cart_id_key` : l'autre evenement Stripe a gagne la course entre
       // notre coup d'oeil et notre ecriture. La contrainte a fait son travail —
@@ -345,23 +366,24 @@ export class OrdersService {
         `Course gagnee par l'autre evenement Stripe sur le panier ${cartId} — ` +
           `commande ${gagnante.publicOrderNumber} conservee`,
       );
-      return gagnante;
+      // CELUI QUI PERD LA COURSE N'ANNONCE RIEN.
+      //
+      // Le gagnant a déposé SON annonce dans SA transaction. En rendre une
+      // seconde ici ferait sonner le comptoir DEUX FOIS pour la même
+      // commande — et la déduplication ne l'attraperait pas, puisque chaque
+      // annonce porte son propre `eventId`. C'était le cas avant : l'émission
+      // vivait après le `.catch()`, donc les DEUX événements Stripe
+      // l'exécutaient.
+      return { order: gagnante, annonce: null };
     });
 
     this.logger.log(
       `Order created: ${order.id} (${publicOrderNumber}) from PaymentIntent ${paymentIntentId}`,
     );
 
-    // Phase 6.2 — emit new_order AFTER transaction commit (outbox rule)
-    this.realtimeService.emitNewOrder({
-      orderId: order.id,
-      publicOrderNumber: order.publicOrderNumber,
-      organizationId: order.organizationId,
-      venueId: order.venueId,
-      eventId: order.eventId,
-      supplierId: order.supplierId,
-      pickupPointId: order.pickupPointId,
-    });
+    // Déjà déposée dans la transaction : on PUBLIE, on ne redépose pas. Et si
+    // c'est l'événement Stripe perdant qui passe ici, il n'y a rien à publier.
+    if (annonce) this.realtimeService.publier(annonce);
 
     return order;
   }
@@ -513,7 +535,7 @@ export class OrdersService {
     const dailyNumber = await this.numeroDuJour(split.venueId, lieu?.timezone || 'Europe/Paris');
     const pickupPointId = split.pickupPointId;
 
-    const order = await this.prisma.$transaction(async (tx) => {
+    const { order, annonce } = await this.prisma.$transaction(async (tx) => {
       const createdOrder = await tx.order.create({
         data: {
           publicOrderNumber,
@@ -597,20 +619,28 @@ export class OrdersService {
         }
       }
 
-      return createdOrder;
+      // L'annonce tombe ou passe avec la tournée — même règle que pour une
+      // commande seule. L'ardoise vient d'être close juste au-dessus, dans
+      // cette MÊME transaction : commande, lien et annonce ne peuvent plus
+      // se séparer.
+      const annonce = this.realtimeService.preparerNewOrder({
+        orderId: createdOrder.id,
+        publicOrderNumber: createdOrder.publicOrderNumber,
+        organizationId: createdOrder.organizationId,
+        venueId: createdOrder.venueId,
+        eventId: createdOrder.eventId,
+        supplierId: createdOrder.supplierId,
+        pickupPointId: createdOrder.pickupPointId,
+      });
+      await this.realtimeService.deposer(tx, annonce);
+
+      return { order: createdOrder, annonce };
     });
 
     this.logger.log(`Commande ${publicOrderNumber} créée depuis l'ardoise ${split.code}`);
 
-    this.realtimeService.emitNewOrder({
-      orderId: order.id,
-      publicOrderNumber: order.publicOrderNumber,
-      organizationId: order.organizationId,
-      venueId: order.venueId,
-      eventId: order.eventId,
-      supplierId: order.supplierId,
-      pickupPointId: order.pickupPointId,
-    });
+    // Déjà déposée dans la transaction : on PUBLIE, on ne redépose pas.
+    this.realtimeService.publier(annonce);
 
     return order;
   }

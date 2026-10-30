@@ -104,9 +104,10 @@ function buildPrismaMock() {
 
 // Minimal mocks — we don't care about side-effects in these tests.
 //
-// La transition PREPARE son annonce, la DEPOSE dans la transaction puis la
-// PUBLIE apres le commit (outbox, 30/10). Ces tests ne jugent QUE le nombre
-// de commandes : les trois gestes sont doubles, sans rien verifier.
+// Creation comme transition : l'annonce est PREPAREE, DEPOSEE dans la
+// transaction puis PUBLIEE apres le commit (outbox, 30/10). Ces tests ne
+// jugent QUE le nombre de commandes : les trois gestes sont doubles, sans
+// rien verifier.
 const annonceDoublee = (p: unknown) => ({
   eventId: 'ev-test',
   eventName: 'test',
@@ -116,6 +117,7 @@ const annonceDoublee = (p: unknown) => ({
 const realtimeMock = {
   emitOrderUpdated: jest.fn(),
   emitOrderReady: jest.fn(),
+  preparerNewOrder: jest.fn(annonceDoublee),
   preparerOrderUpdated: jest.fn(annonceDoublee),
   preparerOrderReady: jest.fn(annonceDoublee),
   deposer: jest.fn().mockResolvedValue(undefined),

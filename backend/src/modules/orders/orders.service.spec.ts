@@ -119,12 +119,17 @@ describe('OrdersService', () => {
         {
           provide: RealtimeService,
           useValue: {
-            emitNewOrder: jest.fn(),
             emitOrderUpdated: jest.fn(),
             emitOrderReady: jest.fn(),
-            // Depuis le 30/10, la transition PREPARE son annonce, la DEPOSE
-            // dans la transaction, puis la PUBLIE apres le commit. Le double
-            // rend une annonce reconnaissable a son `eventName`.
+            // Depuis le 30/10, CHAQUE annonce est PREPAREE, DEPOSEE dans la
+            // transaction metier, puis PUBLIEE apres le commit. Le double rend
+            // une annonce reconnaissable a son `eventName`.
+            preparerNewOrder: jest.fn((p: unknown) => ({
+              eventId: 'ev-neuve',
+              eventName: 'new_order',
+              rooms: [],
+              payload: p,
+            })),
             preparerOrderUpdated: jest.fn((p: unknown) => ({
               eventId: 'ev-maj',
               eventName: 'order_updated',
@@ -429,7 +434,7 @@ describe('OrdersService', () => {
       );
 
       expect(order.publicOrderNumber).toBe('BE-00000001');
-      expect(realtime.emitNewOrder).toHaveBeenCalled();
+      expect(realtime.preparerNewOrder).toHaveBeenCalled();
     });
   });
 
@@ -572,10 +577,12 @@ describe('OrdersService', () => {
 
       expect(order.publicOrderNumber).toBe('BE-00000001');
       expect(transactionMock).toHaveBeenCalledTimes(1);
-      // Outbox rule: new_order emitted AFTER transaction
-      expect(realtime.emitNewOrder).toHaveBeenCalledWith(
+      // L'annonce est DEPOSEE dans la transaction, et PUBLIEE apres le commit.
+      expect(realtime.preparerNewOrder).toHaveBeenCalledWith(
         expect.objectContaining({ orderId: 'order-1', publicOrderNumber: 'BE-00000001' }),
       );
+      expect(realtime.deposer).toHaveBeenCalled();
+      expect(realtime.publier).toHaveBeenCalled();
     });
 
     it('is idempotent — returns existing Order when Payment already exists', async () => {
@@ -795,6 +802,61 @@ describe('OrdersService', () => {
       );
 
       expect(order).toEqual(existante);
+      // ─── ET IL N'ANNONCE RIEN ──────────────────────────────────
+      //
+      // Le gagnant a deja depose SON annonce dans SA transaction. En rendre
+      // une seconde ici ferait sonner le comptoir DEUX FOIS pour la meme
+      // commande, et la deduplication ne l'attraperait pas : chaque annonce
+      // porte son propre `eventId`. C'etait le cas avant le 30/10 —
+      // l'emission vivait apres le `.catch()`, donc les DEUX evenements
+      // Stripe l'executaient.
+      expect(realtime.preparerNewOrder).not.toHaveBeenCalled();
+      expect(realtime.publier).not.toHaveBeenCalled();
+    });
+
+    it('depose l’annonce AVEC la commande, dans la MEME transaction', async () => {
+      // LA PROPRIETE QU'ON ACHETE. Deposee apres le commit, l'annonce laissait
+      // une fenetre — etroite, mais reelle — ou la commande existait et
+      // l'annonce n'existait pas. Un arret brutal dans cet intervalle donnait
+      // une commande PAYEE que le comptoir n'apprendrait jamais : ni par la
+      // socket, ni par l'ouvrier de l'outbox, puisque rien n'avait ete depose.
+      //
+      // On ne verifie donc pas que `deposer` a ete appele : on verifie qu'il a
+      // recu le MEME client transactionnel que l'ecriture de la commande.
+      // C'est lui, et lui seul, qui fait tomber ou passer les deux ensemble.
+      (prisma.payment.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+
+      let txUtilise: unknown;
+      transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) => {
+        const tx = {
+          cart: { update: jest.fn() },
+          order: {
+            create: jest
+              .fn()
+              .mockResolvedValue({ id: 'order-1', publicOrderNumber: 'BE-00000001' }),
+          },
+          payment: { upsert: jest.fn() },
+          orderAuditTrail: { create: jest.fn() },
+          stock: {
+            findFirst: jest.fn().mockResolvedValue({ id: 's', quantity: 50, isAvailable: true }),
+            findUnique: jest.fn().mockResolvedValue({ id: 's', quantity: 48, isAvailable: true }),
+            updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+            update: jest.fn(),
+          },
+        };
+        txUtilise = tx;
+        return cb(tx);
+      });
+
+      await service.createFromPaymentIntent(PAYMENT_INTENT_ID, mockIntent(), {} as never);
+
+      expect(realtime.deposer).toHaveBeenCalledWith(
+        txUtilise,
+        expect.objectContaining({ eventName: 'new_order' }),
+      );
+      // Et la publication vient APRES le commit, une seule fois.
+      expect(realtime.publier).toHaveBeenCalledTimes(1);
     });
 
     it('laisse remonter une contrainte qui n’est PAS celle du panier', async () => {
