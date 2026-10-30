@@ -38,6 +38,29 @@ import { RealtimeGateway } from './realtime.gateway';
  * rejoué avant son `order_updated` montrerait une commande prête avant
  * d'avoir avancé.
  */
+/** Une ligne réservée par la requête de réservation. */
+interface LigneReservee {
+  id: string;
+  event_id: string;
+  event_name: string;
+  rooms: string[];
+  payload: unknown;
+  attempts: number;
+  sequence: bigint;
+}
+
+/** Ce qu'un tour de rattrapage a fait, et ce qu'il laisse derrière lui. */
+export interface EtatDeLaFile {
+  rejoues: number;
+  abandonnes: number;
+  /** Nombre de lots enchaînés. Zéro quand il n'y avait rien à faire. */
+  passages: number;
+  /** Ce qui reste en attente APRÈS la vidange. `null` : pas mesuré. */
+  enAttente: number | null;
+  /** Âge de la plus vieille annonce en attente. `null` : la file est vide. */
+  plusVieuxMs: number | null;
+}
+
 @Injectable()
 export class OutboxService {
   private readonly logger = new Logger('Outbox');
@@ -51,6 +74,56 @@ export class OutboxService {
    * Le reste part au tour suivant.
    */
   private static readonly PAR_PASSAGE = 200;
+
+  /**
+   * COMBIEN DE LOTS ON ENCHAÎNE DANS LE MÊME TOUR.
+   *
+   * Un seul lot par minute, c'était 200 annonces par minute : une file de
+   * 10 000 — une coupure d'une heure un soir de match — demandait CINQUANTE
+   * MINUTES à se vider. Le match est fini avant que le comptoir ait tout vu,
+   * et une annonce qui arrive après le coup de sifflet ne sert plus à rien.
+   *
+   * On enchaîne donc les lots tant qu'il reste du travail. MESURÉ sur un
+   * PostgreSQL véritable : les 10 000 annonces de l'exemple partent en
+   * 2,0 secondes, soit près de 5 000 par seconde — c'est le budget de temps
+   * qui gouverne, pas ce plafond.
+   *
+   * Il reste comme garde-fou contre une boucle pathologique, et il est posé
+   * haut exprès : à 200 lignes le lot, cinq cents passages valent 100 000
+   * annonces, bien au-delà de ce que vingt secondes permettent d'atteindre.
+   * Trop bas, c'''est LUI qui aurait coupé la vidange — à cinquante, les
+   * 10 000 de la mesure tombaient pile sur la limite.
+   */
+  private static readonly PASSAGES_MAX = 500;
+
+  /**
+   * LE TEMPS QU'ON S'ACCORDE pour vider, et pourquoi il existe.
+   *
+   * La vidange tient le processus : tant qu'elle tourne, elle partage la
+   * boucle d'événements avec les sockets vivantes. Vingt secondes laissent
+   * quarante secondes de respiration avant le tour suivant, et bornent les
+   * dégâts si la base répond mal — on préfère reprendre à la minute suivante
+   * plutôt que d'empiler les tours les uns sur les autres.
+   */
+  private static readonly BUDGET_MS = 20_000;
+
+  /**
+   * AU-DELÀ, LA FILE N'EST PLUS UN FILET : C'EST UN RETARD.
+   *
+   * Mille annonces en attente après une vidange complète veut dire que les
+   * dépôts arrivent plus vite qu'on ne les sert. Cela doit se voir dans les
+   * journaux avant qu'un comptoir ne s'en aperçoive.
+   */
+  private static readonly PROFONDEUR_ALERTE = 1_000;
+
+  /**
+   * ET L'ÂGE, qui dit la vraie gravité.
+   *
+   * La profondeur seule ne distingue pas une rafale d'un blocage. Une annonce
+   * qui attend cinq minutes, c'est un écran de comptoir aveugle depuis cinq
+   * minutes — le client est au guichet et sa commande n'est pas affichée.
+   */
+  private static readonly RETARD_ALERTE_MS = 5 * 60_000;
 
   /**
    * Au bout de combien d'échecs on cesse d'essayer.
@@ -86,6 +159,19 @@ export class OutboxService {
    * qu'il était censé couvrir.
    */
   private static readonly BAIL_MS = 120_000;
+
+  /**
+   * UNE VIDANGE À LA FOIS DANS CETTE INSTANCE.
+   *
+   * La vidange peut durer vingt secondes ; le cron passe à la minute. En cas
+   * de retard, deux vidanges du MÊME processus se chevaucheraient. Le bail
+   * les empêcherait de se marcher dessus, mais elles se disputeraient la
+   * boucle d'événements pour rien.
+   *
+   * Entre INSTANCES, c'est le bail qui décide — et c'est voulu : deux
+   * répliques qui vident ensemble vont deux fois plus vite.
+   */
+  private enCours = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -142,14 +228,78 @@ export class OutboxService {
    * qu'il rapporte.
    */
   @Cron(CronExpression.EVERY_MINUTE)
-  async rejouer(): Promise<{ rejoues: number; abandonnes: number }> {
+  async rejouer(): Promise<EtatDeLaFile> {
+    if (this.enCours) {
+      this.logger.debug('Vidange deja en cours — ce tour est saute.');
+      return { rejoues: 0, abandonnes: 0, passages: 0, enAttente: null, plusVieuxMs: null };
+    }
+    this.enCours = true;
+    try {
+      return await this.vider();
+    } finally {
+      this.enCours = false;
+    }
+  }
+
+  /**
+   * ON VIDE, on ne grignote pas.
+   *
+   * Lot après lot tant qu'il reste du travail, dans la limite du budget et du
+   * nombre de passages. Entre deux lots, la main est rendue à la boucle
+   * d'événements : les sockets vivantes continuent de servir pendant qu'on
+   * rattrape le retard.
+   */
+  private async vider(): Promise<EtatDeLaFile> {
     const { server } = this.gateway;
     if (!server) {
       // La passerelle n'est pas prête : rien n'est perdu, les lignes
       // attendent. C'est exactement la panne que cette table couvre.
-      return { rejoues: 0, abandonnes: 0 };
+      return { rejoues: 0, abandonnes: 0, passages: 0, enAttente: null, plusVieuxMs: null };
     }
 
+    const echeance = Date.now() + OutboxService.BUDGET_MS;
+    let rejoues = 0;
+    let abandonnes = 0;
+    let passages = 0;
+
+    while (passages < OutboxService.PASSAGES_MAX && Date.now() < echeance) {
+      const lot = await this.reserver();
+      if (lot.length === 0) break;
+      passages += 1;
+
+      const bilan = await this.emettreLot(server, lot);
+      rejoues += bilan.rejoues;
+      abandonnes += bilan.abandonnes;
+
+      // Un lot incomplet veut dire qu'il ne reste rien à prendre — ou que le
+      // reste est réservé par une autre réplique, qui s'en occupe.
+      if (lot.length < OutboxService.PAR_PASSAGE) break;
+
+      // La main à la boucle d'événements, entre deux lots.
+      await new Promise((suite) => setImmediate(suite));
+    }
+
+    if (rejoues > 0) {
+      this.logger.log(
+        `${rejoues} evenement(s) rejoue(s) en ${passages} lot(s) — ils n'etaient jamais arrives.`,
+      );
+    }
+    if (abandonnes > 0) {
+      // Au niveau ERREUR : une ligne abandonnée est un écran qui ne saura
+      // jamais. Cela doit se voir, pas se deviner.
+      this.logger.error(
+        `${abandonnes} evenement(s) ABANDONNE(S) apres ${OutboxService.ESSAIS_MAX} essais. ` +
+          `Voir realtime_outbox.last_error, puis reprendreLesAbandonnes().`,
+      );
+    }
+
+    const reste = await this.mesurer();
+    this.alerter(reste);
+    return { rejoues, abandonnes, passages, ...reste };
+  }
+
+  /** Réserve un lot. Voir le commentaire de la requête. */
+  private async reserver() {
     /**
      * RÉSERVER AVANT DE LIRE — sinon deux instances rejouent la même ligne.
      *
@@ -174,7 +324,7 @@ export class OutboxService {
      * Sans cela, une ligne qui fait tomber son ouvrier serait reprise sans
      * fin, par toutes les instances, à chaque passage.
      */
-    const enAttente = await this.prisma.$queryRaw<
+    return await this.prisma.$queryRaw<
       {
         id: string;
         event_id: string;
@@ -200,8 +350,20 @@ export class OutboxService {
        )
    RETURNING id, event_id, event_name, rooms, payload, attempts, sequence
     `;
-    if (enAttente.length === 0) return { rejoues: 0, abandonnes: 0 };
+  }
 
+  /**
+   * Émet un lot, puis marque TOUT LE LOT livré en une seule écriture.
+   *
+   * Une écriture par ligne, c'était 200 allers-retours par lot : à une
+   * poignée de millisecondes chacun, le lot passait plus de temps à se
+   * marquer qu'à émettre. C'est ce coût-là, pas l'émission, qui faisait des
+   * cinquante minutes de rattrapage.
+   */
+  private async emettreLot(
+    server: NonNullable<RealtimeGateway['server']>,
+    lot: LigneReservee[],
+  ): Promise<{ rejoues: number; abandonnes: number }> {
     /**
      * `RETURNING` NE REND RIEN DANS L'ORDRE — il faut trier ici.
      *
@@ -213,45 +375,96 @@ export class OutboxService {
      * Sans ce tri, un `order_ready` partait avant son `order_updated` — une
      * commande prête avant d'avoir avancé.
      */
-    enAttente.sort((a, b) => (a.sequence < b.sequence ? -1 : a.sequence > b.sequence ? 1 : 0));
+    const ordonne = [...lot].sort((a, b) =>
+      a.sequence < b.sequence ? -1 : a.sequence > b.sequence ? 1 : 0,
+    );
 
-    let rejoues = 0;
+    const livrees: string[] = [];
     let abandonnes = 0;
 
-    for (const ligne of enAttente) {
+    for (const ligne of ordonne) {
       try {
         for (const salon of ligne.rooms) server.to(salon).emit(ligne.event_name, ligne.payload);
-        // L'essai est deja compte par la reservation : on ne marque ici que
-        // l'aboutissement.
-        await this.prisma.realtimeOutbox.update({
-          where: { id: ligne.id },
-          // Le bail est rendu en meme temps : la ligne est finie, elle
-          // n'a plus a etre reservee par personne.
-          data: { deliveredAt: new Date(), lastError: null, claimedUntil: null },
-        });
-        rejoues += 1;
+        livrees.push(ligne.id);
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
         await this.prisma.realtimeOutbox.update({
           where: { id: ligne.id },
           data: { lastError: message.slice(0, 500) },
         });
+        // L'essai est deja compte par la reservation.
         if (ligne.attempts >= OutboxService.ESSAIS_MAX) abandonnes += 1;
       }
     }
 
-    if (rejoues > 0) {
-      this.logger.log(`${rejoues} evenement(s) rejoue(s) — ils n'etaient jamais arrives.`);
+    if (livrees.length > 0) {
+      await this.prisma.realtimeOutbox.updateMany({
+        where: { id: { in: livrees } },
+        // Le bail est rendu en meme temps : la ligne est finie, elle n'a plus
+        // a etre reservee par personne.
+        data: { deliveredAt: new Date(), lastError: null, claimedUntil: null },
+      });
     }
-    if (abandonnes > 0) {
-      // Au niveau ERREUR : une ligne abandonnée est un écran qui ne saura
-      // jamais. Cela doit se voir, pas se deviner.
+
+    return { rejoues: livrees.length, abandonnes };
+  }
+
+  /**
+   * CE QU'IL RESTE, et depuis combien de temps.
+   *
+   * La profondeur seule ne distingue pas une rafale d'un blocage : cent
+   * annonces déposées à l'instant ne sont pas un incident, une seule qui
+   * attend depuis dix minutes en est un.
+   */
+  async mesurer(): Promise<{ enAttente: number; plusVieuxMs: number | null }> {
+    const [enAttente, plusVieux] = await Promise.all([
+      this.prisma.realtimeOutbox.count({ where: { deliveredAt: null } }),
+      this.prisma.realtimeOutbox.findFirst({
+        where: { deliveredAt: null },
+        orderBy: { sequence: 'asc' },
+        select: { createdAt: true },
+      }),
+    ]);
+    return {
+      enAttente,
+      plusVieuxMs: plusVieux ? Date.now() - plusVieux.createdAt.getTime() : null,
+    };
+  }
+
+  private alerter(etat: { enAttente: number; plusVieuxMs: number | null }): void {
+    if (etat.plusVieuxMs !== null && etat.plusVieuxMs >= OutboxService.RETARD_ALERTE_MS) {
       this.logger.error(
-        `${abandonnes} evenement(s) ABANDONNE(S) apres ${OutboxService.ESSAIS_MAX} essais. ` +
-          `Voir realtime_outbox.last_error.`,
+        `La plus vieille annonce attend ${Math.round(etat.plusVieuxMs / 1000)} s ` +
+          `(${etat.enAttente} en attente). Un comptoir est aveugle depuis ce temps-la.`,
+      );
+      return;
+    }
+    if (etat.enAttente >= OutboxService.PROFONDEUR_ALERTE) {
+      this.logger.warn(
+        `${etat.enAttente} annonce(s) en attente apres la vidange : ` +
+          `les depots arrivent plus vite qu'on ne les sert.`,
       );
     }
-    return { rejoues, abandonnes };
+  }
+
+  /**
+   * LA REPRISE D'UNE LIGNE ABANDONNÉE — la procédure, en code.
+   *
+   * Passé dix essais, une ligne est laissée de côté pour ne pas masquer les
+   * suivantes. Elle n'est pas perdue : elle attend qu'on ait réparé la cause
+   * (`last_error` la nomme), puis qu'on la remette dans la file. Sans ce
+   * geste il faudrait écrire du SQL à la main sur la production, un soir de
+   * match, ce qui est exactement le moment où l'on ne veut pas le faire.
+   *
+   * Rend le nombre de lignes remises en file.
+   */
+  async reprendreLesAbandonnes(): Promise<number> {
+    const { count } = await this.prisma.realtimeOutbox.updateMany({
+      where: { deliveredAt: null, attempts: { gte: OutboxService.ESSAIS_MAX } },
+      data: { attempts: 0, claimedUntil: null, lastError: null },
+    });
+    if (count > 0) this.logger.log(`${count} annonce(s) abandonnee(s) remise(s) en file.`);
+    return count;
   }
 
   /** La purge des lignes livrées — une file d'attente ne s'accumule pas. */

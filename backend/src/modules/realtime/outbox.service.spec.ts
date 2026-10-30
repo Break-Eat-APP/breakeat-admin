@@ -26,12 +26,16 @@ describe('OutboxService — le rattrapage', () => {
     rooms: ['organization:org-1', 'supplier:buvette-nord'],
     payload: { eventId: 'ev-uuid-1', orderId: 'o-1' },
     attempts: 1,
+    sequence: 1n,
     ...over,
   });
 
   function monter(lignes: ReturnType<typeof ligne>[], serveurCasse = false) {
     const emis: string[] = [];
     const maj: { where: unknown; data: Record<string, unknown> }[] = [];
+    // Le lot entier est marqué d'une SEULE écriture : c'est `updateMany`
+    // qu'il faut regarder, plus `update`, qui ne sert plus qu'aux échecs.
+    const majMasse: { where: unknown; data: Record<string, unknown> }[] = [];
 
     const sql: string[] = [];
     const prisma = {
@@ -47,8 +51,14 @@ describe('OutboxService — le rattrapage', () => {
           maj.push(a);
           return Promise.resolve({});
         }),
-        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        updateMany: jest.fn((a: { where: unknown; data: Record<string, unknown> }) => {
+          majMasse.push(a);
+          return Promise.resolve({ count: 1 });
+        }),
         deleteMany: jest.fn().mockResolvedValue({ count: 3 }),
+        // La mesure de fin de vidange : profondeur et âge du plus vieux.
+        count: jest.fn().mockResolvedValue(0),
+        findFirst: jest.fn().mockResolvedValue(null),
       },
     };
 
@@ -71,6 +81,7 @@ describe('OutboxService — le rattrapage', () => {
       prisma,
       emis,
       maj,
+      majMasse,
       sql,
     };
   }
@@ -99,7 +110,12 @@ describe('OutboxService — le rattrapage', () => {
     const recus: unknown[] = [];
     const prisma = {
       $queryRaw: jest.fn().mockResolvedValue([ligne({ payload: charge })]),
-      realtimeOutbox: { update: jest.fn().mockResolvedValue({}) },
+      realtimeOutbox: {
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        count: jest.fn().mockResolvedValue(0),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
     };
     const gateway = {
       server: { to: () => ({ emit: (_n: string, c: unknown) => recus.push(c) }) },
@@ -114,12 +130,12 @@ describe('OutboxService — le rattrapage', () => {
   });
 
   it('marque livré ce qui vient de partir', async () => {
-    const { service, maj } = monter([ligne()]);
+    const { service, majMasse } = monter([ligne()]);
 
     await service.rejouer();
 
-    expect(maj[0].data.deliveredAt).toBeInstanceOf(Date);
-    expect(maj[0].data.lastError).toBeNull();
+    expect(majMasse[0].data.deliveredAt).toBeInstanceOf(Date);
+    expect(majMasse[0].data.lastError).toBeNull();
   });
 
   /**
@@ -176,12 +192,12 @@ describe('OutboxService — le rattrapage', () => {
    * à la réserver.
    */
   it('REND le bail en marquant livré', async () => {
-    const { service, maj } = monter([ligne()]);
+    const { service, majMasse } = monter([ligne()]);
 
     await service.rejouer();
 
-    expect(maj[0].data.deliveredAt).toBeInstanceOf(Date);
-    expect(maj[0].data.claimedUntil).toBeNull();
+    expect(majMasse[0].data.deliveredAt).toBeInstanceOf(Date);
+    expect(majMasse[0].data.claimedUntil).toBeNull();
   });
 
   /**
@@ -256,15 +272,185 @@ describe('OutboxService — le rattrapage', () => {
       { server: undefined } as unknown as RealtimeGateway,
     ).rejouer();
 
-    expect(bilan).toEqual({ rejoues: 0, abandonnes: 0 });
+    expect(bilan).toMatchObject({ rejoues: 0, abandonnes: 0, passages: 0 });
     expect(prisma.$queryRaw).not.toHaveBeenCalled();
   });
 
   it('ne fait rien quand il n’y a rien à rejouer', async () => {
     const { service, emis } = monter([]);
 
-    expect(await service.rejouer()).toEqual({ rejoues: 0, abandonnes: 0 });
+    expect(await service.rejouer()).toMatchObject({ rejoues: 0, abandonnes: 0, passages: 0 });
     expect(emis).toEqual([]);
+  });
+
+  // ─── LA VIDANGE — ce qui tenait un comptoir aveugle 50 minutes ──
+
+  /**
+   * UN SEUL LOT PAR MINUTE, C'ÉTAIT 200 ANNONCES PAR MINUTE.
+   *
+   * Une file de 10 000 — une coupure d'une heure un soir de match — demandait
+   * CINQUANTE MINUTES à se vider. Le match est fini avant que le comptoir ait
+   * tout vu, et une annonce qui arrive après le coup de sifflet ne sert plus
+   * à rien.
+   */
+  describe('la vidange', () => {
+    /** Une doublure qui rend `lots` successifs, puis plus rien. */
+    function monterLots(lots: ReturnType<typeof ligne>[][]) {
+      let i = 0;
+      const majMasse: { where: { id: { in: string[] } } }[] = [];
+      const prisma = {
+        $queryRaw: jest.fn(() => Promise.resolve(lots[i++] ?? [])),
+        realtimeOutbox: {
+          update: jest.fn().mockResolvedValue({}),
+          updateMany: jest.fn((a: { where: { id: { in: string[] } } }) => {
+            majMasse.push(a);
+            return Promise.resolve({ count: a.where.id.in.length });
+          }),
+          count: jest.fn().mockResolvedValue(0),
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+      };
+      const gateway = { server: { to: () => ({ emit: () => undefined }) } };
+      return {
+        service: new OutboxService(
+          prisma as unknown as PrismaService,
+          gateway as unknown as RealtimeGateway,
+        ),
+        prisma,
+        majMasse,
+      };
+    }
+
+    /** Un lot PLEIN : c'est ce qui dit à la vidange qu'il reste du travail. */
+    const lotPlein = (depart: number) =>
+      Array.from({ length: 200 }, (_, k) =>
+        ligne({ id: `l-${depart + k}`, sequence: BigInt(depart + k) }),
+      );
+
+    it('enchaîne les lots dans le MÊME tour au lieu d’en faire un par minute', async () => {
+      const { service } = monterLots([lotPlein(0), lotPlein(200), [ligne({ id: 'l-fin' })]]);
+
+      const bilan = await service.rejouer();
+
+      expect(bilan.passages).toBe(3);
+      expect(bilan.rejoues).toBe(401);
+    });
+
+    /**
+     * ET C'EST LE MARQUAGE QUI COÛTAIT, PAS L'ÉMISSION. Une écriture par
+     * ligne, c'était 200 allers-retours par lot : le lot passait plus de
+     * temps à se marquer qu'à émettre.
+     */
+    it('marque TOUT un lot en une seule écriture', async () => {
+      const { service, prisma, majMasse } = monterLots([lotPlein(0), []]);
+
+      await service.rejouer();
+
+      expect(majMasse).toHaveLength(1);
+      expect(majMasse[0].where.id.in).toHaveLength(200);
+      // Aucune écriture ligne à ligne : `update` ne sert plus qu'aux échecs.
+      expect(prisma.realtimeOutbox.update).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Un lot INCOMPLET veut dire qu'il ne reste rien à prendre. Redemander
+     * serait une requête pour rien, à chaque tour.
+     */
+    it('s’arrête dès qu’un lot revient incomplet', async () => {
+      const { service, prisma } = monterLots([[ligne()], lotPlein(0)]);
+
+      const bilan = await service.rejouer();
+
+      expect(bilan.passages).toBe(1);
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * La vidange peut durer vingt secondes, le cron passe à la minute : en
+     * cas de retard, deux vidanges du MÊME processus se chevaucheraient et se
+     * disputeraient la boucle d'événements pour rien.
+     */
+    it('ne lance pas deux vidanges à la fois dans la même instance', async () => {
+      const { service, prisma } = monterLots([lotPlein(0), []]);
+
+      const [un, deux] = await Promise.all([service.rejouer(), service.rejouer()]);
+
+      // L'une a travaillé, l'autre a passé son tour.
+      expect([un.passages, deux.passages].sort()).toEqual([0, 1]);
+      expect(prisma.$queryRaw).toHaveBeenCalledTimes(2); // 1 lot + 1 lot vide
+    });
+  });
+
+  // ─── La surveillance ────────────────────────────────────────────
+
+  /**
+   * LA PROFONDEUR SEULE NE DIT PAS LA GRAVITÉ. Cent annonces déposées à
+   * l'instant ne sont pas un incident ; une seule qui attend depuis dix
+   * minutes en est un — c'est un écran de comptoir aveugle depuis dix
+   * minutes, avec le client au guichet.
+   */
+  it('CRIE quand la plus vieille annonce traîne, pas seulement quand il y en a beaucoup', async () => {
+    const { service, prisma } = monter([]);
+    prisma.realtimeOutbox.count.mockResolvedValue(3);
+    prisma.realtimeOutbox.findFirst.mockResolvedValue({
+      createdAt: new Date(Date.now() - 6 * 60_000),
+    });
+    const journal = jest
+      .spyOn((service as unknown as { logger: { error: () => void } }).logger, 'error')
+      .mockImplementation(() => undefined);
+
+    const bilan = await service.rejouer();
+
+    expect(bilan.plusVieuxMs).toBeGreaterThan(5 * 60_000);
+    expect(journal).toHaveBeenCalledWith(expect.stringContaining('aveugle'));
+    journal.mockRestore();
+  });
+
+  it('avertit quand la file reste profonde après la vidange', async () => {
+    const { service, prisma } = monter([]);
+    prisma.realtimeOutbox.count.mockResolvedValue(1_500);
+    prisma.realtimeOutbox.findFirst.mockResolvedValue({ createdAt: new Date() });
+    const journal = jest
+      .spyOn((service as unknown as { logger: { warn: () => void } }).logger, 'warn')
+      .mockImplementation(() => undefined);
+
+    await service.rejouer();
+
+    expect(journal).toHaveBeenCalledWith(expect.stringContaining('plus vite'));
+    journal.mockRestore();
+  });
+
+  it('se tait quand la file est vide', async () => {
+    const { service } = monter([]);
+    const erreur = jest
+      .spyOn((service as unknown as { logger: { error: () => void } }).logger, 'error')
+      .mockImplementation(() => undefined);
+    const avis = jest
+      .spyOn((service as unknown as { logger: { warn: () => void } }).logger, 'warn')
+      .mockImplementation(() => undefined);
+
+    await service.rejouer();
+
+    expect(erreur).not.toHaveBeenCalled();
+    expect(avis).not.toHaveBeenCalled();
+    erreur.mockRestore();
+    avis.mockRestore();
+  });
+
+  /**
+   * LA REPRISE, EN CODE. Sans elle il faudrait écrire du SQL à la main sur la
+   * production, un soir de match — exactement le moment où l'on ne veut pas
+   * le faire.
+   */
+  it('remet les abandonnées en file, et elles seules', async () => {
+    const { service, prisma } = monter([]);
+    prisma.realtimeOutbox.updateMany.mockResolvedValue({ count: 4 });
+
+    expect(await service.reprendreLesAbandonnes()).toBe(4);
+    expect(prisma.realtimeOutbox.updateMany).toHaveBeenCalledWith({
+      where: { deliveredAt: null, attempts: { gte: 10 } },
+      data: { attempts: 0, claimedUntil: null, lastError: null },
+    });
   });
 
   // ─── Le marquage immédiat ───────────────────────────────────────
