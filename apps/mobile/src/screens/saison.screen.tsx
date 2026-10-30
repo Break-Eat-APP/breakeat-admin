@@ -14,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import {
+  apiDestinationDeCommande,
   apiGetPublicVenue,
   apiMonProfil,
   type EvenementDeSaison,
@@ -21,7 +22,8 @@ import {
   type PublicVenue,
 } from '@lib/api/mobile-api';
 import { useUserLocation } from '@lib/hooks/use-user-location';
-import { cheminDeCommande, heureDOuverture, ouvertALaCommande } from '@lib/ouverture-lieu';
+import { showAlert } from '@lib/alert';
+import { heureDOuverture, ouvertALaCommande } from '@lib/ouverture-lieu';
 import {
   heureLisible,
   initialesAdversaire,
@@ -90,6 +92,10 @@ export function SaisonScreen({ route, navigation }: Props) {
   // Flaix : c'est ce qui évite au client de se reconnecter chez Flaix.
   const [profil, setProfil] = useState<MonProfil | null>(null);
   const [demandeOuverte, setDemandeOuverte] = useState(false);
+  /** Le match qu'on allait ouvrir quand la demande de coordonnées a surgi. */
+  const [matchEnAttente, setMatchEnAttente] = useState<string | null>(null);
+  /** Le temps d'aller demander la destination : le bouton ne doit pas partir deux fois. */
+  const [envoiCommande, setEnvoiCommande] = useState(false);
 
   /**
    * Le lieu se relit À CHAQUE RETOUR sur l'écran, et pas une fois pour toutes.
@@ -168,38 +174,64 @@ export function SaisonScreen({ route, navigation }: Props) {
    * et refusait au doigt.
    */
   const commander = () => {
+    if (!lieu || !selection) return;
+
+    // Parcours Break Eat : c'est l'écran de l'événement qui prend le relais.
+    if (!lieu.flaixEnabled) {
+      if (lieu.currentEventId) navigation.navigate('EventHome', { eventId: lieu.currentEventId });
+      return;
+    }
+
+    void ouvrirFlaixPour(selection.id);
+  };
+
+  /**
+   * LA DESTINATION EST CELLE DU MATCH CHOISI — demandée au serveur.
+   *
+   * Le bouton ouvrait le lien COURANT DU LIEU, quel que soit le match
+   * sélectionné. Tant qu'un lieu n'ouvrait qu'une rencontre à la fois, cela
+   * revenait au même. Avec deux épreuves le même jour dans le même stade,
+   * c'était la porte ouverte à commander pour la mauvaise.
+   *
+   * Et c'est le SERVEUR qui tranche : cet écran peut être ouvert depuis dix
+   * minutes et croire une commande ouverte alors qu'elle vient de fermer.
+   * Mieux vaut un refus clair qu'un paiement pour un match qui ne prend
+   * plus rien.
+   */
+  const ouvrirFlaixPour = async (eventId: string): Promise<void> => {
     if (!lieu) return;
-    const chemin = cheminDeCommande(lieu);
+    setEnvoiCommande(true);
+    try {
+      const destination = await apiDestinationDeCommande(lieu.id, eventId);
 
-    if (chemin === 'flaix' && lieu.flaixOrderUrl) {
-      const url = lieu.flaixOrderUrl;
-      // Le lien porte-t-il des coordonnées à pré-remplir ? S'il n'en attend
-      // aucune, il n'y a rien à demander : on ouvre.
-      const attendUneIdentite = /[?&](firstname|lastname|mail|email|phone|tel)=/i.test(url);
-      if (!attendUneIdentite) {
-        ouvrirFlaix(url);
-        return;
-      }
-
-      void (async () => {
+      // Ses coordonnées lui éviteront de se reconnecter chez Flaix — on les
+      // demande ici plutôt que de le laisser les ressaisir là-bas.
+      if (destination.attendIdentite) {
         try {
           const p = profil ?? (await apiMonProfil());
           setProfil(p);
           if (coordonneesManquantes(p)) {
+            setMatchEnAttente(eventId);
             setDemandeOuverte(true);
             return;
           }
         } catch {
-          // Profil illisible (réseau) : on n'empêche pas de commander. La page
-          // de commande demandera ce qui manque, comme avant.
+          // Profil illisible (réseau) : on n'empêche pas de commander. La
+          // page de commande demandera ce qui manque, comme avant.
         }
-        ouvrirFlaix(url);
-      })();
-      return;
-    }
+      }
 
-    if (chemin === 'evenement' && lieu.currentEventId) {
-      navigation.navigate('EventHome', { eventId: lieu.currentEventId });
+      ouvrirFlaix(destination.url);
+    } catch (e: unknown) {
+      console.warn('apiDestinationDeCommande a échoué:', e);
+      showAlert(
+        'Commande indisponible',
+        'La commande de ce match n’est pas ouverte pour le moment. Réessaie dans un instant.',
+      );
+      // L'écran peut être en retard sur la réalité : on le relit.
+      void charger();
+    } finally {
+      setEnvoiCommande(false);
     }
   };
 
@@ -349,9 +381,21 @@ export function SaisonScreen({ route, navigation }: Props) {
                 </View>
 
                 {selection.ouvert ? (
-                  <Pressable style={styles.bouton} onPress={commander}>
-                    <Text style={styles.boutonTexte}>Commander</Text>
-                    <Ionicons name="arrow-forward" size={17} color="#fff" />
+                  // DÉSARMÉ LE TEMPS D'ALLER CHERCHER LA DESTINATION. Deux
+                  // appuis rapides partiraient sinon deux fois, et le
+                  // second écraserait le premier avec un aller-retour de
+                  // retard — on ouvrirait la page d'avant.
+                  <Pressable
+                    style={[styles.bouton, envoiCommande && styles.boutonEnCours]}
+                    onPress={commander}
+                    disabled={envoiCommande}
+                  >
+                    <Text style={styles.boutonTexte}>
+                      {envoiCommande ? 'Un instant…' : 'Commander'}
+                    </Text>
+                    {envoiCommande ? null : (
+                      <Ionicons name="arrow-forward" size={17} color="#fff" />
+                    )}
                   </Pressable>
                 ) : (
                   /*
@@ -387,27 +431,21 @@ export function SaisonScreen({ route, navigation }: Props) {
         profil={profil}
         onTermine={(enregistre) => {
           setDemandeOuverte(false);
-          if (!enregistre) {
-            // « Plus tard » : on ouvre avec l'adresse telle quelle.
-            if (lieu?.flaixOrderUrl) ouvrirFlaix(lieu.flaixOrderUrl);
-            return;
-          }
-          // Enregistré : le SERVEUR reconstruit l'adresse avec les nouvelles
-          // coordonnées, donc on relit le lieu AVANT d'ouvrir — sinon le
-          // client saisirait son numéro et la page le redemanderait.
-          setProfil(null);
-          void (async () => {
-            try {
-              const frais = await apiGetPublicVenue(venueId, coords ?? undefined);
-              setLieu(frais);
-              if (frais.flaixOrderUrl) ouvrirFlaix(frais.flaixOrderUrl);
-            } catch {
-              if (lieu?.flaixOrderUrl) ouvrirFlaix(lieu.flaixOrderUrl);
-            }
-          })();
+          const match = matchEnAttente;
+          setMatchEnAttente(null);
+          if (!match) return;
+
+          // Enregistré : le SERVEUR remplit l'adresse avec les nouvelles
+          // coordonnées. On la redemande donc — sinon le client saisirait
+          // son numéro ici et la page de commande le redemanderait.
+          //
+          // « Plus tard » : on la redemande aussi, et on ouvre telle quelle.
+          // Dans les deux cas une seule chose compte — que l'adresse soit
+          // celle du match CHOISI.
+          if (enregistre) setProfil(null);
+          void ouvrirFlaixPour(match);
         }}
-      />
-    </View>
+      />    </View>
   );
 }
 
@@ -627,6 +665,7 @@ const styles = StyleSheet.create({
     borderRadius: THEME.radius.control,
     paddingVertical: 14,
   },
+  boutonEnCours: { opacity: 0.6 },
   boutonTexte: { color: '#fff', fontSize: 15, fontFamily: HEAD.bold },
 
   attente: {

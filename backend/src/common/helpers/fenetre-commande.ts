@@ -214,6 +214,36 @@ export function heureDOuverture(ev: EvenementCommandable, reglage: ReglageOuvert
  *                    pas l'horloge, sinon elle ne se teste pas).
  * @param reglage     L'heure d'accès au lien et le fuseau du lieu.
  */
+/**
+ * CET ÉVÉNEMENT-LÀ EST-IL COMMANDABLE, MAINTENANT ?
+ *
+ * `fenetreDeCommande` rend UN événement — celui que le lieu ouvre. C'était
+ * suffisant tant qu'un lieu n'accueillait qu'une rencontre à la fois. Ça ne
+ * l'est plus : un même stade peut tenir deux épreuves le même jour, et le
+ * supporter doit pouvoir choisir la sienne. Avec une seule réponse, la
+ * seconde s'affichait au calendrier SANS bouton — visible, et inaccessible.
+ *
+ * Cette fonction répond événement par événement. Elle applique exactement
+ * les mêmes règles, et c'est le point important : si elle divergeait de
+ * `fenetreDeCommande`, le calendrier dirait « ouvert » là où la commande
+ * refuserait.
+ *
+ * Un lieu PERMANENT est toujours ouvert : son contenant n'a ni horaire ni
+ * fin, et lui appliquer une heure d'ouverture fermerait la vente chaque
+ * nuit sur une date posée à la création du lieu.
+ */
+export function estCommandableMaintenant(
+  ev: EvenementCommandable,
+  maintenant: Date,
+  reglage: ReglageOuverture,
+): boolean {
+  if (!ouvrable(ev) || !ev.flaixOrderUrl) return false;
+  if (ev.isPermanentContainer) return true;
+
+  const t = maintenant.getTime();
+  return t <= ev.endAt.getTime() && t >= heureDOuverture(ev, reglage).getTime();
+}
+
 export function fenetreDeCommande<T extends EvenementCommandable>(
   evenements: readonly T[],
   maintenant: Date,

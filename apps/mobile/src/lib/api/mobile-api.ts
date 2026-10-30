@@ -632,6 +632,39 @@ export const apiGetPublicVenue = (id: string, pos?: { lat: number; lng: number }
       (pos ? `?lat=${pos.lat}&lng=${pos.lng}` : ''),
   );
 
+/**
+ * OÙ COMMANDER POUR **CE** MATCH-LÀ.
+ *
+ * La liste des lieux ne porte AUCUNE adresse de commande, et ce n'est pas
+ * un oubli : ces adresses sont personnalisées — le nom et le téléphone du
+ * client y sont glissés pour qu'il n'ait pas à se reconnecter chez Flaix.
+ * En recevoir une par match ferait partir autant de copies de son identité
+ * qu'il y a de rencontres affichées, à chaque ouverture de l'écran.
+ *
+ * On demande donc la destination au moment où le supporter appuie, pour le
+ * match qu'il a choisi. Une seule adresse, une seule fois.
+ *
+ * ET C'EST LE SERVEUR QUI TRANCHE. Un écran ouvert depuis dix minutes peut
+ * croire une commande ouverte alors qu'elle vient de fermer : il refusera,
+ * plutôt que d'envoyer quelqu'un payer pour un match qui ne prend plus de
+ * commande.
+ */
+export const apiDestinationDeCommande = (venueId: string, eventId: string) =>
+  req<{
+    url: string;
+    /**
+     * L adresse attend-elle les coordonnees du client ?
+     *
+     * Lu par le SERVEUR sur le lien brut, avant substitution : apres, les
+     * etiquettes ont disparu et la question n a plus de reponse. L app s en
+     * sert pour demander ses coordonnees AVANT de l envoyer chez Flaix.
+     */
+    attendIdentite: boolean;
+  }>(
+    `/public/venues/${encodeURIComponent(venueId)}` +
+      `/evenements/${encodeURIComponent(eventId)}/commande`,
+  );
+
 // ─── Public event browsing (no auth required) ─────────────────
 
 export const apiGetPublicEvent = (eventId: string) =>

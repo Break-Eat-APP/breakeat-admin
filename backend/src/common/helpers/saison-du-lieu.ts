@@ -25,11 +25,12 @@ import { EventStatus } from '@prisma/client';
  *  · LES MATCHS ANNULÉS. Un match qui n'a pas lieu n'a pas de commande à
  *    prendre. Le laisser estompé parmi les passés laisserait croire qu'il
  *    s'est joué.
- *  · LE LIEN DE COMMANDE. Il reste porté par le LIEU, une seule fois
- *    (`flaixOrderUrl`), et `ouvert` désigne la case à laquelle il correspond.
- *    Exposer un lien par match multiplierait les adresses personnalisées dans
- *    une même réponse — et le bouton « Commander » doit partir d'un seul
- *    endroit, sinon deux chemins finissent par diverger.
+ *  · LE LIEN DE COMMANDE. Aucune adresse ne voyage dans cette liste, et ce
+ *    n'est pas un oubli : elles sont PERSONNALISÉES (le nom et le téléphone
+ *    du client y sont glissés), et en mettre une par match ferait partir
+ *    autant de copies de son identité qu'il y a de rencontres affichées.
+ *    L'application demande la destination du match CHOISI, au moment où le
+ *    supporter appuie — une seule adresse, une seule fois.
  *
  * ── POURQUOI C'EST BORNÉ ─────────────────────────────────────────────
  *
@@ -92,13 +93,18 @@ export const SAISON_A_VENIR_MAX = 24;
  *                   révéler qu'un événement réservé existe.
  * @param maintenant L'instant de référence (injecté : une fonction pure ne lit
  *                   pas l'horloge, sinon elle ne se teste pas).
- * @param idOuvert   L'événement dont la commande est ouverte, tel que
- *                   `fenetreDeCommande` l'a désigné. `null` : aucun.
+ * @param estOuvert  Dit, POUR CHAQUE événement, si sa commande est ouverte.
+ *
+ * On recevait auparavant UN identifiant — celui que `fenetreDeCommande`
+ * désignait. C'était suffisant tant qu'un lieu n'accueillait qu'une
+ * rencontre à la fois ; ça ne l'est plus. Deux épreuves le même jour dans
+ * le même stade, et la seconde s'affichait au calendrier SANS bouton :
+ * visible, et inaccessible.
  */
 export function saisonDuLieu(
   evenements: readonly EvenementDeSaisonSource[],
   maintenant: Date,
-  idOuvert: string | null,
+  estOuvert: (ev: EvenementDeSaisonSource) => boolean,
 ): EvenementDeSaison[] {
   const t = maintenant.getTime();
   const retenus = evenements.filter(
@@ -129,6 +135,6 @@ export function saisonDuLieu(
     opponentName: ev.opponentName ?? null,
     opponentLogoUrl: ev.opponentLogoUrl ?? null,
     passe: ev.endAt.getTime() <= t,
-    ouvert: idOuvert !== null && ev.id === idOuvert,
+    ouvert: estOuvert(ev),
   }));
 }

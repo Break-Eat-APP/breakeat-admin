@@ -20,6 +20,15 @@ import {
  *    dernier serait le pire des deux.
  */
 describe('la saison d’un lieu', () => {
+  /**
+   * QUI EST OUVERT — une décision par événement, et non plus un identifiant.
+   *
+   * Un lieu pouvait n'ouvrir qu'une rencontre à la fois. Deux épreuves le
+   * même jour dans le même stade, et la seconde s'affichait au calendrier
+   * SANS bouton : visible, et inaccessible.
+   */
+  const AUCUN = () => false;
+  const seul = (id: string) => (ev: { id: string }) => ev.id === id;
   const MAINTENANT = new Date('2026-10-31T12:00:00Z');
 
   /** Un match, posé à N jours de l'instant de référence. */
@@ -40,7 +49,7 @@ describe('la saison d’un lieu', () => {
   };
 
   it('range les matchs dans l’ordre du calendrier, passés d’abord', () => {
-    const saison = saisonDuLieu([match('c', 7), match('a', -7), match('b', 1)], MAINTENANT, null);
+    const saison = saisonDuLieu([match('c', 7), match('a', -7), match('b', 1)], MAINTENANT, AUCUN);
     expect(saison.map((e) => e.id)).toEqual(['a', 'b', 'c']);
   });
 
@@ -54,7 +63,7 @@ describe('la saison d’un lieu', () => {
     const saison = saisonDuLieu(
       [match('joue', -2), match('annule', 2, { status: EventStatus.CANCELLED })],
       MAINTENANT,
-      null,
+      AUCUN,
     );
     expect(saison.map((e) => e.id)).toEqual(['joue']);
   });
@@ -67,7 +76,7 @@ describe('la saison d’un lieu', () => {
     const saison = saisonDuLieu(
       [match('resto', 0, { isPermanentContainer: true })],
       MAINTENANT,
-      'resto',
+      seul('resto'),
     );
     expect(saison).toEqual([]);
   });
@@ -81,7 +90,7 @@ describe('la saison d’un lieu', () => {
     const saison = saisonDuLieu(
       [match('fini', -3, { status: EventStatus.ENDED })],
       MAINTENANT,
-      null,
+      AUCUN,
     );
     expect(saison).toHaveLength(1);
     expect(saison[0].passe).toBe(true);
@@ -100,7 +109,7 @@ describe('la saison d’un lieu', () => {
       startAt: new Date(MAINTENANT.getTime() - 3_600_000),
       endAt: new Date(MAINTENANT.getTime() + 3_600_000),
     };
-    const [m] = saisonDuLieu([enCours], MAINTENANT, null);
+    const [m] = saisonDuLieu([enCours], MAINTENANT, AUCUN);
     expect(m.passe).toBe(false);
   });
 
@@ -110,13 +119,13 @@ describe('la saison d’un lieu', () => {
       startAt: new Date(MAINTENANT.getTime() - 7_200_000),
       endAt: MAINTENANT,
     };
-    expect(saisonDuLieu([fini], MAINTENANT, null)[0].passe).toBe(true);
+    expect(saisonDuLieu([fini], MAINTENANT, AUCUN)[0].passe).toBe(true);
   });
 
   // ─── Quelle case est OUVERTE ────────────────────────────────────
 
   it('marque ouverte LA case que la fenêtre de commande désigne, et elle seule', () => {
-    const saison = saisonDuLieu([match('a', -2), match('b', 0), match('c', 5)], MAINTENANT, 'b');
+    const saison = saisonDuLieu([match('a', -2), match('b', 0), match('c', 5)], MAINTENANT, seul('b'));
     expect(saison.filter((e) => e.ouvert).map((e) => e.id)).toEqual(['b']);
   });
 
@@ -126,7 +135,7 @@ describe('la saison d’un lieu', () => {
    * annonce une commande que le bouton refusera.
    */
   it('n’ouvre AUCUNE case quand rien n’est ouvert', () => {
-    const saison = saisonDuLieu([match('a', 1), match('b', 8)], MAINTENANT, null);
+    const saison = saisonDuLieu([match('a', 1), match('b', 8)], MAINTENANT, AUCUN);
     expect(saison.some((e) => e.ouvert)).toBe(false);
   });
 
@@ -136,7 +145,7 @@ describe('la saison d’un lieu', () => {
     const [m] = saisonDuLieu(
       [match('a', 1, { opponentName: 'Racing 92', opponentLogoUrl: 'https://x.test/r92.png' })],
       MAINTENANT,
-      null,
+      AUCUN,
     );
     expect(m.opponentName).toBe('Racing 92');
     expect(m.opponentLogoUrl).toBe('https://x.test/r92.png');
@@ -148,7 +157,7 @@ describe('la saison d’un lieu', () => {
    * l'app lirait un champ absent.
    */
   it('rend null — jamais undefined — quand l’adversaire n’est pas saisi', () => {
-    const [m] = saisonDuLieu([match('a', 1)], MAINTENANT, null);
+    const [m] = saisonDuLieu([match('a', 1)], MAINTENANT, AUCUN);
     expect(m.opponentName).toBeNull();
     expect(m.opponentLogoUrl).toBeNull();
   });
@@ -162,7 +171,7 @@ describe('la saison d’un lieu', () => {
    */
   it('garde les passés les PLUS RÉCENTS, et les remet dans l’ordre', () => {
     const vieux = Array.from({ length: 20 }, (_, i) => match(`p${i}`, -(i + 1)));
-    const saison = saisonDuLieu(vieux, MAINTENANT, null);
+    const saison = saisonDuLieu(vieux, MAINTENANT, AUCUN);
 
     expect(saison).toHaveLength(SAISON_PASSES_MAX);
     // p0 est le plus récent (hier) : il doit être là, et en DERNIER.
@@ -174,7 +183,7 @@ describe('la saison d’un lieu', () => {
 
   it('borne aussi les matchs à venir', () => {
     const beaucoup = Array.from({ length: 40 }, (_, i) => match(`v${i}`, i + 1));
-    const saison = saisonDuLieu(beaucoup, MAINTENANT, null);
+    const saison = saisonDuLieu(beaucoup, MAINTENANT, AUCUN);
     expect(saison).toHaveLength(SAISON_A_VENIR_MAX);
     // Les PROCHAINS, pas les plus lointains.
     expect(saison[0].id).toBe('v0');
@@ -191,13 +200,13 @@ describe('la saison d’un lieu', () => {
         ...Array.from({ length: 40 }, (_, i) => match(`v${i}`, i + 1)),
       ],
       MAINTENANT,
-      null,
+      AUCUN,
     );
     expect(saison).toHaveLength(SAISON_PASSES_MAX + SAISON_A_VENIR_MAX);
     expect(saison.filter((e) => e.passe)).toHaveLength(SAISON_PASSES_MAX);
   });
 
   it('un lieu sans aucun événement rend une liste vide, pas une erreur', () => {
-    expect(saisonDuLieu([], MAINTENANT, null)).toEqual([]);
+    expect(saisonDuLieu([], MAINTENANT, AUCUN)).toEqual([]);
   });
 });

@@ -1,11 +1,12 @@
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { EventStatus, EventVisibility } from '@prisma/client';
 import { PublicVenuesController } from './public-venues.controller';
 import type { PrismaService } from '../../database/prisma.service';
 
 // ─── Prisma mock ─────────────────────────────────────────────────
 const prisma = {
-  venue: { findMany: jest.fn() },
-  groupMember: { findMany: jest.fn() },
+  venue: { findMany: jest.fn(), findFirst: jest.fn() },
+  groupMember: { findMany: jest.fn(), count: jest.fn() },
   // Lu seulement quand un lien Flaix porte des etiquettes a remplir.
   user: { findUnique: jest.fn() },
   /**
@@ -21,6 +22,7 @@ const prisma = {
    * une reponse ecrite a la main qui dirait ce qu'on veut entendre.
    */
   event: {
+    findFirst: jest.fn(),
     groupBy: jest.fn(async ({ where }: { where: Record<string, unknown> }) => {
       // `mockResolvedValue` range une PROMESSE dans les resultats, pas le
       // tableau : il faut l'attendre pour lire les lieux du scenario.
@@ -613,5 +615,158 @@ describe('la fenêtre de saison', () => {
       select: { events: { where: { OR: unknown[] } } };
     };
     expect(appel.select.events.where.OR).toContainEqual({ isPermanentContainer: true });
+  });
+});
+
+// ─── La destination de commande d'UN match ───────────────────────
+
+/**
+ * OÙ COMMANDER POUR **CE** MATCH-LÀ.
+ *
+ * Un lieu ne rendait commandable qu'UN événement : deux épreuves le même
+ * jour dans le même stade, et la seconde s'affichait au calendrier SANS
+ * bouton — visible, et inaccessible.
+ *
+ * Et la destination est vérifiée ICI, par le serveur, pas par l'écran. Une
+ * application qui affiche un état d'il y a dix minutes ne doit pas pouvoir
+ * envoyer un supporter commander sur un match fermé, réservé, ou d'un autre
+ * lieu.
+ */
+describe('la destination de commande d’un match', () => {
+  const LIEU = 'v-1';
+  const MATCH = 'e-1';
+  const LIEN = 'https://commande.flaix.bo.synertic.net/asm/racing';
+
+  const match = (over: Record<string, unknown> = {}) => ({
+    id: MATCH,
+    name: 'ASM - Racing',
+    // Commencé il y a une heure, fini dans deux : en plein dedans.
+    startAt: new Date(Date.now() - 3_600_000),
+    endAt: new Date(Date.now() + 7_200_000),
+    status: EventStatus.ACTIVE,
+    visibility: EventVisibility.PUBLIC,
+    isPermanentContainer: false,
+    flaixOrderUrl: LIEN,
+    ...over,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (prisma.venue.findFirst as jest.Mock).mockResolvedValue({
+      ordersOpenAt: '08:00',
+      timezone: 'Europe/Paris',
+      flaixEnabled: true,
+    });
+    (prisma.event.findFirst as jest.Mock).mockResolvedValue(match());
+  });
+
+  const demander = (u?: unknown) =>
+    makeController().destinationDeCommande(LIEU, MATCH, u as never);
+
+  it('rend l’adresse du match quand sa commande est ouverte', async () => {
+    await expect(demander()).resolves.toEqual({ url: LIEN, attendIdentite: false });
+  });
+
+  /**
+   * LE PIÈGE QUE CETTE ROUTE FERME. Sans `venueId` dans la condition, le
+   * match d'un AUTRE lieu passerait — et le supporter partirait commander
+   * ailleurs, pour une rencontre qu'il ne verra pas.
+   */
+  it('cherche le match DANS ce lieu, pas n’importe où', async () => {
+    await demander();
+
+    const appel = (prisma.event.findFirst as jest.Mock).mock.calls[0][0] as {
+      where: { id: string; venueId: string };
+    };
+    expect(appel.where).toEqual({ id: MATCH, venueId: LIEU });
+  });
+
+  it('REFUSE quand le match n’existe pas dans ce lieu', async () => {
+    (prisma.event.findFirst as jest.Mock).mockResolvedValue(null);
+    await expect(demander()).rejects.toThrow(NotFoundException);
+  });
+
+  /**
+   * Une application qui affiche un écran d'il y a dix minutes ne doit pas
+   * pouvoir envoyer quelqu'un sur un match fermé. 409 et non 404 : la
+   * rencontre existe, c'est son moment qui ne convient pas.
+   */
+  it('REFUSE un match dont la commande n’est pas ouverte', async () => {
+    (prisma.event.findFirst as jest.Mock).mockResolvedValue(
+      match({
+        startAt: new Date(Date.now() + 30 * 86_400_000),
+        endAt: new Date(Date.now() + 30 * 86_400_000 + 7_200_000),
+      }),
+    );
+    await expect(demander()).rejects.toThrow(ConflictException);
+  });
+
+  it('REFUSE un match sans adresse de commande', async () => {
+    (prisma.event.findFirst as jest.Mock).mockResolvedValue(match({ flaixOrderUrl: null }));
+    await expect(demander()).rejects.toThrow(ConflictException);
+  });
+
+  /**
+   * Un événement RÉSERVÉ ne se laisse pas ouvrir en le nommant. 404 et non
+   * 403 : répondre « interdit » confirmerait son existence.
+   */
+  it('REFUSE un match privé à un anonyme — et dit « introuvable »', async () => {
+    (prisma.event.findFirst as jest.Mock).mockResolvedValue(
+      match({ visibility: EventVisibility.PRIVATE }),
+    );
+    await expect(demander()).rejects.toThrow(NotFoundException);
+  });
+
+  it('laisse passer un match privé à un membre du groupe', async () => {
+    (prisma.event.findFirst as jest.Mock).mockResolvedValue(
+      match({ visibility: EventVisibility.PRIVATE }),
+    );
+    (prisma.groupMember.count as jest.Mock).mockResolvedValue(1);
+
+    await expect(demander({ sub: 'membre' })).resolves.toEqual({
+      url: LIEN,
+      attendIdentite: false,
+    });
+  });
+
+  it('REFUSE un lieu qui ne passe pas par Flaix', async () => {
+    (prisma.venue.findFirst as jest.Mock).mockResolvedValue({
+      ordersOpenAt: '08:00',
+      timezone: 'Europe/Paris',
+      flaixEnabled: false,
+    });
+    await expect(demander()).rejects.toThrow(NotFoundException);
+  });
+
+  /**
+   * L'identité n'est cherchée QUE si l'adresse l'attend : la grande
+   * majorité des liens n'en porte aucune, et c'est une requête de moins.
+   */
+  /**
+   * Lu sur le lien BRUT : après substitution, les étiquettes ont disparu et
+   * la question n'a plus de réponse. C'est ce drapeau qui permet à l'app de
+   * demander ses coordonnées au client AVANT de l'envoyer chez Flaix.
+   */
+  it('annonce que l’adresse attend une identité', async () => {
+    (prisma.event.findFirst as jest.Mock).mockResolvedValue(
+      match({ flaixOrderUrl: `${LIEN}?firstname=[#firstname]` }),
+    );
+
+    const r = await demander();
+    expect(r.attendIdentite).toBe(true);
+  });
+
+  it('ne lit le profil que si l’adresse porte des étiquettes', async () => {
+    await demander({ sub: 'client' });
+    expect(prisma.user.findUnique).not.toHaveBeenCalled();
+
+    (prisma.event.findFirst as jest.Mock).mockResolvedValue(
+      match({ flaixOrderUrl: `${LIEN}?firstname=[#firstname]` }),
+    );
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({ firstName: 'Remi' });
+
+    const r = await demander({ sub: 'client' });
+    expect(prisma.user.findUnique).toHaveBeenCalled();
+    expect(r.url).toContain('Remi');
   });
 });

@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Header,
+  ConflictException,
   NotFoundException,
   Param,
   Query,
@@ -13,7 +14,10 @@ import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guar
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { CLUB_EN_SERVICE } from '../../common/helpers/organisation-ouverte';
-import { fenetreDeCommande } from '../../common/helpers/fenetre-commande';
+import {
+  estCommandableMaintenant,
+  fenetreDeCommande,
+} from '../../common/helpers/fenetre-commande';
 import { saisonDuLieu } from '../../common/helpers/saison-du-lieu';
 import { personnaliserLien, porteDesEtiquettes } from '../../common/helpers/personnaliser-lien';
 
@@ -360,12 +364,32 @@ export class PublicVenuesController {
         //                ni prix ;
         //  · 'aucun'   : pas de relais Flaix ici → le parcours Break Eat
         //                reprend la main sur l'événement actif.
-        const idOuvert =
-          fenetre.etat === 'ouvert'
-            ? fenetre.evenement.id
-            : fenetre.etat === 'bientot'
-              ? null
-              : (currentEvent?.id ?? null);
+        /**
+         * QUELS MATCHS SONT COMMANDABLES — au pluriel, désormais.
+         *
+         * On n'en désignait qu'UN, celui que `fenetreDeCommande` ouvrait.
+         * Suffisant tant qu'un lieu n'accueillait qu'une rencontre à la
+         * fois ; plus du tout quand deux épreuves se tiennent le même jour
+         * dans le même stade. La seconde s'affichait alors au calendrier
+         * SANS bouton : visible, et inaccessible.
+         *
+         * `estCommandableMaintenant` applique exactement les mêmes règles,
+         * événement par événement. Pour un lieu qui n'en ouvre qu'un, la
+         * réponse est identique à l'ancienne.
+         */
+        const ouvrable = v.flaixEnabled
+          ? (ev: { id: string }) =>
+              accessible.some(
+                (e) =>
+                  e.id === ev.id &&
+                  estCommandableMaintenant(e, maintenant, {
+                    heure: v.ordersOpenAt,
+                    timezone: v.timezone ?? 'Europe/Paris',
+                  }),
+              )
+          : // Parcours Break Eat : c'est l'événement ACTIF qui prend les
+            // commandes, et il n'y en a qu'un. La règle ne change pas.
+            (ev: { id: string }) => ev.id === currentEvent?.id;
 
         const distanceKm =
           position && v.latitude !== null && v.longitude !== null
@@ -397,7 +421,7 @@ export class PublicVenuesController {
            * Sur les événements ACCESSIBLES, comme le lien : un calendrier ne
            * doit pas révéler qu'un événement réservé existe.
            */
-          saison: saisonDuLieu(accessible, maintenant, idOuvert),
+          saison: saisonDuLieu(accessible, maintenant, ouvrable),
           /**
            * L'HEURE à laquelle la commande ouvre, le jour du match (« 08:00 »).
            *
@@ -450,6 +474,117 @@ export class PublicVenuesController {
     }
 
     return result;
+  }
+
+  /**
+   * OÙ COMMANDER POUR **CE** MATCH-LÀ.
+   *
+   * La liste des lieux ne porte aucune adresse de commande, et ce n'est pas
+   * un oubli : ces adresses sont PERSONNALISÉES — le nom et le téléphone du
+   * client y sont glissés pour qu'il n'ait pas à se reconnecter chez Flaix.
+   * En mettre une par match ferait partir autant de copies de son identité
+   * qu'il y a de rencontres affichées, à chaque ouverture de l'écran.
+   *
+   * L'application demande donc la destination AU MOMENT OÙ le supporter
+   * appuie, pour le match qu'il a choisi. Une seule adresse, une seule fois.
+   *
+   * ── ET LA DESTINATION EST VÉRIFIÉE ICI ───────────────────────────────
+   *
+   * C'est le serveur qui décide, pas l'écran. Il refuse un match d'un autre
+   * lieu, un match auquel l'appelant n'a pas accès, et un match dont la
+   * commande n'est pas ouverte à cette seconde — même si l'application
+   * croyait le contraire parce qu'elle affiche un écran d'il y a dix
+   * minutes.
+   *
+   * 404 et non 403 sur un événement interdit : répondre « interdit »
+   * confirmerait son existence à qui essaie des identifiants.
+   */
+  @Header('Cache-Control', 'no-store')
+  @Get(':id/evenements/:eventId/commande')
+  async destinationDeCommande(
+    @Param('id') venueId: string,
+    @Param('eventId') eventId: string,
+    @CurrentUser() user?: JwtPayload,
+  ): Promise<{ url: string; attendIdentite: boolean }> {
+    const lieu = await this.prisma.venue.findFirst({
+      where: { id: venueId, status: VenueStatus.ACTIVE, ...CLUB_EN_SERVICE },
+      select: { ordersOpenAt: true, timezone: true, flaixEnabled: true },
+    });
+    if (!lieu) throw new NotFoundException('Lieu introuvable.');
+
+    const evenement = await this.prisma.event.findFirst({
+      // `venueId` dans la condition, et pas seulement l'identifiant : sans
+      // lui, le match d'un AUTRE lieu passerait, et le supporter partirait
+      // commander ailleurs.
+      where: { id: eventId, venueId },
+      select: {
+        id: true,
+        name: true,
+        startAt: true,
+        endAt: true,
+        status: true,
+        visibility: true,
+        isPermanentContainer: true,
+        flaixOrderUrl: true,
+      },
+    });
+    if (!evenement) throw new NotFoundException('Événement introuvable.');
+
+    // Un événement RÉSERVÉ ne se laisse pas ouvrir en le nommant.
+    if (evenement.visibility !== EventVisibility.PUBLIC) {
+      const autorise = user?.sub
+        ? await this.prisma.groupMember.count({
+            where: { userId: user.sub, group: { events: { some: { eventId } } } },
+          })
+        : 0;
+      if (autorise === 0) throw new NotFoundException('Événement introuvable.');
+    }
+
+    if (!lieu.flaixEnabled) {
+      throw new NotFoundException('Ce lieu ne passe pas par Flaix.');
+    }
+
+    const ouvert = estCommandableMaintenant(evenement, new Date(), {
+      heure: lieu.ordersOpenAt,
+      timezone: lieu.timezone ?? 'Europe/Paris',
+    });
+    if (!ouvert || !evenement.flaixOrderUrl) {
+      // 409 et non 404 : le match existe, c'est son moment qui ne convient
+      // pas. L'app peut le dire au supporter au lieu de le laisser croire
+      // que la rencontre a disparu.
+      throw new ConflictException('La commande de ce match n’est pas ouverte.');
+    }
+
+    /**
+     * L'ADRESSE ATTEND-ELLE UNE IDENTITÉ ?
+     *
+     * Lu sur le lien BRUT, avant toute substitution — après, les étiquettes
+     * ont disparu et la question n'a plus de réponse.
+     *
+     * L'application s'en sert pour demander ses coordonnées au client AVANT
+     * de l'envoyer chez Flaix, plutôt que de le laisser les ressaisir
+     * là-bas. Elle ne peut plus le deviner elle-même : c'est désormais le
+     * serveur qui remplit le lien.
+     */
+    const attendIdentite = porteDesEtiquettes(evenement.flaixOrderUrl);
+
+    // L'identité n'est cherchée QUE si l'adresse l'attend.
+    let url = evenement.flaixOrderUrl;
+    if (attendIdentite && user?.sub) {
+      const client = await this.prisma.user.findUnique({
+        where: { id: user.sub },
+        select: {
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          displayName: true,
+        },
+      });
+      url = personnaliserLien(url, client);
+    }
+
+    return { url, attendIdentite };
   }
 
   /**
