@@ -35,8 +35,9 @@ import { personnaliserLien, porteDesEtiquettes } from '../../common/helpers/pers
  * fait défiler : ce sont des lignes lues à chaque requête, par chaque
  * client, pour rien.
  *
- * Calculée à l'appel et non figée au démarrage : un conteneur qui vit des
- * semaines verrait sinon sa fenêtre glisser lentement vers le passé.
+ * Calculée À CHAQUE LECTURE, dans `lire()`. Posée dans la constante de
+ * sélection — qui n'est évaluée qu'une fois à l'import — un conteneur qui vit des
+ * mois aurait vu sa fenêtre glisser vers le passé, un jour de plus chaque jour.
  */
 const JOURS_DE_MEMOIRE = 150;
 
@@ -88,10 +89,13 @@ const SELECTION_LIEU = {
    * le lien de commande d'un restaurant ouvert tous les jours. Le couper
    * fermerait la vente de ces lieux-là du jour au lendemain.
    */
+  // ⚠️ LE `where` DE CETTE RELATION EST POSÉ À CHAQUE LECTURE, dans
+  // `lire()`, et surtout PAS ici : cet objet est une constante de module,
+  // évaluée une seule fois à l'import. La borne y aurait été figée au
+  // démarrage, et un conteneur vivant trois mois aurait lu trois mois de
+  // plus que prévu — en s'éloignant un peu plus chaque jour, sans que rien
+  // ne le signale. C'est le défaut que cette fenêtre venait corriger.
   events: {
-    where: {
-      OR: [{ startAt: { gte: borneDeSaison() } }, { isPermanentContainer: true }],
-    },
     orderBy: { startAt: 'asc' },
     select: {
       id: true,
@@ -225,7 +229,17 @@ export class PublicVenuesController {
     return this.prisma.venue.findMany({
       where,
       orderBy: { name: 'asc' },
-      select: SELECTION_LIEU,
+      select: {
+        ...SELECTION_LIEU,
+        // La fenêtre de saison, calculée MAINTENANT. Posée dans la
+        // constante, elle vieillissait avec le processus.
+        events: {
+          ...SELECTION_LIEU.events,
+          where: {
+            OR: [{ startAt: { gte: borneDeSaison() } }, { isPermanentContainer: true }],
+          },
+        },
+      },
     });
   }
 

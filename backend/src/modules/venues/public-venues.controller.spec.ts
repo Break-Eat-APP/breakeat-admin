@@ -537,3 +537,81 @@ describe('PublicVenuesController — un lieu par son identifiant', () => {
     expect(where.organization).toBeDefined();
   });
 });
+
+// ─── La fenêtre de saison ────────────────────────────────────────
+
+/**
+ * LA BORNE DOIT ÊTRE CALCULÉE À CHAQUE LECTURE.
+ *
+ * Elle a d'abord été posée dans la constante de sélection — un objet de
+ * module, évalué UNE SEULE FOIS à l'import. Le commentaire affirmait
+ * pourtant qu'elle était calculée à l'appel. Sur un conteneur Railway qui
+ * vit des mois, la fenêtre reculait donc d'un jour par jour : au bout d'un
+ * trimestre, chaque requête lisait trois mois d'historique de plus que
+ * prévu — en silence, et en annulant lentement le gain qu'elle apportait.
+ *
+ * C'est exactement le défaut que cette fenêtre venait corriger. Ce test
+ * existe pour qu'il ne revienne pas par la porte de derrière.
+ */
+describe('la fenêtre de saison', () => {
+  const borneLue = () => {
+    const appel = prisma.venue.findMany.mock.calls.at(-1)?.[0] as {
+      select: { events: { where: { OR: [{ startAt: { gte: Date } }] } } };
+    };
+    return appel.select.events.where.OR[0].startAt.gte;
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.groupMember.findMany as jest.Mock).mockResolvedValue([]);
+  });
+
+  it('remonte à 150 jours, et pas davantage', async () => {
+    await makeController().search(undefined, 'stade');
+
+    const jours = (Date.now() - borneLue().getTime()) / 86_400_000;
+    expect(jours).toBeGreaterThan(149.9);
+    expect(jours).toBeLessThan(150.1);
+  });
+
+  /**
+   * LE CŒUR DU TEST : deux lectures séparées dans le temps doivent donner
+   * deux bornes différentes. Figée à l'import, la seconde rendrait la même
+   * date que la première — et le test passerait au vert en masquant la
+   * dérive.
+   */
+  it('se recalcule à CHAQUE lecture, elle ne vieillit pas avec le processus', async () => {
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date('2026-10-30T12:00:00Z'));
+      await makeController().search(undefined, 'stade');
+      const premiere = borneLue().getTime();
+
+      // Le conteneur a vécu trente jours sans redémarrer.
+      jest.setSystemTime(new Date('2026-11-29T12:00:00Z'));
+      await makeController().search(undefined, 'stade');
+      const seconde = borneLue().getTime();
+
+      const ecart = (seconde - premiere) / 86_400_000;
+      expect(ecart).toBeGreaterThan(29.9);
+      expect(ecart).toBeLessThan(30.1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  /**
+   * Le contenant d'un lieu PERMANENT échappe à la borne : il est créé une
+   * fois, sa date ne veut rien dire, et il porte le lien de commande d'un
+   * restaurant ouvert tous les jours. Le couper fermerait leur vente.
+   */
+  it('laisse passer le contenant d’un lieu permanent, quelle que soit sa date', async () => {
+    await makeController().search(undefined, 'stade');
+
+    const appel = prisma.venue.findMany.mock.calls.at(-1)?.[0] as {
+      select: { events: { where: { OR: unknown[] } } };
+    };
+    expect(appel.select.events.where.OR).toContainEqual({ isPermanentContainer: true });
+  });
+});
