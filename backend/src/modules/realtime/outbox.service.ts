@@ -127,11 +127,48 @@ export class OutboxService {
       return { rejoues: 0, abandonnes: 0 };
     }
 
-    const enAttente = await this.prisma.realtimeOutbox.findMany({
-      where: { deliveredAt: null, attempts: { lt: OutboxService.ESSAIS_MAX } },
-      orderBy: { createdAt: 'asc' },
-      take: OutboxService.PAR_PASSAGE,
-    });
+    /**
+     * RÉSERVER AVANT DE LIRE — sinon deux instances rejouent la même ligne.
+     *
+     * Chaque réplique exécute ce cron. Un `findMany` tout simple leur rend à
+     * toutes les mêmes lignes en attente : elles émettent toutes, et le
+     * comptoir voit la même commande arriver deux fois. L'`eventId` permet à
+     * un client de reconnaître le doublon, mais compter là-dessus, c'est
+     * supposer que TOUS les consommateurs dédupliquent correctement.
+     *
+     * `FOR UPDATE SKIP LOCKED` règle cela dans la base elle-même : chaque
+     * instance verrouille les lignes qu'elle prend, et les autres SAUTENT
+     * celles-là au lieu d'attendre. Deux ouvriers se partagent donc la file
+     * sans se marcher dessus, et sans se bloquer l'un l'autre.
+     *
+     * L'essai est compté AU MOMENT DE LA RÉSERVATION, pas après l'émission :
+     * un ouvrier qui meurt entre les deux a quand même consommé son essai.
+     * Sans cela, une ligne qui fait tomber son ouvrier serait reprise sans
+     * fin, par toutes les instances, à chaque passage.
+     */
+    const enAttente = await this.prisma.$queryRaw<
+      {
+        id: string;
+        event_id: string;
+        event_name: string;
+        rooms: string[];
+        payload: unknown;
+        attempts: number;
+      }[]
+    >`
+      UPDATE "realtime_outbox"
+         SET attempts = attempts + 1
+       WHERE id IN (
+         SELECT id
+           FROM "realtime_outbox"
+          WHERE delivered_at IS NULL
+            AND attempts < ${OutboxService.ESSAIS_MAX}
+          ORDER BY created_at ASC
+          LIMIT ${OutboxService.PAR_PASSAGE}
+            FOR UPDATE SKIP LOCKED
+       )
+   RETURNING id, event_id, event_name, rooms, payload, attempts
+    `;
     if (enAttente.length === 0) return { rejoues: 0, abandonnes: 0 };
 
     let rejoues = 0;
@@ -139,20 +176,21 @@ export class OutboxService {
 
     for (const ligne of enAttente) {
       try {
-        for (const salon of ligne.rooms) server.to(salon).emit(ligne.eventName, ligne.payload);
+        for (const salon of ligne.rooms) server.to(salon).emit(ligne.event_name, ligne.payload);
+        // L'essai est deja compte par la reservation : on ne marque ici que
+        // l'aboutissement.
         await this.prisma.realtimeOutbox.update({
           where: { id: ligne.id },
-          data: { deliveredAt: new Date(), attempts: { increment: 1 }, lastError: null },
+          data: { deliveredAt: new Date(), lastError: null },
         });
         rejoues += 1;
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
-        const essais = ligne.attempts + 1;
         await this.prisma.realtimeOutbox.update({
           where: { id: ligne.id },
-          data: { attempts: essais, lastError: message.slice(0, 500) },
+          data: { lastError: message.slice(0, 500) },
         });
-        if (essais >= OutboxService.ESSAIS_MAX) abandonnes += 1;
+        if (ligne.attempts >= OutboxService.ESSAIS_MAX) abandonnes += 1;
       }
     }
 

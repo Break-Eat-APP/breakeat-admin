@@ -14,16 +14,18 @@ import type { PrismaService } from '../../database/prisma.service';
  * s'afficher.**
  */
 describe('OutboxService — le rattrapage', () => {
+  /**
+   * Une ligne telle que la RÉSERVATION la rend : c'est du SQL brut
+   * (`FOR UPDATE SKIP LOCKED`), donc des colonnes en snake_case et non les
+   * champs du client Prisma.
+   */
   const ligne = (over: Record<string, unknown> = {}) => ({
     id: 'l-1',
-    eventId: 'ev-uuid-1',
-    eventName: 'new_order',
+    event_id: 'ev-uuid-1',
+    event_name: 'new_order',
     rooms: ['organization:org-1', 'supplier:buvette-nord'],
     payload: { eventId: 'ev-uuid-1', orderId: 'o-1' },
-    createdAt: new Date('2026-10-27T10:00:00Z'),
-    deliveredAt: null,
-    attempts: 0,
-    lastError: null,
+    attempts: 1,
     ...over,
   });
 
@@ -31,9 +33,16 @@ describe('OutboxService — le rattrapage', () => {
     const emis: string[] = [];
     const maj: { where: unknown; data: Record<string, unknown> }[] = [];
 
+    const sql: string[] = [];
     const prisma = {
+      // La reservation passe par du SQL brut : c'est la seule facon d'obtenir
+      // `FOR UPDATE SKIP LOCKED`, donc deux instances qui se partagent la file
+      // au lieu de rejouer les memes lignes.
+      $queryRaw: jest.fn((morceaux: TemplateStringsArray) => {
+        sql.push(morceaux.join(' '));
+        return Promise.resolve(lignes);
+      }),
       realtimeOutbox: {
-        findMany: jest.fn().mockResolvedValue(lignes),
         update: jest.fn((a: { where: unknown; data: Record<string, unknown> }) => {
           maj.push(a);
           return Promise.resolve({});
@@ -62,6 +71,7 @@ describe('OutboxService — le rattrapage', () => {
       prisma,
       emis,
       maj,
+      sql,
     };
   }
 
@@ -88,10 +98,8 @@ describe('OutboxService — le rattrapage', () => {
     const charge = { eventId: 'ev-uuid-1', orderId: 'o-1', status: 'PAID' };
     const recus: unknown[] = [];
     const prisma = {
-      realtimeOutbox: {
-        findMany: jest.fn().mockResolvedValue([ligne({ payload: charge })]),
-        update: jest.fn().mockResolvedValue({}),
-      },
+      $queryRaw: jest.fn().mockResolvedValue([ligne({ payload: charge })]),
+      realtimeOutbox: { update: jest.fn().mockResolvedValue({}) },
     };
     const gateway = {
       server: { to: () => ({ emit: (_n: string, c: unknown) => recus.push(c) }) },
@@ -118,21 +126,41 @@ describe('OutboxService — le rattrapage', () => {
    * L'ORDRE COMPTE. Un `order_updated` rejoué avant son `new_order`
    * afficherait une commande qui avance avant d'exister.
    */
-  it('lit les plus anciennes d’abord, et seulement les non livrées', async () => {
-    const { service, prisma } = monter([ligne()]);
+  /**
+   * LA RÉSERVATION EST CE QUI REND DEUX INSTANCES POSSIBLES.
+   *
+   * Chaque réplique exécute ce cron. Une simple lecture leur rendrait à
+   * toutes les mêmes lignes : le comptoir verrait la commande arriver deux
+   * fois. `FOR UPDATE SKIP LOCKED` fait que chacune prend des lignes que les
+   * autres sautent — sans attendre, sans doublon.
+   */
+  it('RÉSERVE les lignes au lieu de les lire — SKIP LOCKED', async () => {
+    const { service, sql } = monter([ligne()]);
 
     await service.rejouer();
 
-    const appel = prisma.realtimeOutbox.findMany.mock.calls[0][0] as {
-      where: { deliveredAt: null; attempts: { lt: number } };
-      orderBy: { createdAt: string };
-      take: number;
-    };
-    expect(appel.where.deliveredAt).toBeNull();
-    expect(appel.orderBy.createdAt).toBe('asc');
-    // Borné : après une coupure d'une heure il peut y en avoir des milliers,
-    // et les envoyer toutes d'un coup ferait tomber les sockets vivantes.
-    expect(appel.take).toBeGreaterThan(0);
+    const requete = sql[0].replace(/\s+/g, ' ');
+    expect(requete).toContain('FOR UPDATE SKIP LOCKED');
+    // Réserver, c'est ÉCRIRE : un simple SELECT ne verrouille rien au-delà
+    // de la transaction implicite.
+    expect(requete).toContain('UPDATE');
+    expect(requete).toContain('attempts = attempts + 1');
+  });
+
+  /**
+   * L'ORDRE COMPTE. Un `order_updated` rejoué avant son `new_order`
+   * afficherait une commande qui avance avant d'exister. Et on ne reprend
+   * que ce qui n'est pas livré, sinon on rejouerait toute l'histoire.
+   */
+  it('prend les plus anciennes, et seulement les non livrées', async () => {
+    const { service, sql } = monter([ligne()]);
+
+    await service.rejouer();
+
+    const requete = sql[0].replace(/\s+/g, ' ');
+    expect(requete).toContain('delivered_at IS NULL');
+    expect(requete).toContain('ORDER BY created_at ASC');
+    expect(requete).toContain('LIMIT');
   });
 
   // ─── Quand ça rate encore ───────────────────────────────────────
@@ -147,8 +175,12 @@ describe('OutboxService — le rattrapage', () => {
     const bilan = await service.rejouer();
 
     expect(bilan.rejoues).toBe(0);
+    // Ne PAS marquer livré est tout l'enjeu : la ligne resterait invisible
+    // de l'ouvrier, et la table donnerait l'illusion que tout est parti.
     expect(maj[0].data.deliveredAt).toBeUndefined();
-    expect(maj[0].data.attempts).toBe(1);
+    // L'essai a déjà été compté par la RÉSERVATION. Le recompter ici le
+    // doublerait — et une ligne serait abandonnée deux fois plus vite.
+    expect(maj[0].data.attempts).toBeUndefined();
     expect(maj[0].data.lastError).toContain('Redis injoignable');
   });
 
@@ -158,7 +190,9 @@ describe('OutboxService — le rattrapage', () => {
    * c'est alors TOUT le rattrapage qui s'arrête.
    */
   it('abandonne après dix essais, et le dit fort', async () => {
-    const { service } = monter([ligne({ attempts: 9 })], true);
+    // 10 et non 9 : la réservation a déjà compté cet essai avant de rendre
+    // la ligne. C'est donc le dixième, et le dernier.
+    const { service } = monter([ligne({ attempts: 10 })], true);
     const journal = jest
       .spyOn((service as unknown as { logger: { error: () => void } }).logger, 'error')
       .mockImplementation(() => undefined);
@@ -175,7 +209,7 @@ describe('OutboxService — le rattrapage', () => {
    * couvre. Les lignes attendent ; rien n'est consommé, rien n'est perdu.
    */
   it('ne touche à rien quand la passerelle n’est pas prête', async () => {
-    const prisma = { realtimeOutbox: { findMany: jest.fn(), update: jest.fn() } };
+    const prisma = { $queryRaw: jest.fn(), realtimeOutbox: { update: jest.fn() } };
 
     const bilan = await new OutboxService(
       prisma as unknown as PrismaService,
@@ -183,7 +217,7 @@ describe('OutboxService — le rattrapage', () => {
     ).rejouer();
 
     expect(bilan).toEqual({ rejoues: 0, abandonnes: 0 });
-    expect(prisma.realtimeOutbox.findMany).not.toHaveBeenCalled();
+    expect(prisma.$queryRaw).not.toHaveBeenCalled();
   });
 
   it('ne fait rien quand il n’y a rien à rejouer', async () => {

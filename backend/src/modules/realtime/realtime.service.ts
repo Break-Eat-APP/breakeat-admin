@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { RealtimeGateway } from './realtime.gateway';
 import { OutboxService } from './outbox.service';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 
 // ─── Payload types (from REALTIME_CONTRACTS.md) ─────────────────
@@ -59,6 +60,14 @@ export interface CustomerArrivedPayload {
  *   order_updated → order + organization + event rooms
  *   order_ready   → order + pickup-point + organization + event rooms
  */
+/** Une annonce prête à partir : son enveloppe, et les salons qu'elle vise. */
+export interface EmissionPreparee {
+  eventId: string;
+  eventName: string;
+  rooms: string[];
+  payload: unknown;
+}
+
 @Injectable()
 export class RealtimeService {
   private readonly logger = new Logger(RealtimeService.name);
@@ -69,6 +78,62 @@ export class RealtimeService {
     private readonly prisma: PrismaService,
   ) {}
 
+  /**
+   * UNE ÉMISSION PRÉPARÉE, avant tout envoi et avant toute écriture.
+   *
+   * C'est ce qui permet de DÉPOSER la ligne dans la transaction métier, puis
+   * de publier une fois le commit passé. Sans cette séparation, le dépôt a
+   * lieu après le commit — et il reste une fenêtre, étroite mais réelle, où
+   * la commande existe et l'annonce n'existe pas.
+   */
+  preparer(salons: string[], nom: string, enveloppe: { eventId: string }): EmissionPreparee {
+    return { eventId: enveloppe.eventId, eventName: nom, rooms: salons, payload: enveloppe };
+  }
+
+  /**
+   * Dépose l'annonce DANS la transaction de l'appelant.
+   *
+   * Elle tombe ou passe avec la commande : il devient impossible d'avoir une
+   * commande sans annonce rejouable. C'est la seule façon de tenir la
+   * promesse « rien ne se perd pour l'opérateur ».
+   */
+  deposer(tx: Prisma.TransactionClient, annonce: EmissionPreparee): Promise<unknown> {
+    return this.outbox.deposer(tx, annonce);
+  }
+
+  /**
+   * Publie une annonce DÉJÀ déposée — après le commit.
+   *
+   * Ne dépose rien : la ligne existe. N'attend rien non plus, et ne lève
+   * jamais : l'appelant vient d'encaisser, et l'ouvrier rattrapera.
+   */
+  publier(annonce: EmissionPreparee): void {
+    void this.emettrePuisMarquer(annonce);
+  }
+
+  private async emettrePuisMarquer(annonce: EmissionPreparee): Promise<void> {
+    try {
+      const { server } = this.gateway;
+      if (!server) {
+        this.logger.warn(
+          `${annonce.eventName} non diffuse : passerelle pas encore prete. ` +
+            `Deja depose — rejoue dans la minute.`,
+        );
+        return;
+      }
+      for (const salon of annonce.rooms) {
+        server.to(salon).emit(annonce.eventName, annonce.payload);
+      }
+    } catch (e) {
+      this.logger.error(
+        `${annonce.eventName} non diffuse : ${e instanceof Error ? e.message : String(e)}. ` +
+          `Deja depose — rejoue dans la minute.`,
+      );
+      return;
+    }
+    // Marquer APRÈS, jamais avant : marquer puis rater perdrait l'annonce.
+    await this.outbox.marquerLivre(annonce.eventId);
+  }
   /**
    * DIFFUSER NE DOIT JAMAIS CASSER CE QUI VIENT D'ETRE FAIT.
    *
@@ -98,29 +163,25 @@ export class RealtimeService {
    * seconde pres.
    */
   private diffuser(salons: string[], nom: string, enveloppe: { eventId: string }): void {
+    this.diffuserAnnonce(this.preparer(salons, nom, enveloppe));
+  }
+
+  private diffuserAnnonce(annonce: EmissionPreparee): void {
     // Fire-and-forget ASSUME : l'appelant vient d'encaisser, il n'attend
     // pas que l'ecran soit prevenu pour lui rendre la main. Tout est
     // rattrape a l'interieur — rien ne remonte, et l'outbox garantit que
     // l'evenement finira par arriver meme si tout echoue ici.
-    void this.deposerPuisDiffuser(salons, nom, enveloppe);
+    void this.deposerPuisDiffuser(annonce);
   }
 
-  private async deposerPuisDiffuser(
-    salons: string[],
-    nom: string,
-    enveloppe: { eventId: string },
-  ): Promise<void> {
+  private async deposerPuisDiffuser(annonce: EmissionPreparee): Promise<void> {
+    const { rooms: salons, eventName: nom, payload: enveloppe } = annonce;
     // 1. DEPOSER D'ABORD. C'est cette ligne qui transforme une emission
     //    perdue en emission differee. Si elle echoue, on tente quand meme
     //    l'emission immediate : sans filet, mais pas sans rien.
     let depose = false;
     try {
-      await this.outbox.deposer(this.prisma, {
-        eventId: enveloppe.eventId,
-        eventName: nom,
-        rooms: salons,
-        payload: enveloppe,
-      });
+      await this.outbox.deposer(this.prisma, annonce);
       depose = true;
     } catch (e) {
       this.logger.error(
@@ -154,11 +215,11 @@ export class RealtimeService {
     //    l'ouvrier rejouera : un doublon, que l'`eventId` rend
     //    reconnaissable. L'inverse — marquer avant d'emettre — perdrait
     //    l'evenement en silence.
-    if (depose) await this.outbox.marquerLivre(enveloppe.eventId);
+    if (depose) await this.outbox.marquerLivre(annonce.eventId);
   }
 
   /** Emitted once after Order is created from a successful PaymentIntent. */
-  emitNewOrder(payload: NewOrderPayload): void {
+  preparerNewOrder(payload: NewOrderPayload): EmissionPreparee {
     const envelope = {
       eventName: 'new_order',
       eventId: randomUUID(), // realtime dedup UUID — not the concert event id
@@ -172,7 +233,7 @@ export class RealtimeService {
       status: 'PAID',
     };
 
-    this.diffuser(
+    return this.preparer(
       [
         `organization:${payload.organizationId}`,
         `event:${payload.eventId}`,
@@ -184,7 +245,7 @@ export class RealtimeService {
   }
 
   /** Emitted after every successful state transition. */
-  emitOrderUpdated(payload: OrderUpdatedPayload): void {
+  preparerOrderUpdated(payload: OrderUpdatedPayload): EmissionPreparee {
     const envelope = {
       eventName: 'order_updated',
       eventId: randomUUID(),
@@ -196,7 +257,7 @@ export class RealtimeService {
       reason: payload.reason ?? null,
     };
 
-    this.diffuser(
+    return this.preparer(
       [
         `order:${payload.orderId}`,
         `organization:${payload.organizationId}`,
@@ -212,6 +273,30 @@ export class RealtimeService {
     );
   }
 
+  /**
+   * LES ÉMETTEURS POST-COMMIT — le chemin historique.
+   *
+   * Ils préparent, déposent et publient d'un seul geste. Le dépôt a donc
+   * lieu JUSTE APRÈS le commit de l'appelant, pas dedans : il reste une
+   * fenêtre de quelques millisecondes où un arrêt brutal perdrait l'annonce.
+   *
+   * Les chemins qui comptent pour le comptoir — création de commande et
+   * changement de statut — n'utilisent plus ces méthodes : ils appellent
+   * `preparer…` puis `deposer(tx, …)` DANS leur transaction, et `publier`
+   * après. Ces émetteurs restent pour ce qui n'a pas de transaction sous la
+   * main, et pour que rien ne casse ailleurs.
+   */
+  emitNewOrder(payload: NewOrderPayload): void {
+    this.diffuserAnnonce(this.preparerNewOrder(payload));
+  }
+
+  emitOrderUpdated(payload: OrderUpdatedPayload): void {
+    this.diffuserAnnonce(this.preparerOrderUpdated(payload));
+  }
+
+  emitOrderReady(payload: OrderReadyPayload): void {
+    this.diffuserAnnonce(this.preparerOrderReady(payload));
+  }
   /**
    * PHASE 19 — le client a appuyé sur « Je suis arrivé ».
    *
@@ -248,7 +333,7 @@ export class RealtimeService {
    * Emitted specifically when an order reaches READY status.
    * Drives the "pickup notification" on the customer app.
    */
-  emitOrderReady(payload: OrderReadyPayload): void {
+  preparerOrderReady(payload: OrderReadyPayload): EmissionPreparee {
     const envelope = {
       eventName: 'order_ready',
       eventId: randomUUID(),
@@ -258,7 +343,7 @@ export class RealtimeService {
       pickupPointId: payload.pickupPointId,
     };
 
-    this.diffuser(
+    return this.preparer(
       [
         `order:${payload.orderId}`,
         `pickup-point:${payload.pickupPointId}`,

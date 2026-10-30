@@ -11,16 +11,41 @@ import type { ThrottlerOptions } from '@nestjs/throttler';
  *
  * D'où deux compteurs :
  *
- *   • `ip` — large (600 requêtes par minute). Il n'attrape qu'un vrai déluge,
- *     un script, jamais une foule ;
+ *   • `ip` — un COUPE-CIRCUIT, pas un contrôle fin (voir plus bas) ;
  *   • `adresse` — serré (8 tentatives par quart d'heure), et compté par ADRESSE
  *     E-MAIL. Il ne s'applique qu'aux requêtes qui portent une adresse ET qui
  *     visent une route d'authentification. C'est lui qui empêche d'essayer une
  *     liste de mots de passe sur un compte, sans jamais gêner le voisin.
  *
- * Les deux compteurs vivent en mémoire : ils repartent à zéro au redémarrage, et
- * chaque conteneur a le sien. Suffisant tant qu'il n'y en a qu'un ; le jour où
- * l'API se dédouble, il faudra les déporter dans Redis, déjà disponible.
+ * Les compteurs sont partagés via Redis quand `REDIS_URL` est posée
+ * (`limitation-redis.ts`), et retombent en mémoire sinon — par instance, donc
+ * multipliés par leur nombre. C'est dit au démarrage.
+ *
+ * ────────────────────────────────────────────────────────────────────────────
+ * POURQUOI LE COMPTEUR PAR IP NE PEUT PAS PROTÉGER GRAND-CHOSE ICI
+ *
+ * Ce fichier a longtemps affirmé que 600 requêtes par minute « n'attrapent
+ * qu'un script, jamais une foule ». **C'était faux**, et la revérification du
+ * 27/10 l'a démontré : dix mille supporters derrière le wifi d'un stade
+ * partagent UNE SEULE adresse publique. À une requête chacun dans la même
+ * minute, six cents passent et neuf mille quatre cents reçoivent un refus —
+ * au coup d'envoi, c'est-à-dire au pire moment possible.
+ *
+ * Et le problème n'a pas de bon réglage : toute limite assez basse pour
+ * arrêter un script est assez basse pour casser un stade. Compter par COMPTE
+ * plutôt que par adresse ne se peut pas non plus — ce garde est global et
+ * s'exécute AVANT l'authentification, qui est posée route par route : il n'y a
+ * pas encore d'utilisateur à lire.
+ *
+ * Alors on arrête de prétendre. Le compteur par IP devient un COUPE-CIRCUIT :
+ * assez haut pour qu'aucun lieu réel ne le touche, assez bas pour qu'une
+ * machine emballée finisse par s'arrêter. La vraie défense contre un déni de
+ * service se pose EN AMONT de l'application — chez l'hébergeur, pas dans le
+ * processus qu'on cherche à protéger.
+ *
+ * Ce qui protège vraiment un compte reste le second compteur, qui suit
+ * l'ADRESSE E-MAIL et se moque de l'IP : huit essais par quart d'heure, et
+ * dix mille supporters n'y changent rien.
  */
 
 /** Les routes où essayer des mots de passe a un sens. */
@@ -50,12 +75,34 @@ export function concerneUneAuthentification(req: RequeteLue): boolean {
   return ROUTES_SENSIBLES.test(url) && adresseDeLaRequete(req) !== null;
 }
 
+/**
+ * Le plafond du coupe-circuit, par minute et par adresse IP.
+ *
+ * Trente mille : un grand stade au coup d'envoi — quelques milliers de
+ * téléphones qui chargent leur écran en même temps — reste très en dessous,
+ * tandis qu'une machine qui tire cinq cents requêtes par seconde le franchit
+ * en une minute. Ce n'est pas une protection fine, et ça ne prétend plus
+ * l'être.
+ *
+ * RÉGLABLE SANS REDÉPLOYER, par `LIMITE_IP_PAR_MINUTE`. Un soir de match, on
+ * ne veut pas attendre cinq minutes de build pour desserrer un étau qui
+ * étrangle une buvette — c'est le même raisonnement que l'interrupteur de
+ * l'ardoise. Une valeur illisible ou absurde retombe sur le défaut plutôt que
+ * d'ouvrir en grand ou de tout fermer.
+ */
+export const LIMITE_IP_DEFAUT = 30_000;
+
+export function limiteIp(brut = process.env.LIMITE_IP_PAR_MINUTE): number {
+  const n = Number(brut);
+  return Number.isInteger(n) && n > 0 ? n : LIMITE_IP_DEFAUT;
+}
+
 /** Les deux compteurs, tels que le module les reçoit. */
 export const COMPTEURS: ThrottlerOptions[] = [
   {
     name: 'ip',
     ttl: 60_000,
-    limit: 600,
+    limit: limiteIp(),
   },
   {
     name: 'adresse',

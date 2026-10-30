@@ -86,6 +86,27 @@ describe('OrdersService', () => {
   };
   const transactionMock = jest.fn();
 
+  /**
+   * LA TRANSACTION S'EXECUTE POUR DE VRAI.
+   *
+   * Elle etait simulee par un `mockResolvedValue([commande, {}])` — la forme
+   * TABLEAU. La transition est passee en forme interactive, parce qu'il lui
+   * faut un client transactionnel a passer au depot de l'outbox : c'est ce
+   * depot, tombant ou passant AVEC le changement de statut, qui garantit
+   * qu'une commande avancee ne peut pas rester inconnue du comptoir.
+   *
+   * Executer le rappel plutot que de le court-circuiter est ce qui rend le
+   * test honnete : si le service oubliait de deposer, on le verrait.
+   */
+  const transactionRend = (commande: unknown, uneSeuleFois = false) => {
+    const rappel = async (cb: (tx: unknown) => Promise<unknown>) => cb(prisma);
+    if (uneSeuleFois) transactionMock.mockImplementationOnce(rappel);
+    else transactionMock.mockImplementation(rappel);
+    const maj = prisma.order.update as jest.Mock;
+    if (uneSeuleFois) maj.mockResolvedValueOnce(commande);
+    else maj.mockResolvedValue(commande);
+  };
+
   beforeEach(async () => {
     transactionMock.mockReset();
 
@@ -101,6 +122,23 @@ describe('OrdersService', () => {
             emitNewOrder: jest.fn(),
             emitOrderUpdated: jest.fn(),
             emitOrderReady: jest.fn(),
+            // Depuis le 30/10, la transition PREPARE son annonce, la DEPOSE
+            // dans la transaction, puis la PUBLIE apres le commit. Le double
+            // rend une annonce reconnaissable a son `eventName`.
+            preparerOrderUpdated: jest.fn((p: unknown) => ({
+              eventId: 'ev-maj',
+              eventName: 'order_updated',
+              rooms: [],
+              payload: p,
+            })),
+            preparerOrderReady: jest.fn((p: unknown) => ({
+              eventId: 'ev-prete',
+              eventName: 'order_ready',
+              rooms: [],
+              payload: p,
+            })),
+            deposer: jest.fn().mockResolvedValue(undefined),
+            publier: jest.fn(),
           },
         },
         {
@@ -875,7 +913,7 @@ describe('OrdersService', () => {
       const acceptedOrder = { ...paidOrder, status: OrderStatus.ACCEPTED };
       (prisma.order.findUnique as jest.Mock).mockResolvedValue(paidOrder);
       // $transaction array form — resolves to [updatedOrder, auditEntry]
-      transactionMock.mockResolvedValue([acceptedOrder, {}]);
+      transactionRend(acceptedOrder);
 
       const result = await service.transition(
         ORDER_ID,
@@ -891,12 +929,12 @@ describe('OrdersService', () => {
 
     it('emits order_updated realtime event AFTER transaction commit (outbox rule)', async () => {
       (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.PAID));
-      transactionMock.mockResolvedValue([mockOrder(OrderStatus.ACCEPTED), {}]);
+      transactionRend(mockOrder(OrderStatus.ACCEPTED));
 
       await service.transition(ORDER_ID, OrderStatus.ACCEPTED, OrderActorType.OPERATOR, USER_ID, 'ok');
 
-      // Must emit AFTER $transaction — verify called with correct payload
-      expect(realtime.emitOrderUpdated).toHaveBeenCalledWith(
+      // L'annonce porte bien la transition…
+      expect(realtime.preparerOrderUpdated).toHaveBeenCalledWith(
         expect.objectContaining({
           orderId: ORDER_ID,
           previousStatus: OrderStatus.PAID,
@@ -905,20 +943,30 @@ describe('OrdersService', () => {
           reason: 'ok',
         }),
       );
-      // order_ready NOT emitted for ACCEPTED
-      expect(realtime.emitOrderReady).not.toHaveBeenCalled();
+      // … elle est DEPOSEE dans la transaction…
+      expect(realtime.deposer).toHaveBeenCalledTimes(1);
+      // … et publiee apres le commit.
+      expect(realtime.publier).toHaveBeenCalledWith(
+        expect.objectContaining({ eventName: 'order_updated' }),
+      );
+      // Rien sur « prete » pour un passage a ACCEPTED.
+      expect(realtime.preparerOrderReady).not.toHaveBeenCalled();
     });
 
     it('emits order_ready in addition to order_updated when transitioning to READY', async () => {
       (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.PREPARING));
-      transactionMock.mockResolvedValue([mockOrder(OrderStatus.READY), {}]);
+      transactionRend(mockOrder(OrderStatus.READY));
 
       await service.transition(ORDER_ID, OrderStatus.READY, OrderActorType.OPERATOR, USER_ID);
 
-      expect(realtime.emitOrderUpdated).toHaveBeenCalledTimes(1);
-      expect(realtime.emitOrderReady).toHaveBeenCalledWith(
+      expect(realtime.preparerOrderUpdated).toHaveBeenCalledTimes(1);
+      expect(realtime.preparerOrderReady).toHaveBeenCalledWith(
         expect.objectContaining({ orderId: ORDER_ID }),
       );
+      // DEUX annonces, deposees ensemble dans la MEME transaction : une
+      // commande prete ne peut pas etre annoncee a moitie.
+      expect(realtime.deposer).toHaveBeenCalledTimes(2);
+      expect(realtime.publier).toHaveBeenCalledTimes(2);
     });
 
     it('does NOT emit realtime when transition is invalid (guard fires first)', async () => {
@@ -928,7 +976,7 @@ describe('OrdersService', () => {
         service.transition(ORDER_ID, OrderStatus.PAID, OrderActorType.OPERATOR, USER_ID),
       ).rejects.toThrow(BadRequestException);
 
-      expect(realtime.emitOrderUpdated).not.toHaveBeenCalled();
+      expect(realtime.publier).not.toHaveBeenCalled();
     });
 
     it('throws NotFoundException when order does not exist', async () => {
@@ -960,17 +1008,35 @@ describe('OrdersService', () => {
       expect(transactionMock).not.toHaveBeenCalled();
     });
 
-    it('runs order update + audit trail in ONE $transaction (array form)', async () => {
+    /**
+     * TOUT DANS LA MEME TRANSACTION — le statut, la trace, ET l'annonce.
+     *
+     * C'etait une transaction en forme TABLEAU, de deux operations. Elle est
+     * passee en forme interactive pour une raison precise : deposer l'annonce
+     * de l'outbox demande un client transactionnel. Depose dedans, elle tombe
+     * ou passe AVEC le changement de statut — et il devient impossible
+     * d'avoir une commande avancee dont le comptoir n'entendra jamais parler.
+     */
+    it('depose l’annonce DANS la transaction du changement de statut', async () => {
       (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.PAID));
-      transactionMock.mockResolvedValue([mockOrder(OrderStatus.ACCEPTED), {}]);
+      const dedans: string[] = [];
+      (realtime.deposer as jest.Mock).mockImplementation(() => {
+        dedans.push('depot');
+        return Promise.resolve();
+      });
+      transactionMock.mockImplementation(async (cb: (tx: unknown) => Promise<unknown>) => {
+        const r = await cb(prisma);
+        dedans.push('commit');
+        return r;
+      });
+      (prisma.order.update as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.ACCEPTED));
 
       await service.transition(ORDER_ID, OrderStatus.ACCEPTED, OrderActorType.OPERATOR, USER_ID);
 
-      // $transaction called once with an array of exactly 2 operations
       expect(transactionMock).toHaveBeenCalledTimes(1);
-      const [ops] = transactionMock.mock.calls[0];
-      expect(Array.isArray(ops)).toBe(true);
-      expect(ops).toHaveLength(2);
+      // L'ordre est toute la garantie : depose AVANT le commit.
+      expect(dedans).toEqual(['depot', 'commit']);
+      expect(prisma.orderAuditTrail.create).toHaveBeenCalledTimes(1);
     });
 
     it('traces full PAID → ACCEPTED → PREPARING → READY → PICKED_UP → COMPLETED chain', async () => {
@@ -987,7 +1053,7 @@ describe('OrdersService', () => {
         const from = chain[i];
         const to = chain[i + 1];
         (prisma.order.findUnique as jest.Mock).mockResolvedValueOnce(mockOrder(from));
-        transactionMock.mockResolvedValueOnce([mockOrder(to), {}]);
+        transactionRend(mockOrder(to), true);
 
         const result = await service.transition(ORDER_ID, to, OrderActorType.OPERATOR, USER_ID);
         expect(result.status).toBe(to);
@@ -999,7 +1065,7 @@ describe('OrdersService', () => {
     it('follows PREPARING → RECOVERED → READY recovery path', async () => {
       // Step 1: PREPARING → RECOVERED
       (prisma.order.findUnique as jest.Mock).mockResolvedValueOnce(mockOrder(OrderStatus.PREPARING));
-      transactionMock.mockResolvedValueOnce([mockOrder(OrderStatus.RECOVERED), {}]);
+      transactionRend(mockOrder(OrderStatus.RECOVERED), true);
 
       const step1 = await service.transition(
         ORDER_ID,
@@ -1012,7 +1078,7 @@ describe('OrdersService', () => {
 
       // Step 2: RECOVERED → READY (re-enter flow at any non-terminal point)
       (prisma.order.findUnique as jest.Mock).mockResolvedValueOnce(mockOrder(OrderStatus.RECOVERED));
-      transactionMock.mockResolvedValueOnce([mockOrder(OrderStatus.READY), {}]);
+      transactionRend(mockOrder(OrderStatus.READY), true);
 
       const step2 = await service.transition(
         ORDER_ID,

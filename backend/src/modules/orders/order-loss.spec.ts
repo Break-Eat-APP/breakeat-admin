@@ -55,7 +55,7 @@ function makeOrder(id: string, status: OrderStatus) {
 let orderStore: ReturnType<typeof makeOrder>[] = [];
 
 function buildPrismaMock() {
-  return {
+  const faux = {
     order: {
       findUnique: jest.fn().mockImplementation(({ where }: { where: { id: string } }) => {
         return Promise.resolve(orderStore.find((o) => o.id === where.id) ?? null);
@@ -84,17 +84,42 @@ function buildPrismaMock() {
     orderAuditTrail: {
       create: jest.fn().mockResolvedValue({}),
     },
-    $transaction: jest.fn().mockImplementation((ops: unknown) => {
-      if (Array.isArray(ops)) return Promise.all(ops);
-      return (ops as (tx: unknown) => Promise<unknown>)(null);
-    }),
+    $transaction: jest.fn(),
   };
+
+  // Posee APRES la construction, et pas dedans : le client transactionnel
+  // est LE MEME magasin, donc la fabrique se designe elle-meme — ce que
+  // TypeScript refuse d'inferer en une fois.
+  //
+  // Pourquoi ce n'est plus `null` : la transition depose desormais son
+  // annonce d'outbox DANS la transaction, et lisait donc `tx.order`. Rendre
+  // le faux prisma reproduit ce que Prisma fait vraiment — un client qui
+  // sait tout faire.
+  faux.$transaction.mockImplementation((ops: unknown) => {
+    if (Array.isArray(ops)) return Promise.all(ops);
+    return (ops as (tx: unknown) => Promise<unknown>)(faux);
+  });
+  return faux;
 }
 
-// Minimal mocks — we don't care about side-effects in these tests
+// Minimal mocks — we don't care about side-effects in these tests.
+//
+// La transition PREPARE son annonce, la DEPOSE dans la transaction puis la
+// PUBLIE apres le commit (outbox, 30/10). Ces tests ne jugent QUE le nombre
+// de commandes : les trois gestes sont doubles, sans rien verifier.
+const annonceDoublee = (p: unknown) => ({
+  eventId: 'ev-test',
+  eventName: 'test',
+  rooms: [],
+  payload: p,
+});
 const realtimeMock = {
   emitOrderUpdated: jest.fn(),
   emitOrderReady: jest.fn(),
+  preparerOrderUpdated: jest.fn(annonceDoublee),
+  preparerOrderReady: jest.fn(annonceDoublee),
+  deposer: jest.fn().mockResolvedValue(undefined),
+  publier: jest.fn(),
 };
 
 const slotsMock = {

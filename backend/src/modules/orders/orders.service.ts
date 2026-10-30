@@ -776,12 +776,49 @@ export class OrdersService {
     // Guard: throws BadRequestException if transition is not in the allowed map
     this.stateMachine.assertTransition(order.status, to);
 
-    const [updated] = await this.prisma.$transaction([
-      this.prisma.order.update({
+    /**
+     * L'ANNONCE EST PRÉPARÉE AVANT, ET DÉPOSÉE DANS LA TRANSACTION.
+     *
+     * Rien de ce qu'elle porte ne change au cours de la transition : le club,
+     * l'événement et la buvette d'une commande sont fixés à sa création. On
+     * peut donc la construire ici, et la faire tomber ou passer AVEC le
+     * changement de statut.
+     *
+     * C'est ce qui ferme la dernière fenêtre : déposée après le commit, elle
+     * laissait quelques millisecondes pendant lesquelles un arrêt brutal
+     * donnait une commande avancée que le comptoir n'apprendrait jamais.
+     */
+    const annonce = this.realtimeService.preparerOrderUpdated({
+      orderId: order.id,
+      organizationId: order.organizationId,
+      eventId: order.eventId,
+      supplierId: order.supplierId,
+      previousStatus: order.status,
+      nextStatus: to,
+      actorType,
+      reason: reason ?? null,
+    });
+    const annoncePrete =
+      to === OrderStatus.READY
+        ? this.realtimeService.preparerOrderReady({
+            orderId: order.id,
+            publicOrderNumber: order.publicOrderNumber,
+            organizationId: order.organizationId,
+            eventId: order.eventId,
+            supplierId: order.supplierId,
+            pickupPointId: order.pickupPointId,
+          })
+        : null;
+
+    // Forme INTERACTIVE et non plus un tableau : il faut un client
+    // transactionnel a passer au depot. Les ecritures sont les memes, et
+    // aussi courtes.
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const apres = await tx.order.update({
         where: { id: orderId },
         data: { status: to },
-      }),
-      this.prisma.orderAuditTrail.create({
+      });
+      await tx.orderAuditTrail.create({
         data: {
           orderId,
           actorType,
@@ -791,35 +828,19 @@ export class OrdersService {
           reason: reason ?? null,
           metadata: {},
         },
-      }),
-    ]);
+      });
+      await this.realtimeService.deposer(tx, annonce);
+      if (annoncePrete) await this.realtimeService.deposer(tx, annoncePrete);
+      return apres;
+    });
 
     this.logger.log(
       `Order ${orderId} transitioned ${order.status} → ${to} by ${actorType}${actorId ? ` (${actorId})` : ''}`,
     );
 
-    // Phase 6.2 — emit realtime AFTER transaction commit (outbox rule)
-    this.realtimeService.emitOrderUpdated({
-      orderId: updated.id,
-      organizationId: updated.organizationId,
-      eventId: updated.eventId,
-      supplierId: updated.supplierId,
-      previousStatus: order.status,
-      nextStatus: to,
-      actorType,
-      reason: reason ?? null,
-    });
-
-    if (to === OrderStatus.READY) {
-      this.realtimeService.emitOrderReady({
-        orderId: updated.id,
-        publicOrderNumber: updated.publicOrderNumber,
-        organizationId: updated.organizationId,
-        eventId: updated.eventId,
-        supplierId: updated.supplierId,
-        pickupPointId: updated.pickupPointId,
-      });
-    }
+    // Deja deposees dans la transaction : on PUBLIE, on ne redepose pas.
+    this.realtimeService.publier(annonce);
+    if (annoncePrete) this.realtimeService.publier(annoncePrete);
 
     // PHASE 21 — Live Activity, SOURCE 1 : le board opérateur fait avancer la
     // commande. Fire-and-forget : un incident d'affichage ne doit jamais

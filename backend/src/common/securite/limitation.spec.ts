@@ -1,4 +1,10 @@
-import { adresseDeLaRequete, concerneUneAuthentification, COMPTEURS } from './limitation';
+import {
+  adresseDeLaRequete,
+  concerneUneAuthentification,
+  COMPTEURS,
+  limiteIp,
+  LIMITE_IP_DEFAUT,
+} from './limitation';
 
 /**
  * Ce que la limitation compte — et surtout ce qu'elle NE doit pas compter.
@@ -86,5 +92,47 @@ describe('Limitation de débit', () => {
       expect(a).toBe('adresse:ana@exemple.fr');
       expect(a).not.toBe(b);
     });
+  });
+});
+
+/**
+ * LE COUPE-CIRCUIT PAR IP — et pourquoi il ne prétend plus protéger.
+ *
+ * Ce fichier affirmait que 600 requêtes par minute « n'attrapent qu'un
+ * script, jamais une foule ». C'était faux : dix mille supporters derrière le
+ * wifi d'un stade partagent UNE adresse publique. À une requête chacun dans
+ * la même minute, six cents passaient et neuf mille quatre cents recevaient
+ * un refus — au coup d'envoi.
+ *
+ * Le seuil est donc monté au niveau d'un coupe-circuit, et surtout il se
+ * règle sans redéployer : un soir de match, desserrer un étau qui étrangle
+ * une buvette ne doit pas attendre cinq minutes de build.
+ */
+describe('le plafond par IP', () => {
+  it('vaut 30 000 par défaut — un grand stade passe, un script non', () => {
+    expect(limiteIp(undefined)).toBe(LIMITE_IP_DEFAUT);
+    expect(LIMITE_IP_DEFAUT).toBe(30_000);
+  });
+
+  it('se règle par variable d’environnement', () => {
+    expect(limiteIp('50000')).toBe(50_000);
+    expect(limiteIp('1200')).toBe(1_200);
+  });
+
+  /**
+   * UNE SAISIE ABSURDE NE DOIT NI OUVRIR EN GRAND NI TOUT FERMER. Un `0`
+   * refuserait toutes les requêtes du lieu ; un texte donnerait `NaN`, que
+   * le limiteur interpréterait n'importe comment. On retombe sur le défaut.
+   */
+  it('retombe sur le défaut quand la valeur est illisible', () => {
+    for (const absurde of ['', '0', '-5', 'beaucoup', '12.5', 'NaN']) {
+      expect(limiteIp(absurde)).toBe(LIMITE_IP_DEFAUT);
+    }
+  });
+
+  it('le compteur ip porte bien ce plafond', () => {
+    const ip = COMPTEURS.find((c) => c.name === 'ip');
+    expect(ip?.limit).toBe(LIMITE_IP_DEFAUT);
+    expect(ip?.ttl).toBe(60_000);
   });
 });
