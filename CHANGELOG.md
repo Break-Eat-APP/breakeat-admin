@@ -5,6 +5,78 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.2.0] — 2026-10-30 — L'outbox, et la revérification Codex (phases 71-73)
+
+**Rien ne doit se perdre pour l'opérateur.** Une commande payée, c'est deux
+gestes : l'écrire en base, et prévenir l'écran de la buvette. Entre les deux,
+un redémarrage ou une passerelle pas encore prête suffisait à ce que le
+comptoir n'en sache jamais rien. La commande existait, encaissée, et personne
+ne la préparait — le client attendait devant une buvette qui ignorait qu'il
+avait commandé.
+
+Chaque émission dépose désormais une ligne dans `realtime_outbox` **avant** de
+partir, et un ouvrier rejoue à la minute tout ce qui n'est pas marqué livré.
+L'ordre est toute la garantie : déposer *après* l'émission laisserait
+exactement le trou qu'on ferme.
+
+**Puis Codex a revérifié, et il avait raison sur trois points.**
+
+**1. Le dépôt n'était pas dans la transaction.** Il subsistait quelques
+millisecondes où la commande existait et l'annonce non. La transition de
+statut prépare maintenant son annonce, la dépose avec `tx`, et publie après le
+commit. La transaction passe de la forme tableau à la forme interactive — il
+faut un client transactionnel à passer au dépôt.
+
+**2. Deux instances rejouaient les mêmes lignes.** Chaque réplique exécute le
+cron ; un simple `findMany` leur rendait à toutes la même file, et le comptoir
+voyait la commande arriver deux fois. `FOR UPDATE SKIP LOCKED` règle cela dans
+la base : chacune verrouille ce qu'elle prend, les autres sautent.
+
+**3. Et le plus dangereux : 600 requêtes/minute par IP cassait les stades.**
+Ce fichier affirmait que ce seuil « n'attrape qu'un script, jamais une foule ».
+C'était faux. Dix mille supporters derrière le wifi d'un stade partagent UNE
+adresse publique : à une requête chacun dans la même minute, six cents passent
+et neuf mille quatre cents sont refusés — au coup d'envoi.
+
+Le problème n'a pas de bon réglage : toute limite assez basse pour arrêter un
+script est assez basse pour casser un lieu. Le compteur par IP devient donc un
+**coupe-circuit** à 30 000/minute, réglable par `LIMITE_IP_PAR_MINUTE` sans
+redéployer. Ce qui protège vraiment un compte reste le compteur par **adresse
+e-mail**, qui se moque de l'IP.
+
+**Deux défauts que ma propre mémoire des salons avait introduits :**
+
+- une autorisation retirée ne prenait effet qu'à la reconnexion — un équipier
+  écarté d'une buvette en voyait les commandes pendant des heures. Un passage
+  à la minute fait désormais **sortir** la socket ;
+- la borne des 30 salons ne tenait pas sous la rafale : quarante demandes
+  simultanées lisaient toutes une taille inférieure à trente. La place se
+  réserve avant l'attente — et une réservation n'est pas une autorisation.
+
+**Avant cela : `/ready`**, qui répond à la question que personne ne pouvait
+poser. `/health` dit « je réponds » ; `/ready` vérifie la base par une vraie
+requête et **nomme les migrations restées en échec** — l'état `P3009` qui a
+coûté deux jours en octobre. Il n'est l'objet d'aucune surveillance
+automatique, et c'est délibéré : Railway continue d'interroger `/health`, sinon
+un hoquet de base ferait tuer un conteneur qui vend très bien.
+
+```
++ backend/prisma/migrations/20261027_outbox_temps_reel/   ← realtime_outbox
++ backend/src/modules/realtime/outbox.service.ts          (+ son spec, 12 cas)
++ backend/src/health/pret.controller.ts                   (+ son spec, 5 cas)
++ backend/src/common/securite/limitation-redis.spec.ts    ← la panne Redis
+~ backend/src/modules/realtime/realtime.service.ts        ← préparer/déposer/publier
+~ backend/src/modules/realtime/realtime.gateway.ts        ← révocation, borne atomique
+~ backend/src/modules/orders/orders.service.ts            ← dépôt DANS la transaction
+~ backend/src/common/securite/limitation.ts               ← coupe-circuit réglable
+~ backend/src/common/securite/limitation-redis.ts         ← repli mémoire en panne
+~ backend/src/modules/order-splits/order-splits.service.ts ← l'ardoise par club
+~ docker-compose.yml, docker-compose.prod.yml             ← postgres 18
+~ apps/{admin,backoffice,operator}/next.config.ts         ← build Vercel sans API = refus
+```
+
+---
+
 ## [1.1.0] — 2026-10-26 — Le calendrier de la saison (phase 70)
 
 **Toucher un lieu menait DIRECTEMENT chez Flaix.** On quittait Break Eat sans

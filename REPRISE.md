@@ -153,6 +153,58 @@ sert plus finit par faire croire qu'il sert.
 > Un second chemin de déploiement ne double pas la fiabilité : il double les
 > endroits où chercher quand ça casse, et personne ne sait lequel a fait quoi.
 
+## 🔎 L'AUDIT CODEX — état au 30/10/2026
+
+Deux documents à la racine : `AUDIT_CHIRURGICAL_REPRISE_2026-10-26.md` (le
+constat) et `REVERIFICATION_AUDIT_2026-10-27.md` (Codex a revérifié son
+propre audit sur le code corrigé). **Le second remplace le premier** pour
+tout ce qu'il revérifie.
+
+### Corrigés — 14
+
+| | |
+|---|---|
+| P1-1 | test d'intégration obsolète — + garde-fou : `test/` était hors du typecheck |
+| P1-3 | une panne Redis coupait les routes protégées |
+| P1-5 | **l'outbox** — plus rien ne se perd pour l'opérateur |
+| P1 (rev.) | le dépôt n'était pas dans la transaction — il l'est |
+| P1 (rev.) | deux instances rejouaient la même ligne — `FOR UPDATE SKIP LOCKED` |
+| P1 (rev.) | **600 req/min par IP cassait les stades** — coupe-circuit réglable |
+| P1 (rev.) | un accès retiré ne coupait qu'à la reconnexion — une minute désormais |
+| P2-1 | l'ardoise ne se coupait que pour tout le monde |
+| P2-2 | une socket pouvait marteler la base sans limite |
+| P2-3 | un super-admin ne pouvait pas écouter une buvette |
+| P2-5 | `/health` ne vérifiait rien — `/ready` le fait |
+| P2-6 | une build Vercel sans adresse d'API partait quand même |
+| P2-7 | Postgres 16 en local, 18 en production |
+| P2 (rev.) | la borne des 30 salons ne tenait pas sous la rafale |
+| P3-3 | `sentAt` posé même sur un échec total |
+
+### Écarté après vérification — 1
+
+**P1-2** : le build de l'app opérateur n'est pas cassé. `turbo build` rend
+5 succès sur 5, et le fichier prétendu introuvable existe. On ne fabrique pas
+un correctif pour un défaut qu'on n'arrive pas à voir.
+
+### Décidé, et assumé — 2
+
+- **`/ready` n'est surveillé par personne, et c'est voulu.** Railway continue
+  d'interroger `/health` : un hoquet de base ne doit pas faire tuer un
+  conteneur qui vend très bien. `/ready` se consulte quand on doute.
+- **« Livré » veut dire « émis », pas « reçu ».** L'outbox garantit que
+  l'émission part ; elle ne prouve pas qu'un navigateur l'a reçue. La
+  relecture REST du tableau de bord reste le filet de ce dernier mètre.
+
+### Toujours ouverts
+
+| | Pourquoi ça attend |
+|---|---|
+| **P2-4** lectures non bornées | l'export CSV appelle la même fonction que l'écran : plafonner tronquerait le fichier client **en silence**. Vraie pagination, backend + interface : une demi-journée propre |
+| **P2** rattrapage à 200/min | 10 000 événements en attente mettraient ~50 min. À mesurer en situation avant de dimensionner |
+| **P2** intégration de l'outbox | les tests sont unitaires. Manquent : rollback métier + outbox ensemble, deux ouvriers concurrents, crash après commit |
+| **P2** charge réelle | 25 000 destinataires validés en écriture ≠ 10 000 clients connectés qui commandent. Aucune affirmation de capacité tant que ce n'est pas mesuré |
+| **P3-1 / P3-2** | dépendances et plugin ESLint Next — cosmétique |
+
 ## 🔓 SUJETS OUVERTS — à reprendre (liste tenue au 01/10/2026)
 
 ## 📅 LE CALENDRIER DE LA SAISON — ÉCRIT le 26/10/2026, à éprouver en vrai
