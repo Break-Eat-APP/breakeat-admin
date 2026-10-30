@@ -161,6 +161,40 @@ export class CartService {
     // panier ouvert avant la suspension ne doit pas pouvoir être réglé après.
     await assertOrganisationOuverte(this.prisma, event.organizationId);
 
+    /**
+     * UN LIEU PASSÉ À FLAIX NE PREND PLUS DE COMMANDE BREAK EAT.
+     *
+     * `flaixEnabled` ne vivait que dans l'écran de découverte : il décidait
+     * où l'application EMMÈNE le client, et nulle part le serveur ne
+     * refusait. Une version ancienne de l'app, un écran resté ouvert, un
+     * appel direct — et un panier Break Eat s'ouvrait sur un lieu dont le
+     * club ne tient plus ni la carte ni les prix. Le client payait des
+     * produits que personne ne lui servirait.
+     *
+     * LA MÊME RÈGLE QUE L'APP, PAS PLUS LARGE. Un lieu basculé mais dont
+     * AUCUN match ne porte encore de lien garde son parcours Break Eat :
+     * c'est ce qui permet au club de préparer sa saison sans couper sa
+     * vente. C'est exactement ce que dit `cheminDeCommande` côté mobile, et
+     * les deux doivent répondre la même chose — sinon l'un des deux ment.
+     */
+    const lieu = await this.prisma.venue.findUnique({
+      where: { id: event.venueId },
+      select: {
+        flaixEnabled: true,
+        // Un seul suffit à prouver que le relais est en service.
+        events: {
+          where: { flaixOrderUrl: { not: null } },
+          select: { id: true },
+          take: 1,
+        },
+      },
+    });
+    if (lieu?.flaixEnabled && lieu.events.length > 0) {
+      throw new BadRequestException(
+        'La commande de ce lieu passe par Flaix — mets à jour l’application.',
+      );
+    }
+
     // Supplier must be attached to this event via the EventSupplier junction.
     const eventSupplier = await this.prisma.eventSupplier.findFirst({
       where: { eventId: dto.eventId, supplierId: dto.supplierId },

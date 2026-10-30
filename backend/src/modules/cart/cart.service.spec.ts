@@ -107,6 +107,14 @@ describe('CartService', () => {
           provide: PrismaService,
           useValue: {
             event: { findUnique: jest.fn() },
+            // UN LIEU PASSE A FLAIX ne prend plus de commande Break Eat.
+            // Par defaut le lieu N'EST PAS bascule : ces tests jugent le
+            // parcours Break Eat, et la regle Flaix a ses propres cas.
+            venue: {
+              findUnique: jest
+                .fn()
+                .mockResolvedValue({ flaixEnabled: false, events: [] }),
+            },
             eventSupplier: { findFirst: jest.fn() },
             pickupPoint: { findUnique: jest.fn(), findFirst: jest.fn().mockResolvedValue(null) },
             cart: {
@@ -217,6 +225,52 @@ describe('CartService', () => {
       await expect(
         service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID }),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    // ─── Un lieu passé à Flaix ────────────────────────────────
+
+    /**
+     * `flaixEnabled` ne vivait QUE dans l'écran de découverte : il décidait
+     * où l'application emmène le client, et nulle part le serveur ne
+     * refusait. Une version ancienne de l'app, un écran resté ouvert, un
+     * appel direct — et un panier Break Eat s'ouvrait sur un lieu dont le
+     * club ne tient plus ni la carte ni les prix. Le client payait des
+     * produits que personne ne lui servirait.
+     */
+    it('REFUSE un panier sur un lieu passé à Flaix', async () => {
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
+      (prisma.venue.findUnique as jest.Mock).mockResolvedValue({
+        flaixEnabled: true,
+        events: [{ id: 'un-match-avec-lien' }],
+      });
+
+      await expect(
+        service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID }),
+      ).rejects.toThrow(/Flaix/);
+    });
+
+    /**
+     * LA MÊME RÈGLE QUE L'APP, PAS PLUS LARGE.
+     *
+     * Un lieu basculé mais dont AUCUN match ne porte encore de lien garde son
+     * parcours Break Eat — c'est ce qui permet au club de préparer sa saison
+     * sans couper sa vente du soir. `cheminDeCommande` dit exactement cela
+     * côté mobile ; si le serveur était plus strict, un club en cours de
+     * configuration se retrouverait sans aucun moyen de vendre.
+     */
+    it('laisse passer un lieu basculé dont AUCUN match n’a encore de lien', async () => {
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
+      (prisma.venue.findUnique as jest.Mock).mockResolvedValue({
+        flaixEnabled: true,
+        events: [],
+      });
+      (prisma.eventSupplier.findFirst as jest.Mock).mockResolvedValue({ id: 'es-1' });
+
+      // Il ne doit PAS être refusé pour cause de Flaix. Ce qui l'arrête
+      // ensuite, c'est le reste du parcours, pas le relais.
+      await expect(
+        service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID }),
+      ).rejects.not.toThrow(/Flaix/);
     });
 
     it('rejects when supplier is not attached to the event', async () => {
