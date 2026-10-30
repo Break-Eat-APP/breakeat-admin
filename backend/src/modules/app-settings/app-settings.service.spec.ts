@@ -12,6 +12,10 @@ const prisma = {
     findFirst: jest.fn(),
     findMany: jest.fn(),
     upsert: jest.fn(),
+    // La portee GLOBALE ne passe PAS par `upsert` : Prisma refuse un `null`
+    // dans une cle composee. Elle lit, puis cree ou met a jour par `id`.
+    create: jest.fn(),
+    update: jest.fn(),
     delete: jest.fn(),
   },
 };
@@ -118,9 +122,15 @@ describe('AppSettingsService', () => {
   // ─── set ──────────────────────────────────────────────────────
 
   describe('set', () => {
-    it('upserts a global setting', async () => {
+    /**
+     * Meme defaut, meme correctif que les flags. La verite est dans
+     * `test/integration/interrupteurs-globaux.int-spec.ts` : une doublure de
+     * `upsert` accepte un `null` que Prisma refuse au runtime.
+     */
+    it('cree un reglage global par lecture-puis-ecriture, pas par upsert', async () => {
       const setting = makeSetting({ value: 42 });
-      (prisma.appSetting.upsert as jest.Mock).mockResolvedValue(setting);
+      (prisma.appSetting.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.appSetting.create as jest.Mock).mockResolvedValue(setting);
 
       const result = await service.set({
         key: 'banner_message',
@@ -129,7 +139,10 @@ describe('AppSettingsService', () => {
       });
 
       expect(result.key).toBe('banner_message');
-      expect(prisma.appSetting.upsert).toHaveBeenCalledTimes(1);
+      expect(prisma.appSetting.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ key: 'banner_message', scopeId: null }),
+      });
+      expect(prisma.appSetting.upsert).not.toHaveBeenCalled();
     });
 
     it('upserts an event-scoped setting', async () => {

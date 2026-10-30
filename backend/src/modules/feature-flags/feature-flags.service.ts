@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { FlagScope, Prisma } from '@prisma/client';
+import { FlagScope, Prisma, type FeatureFlag } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { requireScopedAccess, filterScopedRows } from '../../common/helpers/scoped-setting-access';
+import { poserSurLaPortee, type TableAPortee } from '../../common/helpers/poser-portee';
 import type { SetFeatureFlagDto } from './dto/set-feature-flag.dto';
 
 /**
@@ -149,14 +150,20 @@ export class FeatureFlagsService {
       throw new BadRequestException('scopeId is required when scope is ORGANIZATION or EVENT');
     }
 
-    // scopeId is null for GLOBAL flags. Cast needed because Prisma's generated
-    // compound-unique where type lists the nullable field as string (not string|null).
-    const sid = (scopeId ?? null) as string;
-    return this.prisma.featureFlag.upsert({
-      where: { key_scope_scopeId: { key, scope, scopeId: sid } },
-      create: { key, scope, scopeId: sid, enabled, metadata: metadata as Prisma.InputJsonValue },
-      update: { enabled, metadata: metadata as Prisma.InputJsonValue },
-    });
+    // UNE PORTÉE GLOBALE NE S'ÉCRIT PAS PAR LA CLÉ COMPOSÉE.
+    //
+    // Le cast `(scopeId ?? null) as string` faisait taire TypeScript ; Prisma
+    // valide au runtime et refusait — « Argument `scopeId` must not be null ».
+    // Poser un interrupteur GLOBAL rendait donc un 500, et aucun test ne
+    // pouvait le voir : la doublure de `upsert` accepte tout.
+    //
+    // `poserSurLaPortee` garde l'`upsert` pour les portées nommées et lit puis
+    // écrit pour la portée globale, où l'index partiel arbitre les courses.
+    return poserSurLaPortee(
+      this.prisma.featureFlag as unknown as TableAPortee<FeatureFlag>,
+      { key, scope, scopeId: scopeId ?? null },
+      { enabled, metadata: metadata as Prisma.InputJsonValue },
+    );
   }
 
   /**

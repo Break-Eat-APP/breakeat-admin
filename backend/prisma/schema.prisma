@@ -1171,6 +1171,29 @@ model FeatureFlag {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
+  /// ⚠️ CETTE CONTRAINTE NE PROTÈGE PAS LA PORTÉE GLOBALE.
+  ///
+  /// `scopeId` est NUL quand la portée est GLOBALE, et dans PostgreSQL deux
+  /// NULL sont DISTINCTS pour une contrainte d'unicité : deux lignes
+  /// `(cle, 'GLOBAL', NULL)` coexistaient sans que rien ne s'y oppose.
+  /// Vérifié sur une vraie base le 31/10, les deux insertions passent. Le
+  /// lecteur faisant `findFirst` sans ordre, l'interrupteur devenait un
+  /// tirage au sort — définitivement, puisque rien ne nettoie les doublons.
+  ///
+  /// UN INDEX PARTIEL COMBLE LE TROU, et il n'est PAS visible ici : Prisma ne
+  /// sait pas l'exprimer. Il vit dans
+  /// `migrations/20261031_unicite_interrupteurs_globaux` —
+  ///
+  ///     CREATE UNIQUE INDEX … ON … (key, scope) WHERE scope_id IS NULL
+  ///
+  /// Cette ligne `@@unique` reste, et il faut la garder : c'est elle que
+  /// Prisma utilise pour le chemin `upsert` des portées NOMMÉES, qui émet un
+  /// `ON CONFLICT (key, scope, scope_id)` ayant besoin de cet index précis.
+  /// L'index partiel est AJOUTÉ, pas substitué.
+  ///
+  /// La dérive entre ce fichier et la base est donc VOULUE. Un
+  /// `prisma migrate diff` la signalera ; ne pas la « corriger » en
+  /// supprimant l'index partiel, ce serait rouvrir le trou.
   @@unique([key, scope, scopeId])
   @@index([key, scope])
   @@map("feature_flags")
@@ -1188,6 +1211,29 @@ model AppSetting {
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 
+  /// ⚠️ CETTE CONTRAINTE NE PROTÈGE PAS LA PORTÉE GLOBALE.
+  ///
+  /// `scopeId` est NUL quand la portée est GLOBALE, et dans PostgreSQL deux
+  /// NULL sont DISTINCTS pour une contrainte d'unicité : deux lignes
+  /// `(cle, 'GLOBAL', NULL)` coexistaient sans que rien ne s'y oppose.
+  /// Vérifié sur une vraie base le 31/10, les deux insertions passent. Le
+  /// lecteur faisant `findFirst` sans ordre, l'interrupteur devenait un
+  /// tirage au sort — définitivement, puisque rien ne nettoie les doublons.
+  ///
+  /// UN INDEX PARTIEL COMBLE LE TROU, et il n'est PAS visible ici : Prisma ne
+  /// sait pas l'exprimer. Il vit dans
+  /// `migrations/20261031_unicite_interrupteurs_globaux` —
+  ///
+  ///     CREATE UNIQUE INDEX … ON … (key, scope) WHERE scope_id IS NULL
+  ///
+  /// Cette ligne `@@unique` reste, et il faut la garder : c'est elle que
+  /// Prisma utilise pour le chemin `upsert` des portées NOMMÉES, qui émet un
+  /// `ON CONFLICT (key, scope, scope_id)` ayant besoin de cet index précis.
+  /// L'index partiel est AJOUTÉ, pas substitué.
+  ///
+  /// La dérive entre ce fichier et la base est donc VOULUE. Un
+  /// `prisma migrate diff` la signalera ; ne pas la « corriger » en
+  /// supprimant l'index partiel, ce serait rouvrir le trou.
   @@unique([key, scope, scopeId])
   @@index([key, scope])
   @@map("app_settings")

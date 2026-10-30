@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { FlagScope, Prisma } from '@prisma/client';
+import { FlagScope, Prisma, type AppSetting } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { requireScopedAccess, filterScopedRows } from '../../common/helpers/scoped-setting-access';
 import type { SetAppSettingDto } from './dto/set-app-setting.dto';
+import { poserSurLaPortee, type TableAPortee } from '../../common/helpers/poser-portee';
 
 /**
  * AppSettingsService — JSON key-value store for CMS / app configuration.
@@ -95,13 +96,14 @@ export class AppSettingsService {
     if (scope !== FlagScope.GLOBAL && !scopeId) {
       throw new BadRequestException('scopeId is required when scope is ORGANIZATION or EVENT');
     }
-    // Cast: Prisma's generated compound-unique where type lists nullable field as string.
-    const sid = (scopeId ?? null) as string;
-    return this.prisma.appSetting.upsert({
-      where: { key_scope_scopeId: { key, scope, scopeId: sid } },
-      create: { key, scope, scopeId: sid, value: value as Prisma.InputJsonValue },
-      update: { value: value as Prisma.InputJsonValue },
-    });
+    // Même défaut, même correctif que les flags : le cast faisait taire
+    // TypeScript et Prisma refusait au runtime un `null` dans la clé composée.
+    // Voir `poser-portee.ts`.
+    return poserSurLaPortee(
+      this.prisma.appSetting as unknown as TableAPortee<AppSetting>,
+      { key, scope, scopeId: scopeId ?? null },
+      { value: value as Prisma.InputJsonValue },
+    );
   }
 
   /**

@@ -13,6 +13,10 @@ const prisma = {
     findFirst: jest.fn(),
     findMany: jest.fn(),
     upsert: jest.fn(),
+    // La portee GLOBALE ne passe PAS par `upsert` : Prisma refuse un `null`
+    // dans une cle composee. Elle lit, puis cree ou met a jour par `id`.
+    create: jest.fn(),
+    update: jest.fn(),
     delete: jest.fn(),
   },
   // Utilisés par requireScopedAccess / requireOrgAccess (autorisation de `resolve`).
@@ -173,9 +177,22 @@ describe('FeatureFlagsService', () => {
   // ─── set ──────────────────────────────────────────────────────
 
   describe('set', () => {
-    it('upserts a global flag', async () => {
+    /**
+     * UN FLAG GLOBAL NE S'ECRIT PAS PAR LA CLE COMPOSEE.
+     *
+     * Ce test affirmait le contraire, et il passait au vert alors que le vrai
+     * chemin LEVAIT : `(scopeId ?? null) as string` fait taire TypeScript,
+     * mais Prisma valide au runtime et refuse — « Argument `scopeId` must not
+     * be null ». La doublure de `upsert`, elle, accepte tout.
+     *
+     * CE TEST NE SUFFIT DONC PAS, et il ne peut pas suffire : la verite est
+     * dans `test/integration/interrupteurs-globaux.int-spec.ts`, sur une vraie
+     * base. Ici on fige seulement QUEL chemin est pris.
+     */
+    it('cree un flag global par lecture-puis-ecriture, pas par upsert', async () => {
       const flag = makeFlag();
-      (prisma.featureFlag.upsert as jest.Mock).mockResolvedValue(flag);
+      (prisma.featureFlag.findFirst as jest.Mock).mockResolvedValue(null);
+      (prisma.featureFlag.create as jest.Mock).mockResolvedValue(flag);
 
       const result = await service.set({
         key: 'my_feature',
@@ -184,7 +201,23 @@ describe('FeatureFlagsService', () => {
       });
 
       expect(result.key).toBe('my_feature');
-      expect(prisma.featureFlag.upsert).toHaveBeenCalledTimes(1);
+      expect(prisma.featureFlag.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({ key: 'my_feature', scopeId: null, enabled: true }),
+      });
+      expect(prisma.featureFlag.upsert).not.toHaveBeenCalled();
+    });
+
+    it('met a jour le flag global existant au lieu d’en ajouter un', async () => {
+      (prisma.featureFlag.findFirst as jest.Mock).mockResolvedValue({ id: 'deja-la' });
+      (prisma.featureFlag.update as jest.Mock).mockResolvedValue(makeFlag());
+
+      await service.set({ key: 'my_feature', scope: FlagScope.GLOBAL, enabled: false });
+
+      expect(prisma.featureFlag.update).toHaveBeenCalledWith({
+        where: { id: 'deja-la' },
+        data: expect.objectContaining({ enabled: false }),
+      });
+      expect(prisma.featureFlag.create).not.toHaveBeenCalled();
     });
 
     it('upserts an event-scoped flag', async () => {
