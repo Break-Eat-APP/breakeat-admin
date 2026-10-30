@@ -20,6 +20,7 @@
  *   DATABASE_URL=… node scripts/banc-de-charge/semer.js --lieux 50 --saisons 3
  */
 const { PrismaClient } = require('@prisma/client');
+const { exigerBaseJetable } = require('./cible');
 
 function argument(nom, defaut) {
   const i = process.argv.indexOf(`--${nom}`);
@@ -36,6 +37,12 @@ const MATCHS_PAR_SAISON = argument('matchs', 13);
 const prisma = new PrismaClient();
 
 async function main() {
+  // AVANT TOUT, ET SANS QUOI RIEN NE PART. Ce script ÉCRIT : une
+  // `DATABASE_URL` restée en place dans un terminal, et le semis verse
+  // quatre-vingts faux clubs chez de vrais clients. Le garde regarde l'hôte,
+  // puis ce que la base CONTIENT — voir `cible.js`.
+  await exigerBaseJetable(prisma);
+
   const total = LIEUX * SAISONS * MATCHS_PAR_SAISON;
   console.log(
     `Semis : ${LIEUX} lieu(x) × ${SAISONS} saison(s) × ${MATCHS_PAR_SAISON} matchs ` +

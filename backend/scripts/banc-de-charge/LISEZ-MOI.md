@@ -3,6 +3,36 @@
 « Est-ce que l'application tient 2 000 commandes simultanées ? » ne se répond
 pas en lisant du code. On le mesure, ou on se tait.
 
+## Les deux gardes, et pourquoi ils refusent
+
+Le tireur envoie des milliers de requêtes ; le semeur **écrit** dans une base.
+Les deux peuvent faire du dégât, et leurs refus ne sont pas décoratifs.
+
+**Le tireur autorise, il n'interdit plus.** Il bloquait les noms *connus* de la
+production (`railway.app`, `breakeat-admin-production`). Une liste d'interdits
+doit prévoir tous les noms futurs : le jour où le club pose son propre domaine,
+`api.break-eat.fr` ne ressemble à rien d'interdit et le banc tire sur les
+clients, un soir de match. Désormais seuls `localhost`, `127.0.0.1`, `::1` et
+les domaines réservés `*.localhost` / `*.test` passent sans rien demander.
+
+Pour une recette hébergée, il faut la **nommer** soi-même :
+
+```bash
+BANC_CIBLE_AUTORISEE=recette.example.test node scripts/banc-de-charge/tirer.js --scenario proche
+```
+
+Le refus ne recopie pas l'hôte qu'il vient de rejeter : souffler la ligne à
+copier-coller à quelqu'un de pressé, c'est lui donner de quoi tirer sur la
+production.
+
+**Le semeur regarde ce que la base CONTIENT**, pas comment elle s'appelle. Il
+n'en avait aucun garde : une `DATABASE_URL` restée en place dans un terminal, et
+le semis versait quatre-vingts faux clubs et des milliers de faux matchs chez de
+vrais clients. Nommer l'hôte ne suffit pas — un tunnel, un transfert de port,
+une copie de production restaurée en local, et l'adresse dit `localhost`. Il
+refuse donc toute base portant une **commande** ou un **paiement** : le semeur
+n'en crée aucun, donc leur présence signifie de vrais clients.
+
 ## Monter le banc
 
 Une base jetable, les vraies migrations, un jeu de données réaliste :

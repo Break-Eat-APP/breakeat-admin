@@ -24,6 +24,7 @@
  *   node scripts/banc-de-charge/tirer.js --api http://localhost:3000/api/v1 \
  *        --scenario stade --clients 2000 --duree 60
  */
+const { exigerApiDEssai } = require('./cible');
 
 function argument(nom, defaut) {
   const i = process.argv.indexOf(`--${nom}`);
@@ -42,14 +43,13 @@ const DUREE = nombre('duree', 30);
 // UNE SÉCURITÉ, ET ELLE N'EST PAS DÉCORATIVE. Tirer deux mille requêtes par
 // seconde sur la production un soir de match, c'est provoquer soi-même la
 // panne qu'on cherche à prévenir.
-if (/railway\.app|breakeat-admin-production/.test(API)) {
-  console.error(
-    "REFUS : cette adresse ressemble à la PRODUCTION.\n" +
-      "  Un banc de charge se tire sur une recette ou en local, jamais sur les\n" +
-      "  clients. Relancer avec --api http://localhost:3000/api/v1",
-  );
-  process.exit(1);
-}
+//
+// Elle bloquait les noms CONNUS de la production — `railway.app`,
+// `breakeat-admin-production`. Une liste d'interdits doit prévoir tous les
+// noms futurs : le jour où le club pose son propre domaine, `api.break-eat.fr`
+// ne ressemble à rien d'interdit et le banc tire sur les clients. On AUTORISE
+// donc, au lieu d'interdire. Voir `cible.js`.
+exigerApiDEssai(API);
 
 /** Le lieu et le match visés par le scénario Flaix, résolus une fois. */
 const CIBLE = { lieu: null, match: null };
