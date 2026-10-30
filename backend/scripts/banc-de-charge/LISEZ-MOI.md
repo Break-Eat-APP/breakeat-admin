@@ -69,3 +69,39 @@ les connexions sautent (21 % d'`ECONNRESET` à 500 clients).
 **Et ça empire tout seul.** Le coût grandit avec l'HISTORIQUE : une quatrième
 saison ajoute 33 % de lignes lues sur chaque requête, pour des matchs que
 personne ne regarde.
+
+## Ce que la première campagne a corrigé
+
+`/public/venues` chargeait **tous les événements jamais créés** de chaque lieu
+rendu, à chaque requête, et la route est en `no-store` — donc incachable. La
+lecture est maintenant bornée à une saison écoulée et celle qui vient (le
+contenant d'un lieu permanent échappe à la borne : sa date ne veut rien dire).
+
+La règle de confidentialité n'a pas bougé d'un mot — un lieu qui a des
+événements mais aucun d'accessible reste masqué — mais elle est désormais
+**comptée par la base** : deux agrégats qui rendent cinquante nombres, au lieu
+de deux mille lignes rapatriées pour être comptées en mémoire.
+
+| Scénario | Avant | Après |
+|---|---|---|
+| `stade` (50 lieux) | 24 req/s, p50 7,3 s | **43 req/s, p50 4,4 s** |
+| `calendrier` (50 lieux) | 26 req/s, p50 6,2 s | **46 req/s, p50 4,0 s** |
+| `proche` (5 lieux, réel) | 33 req/s, p50 2,8 s | **41 req/s, p50 2,2 s** |
+
+Environ **+80 % de débit** sur les chemins lourds, latence presque divisée par
+deux. Et surtout : **le coût ne grandit plus avec l'historique.** Avant, une
+quatrième saison ajoutait un tiers de lignes lues sur chaque requête, pour des
+matchs que personne ne regarde.
+
+## Ce que ces chiffres ne disent pas
+
+- **Ils sont pessimistes.** Le tireur et l'API se partagent le processeur d'une
+  machine de développement Windows. Un conteneur Linux fera mieux ; l'écart
+  entre scénarios, lui, est fiable.
+- **Ils ne mesurent pas la COMMANDE.** Sur un lieu Flaix, Break Eat ne traite
+  aucun paiement : il sert la découverte et le lien. Le parcours de commande
+  Break Eat (panier, Stripe, stock) reste à mesurer séparément.
+- **Ils ne mesurent pas le temps réel.** Dix mille sockets ouvertes sur un
+  soir de match sont un autre sujet que dix mille requêtes HTTP.
+- **Un seul processus.** Le débit se multiplie par le nombre d'instances ;
+  la base, elle, ne se multiplie pas.

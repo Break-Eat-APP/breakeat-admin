@@ -8,6 +8,42 @@ const prisma = {
   groupMember: { findMany: jest.fn() },
   // Lu seulement quand un lien Flaix porte des etiquettes a remplir.
   user: { findUnique: jest.fn() },
+  /**
+   * LA CONFIDENTIALITE EST DESORMAIS COMPTEE PAR LA BASE.
+   *
+   * Le controleur ne rapatrie plus tous les evenements pour les compter en
+   * memoire — c'etait le mur mesure le 30/10 : 24 requetes par seconde sur
+   * cinquante lieux, contre 191 sur un seul.
+   *
+   * Ce double DERIVE ses comptes des memes lieux que `venue.findMany` vient
+   * de rendre. C'est ce qui garde les tests de confidentialite honnetes : ils
+   * jugent toujours la vraie regle sur les vraies donnees du scenario, et non
+   * une reponse ecrite a la main qui dirait ce qu'on veut entendre.
+   */
+  event: {
+    groupBy: jest.fn(async ({ where }: { where: Record<string, unknown> }) => {
+      // `mockResolvedValue` range une PROMESSE dans les resultats, pas le
+      // tableau : il faut l'attendre pour lire les lieux du scenario.
+      const derniers = await prisma.venue.findMany.mock.results.at(-1)?.value;
+      const lieux = (derniers ?? []) as { id: string; events: Record<string, unknown>[] }[];
+      const ou = where['OR'] as
+        | [{ visibility: string }, { id: { in: string[] } }?]
+        | undefined;
+      const autorises = new Set((ou?.[1]?.id?.in ?? []) as string[]);
+
+      return lieux
+        .filter((v) =>
+          v.events.some(
+            (e) =>
+              // Sans `OR`, on compte TOUS les evenements du lieu.
+              !ou ||
+              e['visibility'] === EventVisibility.PUBLIC ||
+              autorises.has(e['id'] as string),
+          ),
+        )
+        .map((v) => ({ venueId: v.id, _count: { _all: v.events.length } }));
+    }),
+  },
 };
 
 function makeController() {

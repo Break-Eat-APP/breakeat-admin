@@ -27,6 +27,23 @@ import { personnaliserLien, porteDesEtiquettes } from '../../common/helpers/pers
  * (`startAt`, `endAt`, `flaixOrderUrl`) : en oublier un sur une route, c'est
  * soit révéler un lieu privé, soit annoncer fermé un lieu qui vend.
  */
+/**
+ * JUSQU'OÙ ON REMONTE DANS LE PASSÉ — cent cinquante jours.
+ *
+ * Assez pour qu'un calendrier ouvert en mai montre encore le début de la
+ * saison, et pour qu'un match d'hier reste lisible. Au-delà, personne ne
+ * fait défiler : ce sont des lignes lues à chaque requête, par chaque
+ * client, pour rien.
+ *
+ * Calculée à l'appel et non figée au démarrage : un conteneur qui vit des
+ * semaines verrait sinon sa fenêtre glisser lentement vers le passé.
+ */
+const JOURS_DE_MEMOIRE = 150;
+
+function borneDeSaison(): Date {
+  return new Date(Date.now() - JOURS_DE_MEMOIRE * 86_400_000);
+}
+
 const SELECTION_LIEU = {
   id: true,
   name: true,
@@ -40,10 +57,41 @@ const SELECTION_LIEU = {
   timezone: true,
   buvettePlanUrl: true,
   organization: { select: { name: true, logoUrl: true, primaryColor: true } },
-  // TOUS les événements (id, statut, visibilité) : la confidentialité se décide
-  // sur l'ensemble, pas seulement les actifs — sinon un lieu privé dont
-  // l'événement privé n'est pas encore actif serait révélé en « Bientôt ».
+  /**
+   * LA CONFIDENTIALITÉ SE DÉCIDE SUR L'ENSEMBLE — mais deux colonnes y
+   * suffisent.
+   *
+   * Un lieu n'apparaît que s'il a au moins un événement accessible, TOUTES
+   * visibilités et tous statuts confondus. Un lieu privé dont l'événement
+   * privé n'est pas encore actif serait sinon révélé en « Bientôt ».
+   *
+   * Cette règle ne compte que des LIGNES : elle n'a besoin d'aucun contenu.
+   * Elle est donc calculée par la base, dans `confidentialite()` — deux
+   * agrégats qui rendent cinquante lignes au lieu de deux mille.
+   */
+
+  /**
+   * LES ÉVÉNEMENTS QU'ON LIT VRAIMENT — bornés dans le temps.
+   *
+   * Ils ne l'étaient pas, et c'était le mur. Mesuré le 30/10 sur 50 lieux et
+   * trois saisons (`scripts/banc-de-charge`) : 24 requêtes par seconde et
+   * 7 secondes de latence médiane, contre 191 req/s quand la réponse ne
+   * porte qu'un lieu. Chaque appel chargeait tous les matchs jamais joués
+   * de chaque lieu rendu — et le coût grandissait d'un tiers à chaque
+   * saison, pour des rencontres que personne ne regarde.
+   *
+   * La fenêtre couvre ce que quelqu'un peut avoir besoin de lire : la
+   * saison écoulée (le calendrier garde une mémoire), et celle qui vient.
+   *
+   * LE CONTENANT D'UN LIEU PERMANENT ÉCHAPPE À LA BORNE, et ce n'est pas un
+   * détail : il est créé une fois, sa date ne veut rien dire, et il porte
+   * le lien de commande d'un restaurant ouvert tous les jours. Le couper
+   * fermerait la vente de ces lieux-là du jour au lendemain.
+   */
   events: {
+    where: {
+      OR: [{ startAt: { gte: borneDeSaison() } }, { isPermanentContainer: true }],
+    },
     orderBy: { startAt: 'asc' },
     select: {
       id: true,
@@ -212,6 +260,40 @@ export class PublicVenuesController {
     const canAccess = (ev: { id: string; visibility: EventVisibility }) =>
       ev.visibility === EventVisibility.PUBLIC || accessibleEventIds.has(ev.id);
 
+    /**
+     * QUI A DES ÉVÉNEMENTS, ET QUI EN A D'ACCESSIBLES — compté par la base.
+     *
+     * La règle n'a pas changé d'un mot : un lieu qui a des événements mais
+     * AUCUN d'accessible reste masqué, toutes visibilités et tous statuts
+     * confondus. Ce qui change, c'est qu'on ne rapatrie plus deux mille
+     * lignes pour les compter en mémoire — la base rend cinquante nombres.
+     *
+     * Et surtout, la décision porte toujours sur la TOTALITÉ, jamais sur la
+     * fenêtre de lecture : un lieu dont le seul événement privé est vieux de
+     * six mois doit rester masqué.
+     */
+    const ids = venues.map((v) => v.id);
+    const [aDesEvenements, aDuAccessible] = await Promise.all([
+      this.prisma.event.groupBy({
+        by: ['venueId'],
+        where: { venueId: { in: ids } },
+        _count: { _all: true },
+      }),
+      this.prisma.event.groupBy({
+        by: ['venueId'],
+        where: {
+          venueId: { in: ids },
+          OR: [
+            { visibility: EventVisibility.PUBLIC },
+            ...(accessibleEventIds.size > 0 ? [{ id: { in: [...accessibleEventIds] } }] : []),
+          ],
+        },
+        _count: { _all: true },
+      }),
+    ]);
+    const porteurs = new Set(aDesEvenements.map((g) => g.venueId));
+    const ouverts = new Set(aDuAccessible.map((g) => g.venueId));
+
     // L'instant de référence, lu UNE seule fois pour toute la réponse : deux
     // lieux de la même liste ne doivent pas être jugés à deux secondes
     // d'écart, sinon un événement peut « ouvrir » entre deux lignes.
@@ -219,10 +301,13 @@ export class PublicVenuesController {
 
     const result = venues
       .map((v) => {
+        // Lieu privé masqué : a des événements, mais AUCUN accessible (toutes
+        // visibilités confondues) — on ne révèle pas son existence, même sans
+        // événement actif. La décision porte sur `tousLesEvenements`, jamais
+        // sur la fenêtre : un lieu dont le seul événement privé est vieux de
+        // six mois doit rester masqué.
+        if (porteurs.has(v.id) && !ouverts.has(v.id)) return null;
         const accessible = v.events.filter(canAccess);
-        // Lieu privé masqué : a des événements, mais AUCUN accessible (toutes visibilités
-        // confondues) — on ne révèle pas son existence, même sans événement actif.
-        if (v.events.length > 0 && accessible.length === 0) return null;
         // Cible de navigation : premier événement accessible ET actif.
         const currentEvent = accessible.find((e) => e.status === EventStatus.ACTIVE);
 
