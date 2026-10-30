@@ -182,73 +182,10 @@ export class CartService {
     // panier ouvert avant la suspension ne doit pas pouvoir être réglé après.
     await assertOrganisationOuverte(this.prisma, event.organizationId);
 
-    /**
-     * UN LIEU PASSÉ À FLAIX NE PREND PLUS DE COMMANDE BREAK EAT.
-     *
-     * `flaixEnabled` ne vivait que dans l'écran de découverte : il décidait
-     * où l'application EMMÈNE le client, et nulle part le serveur ne
-     * refusait. Une version ancienne de l'app, un écran resté ouvert, un
-     * appel direct — et un panier Break Eat s'ouvrait sur un lieu dont le
-     * club ne tient plus ni la carte ni les prix. Le client payait des
-     * produits que personne ne lui servirait.
-     *
-     * LA MÊME RÈGLE QUE L'APP, PAS PLUS LARGE. Un lieu basculé mais dont
-     * AUCUN match ne porte encore de lien garde son parcours Break Eat :
-     * c'est ce qui permet au club de préparer sa saison sans couper sa
-     * vente. C'est exactement ce que dit `cheminDeCommande` côté mobile, et
-     * les deux doivent répondre la même chose — sinon l'un des deux ment.
-     */
-    const lieu = await this.prisma.venue.findUnique({
-      where: { id: event.venueId },
-      select: {
-        flaixEnabled: true,
-        ordersOpenAt: true,
-        timezone: true,
-        /**
-         * TOUS les événements du lieu, pas seulement celui qu'on ouvre : le
-         * mode se décide sur l'ensemble. Bornés aux colonnes que
-         * `fenetreDeCommande` lit.
-         */
-        events: {
-          select: {
-            id: true,
-            name: true,
-            startAt: true,
-            endAt: true,
-            status: true,
-            isPermanentContainer: true,
-            flaixOrderUrl: true,
-          },
-        },
-      },
-    });
-
-    /**
-     * UN LIEU PASSÉ À FLAIX NE PREND PLUS DE COMMANDE BREAK EAT.
-     *
-     * `flaixEnabled` ne vivait que dans l'écran de découverte : il décidait
-     * où l'application EMMÈNE le client, et nulle part le serveur ne
-     * refusait. Une version ancienne de l'app, un écran resté ouvert, un
-     * appel direct — et un panier s'ouvrait sur un lieu dont le club ne
-     * tient plus ni la carte ni les prix.
-     *
-     * LA MÊME RÈGLE QUE PARTOUT AILLEURS, et c'est tout l'objet de
-     * `modeDeCommande`. La première version refusait dès qu'UN événement du
-     * lieu portait un lien — même un match joué il y a six mois. Une vieille
-     * adresse oubliée suffisait donc à couper la vente d'un club dont
-     * aucune rencontre du moment n'était joignable chez Flaix.
-     */
-    if (lieu) {
-      const mode = modeDeCommande(lieu, lieu.events, new Date(), {
-        heure: lieu.ordersOpenAt,
-        timezone: lieu.timezone ?? 'Europe/Paris',
-      });
-      if (mode !== 'break-eat') {
-        throw new BadRequestException(
-          'La commande de ce lieu passe par Flaix — mets à jour l’application.',
-        );
-      }
-    }
+    // Un lieu passé à Flaix ne prend plus de commande Break Eat. Vérifié ici
+    // ET au paiement : un panier ouvert avant la bascule ne doit pas pouvoir
+    // être réglé après. Voir `assertEncoreSurBreakEat`.
+    await this.assertEncoreSurBreakEat(dto.eventId);
     // Supplier must be attached to this event via the EventSupplier junction.
     const eventSupplier = await this.prisma.eventSupplier.findFirst({
       where: { eventId: dto.eventId, supplierId: dto.supplierId },
@@ -526,6 +463,10 @@ export class CartService {
         'Ton panier a expiré — reprends ta commande, les stocks ont pu changer.',
       );
     }
+
+    // Le lieu a pu passer à Flaix pendant que le client composait sa commande.
+    // Refuser ici ne coûte qu'un message : rien n'est encore débité.
+    await this.assertEncoreSurBreakEat(cart.eventId);
 
     if (!cart.pickupPointId) {
       throw new BadRequestException(
@@ -1038,6 +979,83 @@ export class CartService {
    * Phase 14.4 — throws 403 if the cart owner no longer has access to a PRIVATE
    * event (e.g. removed from the gating group). PUBLIC events always pass.
    */
+  /**
+   * UN LIEU PASSÉ À FLAIX NE PREND PLUS DE COMMANDE BREAK EAT.
+   *
+   * `flaixEnabled` ne vivait que dans l'écran de découverte : il décidait où
+   * l'application EMMÈNE le client, et nulle part le serveur ne refusait. Une
+   * version ancienne de l'app, un écran resté ouvert, un appel direct — et un
+   * panier Break Eat s'ouvrait sur un lieu dont le club ne tient plus ni la
+   * carte ni les prix. Le client payait des produits que personne ne lui
+   * servirait.
+   *
+   * ── POURQUOI AUSSI AU PAIEMENT, ET PAS SEULEMENT À L'OUVERTURE ──
+   *
+   * Le garde ne vivait qu'à la création du panier. Un client qui ouvre son
+   * panier à 20h00, un club qui bascule à 20h02, un paiement à 20h04 : Break
+   * Eat encaissait pour une carte que le club ne tient plus, et la commande
+   * tombait dans un comptoir que personne ne regarde — le personnel est passé
+   * sur Flaix. Les cinq minutes de péremption bornent la fenêtre, elles ne la
+   * ferment pas.
+   *
+   * ── ET POURQUOI PAS DANS LE WEBHOOK ────────────────────────
+   *
+   * Passé le débit, on CONSTATE, on ne refuse plus — c'est la règle de toute
+   * la création de commande (cf. `decrementerStock`). Un lieu basculé entre la
+   * page de paiement et le webhook donne une commande honorée, et le club la
+   * sert : refuser laisserait un client débité sans rien. Ne pas ajouter ce
+   * garde là-bas.
+   *
+   * LA MÊME RÈGLE QUE L'APP, PAS PLUS LARGE. Un lieu basculé dont AUCUN match
+   * ne porte encore de lien garde son parcours Break Eat : c'est ce qui permet
+   * au club de préparer sa saison sans couper sa vente. C'est tout l'objet de
+   * `modeDeCommande` — la première version refusait dès qu'UN événement du
+   * lieu portait un lien, même un match joué six mois plus tôt, et une vieille
+   * adresse oubliée coupait la vente d'un club dont aucune rencontre du moment
+   * n'était joignable chez Flaix.
+   */
+  private async assertEncoreSurBreakEat(eventId: string): Promise<void> {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: {
+        venue: {
+          select: {
+            flaixEnabled: true,
+            ordersOpenAt: true,
+            timezone: true,
+            // TOUS les événements du lieu, pas seulement celui qu'on ouvre :
+            // le mode se décide sur l'ensemble. Bornés aux colonnes que
+            // `fenetreDeCommande` lit.
+            events: {
+              select: {
+                id: true,
+                name: true,
+                startAt: true,
+                endAt: true,
+                status: true,
+                isPermanentContainer: true,
+                flaixOrderUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const lieu = event?.venue;
+    if (!lieu) return;
+
+    const mode = modeDeCommande(lieu, lieu.events, new Date(), {
+      heure: lieu.ordersOpenAt,
+      timezone: lieu.timezone ?? 'Europe/Paris',
+    });
+    if (mode !== 'break-eat') {
+      throw new BadRequestException(
+        'La commande de ce lieu passe par Flaix — mets à jour l’application.',
+      );
+    }
+  }
+
   /** Le club a pu être suspendu entre la création du panier et le paiement. */
   private async assertOrganisationEncoreOuverte(eventId: string): Promise<void> {
     const event = await this.prisma.event.findUnique({

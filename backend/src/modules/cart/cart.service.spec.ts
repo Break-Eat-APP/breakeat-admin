@@ -251,18 +251,23 @@ describe('CartService', () => {
       flaixOrderUrl: 'https://commande.flaix.bo.synertic.net/c/m1',
       ...over,
     });
+    // Le garde lit le lieu À TRAVERS l'événement — une seule requête, et le
+    // MÊME code à l'ouverture du panier et au paiement. Avant, chacun des
+    // deux chemins avait la sienne, et seul l'un des deux refusait.
     const lieuAvec = (events: unknown[]) =>
-      (prisma.venue.findUnique as jest.Mock).mockResolvedValue({
-        flaixEnabled: true,
-        ordersOpenAt: '08:00',
-        timezone: 'Europe/Paris',
-        events,
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue({
+        ...mockEvent(),
+        venue: {
+          flaixEnabled: true,
+          ordersOpenAt: '08:00',
+          timezone: 'Europe/Paris',
+          events,
+        },
       });
     const ouvrirPanier = () =>
       service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID });
 
     it('REFUSE quand un match est ouvert chez Flaix MAINTENANT', async () => {
-      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
       lieuAvec([matchFlaix()]);
 
       await expect(ouvrirPanier()).rejects.toThrow(/Flaix/);
@@ -274,7 +279,6 @@ describe('CartService', () => {
      * vendrait une carte que le club ne tient plus.
      */
     it('REFUSE quand la commande Flaix ouvre plus tard', async () => {
-      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
       lieuAvec([
         matchFlaix({
           startAt: new Date(Date.now() + 10 * 86_400_000),
@@ -291,7 +295,6 @@ describe('CartService', () => {
      * soir du match sans aucun moyen de prendre une commande.
      */
     it('LAISSE PASSER un lieu basculé dont AUCUN match n’a de lien', async () => {
-      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
       lieuAvec([matchFlaix({ flaixOrderUrl: null })]);
       (prisma.eventSupplier.findFirst as jest.Mock).mockResolvedValue({ id: 'es-1' });
 
@@ -304,7 +307,6 @@ describe('CartService', () => {
      * rien fermer.
      */
     it('LAISSE PASSER quand le seul lien est sur un match TERMINÉ', async () => {
-      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
       lieuAvec([
         matchFlaix({
           startAt: new Date(Date.now() - 180 * 86_400_000),
@@ -561,6 +563,73 @@ describe('CartService', () => {
       expect(prisma.cart.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { status: CartStatus.EXPIRED } }),
       );
+    });
+
+    /**
+     * LE GARDE FLAIX NE VIVAIT QU'À L'OUVERTURE DU PANIER.
+     *
+     * Un client ouvre son panier à 20h00, le club bascule à 20h02, le
+     * paiement part à 20h04 : Break Eat encaissait pour une carte que le club
+     * ne tient plus, et la commande tombait dans un comptoir que personne ne
+     * regarde — le personnel est passé sur Flaix. Les cinq minutes de
+     * péremption bornent la fenêtre, elles ne la ferment pas.
+     *
+     * Ici, refuser ne coûte qu'un message : rien n'a été débité.
+     */
+    it('REFUSE de payer un panier dont le lieu est passé à Flaix', async () => {
+      setupValidCheckout();
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue({
+        ...mockEvent(),
+        venue: {
+          flaixEnabled: true,
+          ordersOpenAt: '08:00',
+          timezone: 'Europe/Paris',
+          events: [
+            {
+              id: 'm-1',
+              name: 'Match',
+              startAt: new Date(Date.now() - 3_600_000),
+              endAt: new Date(Date.now() + 2 * 3_600_000),
+              status: 'ACTIVE',
+              isPermanentContainer: false,
+              flaixOrderUrl: 'https://commande.flaix.bo.synertic.net/c/m1',
+            },
+          ],
+        },
+      });
+
+      await expect(service.checkout(CART_ID, USER_ID)).rejects.toThrow(/Flaix/);
+    });
+
+    /**
+     * ET LE REPLI TIENT AUSSI AU PAIEMENT. Un club basculé dont aucun match
+     * ne porte de lien garde son parcours Break Eat : refuser ici le
+     * priverait de sa vente du soir, alors qu'il n'a rien pour la prendre
+     * ailleurs.
+     */
+    it('LAISSE PAYER un lieu basculé dont AUCUN match n’a de lien', async () => {
+      setupValidCheckout();
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue({
+        ...mockEvent(),
+        venue: {
+          flaixEnabled: true,
+          ordersOpenAt: '08:00',
+          timezone: 'Europe/Paris',
+          events: [
+            {
+              id: 'm-1',
+              name: 'Match',
+              startAt: new Date(Date.now() - 3_600_000),
+              endAt: new Date(Date.now() + 2 * 3_600_000),
+              status: 'ACTIVE',
+              isPermanentContainer: false,
+              flaixOrderUrl: null,
+            },
+          ],
+        },
+      });
+
+      await expect(service.checkout(CART_ID, USER_ID)).rejects.not.toThrow(/Flaix/);
     });
 
     /**
