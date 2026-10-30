@@ -196,7 +196,10 @@ describe('OutboxService — le rattrapage', () => {
 
     const requete = sql[0].replace(/\s+/g, ' ');
     expect(requete).toContain('delivered_at IS NULL');
-    expect(requete).toContain('ORDER BY created_at ASC');
+    // Par la SÉQUENCE, pas par la date : deux annonces déposées dans la
+    // même transaction portent la même date à la milliseconde près, et
+    // PostgreSQL rendait alors les ex æquo dans l'ordre qu'il voulait.
+    expect(requete).toContain('ORDER BY sequence ASC');
     expect(requete).toContain('LIMIT');
   });
 

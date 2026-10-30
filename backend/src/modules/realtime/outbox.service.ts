@@ -29,8 +29,14 @@ import { RealtimeGateway } from './realtime.gateway';
  * l'enveloppe porte un `eventId` unique qui permet au client de reconnaître
  * un doublon.
  *
- * DANS L'ORDRE D'ARRIVÉE. Un `order_updated` rejoué avant son `new_order`
- * afficherait une commande qui avance avant d'exister.
+ * DANS L'ORDRE D'ARRIVÉE, et c'est la SÉQUENCE qui le dit — pas la date.
+ *
+ * Deux annonces déposées dans la même transaction portent la même date à
+ * la milliseconde près. `ORDER BY created_at` avait donc des ex æquo, et
+ * PostgreSQL rendait les lignes dans l'ordre qu'il voulait : mesuré sur
+ * une vraie base, quinze lignes ressortaient mélangées. Un `order_ready`
+ * rejoué avant son `order_updated` montrerait une commande prête avant
+ * d'avoir avancé.
  */
 @Injectable()
 export class OutboxService {
@@ -176,6 +182,7 @@ export class OutboxService {
         rooms: string[];
         payload: unknown;
         attempts: number;
+        sequence: bigint;
       }[]
     >`
       UPDATE "realtime_outbox"
@@ -187,13 +194,26 @@ export class OutboxService {
           WHERE delivered_at IS NULL
             AND attempts < ${OutboxService.ESSAIS_MAX}
             AND (claimed_until IS NULL OR claimed_until < NOW())
-          ORDER BY created_at ASC
+          ORDER BY sequence ASC
           LIMIT ${OutboxService.PAR_PASSAGE}
             FOR UPDATE SKIP LOCKED
        )
-   RETURNING id, event_id, event_name, rooms, payload, attempts
+   RETURNING id, event_id, event_name, rooms, payload, attempts, sequence
     `;
     if (enAttente.length === 0) return { rejoues: 0, abandonnes: 0 };
+
+    /**
+     * `RETURNING` NE REND RIEN DANS L'ORDRE — il faut trier ici.
+     *
+     * Le `ORDER BY` du sous-select choisit QUELLES lignes sont réservées ;
+     * il ne dit rien de l'ordre dans lequel `UPDATE … RETURNING` les rend.
+     * PostgreSQL est libre, et il en use : mesuré sur une vraie base, quinze
+     * lignes réservées ensemble ressortaient mélangées.
+     *
+     * Sans ce tri, un `order_ready` partait avant son `order_updated` — une
+     * commande prête avant d'avoir avancé.
+     */
+    enAttente.sort((a, b) => (a.sequence < b.sequence ? -1 : a.sequence > b.sequence ? 1 : 0));
 
     let rejoues = 0;
     let abandonnes = 0;

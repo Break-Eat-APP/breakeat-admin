@@ -1,7 +1,7 @@
 import { PrismaService } from '../../src/database/prisma.service';
 import { OutboxService } from '../../src/modules/realtime/outbox.service';
 import type { RealtimeGateway } from '../../src/modules/realtime/realtime.gateway';
-import { unique } from './banc';
+import { randomUUID } from 'crypto';
 
 /**
  * DEUX OUVRIERS, UNE SEULE FILE — et chaque annonce part UNE fois.
@@ -59,7 +59,14 @@ decrire('outbox : deux ouvriers concurrents (PostgreSQL réel)', () => {
 
   /** Dépose N annonces en attente, et rend leurs identifiants. */
   async function deposer(combien: number): Promise<string[]> {
-    const ids = Array.from({ length: combien }, () => unique('ev'));
+    // DES UUID, pas les identifiants lisibles de `banc.ts`.
+    //
+    // `realtime_outbox.event_id` est une colonne UUID — c'est la clé de
+    // déduplication que l'enveloppe porte déjà, et elle vient de
+    // `randomUUID()`. Une chaîne « ev-… » est refusée par PostgreSQL AVANT
+    // que le test n'ait rien éprouvé : les cinq cas échouaient sur
+    // l'insertion, pas sur le bail.
+    const ids = Array.from({ length: combien }, () => randomUUID());
     await prisma.realtimeOutbox.createMany({
       data: ids.map((eventId) => ({
         eventId,

@@ -1830,6 +1830,18 @@ model RealtimeOutbox {
   /// expire : un ouvrier qui meurt entre la réservation et l'envoi ne retient
   /// pas la ligne pour toujours — elle repart au tour suivant.
   claimedUntil DateTime? @map("claimed_until")
+  /// L'ORDRE D'ARRIVÉE, et il ne se déduit PAS de `createdAt`.
+  ///
+  /// Deux annonces déposées dans la même transaction — un `order_updated`
+  /// et le `order_ready` qui le suit — portent la même date à la
+  /// milliseconde près. `ORDER BY created_at` a donc des ex æquo, et
+  /// PostgreSQL rend alors les lignes dans l'ordre qu'il veut : mesuré sur
+  /// une vraie base, quinze lignes sortaient mélangées.
+  ///
+  /// Conséquence : un `order_ready` rejoué AVANT son `order_updated`
+  /// afficherait une commande prête avant d'avoir avancé. La séquence
+  /// tranche — elle est strictement croissante, insertion par insertion.
+  sequence     BigInt    @default(autoincrement())
 
   /// L'index de l'ouvrier : les non-livrées, dans l'ordre d'arrivée. L'ordre
   /// compte — un `order_updated` rejoué avant son `new_order` afficherait une
@@ -1837,6 +1849,6 @@ model RealtimeOutbox {
   /// L'index de l'ouvrier : les non-livrées dont le bail est échu, dans
   /// l'ordre d'arrivée. L'ordre compte — un `order_updated` rejoué avant son
   /// `new_order` afficherait une commande qui avance avant d'exister.
-  @@index([deliveredAt, claimedUntil, createdAt])
+  @@index([deliveredAt, claimedUntil, sequence])
   @@map("realtime_outbox")
 }
