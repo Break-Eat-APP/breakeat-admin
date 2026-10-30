@@ -1,5 +1,6 @@
 import type { ExecutionContext } from '@nestjs/common';
 import type { ThrottlerOptions } from '@nestjs/throttler';
+import { compteursPartages } from './limitation-redis';
 
 /**
  * La limitation de débit — deux compteurs, qui ne comptent pas la même chose.
@@ -97,6 +98,59 @@ export function limiteIp(brut = process.env.LIMITE_IP_PAR_MINUTE): number {
   return Number.isInteger(n) && n > 0 ? n : LIMITE_IP_DEFAUT;
 }
 
+/**
+ * CE QUE VAUT LA MESURE : 30 000 EST LA BONNE TAILLE, AVEC LE DOUBLE DE MARGE.
+ *
+ * L'audit demandait les appels réels par parcours, et l'effet du NAT des
+ * stades. Comptés dans l'application mobile :
+ *
+ *   · ouvrir l'app froid           1 requête  (`apiSearchVenues`)
+ *   · toucher un lieu              2          (fiche + profil)
+ *   · ouvrir une buvette           2          (événement + carte)
+ *   · panier, créneau, paiement    4 à 6
+ *
+ * Soit une DIZAINE pour une commande entière, étalée sur des minutes de
+ * navigation. Les favoris ne coûtent rien à l'affichage : ils ne sont lus
+ * qu'au toucher.
+ *
+ * Dix mille supporters derrière une seule adresse publique, qui ouvrent tous
+ * l'app au coup d'envoi : dix mille requêtes dans la minute. Deux mille qui
+ * commandent sur dix minutes : seize mille requêtes, soit mille six cents par
+ * minute. Le pic réel tient donc autour de dix à quinze mille — la moitié du
+ * plafond. Une machine qui tire cinq cents requêtes par seconde le franchit,
+ * elle, en une minute.
+ */
+
+/**
+ * LES ESSAIS DE MOT DE PASSE, QUAND REDIS EST TOMBÉ.
+ *
+ * Le repli en mémoire rend les compteurs locaux à chaque instance. Huit
+ * essais par quart d'heure devenaient donc huit PAR INSTANCE : avec trois
+ * répliques, vingt-quatre — et personne ne l'avait décidé.
+ *
+ * On resserre, pour que le produit par le nombre de répliques revienne près de
+ * ce qui était voulu. C'est une approximation, et il faut le dire : on ne
+ * connaît pas le nombre d'instances depuis le processus. Trois essais fois
+ * trois répliques font neuf ; à une seule instance, cela resserre pour rien.
+ *
+ * ── ET L'ASYMÉTRIE EST LE CŒUR DE LA DÉCISION ──────────────────
+ *
+ * Le coupe-circuit par IP ne se resserre PAS dans le même cas, et c'est
+ * volontaire. Les deux échecs ne coûtent pas la même chose :
+ *
+ *   · resserrer le compteur d'ADRESSE coûte quelques essais à quelqu'un qui a
+ *     oublié son mot de passe. Il attend un quart d'heure ;
+ *   · resserrer le coupe-circuit par IP coûte LA VENTE D'UN STADE ENTIER,
+ *     puisque tous les téléphones partagent une adresse. Et un compte forcé
+ *     ne se rattrape pas, alors qu'une buvette fermée au coup d'envoi se voit
+ *     tout de suite et ne se rattrape pas non plus.
+ *
+ * Donc : on protège les comptes plus fort quand on compte moins bien, et on ne
+ * touche jamais au plafond qui tient le stade ouvert.
+ */
+export const ESSAIS_ADRESSE = 8;
+export const ESSAIS_ADRESSE_DEGRADE = 3;
+
 /** Les deux compteurs, tels que le module les reçoit. */
 export const COMPTEURS: ThrottlerOptions[] = [
   {
@@ -107,7 +161,8 @@ export const COMPTEURS: ThrottlerOptions[] = [
   {
     name: 'adresse',
     ttl: 900_000,
-    limit: 8,
+    // Resserré quand les compteurs ne sont plus communs — voir au-dessus.
+    limit: () => (compteursPartages() ? ESSAIS_ADRESSE : ESSAIS_ADRESSE_DEGRADE),
     // Hors authentification, ce compteur ne s'applique pas du tout.
     skipIf: (contexte: ExecutionContext) =>
       !concerneUneAuthentification(contexte.switchToHttp().getRequest<RequeteLue>()),

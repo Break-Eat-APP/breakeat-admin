@@ -4,7 +4,21 @@ import {
   COMPTEURS,
   limiteIp,
   LIMITE_IP_DEFAUT,
+  ESSAIS_ADRESSE,
+  ESSAIS_ADRESSE_DEGRADE,
 } from './limitation';
+import { reinitialiserEtatDesCompteurs } from './limitation-redis';
+
+/**
+ * La limite du compteur d'adresse est RESOLUE a chaque requete : elle depend
+ * de l'etat de Redis. On l'appelle donc, on ne la lit pas.
+ */
+const limiteAdresse = (): number => {
+  const brut = COMPTEURS.find((c) => c.name === 'adresse')?.limit;
+  return typeof brut === 'function'
+    ? (brut as (c: unknown) => number)(undefined)
+    : (brut as number);
+};
 
 /**
  * Ce que la limitation compte — et surtout ce qu'elle NE doit pas compter.
@@ -15,6 +29,10 @@ import {
  * ils sont nés d'un essai réel qui avait bloqué un « voisin » de la même IP.
  */
 describe('Limitation de débit', () => {
+  // L'etat des compteurs est un module : sans remise a neuf, un test qui
+  // simule la panne de Redis contaminerait les suivants.
+  beforeEach(() => reinitialiserEtatDesCompteurs());
+
   const connexion = (email: unknown) => ({ url: '/api/v1/auth/login', body: { email }, ip: '1.2.3.4' });
 
   describe('l’adresse lue dans la requête', () => {
@@ -69,17 +87,29 @@ describe('Limitation de débit', () => {
       expect(Object.keys(parNom).sort()).toEqual(['adresse', 'ip']);
     });
 
-    it('laissent passer une foule : la limite par IP est large', () => {
-      // Un stade entier partage une adresse publique. 600 par minute n'attrape
-      // qu'un script, jamais des clients.
-      expect(parNom.ip.limit).toBeGreaterThanOrEqual(500);
+    /**
+     * UN STADE ENTIER PARTAGE UNE ADRESSE PUBLIQUE.
+     *
+     * Ce test affirmait que « 600 par minute n'attrape qu'un script, jamais
+     * des clients ». C'était faux, et `limitation.ts` le dit depuis le 27/10 :
+     * dix mille supporters derrière le wifi d'un stade, à une requête chacun,
+     * et neuf mille quatre cents reçoivent un refus au coup d'envoi.
+     *
+     * Compté dans l'application : ouvrir l'app froid coûte UNE requête, une
+     * commande entière une dizaine étalée sur des minutes. Le pic réel d'un
+     * grand stade tient autour de dix à quinze mille par minute — il faut donc
+     * un plafond qui les laisse passer tous.
+     */
+    it('laissent passer un stade entier : le coupe-circuit est haut', () => {
+      expect(parNom.ip.limit).toBeGreaterThanOrEqual(20_000);
       expect(parNom.ip.ttl).toBe(60_000);
     });
 
     it('serrent l’authentification, sans l’étouffer', () => {
       // Assez pour se tromper plusieurs fois ; beaucoup trop peu pour essayer
       // une liste de mots de passe.
-      expect(parNom.adresse.limit).toBeLessThanOrEqual(10);
+      expect(limiteAdresse()).toBeLessThanOrEqual(10);
+      expect(limiteAdresse()).toBeGreaterThanOrEqual(3);
       expect(parNom.adresse.ttl).toBeGreaterThanOrEqual(600_000);
     });
 
@@ -134,5 +164,52 @@ describe('le plafond par IP', () => {
     const ip = COMPTEURS.find((c) => c.name === 'ip');
     expect(ip?.limit).toBe(LIMITE_IP_DEFAUT);
     expect(ip?.ttl).toBe(60_000);
+  });
+
+  // ─── QUAND REDIS TOMBE ──────────────────────────────────────────
+
+  /**
+   * LE REPLI REND LES COMPTEURS LOCAUX À CHAQUE INSTANCE.
+   *
+   * Huit essais par quart d'heure devenaient donc huit PAR INSTANCE : avec
+   * trois répliques, vingt-quatre — et personne ne l'avait décidé. On
+   * resserre pour que le produit revienne près de ce qui était voulu.
+   */
+  describe('les compteurs en panne de Redis', () => {
+    /** Fait échouer Redis une fois, ce qui pose l'état dégradé. */
+    async function faireTomberRedis() {
+      const { LimitationRedis } = await import('./limitation-redis');
+      const redis = {
+        defineCommand: () => undefined,
+        limiter: () => Promise.reject(new Error('Redis injoignable')),
+      };
+      const stockage = new LimitationRedis(redis as never);
+      await stockage.increment('cle', 1_000, 5, 0, 'adresse');
+    }
+
+    it('resserre les essais de mot de passe', async () => {
+      expect(limiteAdresse()).toBe(ESSAIS_ADRESSE);
+
+      await faireTomberRedis();
+
+      expect(limiteAdresse()).toBe(ESSAIS_ADRESSE_DEGRADE);
+      expect(ESSAIS_ADRESSE_DEGRADE).toBeLessThan(ESSAIS_ADRESSE);
+    });
+
+    /**
+     * ET L'ASYMÉTRIE EST LE CŒUR DE LA DÉCISION.
+     *
+     * Resserrer le compteur d'adresse coûte quelques essais à quelqu'un qui a
+     * oublié son mot de passe : il attend un quart d'heure. Resserrer le
+     * coupe-circuit par IP coûterait LA VENTE D'UN STADE ENTIER, puisque tous
+     * les téléphones partagent une adresse publique. On ne touche jamais au
+     * plafond qui tient le stade ouvert.
+     */
+    it('ne touche PAS au coupe-circuit qui tient le stade ouvert', async () => {
+      await faireTomberRedis();
+
+      const ip = COMPTEURS.find((c) => c.name === 'ip');
+      expect(ip?.limit).toBe(LIMITE_IP_DEFAUT);
+    });
   });
 });

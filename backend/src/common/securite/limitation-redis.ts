@@ -81,6 +81,35 @@ return { coups, reste, 0, 0 }
 /** Millisecondes vers secondes, arrondies au-dessus — comme la version d'origine. */
 const enSecondes = (ms: number) => Math.ceil(ms / 1000);
 
+/**
+ * LES COMPTEURS SONT-ILS ENCORE COMMUNS À TOUTES LES INSTANCES ?
+ *
+ * On ne pouvait pas le savoir. Le repli en mémoire était journalisé, et rien
+ * d'autre ne pouvait en tenir compte — en particulier pas la limite elle-même,
+ * qui restait à huit essais alors qu'elle en autorisait désormais huit PAR
+ * INSTANCE. Trois répliques, et la protection d'un compte passait de huit
+ * essais par quart d'heure à vingt-quatre, sans que personne le décide.
+ *
+ * Cet état est volontairement un module, et non une injection : il est lu par
+ * la fonction qui résout la limite, appelée par le garde Throttler bien avant
+ * qu'un service soit disponible.
+ *
+ * ON NE POSE JAMAIS DE DRAPEAU QU'IL FAUDRAIT LEVER À LA MAIN. Chaque requête
+ * retente Redis ; un succès efface l'état. Le rétablissement est donc
+ * automatique, et la fenêtre d'incertitude est d'une requête.
+ */
+const etat = { enMemoire: false };
+
+/** Vrai quand les compteurs sont partagés — c'est-à-dire quand Redis répond. */
+export function compteursPartages(): boolean {
+  return !etat.enMemoire;
+}
+
+/** Pour les tests : remet l'état à neuf. */
+export function reinitialiserEtatDesCompteurs(): void {
+  etat.enMemoire = false;
+}
+
 export class LimitationRedis implements ThrottlerStorage {
   private readonly logger = new Logger('Limitation');
 
@@ -138,6 +167,10 @@ export class LimitationRedis implements ThrottlerStorage {
         number,
       ];
 
+      // Redis a répondu : les compteurs sont de nouveau communs. Effacé ici et
+      // nulle part ailleurs, à chaque succès — pas de drapeau à lever.
+      etat.enMemoire = false;
+
       return {
         totalHits: coups,
         timeToExpire: enSecondes(reste),
@@ -145,6 +178,7 @@ export class LimitationRedis implements ThrottlerStorage {
         timeToBlockExpire: enSecondes(resteBlocage),
       };
     } catch (e) {
+      etat.enMemoire = true;
       this.signalerPanne(e);
       // On réessaie Redis à CHAQUE requête : dès qu'il répond de nouveau, les
       // compteurs redeviennent communs sans qu'on ait à redémarrer quoi que
