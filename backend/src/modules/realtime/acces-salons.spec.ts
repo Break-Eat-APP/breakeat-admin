@@ -319,6 +319,74 @@ describe('Accès aux salons temps réel', () => {
       expect(c.join).not.toHaveBeenCalled();
     });
 
+    /**
+     * LA BORNE DOIT TENIR MEME QUAND TOUT PART EN MEME TEMPS.
+     *
+     * Compter, attendre la base, puis s'ajouter : trente-et-une demandes
+     * lancees ensemble lisaient toutes une taille inferieure a trente,
+     * attendaient, et s'ajoutaient toutes. La borne ne tenait que si les
+     * demandes arrivaient une par une — c'est-a-dire jamais, dans le cas
+     * qu'elle est censee empecher.
+     */
+    it('tient la borne meme sur 40 demandes SIMULTANEES', async () => {
+      const c = socket();
+      prisma.event.findUnique.mockImplementation(
+        () => new Promise((r) => setTimeout(() => r({ organizationId: MON_CLUB }), 5)),
+      );
+
+      const issues = await Promise.allSettled(
+        Array.from({ length: 40 }, (_, i) =>
+          gateway.handleJoinRoom(c as never, { room: `event:e${i}` } as never),
+        ),
+      );
+
+      const admis = issues.filter((r) => r.status === 'fulfilled').length;
+      expect(admis).toBe(30);
+      expect(issues.filter((r) => r.status === 'rejected')).toHaveLength(10);
+    });
+
+    /**
+     * UNE RESERVATION N'EST PAS UNE AUTORISATION. Poser le salon dans la
+     * memoire avant de l'avoir verifie ferait entrer une seconde demande
+     * par le chemin rapide — celui qui ne verifie plus rien.
+     */
+    it('une demande REFUSEE ne laisse pas passer sa jumelle', async () => {
+      const c = socket();
+      prisma.event.findUnique.mockImplementation(
+        () => new Promise((r) => setTimeout(() => r({ organizationId: AUTRE_CLUB }), 5)),
+      );
+
+      const issues = await Promise.allSettled([
+        gateway.handleJoinRoom(c as never, { room: 'event:e-autre' } as never),
+        gateway.handleJoinRoom(c as never, { room: 'event:e-autre' } as never),
+      ]);
+
+      expect(issues.every((r) => r.status === 'rejected')).toBe(true);
+      expect(c.join).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Une base qui hoquette ne doit pas consommer les trente places : sans
+     * liberation, la socket serait fermee pour de bon apres trente pannes.
+     */
+    it('libere la place quand la base echoue', async () => {
+      const c = socket();
+      prisma.event.findUnique.mockRejectedValue(new Error('base injoignable'));
+
+      for (let i = 0; i < 35; i += 1) {
+        await gateway
+          .handleJoinRoom(c as never, { room: `event:e${i}` } as never)
+          .catch(() => undefined);
+      }
+
+      // Rien n'a ete autorise, donc rien ne doit etre reserve non plus : une
+      // demande valide passe encore.
+      prisma.event.findUnique.mockResolvedValue({ organizationId: MON_CLUB });
+      await expect(
+        gateway.handleJoinRoom(c as never, { room: 'event:e-valide' } as never),
+      ).resolves.toBeDefined();
+    });
+
     /** La memoire est portee par LA SOCKET : une autre repart de zero. */
     it('deux sockets ne partagent pas leur memoire', async () => {
       const a = socket();
@@ -329,6 +397,86 @@ describe('Accès aux salons temps réel', () => {
       await gateway.handleJoinRoom(b as never, { room: salon } as never);
 
       expect(prisma.organizationMember.findUnique).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ─── Retirer un acces sans attendre la reconnexion ─────────────
+
+  /**
+   * LA MEMOIRE DES SALONS AVAIT UN PRIX.
+   *
+   * Elle evite de relire la base a chaque message, mais une autorisation
+   * retiree ne prenait effet qu'a la deconnexion : un equipier ecarte d'une
+   * buvette continuait d'en voir arriver les commandes, les montants et les
+   * noms — parfois des heures.
+   *
+   * Et rejouer la verification a l'entree n'y aurait rien fait : une fois
+   * dans le salon, Socket.IO livre sans plus rien demander. Il faut FAIRE
+   * SORTIR la socket.
+   */
+  describe('la revocation', () => {
+    const socketDans = (salons: string[]) => ({
+      id: 'ws-1',
+      data: { user: { sub: MOI }, salonsAutorises: new Set(salons) },
+      join: jest.fn(),
+      leave: jest.fn(),
+    });
+
+    const brancher = (clients: unknown[]) => {
+      (gateway as unknown as { server: unknown }).server = {
+        sockets: { sockets: new Map(clients.map((c, i) => [String(i), c])) },
+      };
+    };
+
+    it('fait SORTIR d’une buvette dont l’acces a ete retire', async () => {
+      const c = socketDans(['supplier:b-perdue']);
+      brancher([c]);
+      prisma.supplier.findUnique.mockResolvedValue({ organizationId: AUTRE_CLUB });
+
+      expect(await gateway.revoquerLesAccesPerdus()).toBe(1);
+      expect(c.leave).toHaveBeenCalledWith('supplier:b-perdue');
+      // Et la memoire est nettoyee : sinon le chemin rapide le readmettrait.
+      expect(c.data.salonsAutorises.has('supplier:b-perdue')).toBe(false);
+    });
+
+    it('ne touche PAS a un acces toujours valide', async () => {
+      const c = socketDans([`organization:${MON_CLUB}`]);
+      brancher([c]);
+
+      expect(await gateway.revoquerLesAccesPerdus()).toBe(0);
+      expect(c.leave).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Un client suit SA commande : cela ne se revoque pas. Et reverifier dix
+     * mille salons de commande chaque minute ferait dix mille lectures pour
+     * une autorisation qui ne peut pas changer.
+     */
+    it('ne reverifie jamais le salon d’une commande', async () => {
+      const c = socketDans(['order:o-1']);
+      brancher([c]);
+
+      expect(await gateway.revoquerLesAccesPerdus()).toBe(0);
+      expect(prisma.order.findUnique).not.toHaveBeenCalled();
+      expect(c.leave).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Couper un comptoir qui travaille parce qu'une requete a echoue serait
+     * pire que le retard qu'on cherche a combler.
+     */
+    it('ne retire RIEN quand la base est injoignable', async () => {
+      const c = socketDans(['supplier:b-1']);
+      brancher([c]);
+      prisma.supplier.findUnique.mockRejectedValue(new Error('base injoignable'));
+
+      expect(await gateway.revoquerLesAccesPerdus()).toBe(0);
+      expect(c.leave).not.toHaveBeenCalled();
+    });
+
+    it('ne fait rien tant que la passerelle n’a pas de serveur', async () => {
+      (gateway as unknown as { server: unknown }).server = undefined;
+      expect(await gateway.revoquerLesAccesPerdus()).toBe(0);
     });
   });
 });

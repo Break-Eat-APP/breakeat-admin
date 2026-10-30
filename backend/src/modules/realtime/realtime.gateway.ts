@@ -9,6 +9,7 @@ import {
   WsException,
 } from '@nestjs/websockets';
 import { Logger, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Server, Socket } from 'socket.io';
@@ -187,14 +188,40 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
      * son club, son evenement, son point de retrait et les commandes du
      * moment. Qui depasse n'utilise pas l'application.
      */
-    if (dejaAutorises.size >= MAX_SALONS_PAR_SOCKET) {
+    /**
+     * LA PLACE SE RESERVE AVANT L'ATTENTE, pas apres.
+     *
+     * Compter puis attendre la base puis s'ajouter laisse la borne passer :
+     * trente-et-une demandes lancees ensemble lisent toutes une taille
+     * inferieure a trente, attendent, et s'ajoutent toutes. La borne ne
+     * tenait que si les demandes arrivaient une par une.
+     *
+     * ET LA RESERVATION N'EST PAS UNE AUTORISATION. Deux ensembles, et c'est
+     * la le point delicat : poser le salon dans `dejaAutorises` avant de
+     * l'avoir verifie ferait entrer une seconde demande sur le chemin
+     * rapide — celui qui ne verifie plus rien. Le salon reserve est donc
+     * tenu a part jusqu'a ce que la base ait repondu.
+     */
+    const enCours = this.salonsEnCours(client);
+    if (dejaAutorises.size + enCours.size >= MAX_SALONS_PAR_SOCKET) {
       this.logger.warn(
         `WS [${client.id}] refuse sur ${dto.room} — ${MAX_SALONS_PAR_SOCKET} salons deja ouverts`,
       );
       throw new WsException('Too many rooms');
     }
+    enCours.add(dto.room);
 
-    if (!(await this.peutRejoindre(utilisateur.sub, dto.room))) {
+    let autorise: boolean;
+    try {
+      autorise = await this.peutRejoindre(utilisateur.sub, dto.room);
+    } finally {
+      // La place se LIBERE quoi qu'il arrive — refus, panne de base,
+      // exception. Sans ce `finally`, une base qui hoquette consommerait
+      // les trente places et fermerait la socket pour de bon.
+      enCours.delete(dto.room);
+    }
+
+    if (!autorise) {
       this.logger.warn(`WS [${client.id}] refuse sur ${dto.room} — pas sa buvette`);
       throw new WsException('Forbidden');
     }
@@ -210,6 +237,82 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
     const data = client.data as { salonsAutorises?: Set<string> };
     data.salonsAutorises ??= new Set<string>();
     return data.salonsAutorises;
+  }
+
+  /** Les salons DEMANDES dont la base n'a pas encore repondu — places reservees. */
+  private salonsEnCours(client: Socket): Set<string> {
+    const data = client.data as { salonsEnCours?: Set<string> };
+    data.salonsEnCours ??= new Set<string>();
+    return data.salonsEnCours;
+  }
+
+  /**
+   * LES SALONS QU'ON PEUT PERDRE — et qu'il faut donc reverifier.
+   *
+   * `order:` n'en est pas : un client suit SA commande, et cela ne se retire
+   * pas. Les autres dependent d'une appartenance ou d'un rattachement, qui
+   * se revoquent d'un clic dans le back-office.
+   *
+   * La distinction n'est pas cosmetique : dix mille clients ont chacun un
+   * salon de commande, et les reverifier toutes les minutes ferait dix mille
+   * lectures par minute pour une autorisation qui ne peut pas changer. Les
+   * salons privilegies, eux, se comptent par poste de comptoir.
+   */
+  private static readonly SALONS_REVOCABLES = [
+    'supplier:',
+    'organization:',
+    'dashboard:',
+    'event:',
+    'pickup-point:',
+  ];
+
+  /**
+   * RETIRER L'ACCES SANS ATTENDRE LA RECONNEXION.
+   *
+   * La memoire des salons evite de relire la base a chaque message — mais
+   * elle a un cout : une autorisation retiree ne prenait effet qu'a la
+   * deconnexion. Un equipier ecarte d'une buvette continuait d'en voir
+   * arriver les commandes, les montants et les noms, parfois des heures.
+   *
+   * Et rejouer la verification a l'entree ne suffisait pas : une fois dans
+   * le salon, Socket.IO livre sans plus rien demander. Il faut donc FAIRE
+   * SORTIR la socket, et c'est ce que fait ce passage.
+   *
+   * Une minute de retard au plus. Pour une revocation immediate il faudrait
+   * que le back-office previenne la passerelle au moment du clic ; c'est
+   * plus de plomberie pour gagner cinquante secondes sur un geste rare.
+   *
+   * Chaque instance ne voit QUE ses propres sockets, et c'est exactement ce
+   * qu'il faut : chacune revoque les siennes.
+   */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async revoquerLesAccesPerdus(): Promise<number> {
+    const { server } = this;
+    if (!server) return 0;
+
+    let sorties = 0;
+    for (const client of server.sockets.sockets.values()) {
+      const utilisateur = client.data.user as { sub?: string } | undefined;
+      if (!utilisateur?.sub) continue;
+
+      const memoire = this.salonsAutorises(client);
+      for (const salon of [...memoire]) {
+        if (!RealtimeGateway.SALONS_REVOCABLES.some((p) => salon.startsWith(p))) continue;
+        try {
+          if (await this.peutRejoindre(utilisateur.sub, salon)) continue;
+        } catch {
+          // Base injoignable : on ne retire rien. Couper un comptoir qui
+          // travaille parce qu'une requete a echoue serait pire que le
+          // retard qu'on cherche a combler.
+          continue;
+        }
+        client.leave(salon);
+        memoire.delete(salon);
+        sorties += 1;
+        this.logger.warn(`WS [${client.id}] sorti de ${salon} — acces retire`);
+      }
+    }
+    return sorties;
   }
 
   /**
