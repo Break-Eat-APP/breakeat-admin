@@ -27,6 +27,7 @@ import type { UpdateCartDto } from './dto/update-cart.dto';
 import type { AddCartItemDto } from './dto/add-cart-item.dto';
 import type { UpdateCartItemDto } from './dto/update-cart-item.dto';
 import { assertOrganisationOuverte } from '../../common/helpers/organisation-ouverte';
+import { modeDeCommande } from '../../common/helpers/mode-de-commande';
 import {
   assertCreneauCompatible,
   assertPointDeRetraitCompatible,
@@ -181,20 +182,53 @@ export class CartService {
       where: { id: event.venueId },
       select: {
         flaixEnabled: true,
-        // Un seul suffit à prouver que le relais est en service.
+        ordersOpenAt: true,
+        timezone: true,
+        /**
+         * TOUS les événements du lieu, pas seulement celui qu'on ouvre : le
+         * mode se décide sur l'ensemble. Bornés aux colonnes que
+         * `fenetreDeCommande` lit.
+         */
         events: {
-          where: { flaixOrderUrl: { not: null } },
-          select: { id: true },
-          take: 1,
+          select: {
+            id: true,
+            name: true,
+            startAt: true,
+            endAt: true,
+            status: true,
+            isPermanentContainer: true,
+            flaixOrderUrl: true,
+          },
         },
       },
     });
-    if (lieu?.flaixEnabled && lieu.events.length > 0) {
-      throw new BadRequestException(
-        'La commande de ce lieu passe par Flaix — mets à jour l’application.',
-      );
-    }
 
+    /**
+     * UN LIEU PASSÉ À FLAIX NE PREND PLUS DE COMMANDE BREAK EAT.
+     *
+     * `flaixEnabled` ne vivait que dans l'écran de découverte : il décidait
+     * où l'application EMMÈNE le client, et nulle part le serveur ne
+     * refusait. Une version ancienne de l'app, un écran resté ouvert, un
+     * appel direct — et un panier s'ouvrait sur un lieu dont le club ne
+     * tient plus ni la carte ni les prix.
+     *
+     * LA MÊME RÈGLE QUE PARTOUT AILLEURS, et c'est tout l'objet de
+     * `modeDeCommande`. La première version refusait dès qu'UN événement du
+     * lieu portait un lien — même un match joué il y a six mois. Une vieille
+     * adresse oubliée suffisait donc à couper la vente d'un club dont
+     * aucune rencontre du moment n'était joignable chez Flaix.
+     */
+    if (lieu) {
+      const mode = modeDeCommande(lieu, lieu.events, new Date(), {
+        heure: lieu.ordersOpenAt,
+        timezone: lieu.timezone ?? 'Europe/Paris',
+      });
+      if (mode !== 'break-eat') {
+        throw new BadRequestException(
+          'La commande de ce lieu passe par Flaix — mets à jour l’application.',
+        );
+      }
+    }
     // Supplier must be attached to this event via the EventSupplier junction.
     const eventSupplier = await this.prisma.eventSupplier.findFirst({
       where: { eventId: dto.eventId, supplierId: dto.supplierId },

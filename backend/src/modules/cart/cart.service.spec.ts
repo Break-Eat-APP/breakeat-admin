@@ -230,49 +230,92 @@ describe('CartService', () => {
     // ─── Un lieu passé à Flaix ────────────────────────────────
 
     /**
-     * `flaixEnabled` ne vivait QUE dans l'écran de découverte : il décidait
-     * où l'application emmène le client, et nulle part le serveur ne
-     * refusait. Une version ancienne de l'app, un écran resté ouvert, un
-     * appel direct — et un panier Break Eat s'ouvrait sur un lieu dont le
-     * club ne tient plus ni la carte ni les prix. Le client payait des
-     * produits que personne ne lui servirait.
+     * UNE SEULE RÈGLE, PARTAGÉE — `modeDeCommande`.
+     *
+     * Elle était écrite à trois endroits qui ne disaient pas la même chose.
+     * Résultat, les deux travers opposés tombaient sur un club en pleine
+     * configuration : un lieu basculé sans lien utilisable n'avait PLUS
+     * AUCUN bouton, et une vieille adresse laissée sur un match terminé
+     * suffisait à refuser un panier.
+     *
+     * Les quatre cas qui comptent sont ici.
      */
-    it('REFUSE un panier sur un lieu passé à Flaix', async () => {
-      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
+    const HEURE = 3_600_000;
+    const matchFlaix = (over: Record<string, unknown> = {}) => ({
+      id: 'm-1',
+      name: 'Match',
+      startAt: new Date(Date.now() - HEURE),
+      endAt: new Date(Date.now() + 2 * HEURE),
+      status: 'ACTIVE',
+      isPermanentContainer: false,
+      flaixOrderUrl: 'https://commande.flaix.bo.synertic.net/c/m1',
+      ...over,
+    });
+    const lieuAvec = (events: unknown[]) =>
       (prisma.venue.findUnique as jest.Mock).mockResolvedValue({
         flaixEnabled: true,
-        events: [{ id: 'un-match-avec-lien' }],
+        ordersOpenAt: '08:00',
+        timezone: 'Europe/Paris',
+        events,
       });
+    const ouvrirPanier = () =>
+      service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID });
 
-      await expect(
-        service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID }),
-      ).rejects.toThrow(/Flaix/);
+    it('REFUSE quand un match est ouvert chez Flaix MAINTENANT', async () => {
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
+      lieuAvec([matchFlaix()]);
+
+      await expect(ouvrirPanier()).rejects.toThrow(/Flaix/);
     });
 
     /**
-     * LA MÊME RÈGLE QUE L'APP, PAS PLUS LARGE.
-     *
-     * Un lieu basculé mais dont AUCUN match ne porte encore de lien garde son
-     * parcours Break Eat — c'est ce qui permet au club de préparer sa saison
-     * sans couper sa vente du soir. `cheminDeCommande` dit exactement cela
-     * côté mobile ; si le serveur était plus strict, un club en cours de
-     * configuration se retrouverait sans aucun moyen de vendre.
+     * Une ouverture est RÉELLEMENT prévue : le lieu est bien passé à Flaix,
+     * il est fermé en attendant. Surtout pas rabattu sur Break Eat, qui
+     * vendrait une carte que le club ne tient plus.
      */
-    it('laisse passer un lieu basculé dont AUCUN match n’a encore de lien', async () => {
+    it('REFUSE quand la commande Flaix ouvre plus tard', async () => {
       (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
-      (prisma.venue.findUnique as jest.Mock).mockResolvedValue({
-        flaixEnabled: true,
-        events: [],
-      });
-      (prisma.eventSupplier.findFirst as jest.Mock).mockResolvedValue({ id: 'es-1' });
+      lieuAvec([
+        matchFlaix({
+          startAt: new Date(Date.now() + 10 * 86_400_000),
+          endAt: new Date(Date.now() + 10 * 86_400_000 + 2 * HEURE),
+        }),
+      ]);
 
-      // Il ne doit PAS être refusé pour cause de Flaix. Ce qui l'arrête
-      // ensuite, c'est le reste du parcours, pas le relais.
-      await expect(
-        service.create(USER_ID, { eventId: EVENT_ID, supplierId: SUPPLIER_ID }),
-      ).rejects.not.toThrow(/Flaix/);
+      await expect(ouvrirPanier()).rejects.toThrow(/Flaix/);
     });
 
+    /**
+     * LE REPLI. Un club qui n'a pas fini sa bascule — basculé, aucun lien
+     * collé — doit pouvoir continuer à vendre. Sans cela, il arrive au
+     * soir du match sans aucun moyen de prendre une commande.
+     */
+    it('LAISSE PASSER un lieu basculé dont AUCUN match n’a de lien', async () => {
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
+      lieuAvec([matchFlaix({ flaixOrderUrl: null })]);
+      (prisma.eventSupplier.findFirst as jest.Mock).mockResolvedValue({ id: 'es-1' });
+
+      await expect(ouvrirPanier()).rejects.not.toThrow(/Flaix/);
+    });
+
+    /**
+     * ET LE CAS QUI COUPAIT LA VENTE : une vieille adresse laissée sur un
+     * match joué il y a six mois. Elle ne joint plus rien, et ne doit donc
+     * rien fermer.
+     */
+    it('LAISSE PASSER quand le seul lien est sur un match TERMINÉ', async () => {
+      (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
+      lieuAvec([
+        matchFlaix({
+          startAt: new Date(Date.now() - 180 * 86_400_000),
+          endAt: new Date(Date.now() - 180 * 86_400_000 + 2 * HEURE),
+          status: 'ENDED',
+        }),
+      ]);
+      (prisma.eventSupplier.findFirst as jest.Mock).mockResolvedValue({ id: 'es-1' });
+
+      await expect(ouvrirPanier()).rejects.not.toThrow(/Flaix/);
+    });
     it('rejects when supplier is not attached to the event', async () => {
       (prisma.event.findUnique as jest.Mock).mockResolvedValue(mockEvent());
       (prisma.eventSupplier.findFirst as jest.Mock).mockResolvedValue(null);

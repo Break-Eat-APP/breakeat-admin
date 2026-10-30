@@ -19,6 +19,7 @@ import {
   fenetreDeCommande,
 } from '../../common/helpers/fenetre-commande';
 import { saisonDuLieu } from '../../common/helpers/saison-du-lieu';
+import { modeDeCommande } from '../../common/helpers/mode-de-commande';
 import { personnaliserLien, porteDesEtiquettes } from '../../common/helpers/personnaliser-lien';
 
 /**
@@ -337,12 +338,13 @@ export class PublicVenuesController {
         // Et seulement si le lieu est en Flaix : UN interrupteur commande tout
         // le relais. Des liens collés d'avance sur un lieu non basculé ne
         // changent rien — c'est ce qui permet de préparer la saison tranquille.
+        // Le fuseau du LIEU : « 8 h » n'a de sens que quelque part.
+        const reglage = {
+          heure: v.ordersOpenAt,
+          timezone: v.timezone ?? 'Europe/Paris',
+        };
         const fenetre = v.flaixEnabled
-          ? fenetreDeCommande(accessible, maintenant, {
-              heure: v.ordersOpenAt,
-              // Le fuseau du LIEU : « 8 h » n'a de sens que quelque part.
-              timezone: v.timezone ?? 'Europe/Paris',
-            })
+          ? fenetreDeCommande(accessible, maintenant, reglage)
           : ({ etat: 'aucun' } as const);
 
         // Le prochain événement annoncé, qu'il soit en Flaix ou non : c'est ce
@@ -377,19 +379,29 @@ export class PublicVenuesController {
          * événement par événement. Pour un lieu qui n'en ouvre qu'un, la
          * réponse est identique à l'ancienne.
          */
-        const ouvrable = v.flaixEnabled
-          ? (ev: { id: string }) =>
-              accessible.some(
-                (e) =>
-                  e.id === ev.id &&
-                  estCommandableMaintenant(e, maintenant, {
-                    heure: v.ordersOpenAt,
-                    timezone: v.timezone ?? 'Europe/Paris',
-                  }),
-              )
-          : // Parcours Break Eat : c'est l'événement ACTIF qui prend les
-            // commandes, et il n'y en a qu'un. La règle ne change pas.
-            (ev: { id: string }) => ev.id === currentEvent?.id;
+        /**
+         * QUELS MATCHS SONT COMMANDABLES — et par quel chemin.
+         *
+         * `modeDeCommande` tranche : c'est la MÊME règle que le panier et
+         * que l'application. Elle était écrite trois fois, et les trois ne
+         * disaient pas la même chose — un lieu basculé sans lien utilisable
+         * n'avait plus aucun bouton, ni Flaix ni Break Eat.
+         */
+        const mode = modeDeCommande(v, accessible, maintenant, reglage);
+        const ouvrable =
+          mode === 'flaix'
+            ? (ev: { id: string }) =>
+                accessible.some(
+                  (e) => e.id === ev.id && estCommandableMaintenant(e, maintenant, reglage),
+                )
+            : mode === 'break-eat'
+              ? // Repli : c'est l'événement ACTIF qui prend les commandes, et
+                // il n'y en a qu'un.
+                (ev: { id: string }) => ev.id === currentEvent?.id
+              : // Passé à Flaix, mais la commande ouvre plus tard : rien
+                // n'est commandable, et surtout pas par le parcours
+                // Break Eat — le club ne tient plus ni carte ni prix.
+                () => false;
 
         const distanceKm =
           position && v.latitude !== null && v.longitude !== null
