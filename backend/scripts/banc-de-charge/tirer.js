@@ -51,6 +51,9 @@ if (/railway\.app|breakeat-admin-production/.test(API)) {
   process.exit(1);
 }
 
+/** Le lieu et le match visés par le scénario Flaix, résolus une fois. */
+const CIBLE = { lieu: null, match: null };
+
 /** Les mesures brutes — on calcule les percentiles à la fin, pas en route. */
 const latences = [];
 const issues = new Map();
@@ -59,6 +62,22 @@ let enVol = 0;
 function noter(code, debutMs) {
   latences.push(Date.now() - debutMs);
   issues.set(code, (issues.get(code) ?? 0) + 1);
+}
+
+/** Un appel qui ECRIT — l'inscription en est un. */
+async function poster(chemin, corps) {
+  const debut = Date.now();
+  try {
+    const r = await fetch(`${API}${chemin}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(corps),
+    });
+    await r.text();
+    noter(String(r.status), debut);
+  } catch (e) {
+    noter(e?.cause?.code ?? 'reseau', debut);
+  }
 }
 
 async function appeler(chemin) {
@@ -86,6 +105,48 @@ const parcours = {
   // lieux a portee — et non les cinquante du pays. C est ce que l app fait
   // par defaut, et donc le chiffre qui decide.
   proche: () => appeler('/public/venues?lat=43&lng=1&radiusKm=10'),
+
+  /**
+   * L'INSCRIPTION — le premier soir d'un club, tout le monde crée son
+   * compte en même temps.
+   *
+   * Elle ÉCRIT, et c'est ce qui la distingue de tout le reste : un hachage
+   * de mot de passe est volontairement coûteux, et il s'exécute sur le
+   * seul fil de Node. C'est le scénario où l'application se comporte le
+   * moins comme une application de lecture.
+   */
+  inscription: () => {
+    const n = Math.random().toString(36).slice(2, 11);
+    return poster('/auth/register', {
+      email: `charge-${n}@essai.test`,
+      password: 'MotDePasseDEssai!2026',
+      firstName: 'Essai',
+      lastName: 'Charge',
+    });
+  },
+
+  /**
+   * LE PASSAGE VERS FLAIX — ce que fait un supporter qui appuie sur
+   * « Commander ».
+   *
+   * Une commande chez Flaix coûte à Break Eat exactement ceci : un appel
+   * pour résoudre la destination du match choisi. Tout le reste — panier,
+   * paiement, créneaux — se passe chez Flaix.
+   *
+   * C'est donc CE chiffre qui dit combien de commandes Break Eat peut
+   * relayer par seconde, et non le débit de l'écran d'accueil.
+   */
+  flaix: async () => {
+    if (!CIBLE.lieu) {
+      const r = await fetch(`${API}/public/venues?lat=43&lng=1&radiusKm=10`);
+      const lieux = await r.json();
+      const avecMatch = lieux.find((v) => v.saison?.length > 0);
+      if (!avecMatch) throw new Error('Aucun lieu avec une saison — relancer le semis.');
+      CIBLE.lieu = avecMatch.id;
+      CIBLE.match = (avecMatch.saison.find((m) => m.ouvert) ?? avecMatch.saison[0]).id;
+    }
+    return appeler(`/public/venues/${CIBLE.lieu}/evenements/${CIBLE.match}/commande`);
+  },
 };
 
 function percentile(tries, p) {
@@ -142,7 +203,7 @@ async function main() {
   for (const [code, n] of [...issues].sort((a, b) => b[1] - a[1])) {
     const part = ((n / latences.length) * 100).toFixed(1);
     const sens =
-      code === '200'
+      code.startsWith('2')
         ? 'servies'
         : code === '429'
           ? 'REFUSÉES par la limitation'
@@ -152,7 +213,9 @@ async function main() {
     console.log(`    ${code.padEnd(8)} ${String(n).padStart(7)}  ${part.padStart(5)} %  ${sens}`);
   }
 
-  const servies = issues.get('200') ?? 0;
+  // Tout code 2xx est une reponse SERVIE : une inscription rend 201, et la
+  // compter comme un echec donnerait un bilan faux dans le sens rassurant.
+  const servies = [...issues].reduce((n, [c, v]) => (c.startsWith('2') ? n + v : n), 0);
   if (servies < latences.length) {
     console.log(
       `\n  ⚠️  ${latences.length - servies} requête(s) non servies. Un chiffre de` +

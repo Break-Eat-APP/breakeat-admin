@@ -105,3 +105,53 @@ matchs que personne ne regarde.
   soir de match sont un autre sujet que dix mille requêtes HTTP.
 - **Un seul processus.** Le débit se multiplie par le nombre d'instances ;
   la base, elle, ne se multiplie pas.
+
+## Campagne du 30/10 — inscriptions et passage vers Flaix
+
+Les deux chemins que l'écran d'accueil ne mesure pas. Même machine, mêmes
+réserves : le tireur et l'API se partagent le processeur, une seule instance,
+sans Redis.
+
+| Scénario | Débit | p50 | p95 | Servies |
+|---|---|---|---|---|
+| `flaix` (50 clients) | **427 req/s** | 93 ms | 148 ms | 100 % |
+| `flaix` (200 clients) | **299 req/s** | 358 ms | 561 ms | 100 % |
+| `inscription` (10 clients) | **14,4 req/s** | 671 ms | 880 ms | 100 % |
+| `inscription` (50 clients) | **14,6 req/s** | 3,3 s | 3,6 s | 100 % |
+
+**Le passage vers Flaix est dix fois moins cher que l'écran d'accueil.** Il ne
+lit qu'un lieu et un match ; tout le reste — panier, paiement, créneaux — se
+passe chez Flaix. C'est donc ce chiffre qui dit combien de commandes Break Eat
+peut relayer, et non le débit de la découverte.
+
+**L'inscription plafonne à 14,5 par seconde, et la concurrence n'y change
+rien** — dix clients ou cinquante donnent le même débit, seule la latence
+monte. Ce n'est pas une file d'attente : c'est `argon2`, le hachage du mot de
+passe. Il est coûteux **par conception** (c'est ce qui protège les comptes), et
+il s'exécute sur le fil unique de Node.
+
+### Ce que ça donne pour « 50 lieux, 20 000 utilisateurs, 20 000 commandes »
+
+Par instance, en prenant les chiffres ci-dessus :
+
+| | Charge | Verdict |
+|---|---|---|
+| 20 000 relais Flaix, étalés sur 10 min | 33 req/s | **8 % d'une instance** |
+| 20 000 inscriptions, étalées sur la soirée | 1,4 req/s | sans effort |
+| 20 000 inscriptions, concentrées sur 30 min | 11 req/s | **76 % d'une instance** |
+| 20 000 inscriptions, concentrées sur 10 min | 33 req/s | **3 instances** |
+| Découverte, 20 000 × 3 appels sur 30 min | 33 req/s | **2 instances** |
+
+**La commande n'est pas le problème ; l'inscription l'est.** Et c'est une
+bonne nouvelle : elle n'arrive qu'une fois par client, elle s'étale
+naturellement, et elle se règle en ajoutant des instances — le hachage est du
+calcul pur, il n'attend aucune ressource partagée.
+
+### Ce que ces chiffres ne disent toujours pas
+
+- **Le parcours de commande Break Eat** (panier, Stripe, stock) n'est pas tiré.
+  Sur un lieu Flaix il n'existe pas ; sur les autres, il reste à mesurer.
+- **Le temps réel.** Dix mille sockets ouvertes un soir de match sont un autre
+  sujet que dix mille requêtes HTTP.
+- **Une seule instance, sans Redis.** Le débit se multiplie par le nombre
+  d'instances ; la base, elle, ne se multiplie pas.
