@@ -539,6 +539,34 @@ model Event {
   operatorScreens EventOperatorScreen[]
   scheduledPushes ScheduledPush[]
 
+  /// LES ÉVÉNEMENTS D'UN LIEU SE LISAIENT EN PARCOURANT TOUTE LA TABLE.
+  ///
+  /// Une clé étrangère ne crée PAS d'index — c'est l'erreur qu'on fait tous
+  /// une fois. Le seul index qui existait est PARTIEL
+  /// (`events_permanent_container_per_venue`) et ne vise que les contenants
+  /// permanents, soit une ligne par lieu. PostgreSQL n'avait donc qu'un
+  /// parcours séquentiel pour les trois requêtes de l'écran d'accueil — les
+  /// deux agrégats de confidentialité et la lecture bornée des événements —
+  /// à chaque affichage, et la route est en `no-store`.
+  ///
+  /// MESURÉ sur 80 lieux, 5 saisons, 5 200 événements, à chaud : une recherche
+  /// de cinq lieux proches — le cas COURANT — passe de 17,1 ms et 134 pages à
+  /// 0,78 ms et 13 pages. Elle jetait 4 875 lignes sur 5 200 pour en garder
+  /// 325.
+  ///
+  /// MAIS DE BOUT EN BOUT CELA NE FAIT QUE 8 % : la requête complète passe de
+  /// 84 à 77 ms. Les seize millisecondes de SQL ne pesaient que seize
+  /// millisecondes sur quatre-vingt-quatre — le reste est du Node. L'index est
+  /// bon à prendre, et il le restera en grandissant puisque le parcours
+  /// séquentiel grossit avec la table ; ce n'est pas là que vit le coût de
+  /// l'écran d'accueil. Les plans et l'A/B complets sont dans la migration
+  /// `20261030c_index_lieu_evenement`.
+  ///
+  /// La date est dans l'index parce qu'elle sert DEUX fois dans la même
+  /// requête : le filtre de saison et le tri. Les deux deviennent gratuits, et
+  /// l'agrégat se contente du préfixe `venueId`, qu'il lit en parcours d'index
+  /// SEUL — sans toucher au tas.
+  @@index([venueId, startAt])
   @@map("events")
 }
 
@@ -1805,20 +1833,20 @@ model OrderRating {
 /// d'attente, pas un journal. Le registre immuable, c'est `OrderAuditTrail`,
 /// et les deux ne doivent pas se confondre.
 model RealtimeOutbox {
-  id          String    @id @default(uuid())
-  eventId     String    @unique @map("event_id")
+  id           String    @id @default(uuid())
+  eventId      String    @unique @map("event_id")
   /// `new_order`, `order_updated`, `order_ready`, `customer_arrived`.
-  eventName   String    @map("event_name")
+  eventName    String    @map("event_name")
   /// Les salons visés, tels que la passerelle les nomme.
-  rooms       String[]
+  rooms        String[]
   /// L'enveloppe COMPLÈTE, telle qu'elle partira. Rejouer ne doit rien
   /// recalculer : les données d'alors ont pu changer depuis.
-  payload     Json
-  createdAt   DateTime  @default(now()) @map("created_at")
+  payload      Json
+  createdAt    DateTime  @default(now()) @map("created_at")
   /// Nul tant que l'émission n'a pas abouti — c'est ce que l'ouvrier cherche.
-  deliveredAt DateTime? @map("delivered_at")
-  attempts    Int       @default(0)
-  lastError   String?   @map("last_error")
+  deliveredAt  DateTime? @map("delivered_at")
+  attempts     Int       @default(0)
+  lastError    String?   @map("last_error")
   /// LE BAIL — jusqu'à quand cette ligne est réservée par un ouvrier.
   ///
   /// `FOR UPDATE SKIP LOCKED` ne verrouille que le temps de la requête. Une

@@ -1,0 +1,66 @@
+-- LES ÉVÉNEMENTS D'UN LIEU SE LISAIENT EN PARCOURANT TOUTE LA TABLE.
+--
+-- `events` n'avait aucun index général sur `venue_id` : le seul qui existait
+-- est PARTIEL (`events_permanent_container_per_venue`) et ne vise que les
+-- contenants permanents, soit une ligne par lieu. PostgreSQL n'avait donc
+-- rien d'autre qu'un parcours séquentiel, et une clé étrangère ne crée pas
+-- d'index — contrairement à ce que l'on suppose souvent.
+--
+-- Trois requêtes du parcours client passent par là, à CHAQUE affichage de
+-- l'écran d'accueil (la route est en `no-store`, rien n'est mis en cache) :
+--
+--   · les deux agrégats de confidentialité, qui décident si un lieu privé
+--     est masqué (`public-venues.controller.ts`) ;
+--   · la lecture bornée des événements de chaque lieu, triée par date.
+--
+-- ── MESURÉ, PAS SUPPOSÉ ──────────────────────────────────────────
+--
+-- 80 lieux, 5 saisons, 5 200 événements sur un PostgreSQL 18 jetable, à
+-- chaud. `EXPLAIN (ANALYZE, BUFFERS)` :
+--
+--                                    SANS index        AVEC index
+--   5 lieux (recherche proche)    17,1 ms / 134 p.   0,78 ms /  13 p.
+--   80 lieux (tous)               16,7 ms / 134 p.   1,77 ms / 186 p.
+--
+-- Le cas à 5 lieux est le cas COURANT : l'application montre les lieux
+-- proches, pas les quatre-vingts. Il passait par un parcours complet qui
+-- jetait 4 875 lignes sur 5 200 pour en garder 325.
+--
+-- Le cas à 80 lieux lit plus de pages — l'index est plus gros que la table —
+-- et reste neuf fois plus rapide : c'est un parcours d'index SEUL, sans accès
+-- au tas et sans évaluer un filtre sur 5 200 lignes.
+--
+-- ── ET CE QUE ÇA DONNE DE BOUT EN BOUT : 8 %, PAS 22 FOIS ────────
+--
+-- Il faut le dire, sinon les chiffres ci-dessus laissent croire autre chose.
+-- Même base, même scénario `proche` du banc de charge, A/B sur la même
+-- machine :
+--
+--                              SANS index     AVEC index
+--   1 client,   p50              84 ms          77 ms      (−8 %)
+--   50 clients, débit          14,7 req/s     15,6 req/s   (+6 %)
+--   50 clients, p95             4 438 ms       3 998 ms    (−10 %)
+--
+-- Les seize millisecondes de SQL ne pesaient que seize millisecondes sur
+-- quatre-vingt-quatre. LE RESTE EST DU NODE : hydratation Prisma, filtrage
+-- géographique, sérialisation. L'index est bon à prendre et il le restera en
+-- grandissant — le parcours séquentiel grossit avec la table, lui non — mais
+-- ce n'est PAS là que vit le coût de l'écran d'accueil. Qui cherchera à
+-- accélérer cette route devra regarder le Node, pas la base.
+--
+-- ── POURQUOI (venue_id, start_at) ET PAS venue_id SEUL ───────────
+--
+-- La colonne de date sert deux fois dans la même requête : le filtre de
+-- saison (`start_at >= …`) et le tri (`ORDER BY start_at`). Dans l'index,
+-- les deux sont gratuits. Et l'agrégat n'a besoin que du préfixe `venue_id`,
+-- qu'il lit en parcours d'index seul.
+--
+-- ── SUR UNE GROSSE TABLE ─────────────────────────────────────────
+--
+-- `CREATE INDEX` prend un verrou qui bloque les ÉCRITURES le temps de la
+-- construction. À 5 200 lignes c'est une affaire de millisecondes. Au-delà de
+-- quelques centaines de milliers de lignes, il faudrait `CONCURRENTLY` — qui
+-- ne peut pas tourner dans une transaction, donc hors de `prisma migrate`.
+-- Ce n'est pas le cas aujourd'hui : un club saisit ses matchs une fois par
+-- saison, la table croît de quelques milliers de lignes par an.
+CREATE INDEX "events_venue_id_start_at_idx" ON "events"("venue_id", "start_at");
