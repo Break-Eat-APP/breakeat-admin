@@ -1,6 +1,11 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { adresseAvecPool, resumePool } from './pool';
+import { adresseAvecPool, resumePool, CONNEXIONS_PAR_INSTANCE } from './pool';
+import {
+  lireLesConnexions,
+  resumeDesConnexions,
+  OCCUPATION_ALERTE,
+} from './connexions';
 
 /**
  * PrismaService wraps PrismaClient and integrates with NestJS lifecycle.
@@ -36,6 +41,20 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     // La valeur retenue se lit au démarrage plutôt que de se déduire d'une
     // panne. Sans l'adresse : cette ligne part dans les journaux.
     this.logger.log(`Database connected — ${resumePool(process.env.DATABASE_URL)}`);
+
+    // ET LE PLAFOND DE LA BASE, qui ne figurait nulle part dans le dépôt.
+    //
+    // Dix connexions par instance, dix répliques un soir de gros match, et
+    // c'est cent connexions — plus les migrations et la sauvegarde. On ajoute
+    // un replica pour encaisser l'affluence, et c'est lui qui épuise la base.
+    // La question se lit désormais dans les journaux de déploiement.
+    const connexions = await lireLesConnexions(this, CONNEXIONS_PAR_INSTANCE);
+    const phrase = resumeDesConnexions(connexions);
+    if (connexions && connexions.occupation >= OCCUPATION_ALERTE) {
+      this.logger.warn(`Connexions de la base À L'ÉTROIT — ${phrase}.`);
+    } else {
+      this.logger.log(`Connexions de la base — ${phrase}.`);
+    }
   }
 
   async onModuleDestroy(): Promise<void> {

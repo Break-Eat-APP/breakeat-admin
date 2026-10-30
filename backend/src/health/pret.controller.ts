@@ -3,6 +3,8 @@ import type { Response } from 'express';
 import { SkipThrottle } from '@nestjs/throttler';
 import { AUCUNE_LIMITE } from '../common/securite/limitation';
 import { PrismaService } from '../database/prisma.service';
+import { CONNEXIONS_PAR_INSTANCE } from '../database/pool';
+import { lireLesConnexions, OCCUPATION_ALERTE } from '../database/connexions';
 
 /**
  * EST-CE QUE CE CONTENEUR PEUT RÉELLEMENT PRENDRE UNE COMMANDE ?
@@ -32,6 +34,14 @@ import { PrismaService } from '../database/prisma.service';
  * état démarre, répond, encaisse… avec un schéma à moitié posé. Rien ne le
  * signalait.
  *
+ * LES CONNEXIONS DE LA BASE, qui ne figuraient nulle part. Le pool en ouvre
+ * dix par instance ; dix répliques un soir de gros match, et c'est cent — plus
+ * les migrations et la sauvegarde. On ajoute un replica pour encaisser
+ * l'affluence, et c'est lui qui épuise la base. Le plafond se lit ici, et au
+ * démarrage. Il ne fait PAS échouer `/ready` : être à l'étroit n'empêche pas
+ * de vendre, et des connexions réellement épuisées auraient déjà fait échouer
+ * le `SELECT 1` ci-dessus.
+ *
  * PAS REDIS. Sa panne ne rend plus l'API inapte : les compteurs de limitation
  * basculent en mémoire (`common/securite/limitation-redis.ts`) et le temps
  * réel se dégrade sans couper la vente. Le déclarer « pas prêt » ferait
@@ -48,6 +58,7 @@ export class PretController {
   async pret(@Res({ passthrough: true }) res: Response) {
     const base = await this.verifierBase();
     const migrations = await this.verifierMigrations();
+    const connexions = await lireLesConnexions(this.prisma, CONNEXIONS_PAR_INSTANCE);
 
     const pret = base.ok && migrations.ok;
     // 503 et non 500 : « indisponible pour le moment » est exact, et c'est ce
@@ -67,6 +78,10 @@ export class PretController {
       commit: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) ?? 'inconnu',
       base,
       migrations,
+      // Renseigné, jamais bloquant — voir l'en-tête.
+      connexions: connexions
+        ? { ...connexions, aLEtroit: connexions.occupation >= OCCUPATION_ALERTE }
+        : null,
     };
   }
 

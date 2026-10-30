@@ -37,6 +37,40 @@ import { RealtimeGateway } from './realtime.gateway';
  * une vraie base, quinze lignes ressortaient mélangées. Un `order_ready`
  * rejoué avant son `order_updated` montrerait une commande prête avant
  * d'avoir avancé.
+ *
+ * ── MAIS L'ORDRE EST TENU PAR OUVRIER, PAS ENTRE OUVRIERS ────────
+ *
+ * Il faut l'écrire, parce que cette phrase-là a longtemps promis plus que le
+ * code ne donne. DANS un ouvrier, l'ordre est total : les lots s'enchaînent
+ * l'un après l'autre et chaque lot est trié avant d'émettre. ENTRE deux
+ * instances, personne ne l'a jamais garanti — l'une réserve les deux cents
+ * plus anciennes, l'autre les suivantes, et rien ne dit laquelle finira la
+ * première.
+ *
+ * CE QUE ÇA COÛTE EN VRAI, et c'est pourquoi on le laisse ainsi :
+ *
+ *   · les annonces d'une MÊME commande sont déposées ensemble — la transition
+ *     dépose `order_updated` et `order_ready` dans la même transaction, donc
+ *     avec des séquences consécutives. Elles tombent dans le même lot, chez
+ *     le même ouvrier, et l'ordre tient ;
+ *   · pour qu'elles se séparent, il faut deux cents AUTRES annonces entre
+ *     elles, donc une file en retard ET deux instances. À la vitesse de
+ *     vidange mesurée — près de cinq mille par seconde — deux cents annonces
+ *     valent quarante millisecondes de retard. Deux gestes d'une même
+ *     commande séparés de quarante millisecondes, cela n'existe pas au
+ *     comptoir : une équipière ne touche pas deux boutons dans le même
+ *     quarantième de seconde ;
+ *   · et si cela arrivait, le tableau affiche un statut faux jusqu'à la
+ *     réconciliation REST, soit au plus une minute.
+ *
+ * Sérialiser par commande coûterait un verrou partagé sur le chemin le plus
+ * chaud du service, pour fermer une fenêtre de quarante millisecondes qui se
+ * referme toute seule en moins d'une minute. Le prix n'en vaut pas la peine,
+ * et c'est une DÉCISION, pas un oubli.
+ *
+ * `test/integration/outbox-ordre-deux-ouvriers.int-spec.ts` établit les trois
+ * cas sur une vraie base. Ce qui reste exigé, et que ce test vérifie : rien ne
+ * se perd, et rien ne part deux fois.
  */
 /** Une ligne réservée par la requête de réservation. */
 interface LigneReservee {
