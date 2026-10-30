@@ -25,6 +25,7 @@ import { SlotsService } from '../slots/slots.service';
 import type { CreateCartDto } from './dto/create-cart.dto';
 import type { UpdateCartDto } from './dto/update-cart.dto';
 import type { AddCartItemDto } from './dto/add-cart-item.dto';
+import type { RemplacerArticlesDto } from './dto/remplacer-articles.dto';
 import type { UpdateCartItemDto } from './dto/update-cart-item.dto';
 import { assertOrganisationOuverte } from '../../common/helpers/organisation-ouverte';
 import { modeDeCommande } from '../../common/helpers/mode-de-commande';
@@ -363,6 +364,91 @@ export class CartService {
     });
 
     this.logger.log(`Cart item added: cart=${cartId} product=${dto.productId} +${dto.quantity}`);
+    return this.computeView(cartId);
+  }
+
+  /**
+   * LE CONTENU VOULU, POSÉ EN UNE FOIS — et deux fois de suite sans dégât.
+   *
+   * `addItem` AJOUTE, et c'est juste pour un bouton « + ». Mais l'écran de
+   * paiement s'en servait pour SYNCHRONISER : à chaque tentative, il créait
+   * le panier (qui réutilise celui déjà ouvert) puis renvoyait chaque ligne.
+   * Une tentative qui échouait après l'ajout — Stripe, points, réseau —
+   * laissait le panier ouvert, et la suivante additionnait les mêmes
+   * quantités. Deux bières devenaient quatre, le client payait quatre, et son
+   * écran affichait toujours deux.
+   *
+   * Ici les quantités sont ABSOLUES : renvoyer deux fois la même demande
+   * donne le même panier. C'est la différence entre « ajoute deux bières » et
+   * « j'en veux deux ».
+   *
+   * ── ET LE STOCK EST VÉRIFIÉ SUR LE TOTAL ────────────────────
+   *
+   * `addItem` devait ruser — lire ce qui est déjà au panier pour vérifier la
+   * somme. Ici la quantité demandée EST le total : il n'y a rien à
+   * reconstituer, donc rien à se tromper.
+   *
+   * ── CE QUI N'EST PAS ENVOYÉ EST RETIRÉ ──────────────────────
+   *
+   * C'est tout l'intérêt d'un remplacement, et c'est aussi ce qui le rend
+   * dangereux avec un corps incomplet. Le DTO refuse donc une liste vide :
+   * vider un panier se fait article par article, délibérément.
+   */
+  async remplacerLesArticles(
+    cartId: string,
+    userId: string,
+    dto: RemplacerArticlesDto,
+  ): Promise<CartWithTotals> {
+    const cart = await this.requireOwnership(cartId, userId);
+    this.requireEditable(cart.status);
+
+    // UN SEUL PRODUIT PAR LIGNE. Deux lignes du même produit rendraient le
+    // résultat dépendant de l'ordre d'application — exactement l'ambiguïté
+    // qu'on vient de supprimer.
+    const vus = new Set<string>();
+    for (const article of dto.items) {
+      if (vus.has(article.productId)) {
+        throw new BadRequestException(
+          `Le produit ${article.productId} est demandé deux fois — une seule ligne par produit.`,
+        );
+      }
+      vus.add(article.productId);
+    }
+
+    // On refuse AVANT d'écrire quoi que ce soit : un panier à moitié
+    // remplacé serait pire que pas de remplacement du tout.
+    for (const article of dto.items) {
+      await this.assertProductOrderable(article.productId, cart.supplierId, cart.pickupPointId);
+      await this.verifierStockDisponible(
+        article.productId,
+        cart.pickupPointId,
+        article.quantity,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.cartItem.deleteMany({
+        where: { cartId, productId: { notIn: [...vus] } },
+      });
+      for (const article of dto.items) {
+        await tx.cartItem.upsert({
+          where: { cartId_productId: { cartId, productId: article.productId } },
+          create: { cartId, productId: article.productId, quantity: article.quantity },
+          // `set`, jamais `increment` : c'est toute la différence.
+          update: { quantity: article.quantity },
+        });
+      }
+      // Chaque geste du client repousse l'échéance — personne n'est coupé en
+      // composant sa commande. Même règle que `addItem`.
+      await tx.cart.update({
+        where: { id: cartId },
+        data: { expiresAt: new Date(Date.now() + CART_TTL_MS) },
+      });
+    });
+
+    this.logger.log(
+      `Panier ${cartId} remplace : ${dto.items.length} ligne(s), quantites absolues.`,
+    );
     return this.computeView(cartId);
   }
 

@@ -411,6 +411,142 @@ describe('CartService', () => {
       );
     });
 
+  // ─── remplacerLesArticles — l'idempotence du panier ────────────
+
+  /**
+   * DEUX BIÈRES NE DOIVENT PAS DEVENIR QUATRE.
+   *
+   * L'écran de paiement synchronisait le panier avec `addItem`, qui
+   * INCRÉMENTE : à chaque tentative il créait le panier (donc réutilisait
+   * celui déjà ouvert) puis renvoyait chaque ligne. Une tentative qui
+   * échouait APRÈS l'ajout — Stripe, points de fidélité, réseau — laissait le
+   * panier ouvert, et la suivante additionnait les mêmes quantités. Le client
+   * payait quatre bières, et son écran affichait toujours deux.
+   */
+  describe('remplacerLesArticles', () => {
+    /** Un panier ouvert, un produit commandable, du stock. */
+    function panierPret() {
+      // `items` est là pour `computeView`, qui relit le panier à la fin et
+      // rend la vue au client. Le même double sert à `requireOwnership`.
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue({ ...mockCart(), items: [] });
+      (prisma.product.findUnique as jest.Mock).mockResolvedValue(mockProduct());
+      (prisma.stock.findFirst as jest.Mock).mockResolvedValue(mockStock(50));
+      // La forme INTERACTIVE : le remplacement a besoin d'un client
+      // transactionnel pour retirer puis reposer les lignes ensemble.
+      const tx = {
+        cartItem: { deleteMany: jest.fn(), upsert: jest.fn() },
+        cart: { update: jest.fn() },
+      };
+      (prisma.$transaction as jest.Mock).mockImplementation(
+        async (cb: (c: unknown) => unknown) => cb(tx),
+      );
+      return tx;
+    }
+
+    /**
+     * LE TEST QUI DÉFINIT LA ROUTE. `set`, jamais `increment` — appeler deux
+     * fois doit donner le même panier.
+     */
+    it('pose une quantité ABSOLUE, et non un ajout', async () => {
+      const tx = panierPret();
+
+      await service.remplacerLesArticles(CART_ID, USER_ID, {
+        items: [{ productId: PRODUCT_ID, quantity: 2 }],
+      });
+      await service.remplacerLesArticles(CART_ID, USER_ID, {
+        items: [{ productId: PRODUCT_ID, quantity: 2 }],
+      });
+
+      for (const appel of tx.cartItem.upsert.mock.calls) {
+        expect(appel[0].update).toEqual({ quantity: 2 });
+        // `increment` est exactement ce qui faisait doubler.
+        expect(JSON.stringify(appel[0].update)).not.toContain('increment');
+      }
+    });
+
+    /**
+     * CE QUI N'EST PAS ENVOYÉ EST RETIRÉ. C'est tout l'intérêt d'un
+     * remplacement : un client qui enlève une bière de son panier doit la voir
+     * disparaître du panier serveur aussi.
+     */
+    it('RETIRE les lignes absentes de la demande', async () => {
+      const tx = panierPret();
+
+      await service.remplacerLesArticles(CART_ID, USER_ID, {
+        items: [{ productId: PRODUCT_ID, quantity: 1 }],
+      });
+
+      expect(tx.cartItem.deleteMany).toHaveBeenCalledWith({
+        where: { cartId: CART_ID, productId: { notIn: [PRODUCT_ID] } },
+      });
+    });
+
+    /**
+     * Deux lignes du même produit rendraient le résultat dépendant de l'ordre
+     * d'application — exactement l'ambiguïté qu'on vient de supprimer.
+     */
+    it('REFUSE deux lignes du même produit', async () => {
+      panierPret();
+
+      await expect(
+        service.remplacerLesArticles(CART_ID, USER_ID, {
+          items: [
+            { productId: PRODUCT_ID, quantity: 1 },
+            { productId: PRODUCT_ID, quantity: 3 },
+          ],
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    /**
+     * ON REFUSE AVANT D'ÉCRIRE QUOI QUE CE SOIT. Un panier à moitié remplacé
+     * serait pire que pas de remplacement : le client paierait un contenu que
+     * personne n'a voulu.
+     */
+    it('n’écrit RIEN quand le stock manque', async () => {
+      const tx = panierPret();
+      (prisma.stock.findFirst as jest.Mock).mockResolvedValue(mockStock(1));
+
+      await expect(
+        service.remplacerLesArticles(CART_ID, USER_ID, {
+          items: [{ productId: PRODUCT_ID, quantity: 5 }],
+        }),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(tx.cartItem.upsert).not.toHaveBeenCalled();
+      expect(tx.cartItem.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('refuse un panier qui n’est pas le sien', async () => {
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue({
+        ...mockCart(),
+        userId: 'quelqu-un-d-autre',
+      });
+
+      await expect(
+        service.remplacerLesArticles(CART_ID, USER_ID, {
+          items: [{ productId: PRODUCT_ID, quantity: 1 }],
+        }),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    /** Chaque geste du client repousse l'échéance — comme `addItem`. */
+    it('repousse la péremption du panier', async () => {
+      const tx = panierPret();
+
+      await service.remplacerLesArticles(CART_ID, USER_ID, {
+        items: [{ productId: PRODUCT_ID, quantity: 1 }],
+      });
+
+      expect(tx.cart.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: CART_ID },
+          data: { expiresAt: expect.any(Date) },
+        }),
+      );
+    });
+  });
+
   describe('addItem', () => {
     it('rejects when caller does not own the cart', async () => {
       (prisma.cart.findUnique as jest.Mock).mockResolvedValue({

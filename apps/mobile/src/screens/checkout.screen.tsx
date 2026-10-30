@@ -14,7 +14,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import {
   apiCreateCart,
-  apiAddCartItem,
+  apiRemplacerArticles,
   apiCheckout,
   apiChoisirCreneau,
   apiCommandeDuPanier,
@@ -176,11 +176,21 @@ export function CheckoutScreen({ navigation }: Props) {
       const cart = await apiCreateCart(eventId, supplierId);
       setBackendCartId(cart.id);
 
-      // 2. Add items
+      // 2. Le contenu voulu, posé en UNE fois et en quantités ABSOLUES.
+      //
+      // C'était une boucle d'ajouts, et `POST /carts/:id/items` INCRÉMENTE.
+      // Comme `POST /carts` réutilise le panier déjà OUVERT, une tentative qui
+      // échouait après cette étape — Stripe, points, réseau — laissait le
+      // panier en place, et la tentative suivante additionnait les mêmes
+      // quantités. Deux bières devenaient quatre, le client payait quatre, et
+      // cet écran affichait toujours deux.
+      //
+      // Renvoyer deux fois la même demande donne maintenant le même panier.
       setStep('Ajout des articles…');
-      for (const item of items) {
-        await apiAddCartItem(cart.id, item.productId, item.quantity);
-      }
+      await apiRemplacerArticles(
+        cart.id,
+        items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
+      );
 
       // 2bis. Le créneau choisi — il doit voyager jusqu'au serveur.
       //

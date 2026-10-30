@@ -10,6 +10,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   UseGuards,
 } from '@nestjs/common';
 import { CartService } from './cart.service';
@@ -18,6 +19,7 @@ import { UpdateCartDto } from './dto/update-cart.dto';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
 import { RedeemPointsDto } from './dto/redeem-points.dto';
+import { RemplacerArticlesDto } from './dto/remplacer-articles.dto';
 import { ChoisirCreneauDto } from './dto/choisir-creneau.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -60,6 +62,24 @@ export class CartController {
     @Body() dto: AddCartItemDto,
   ) {
     return this.cartService.addItem(id, user.sub, dto);
+  }
+
+  /**
+   * PUT /api/v1/carts/:id/items — le contenu VOULU, en une fois.
+   *
+   * `POST` ajoute et incrémente ; celui-ci REMPLACE. C'est ce qu'il faut pour
+   * synchroniser un panier local : renvoyer deux fois la même demande donne le
+   * même panier. L'écran de paiement faisait un `POST` par ligne, et une
+   * tentative qui échouait après l'ajout faisait doubler les quantités à la
+   * suivante.
+   */
+  @Put(':id/items')
+  remplacerLesArticles(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: RemplacerArticlesDto,
+  ) {
+    return this.cartService.remplacerLesArticles(id, user.sub, dto);
   }
 
   /** PATCH /api/v1/carts/:id/items/:itemId */

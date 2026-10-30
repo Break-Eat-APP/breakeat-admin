@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import {
-  apiAddCartItem,
+  apiRemplacerArticles,
   apiChoisirCreneau,
   apiCreateCart,
   apiOpenSplit,
@@ -72,9 +72,15 @@ export function CartScreen({ navigation }: Props) {
     setInvitationEnCours(true);
     try {
       const cart = await apiCreateCart(eventId, supplierId);
-      for (const item of items) {
-        await apiAddCartItem(cart.id, item.productId, item.quantity);
-      }
+      // Le contenu voulu, en quantites ABSOLUES — meme raison qu'au paiement.
+      // C'etait une boucle d'ajouts, et `POST /carts/:id/items` INCREMENTE :
+      // comme `POST /carts` reutilise le panier deja OUVERT, un partage qui
+      // echouait apres cette etape faisait doubler les quantites au suivant.
+      // Les convives payaient alors une tournee que personne n'avait composee.
+      await apiRemplacerArticles(
+        cart.id,
+        items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
+      );
       // Le creneau voyage AVEC le panier : l'ardoise en herite, puis la commande.
       await apiChoisirCreneau(cart.id, selectedSlotId);
       const split = await apiOpenSplit(cart.id);

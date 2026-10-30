@@ -194,4 +194,109 @@ decrire('panier et stock (base réelle)', () => {
       expect(await auPanier(panier.id, o.product.id)).toBe(2);
     });
   });
+
+  // ─── LA REPRISE DE PAIEMENT NE DOIT RIEN DOUBLER ────────────────
+
+  /**
+   * DEUX BIÈRES NE DOIVENT PAS DEVENIR QUATRE.
+   *
+   * L'écran de paiement synchronisait le panier avec `addItem`, qui
+   * INCRÉMENTE : à chaque tentative il créait le panier — et `POST /carts`
+   * réutilise celui déjà OUVERT — puis renvoyait chaque ligne. Une tentative
+   * qui échouait APRÈS cette étape (Stripe, points de fidélité, réseau)
+   * laissait le panier en place, et la suivante additionnait les mêmes
+   * quantités. Le client payait quatre bières, et son écran affichait
+   * toujours deux.
+   *
+   * Sur une VRAIE base, parce que c'est l'état réellement écrit qui est en
+   * cause.
+   */
+  describe('remplacer le contenu du panier', () => {
+    it('REJOUER la même demande ne change rien — l’idempotence', async () => {
+      const { o, client, panier } = await decor(50);
+
+      const voulu = { items: [{ productId: o.product.id, quantity: 2 }] };
+      await paniers.remplacerLesArticles(panier.id, client.id, voulu as never);
+      expect(await auPanier(panier.id, o.product.id)).toBe(2);
+
+      // La tentative a échoué après l'ajout ; le client réessaie.
+      await paniers.remplacerLesArticles(panier.id, client.id, voulu as never);
+      await paniers.remplacerLesArticles(panier.id, client.id, voulu as never);
+
+      // Toujours deux. C'est tout l'objet de la route.
+      expect(await auPanier(panier.id, o.product.id)).toBe(2);
+    });
+
+    /**
+     * ET VOICI CE QUE FAISAIT L'ANCIEN CHEMIN, mesuré pour qu'on n'ait pas à
+     * le croire. `addItem` reste juste — pour un bouton « + ». Il ne l'était
+     * pas pour synchroniser.
+     */
+    it('`addItem` rejoué DOUBLE — ce pourquoi la route existe', async () => {
+      const { o, client, panier } = await decor(50);
+
+      const ajout = { productId: o.product.id, quantity: 2 };
+      await paniers.addItem(panier.id, client.id, ajout as never);
+      await paniers.addItem(panier.id, client.id, ajout as never);
+
+      expect(await auPanier(panier.id, o.product.id)).toBe(4);
+    });
+
+    it('RETIRE une ligne que le client a enlevée de son panier', async () => {
+      const { o, client, panier } = await decor(50);
+
+      await paniers.remplacerLesArticles(panier.id, client.id, {
+        items: [{ productId: o.product.id, quantity: 3 }],
+      } as never);
+      expect(await auPanier(panier.id, o.product.id)).toBe(3);
+
+      // Un second produit de la même buvette, puis une demande qui ne porte
+      // que celui-là : le premier doit disparaître.
+      const autre = await s.prisma.product.create({
+        data: {
+          supplierId: o.supplier.id,
+          categoryId: o.product.categoryId,
+          name: 'Autre produit',
+          price: 300,
+        },
+      });
+      await s.prisma.stock.create({
+        data: {
+          productId: autre.id,
+          supplierId: o.supplier.id,
+          pickupPointId: o.pickup.id,
+          quantity: 50,
+        },
+      });
+
+      await paniers.remplacerLesArticles(panier.id, client.id, {
+        items: [{ productId: autre.id, quantity: 1 }],
+      } as never);
+
+      expect(await auPanier(panier.id, o.product.id)).toBe(0);
+      expect(await auPanier(panier.id, autre.id)).toBe(1);
+    });
+
+    /**
+     * UN PANIER À MOITIÉ REMPLACÉ serait pire que pas de remplacement : le
+     * client paierait un contenu que personne n'a voulu. On refuse donc avant
+     * d'écrire quoi que ce soit.
+     */
+    it('n’écrit RIEN quand une ligne dépasse le stock', async () => {
+      const { o, client, panier } = await decor(3);
+
+      await paniers.remplacerLesArticles(panier.id, client.id, {
+        items: [{ productId: o.product.id, quantity: 2 }],
+      } as never);
+
+      await expect(
+        paniers.remplacerLesArticles(panier.id, client.id, {
+          items: [{ productId: o.product.id, quantity: 10 }],
+        } as never),
+      ).rejects.toThrow(/reste que 3/);
+
+      // Les deux d'origine sont intacts.
+      expect(await auPanier(panier.id, o.product.id)).toBe(2);
+    });
+  });
 });

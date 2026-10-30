@@ -692,6 +692,28 @@ export const apiAddCartItem = (cartId: string, productId: string, quantity: numb
     body: JSON.stringify({ productId, quantity }),
   });
 
+/**
+ * POSE LE CONTENU VOULU, en une fois et en quantités ABSOLUES.
+ *
+ * `apiAddCartItem` INCRÉMENTE côté serveur. L'écran de paiement s'en servait
+ * pour synchroniser : il créait le panier — qui réutilise celui déjà OUVERT —
+ * puis renvoyait chaque ligne. Une tentative qui échouait APRÈS l'ajout
+ * (Stripe, points de fidélité, réseau) laissait le panier ouvert, et la
+ * suivante additionnait les mêmes quantités. Deux bières devenaient quatre, le
+ * client payait quatre, et son écran affichait toujours deux.
+ *
+ * Renvoyer deux fois la même demande donne ici le même panier. Et c'est UNE
+ * requête au lieu d'une par ligne.
+ */
+export const apiRemplacerArticles = (
+  cartId: string,
+  items: { productId: string; quantity: number }[],
+) =>
+  req<BackendCart>(`/carts/${cartId}/items`, {
+    method: 'PUT',
+    body: JSON.stringify({ items }),
+  });
+
 export const apiRemoveCartItem = (cartId: string, itemId: string) =>
   req<BackendCart>(`/carts/${cartId}/items/${itemId}`, { method: 'DELETE' });
 
