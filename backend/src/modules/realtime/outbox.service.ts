@@ -64,6 +64,23 @@ export class OutboxService {
    */
   private static readonly JOURS_DE_GARDE = 7;
 
+  /**
+   * COMBIEN DE TEMPS UNE LIGNE RESTE RÉSERVÉE.
+   *
+   * `FOR UPDATE SKIP LOCKED` ne verrouille que le temps de la requête. Une
+   * fois celle-ci terminée, la ligne est encore non livrée — et une autre
+   * réplique la reprenait avant que la première n'ait fini d'émettre. Le
+   * comptoir voyait la même commande arriver deux fois.
+   *
+   * Deux minutes : l'ouvrier passe à la minute et traite au plus deux cents
+   * lignes, donc il a largement fini avant l'échéance. Et le bail EXPIRE,
+   * c'est tout l'intérêt : un ouvrier qui meurt entre la réservation et
+   * l'envoi ne retient pas la ligne pour toujours — elle repart au tour
+   * suivant. Un verrou qu'il faudrait lever à la main survivrait à la panne
+   * qu'il était censé couvrir.
+   */
+  private static readonly BAIL_MS = 120_000;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly gateway: RealtimeGateway,
@@ -136,10 +153,15 @@ export class OutboxService {
      * un client de reconnaître le doublon, mais compter là-dessus, c'est
      * supposer que TOUS les consommateurs dédupliquent correctement.
      *
-     * `FOR UPDATE SKIP LOCKED` règle cela dans la base elle-même : chaque
-     * instance verrouille les lignes qu'elle prend, et les autres SAUTENT
-     * celles-là au lieu d'attendre. Deux ouvriers se partagent donc la file
-     * sans se marcher dessus, et sans se bloquer l'un l'autre.
+     * `FOR UPDATE SKIP LOCKED` règle le temps de la REQUÊTE : chaque
+     * instance verrouille les lignes qu'elle prend, et les autres sautent
+     * celles-là au lieu d'attendre.
+     *
+     * Mais ce verrou tombe avec la requête, et la ligne est encore non
+     * livrée : une autre réplique la reprenait pendant que la première
+     * émettait. D'où le BAIL — `claimed_until` — qui couvre la phase
+     * d'émission, et que les autres ouvriers respectent. Il expire tout
+     * seul : un ouvrier qui meurt n'emporte pas la ligne avec lui.
      *
      * L'essai est compté AU MOMENT DE LA RÉSERVATION, pas après l'émission :
      * un ouvrier qui meurt entre les deux a quand même consommé son essai.
@@ -157,12 +179,14 @@ export class OutboxService {
       }[]
     >`
       UPDATE "realtime_outbox"
-         SET attempts = attempts + 1
+         SET attempts = attempts + 1,
+             claimed_until = NOW() + (${OutboxService.BAIL_MS} || ' milliseconds')::interval
        WHERE id IN (
          SELECT id
            FROM "realtime_outbox"
           WHERE delivered_at IS NULL
             AND attempts < ${OutboxService.ESSAIS_MAX}
+            AND (claimed_until IS NULL OR claimed_until < NOW())
           ORDER BY created_at ASC
           LIMIT ${OutboxService.PAR_PASSAGE}
             FOR UPDATE SKIP LOCKED
@@ -181,7 +205,9 @@ export class OutboxService {
         // l'aboutissement.
         await this.prisma.realtimeOutbox.update({
           where: { id: ligne.id },
-          data: { deliveredAt: new Date(), lastError: null },
+          // Le bail est rendu en meme temps : la ligne est finie, elle
+          // n'a plus a etre reservee par personne.
+          data: { deliveredAt: new Date(), lastError: null, claimedUntil: null },
         });
         rejoues += 1;
       } catch (e) {

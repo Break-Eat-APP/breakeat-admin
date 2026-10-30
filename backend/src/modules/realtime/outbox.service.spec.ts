@@ -148,6 +148,43 @@ describe('OutboxService — le rattrapage', () => {
   });
 
   /**
+   * LE VERROU NE SUFFIT PAS — IL TOMBE AVEC LA REQUÊTE.
+   *
+   * `FOR UPDATE SKIP LOCKED` protège le temps de la requête qui réserve.
+   * Une fois celle-ci terminée, la ligne est encore non livrée : une autre
+   * réplique la reprenait pendant que la première émettait, et le comptoir
+   * voyait la même commande arriver deux fois.
+   *
+   * Le bail couvre la phase d'ÉMISSION, et les autres ouvriers le
+   * respectent.
+   */
+  it('POSE un bail, et respecte celui des autres', async () => {
+    const { service, sql } = monter([ligne()]);
+
+    await service.rejouer();
+
+    const requete = sql[0].replace(/\s+/g, ' ');
+    // Il le pose…
+    expect(requete).toContain('claimed_until = NOW()');
+    // … et il ne prend que les lignes dont le bail est échu ou absent.
+    expect(requete).toContain('claimed_until IS NULL OR claimed_until < NOW()');
+  });
+
+  /**
+   * Un bail qu'il faudrait lever à la main survivrait à la panne qu'il est
+   * censé couvrir. Livrer le rend : la ligne est finie, plus personne n'a
+   * à la réserver.
+   */
+  it('REND le bail en marquant livré', async () => {
+    const { service, maj } = monter([ligne()]);
+
+    await service.rejouer();
+
+    expect(maj[0].data.deliveredAt).toBeInstanceOf(Date);
+    expect(maj[0].data.claimedUntil).toBeNull();
+  });
+
+  /**
    * L'ORDRE COMPTE. Un `order_updated` rejoué avant son `new_order`
    * afficherait une commande qui avance avant d'exister. Et on ne reprend
    * que ce qui n'est pas livré, sinon on rejouerait toute l'histoire.

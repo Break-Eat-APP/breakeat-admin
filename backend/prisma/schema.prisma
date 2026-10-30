@@ -1819,10 +1819,24 @@ model RealtimeOutbox {
   deliveredAt DateTime? @map("delivered_at")
   attempts    Int       @default(0)
   lastError   String?   @map("last_error")
+  /// LE BAIL — jusqu'à quand cette ligne est réservée par un ouvrier.
+  ///
+  /// `FOR UPDATE SKIP LOCKED` ne verrouille que le temps de la requête. Une
+  /// fois celle-ci terminée, la ligne reste non livrée : une autre réplique
+  /// la reprenait avant que la première n'ait fini d'émettre, et le comptoir
+  /// voyait la commande arriver deux fois.
+  ///
+  /// Le bail couvre la phase d'ÉMISSION, pas seulement la lecture. Il
+  /// expire : un ouvrier qui meurt entre la réservation et l'envoi ne retient
+  /// pas la ligne pour toujours — elle repart au tour suivant.
+  claimedUntil DateTime? @map("claimed_until")
 
   /// L'index de l'ouvrier : les non-livrées, dans l'ordre d'arrivée. L'ordre
   /// compte — un `order_updated` rejoué avant son `new_order` afficherait une
   /// commande qui avance avant d'exister.
-  @@index([deliveredAt, createdAt])
+  /// L'index de l'ouvrier : les non-livrées dont le bail est échu, dans
+  /// l'ordre d'arrivée. L'ordre compte — un `order_updated` rejoué avant son
+  /// `new_order` afficherait une commande qui avance avant d'exister.
+  @@index([deliveredAt, claimedUntil, createdAt])
   @@map("realtime_outbox")
 }
