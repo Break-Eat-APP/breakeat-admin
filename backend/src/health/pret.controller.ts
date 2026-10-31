@@ -5,6 +5,7 @@ import { AUCUNE_LIMITE } from '../common/securite/limitation';
 import { PrismaService } from '../database/prisma.service';
 import { CONNEXIONS_PAR_INSTANCE } from '../database/pool';
 import { lireLesConnexions, OCCUPATION_ALERTE } from '../database/connexions';
+import { compteursPartages } from '../common/securite/limitation-redis';
 
 /**
  * EST-CE QUE CE CONTENEUR PEUT RÉELLEMENT PRENDRE UNE COMMANDE ?
@@ -42,10 +43,22 @@ import { lireLesConnexions, OCCUPATION_ALERTE } from '../database/connexions';
  * de vendre, et des connexions réellement épuisées auraient déjà fait échouer
  * le `SELECT 1` ci-dessus.
  *
- * PAS REDIS. Sa panne ne rend plus l'API inapte : les compteurs de limitation
- * basculent en mémoire (`common/securite/limitation-redis.ts`) et le temps
- * réel se dégrade sans couper la vente. Le déclarer « pas prêt » ferait
- * retirer du service un conteneur qui vend parfaitement.
+ * REDIS EST RAPPORTÉ, JAMAIS BLOQUANT — et la distinction compte.
+ *
+ * Sa panne ne rend pas l'API inapte : les compteurs de limitation basculent en
+ * mémoire (`common/securite/limitation-redis.ts`) et le temps réel se dégrade
+ * sans couper la vente. Le déclarer « pas prêt » ferait retirer du service un
+ * conteneur qui vend parfaitement.
+ *
+ * Mais ne RIEN en dire était un trou : c'est Redis qui décide si l'on peut
+ * faire tourner PLUS D'UNE INSTANCE. Sans lui, les salons Socket.IO vivent
+ * dans la mémoire de chaque conteneur — une commande annoncée par l'un
+ * n'atteint pas l'opératrice connectée à l'autre, et le comptoir ne voit
+ * jamais la commande. Ça ne s'apprend qu'en lisant le journal de démarrage,
+ * c'est-à-dire trop tard, un soir de match.
+ *
+ * Ce bloc répond donc à la question qu'on se pose avant d'ajouter un replica,
+ * et il la répond de l'extérieur, sans accès aux journaux.
  */
 @SkipThrottle(AUCUNE_LIMITE)
 @Controller('ready')
@@ -82,6 +95,33 @@ export class PretController {
       connexions: connexions
         ? { ...connexions, aLEtroit: connexions.occupation >= OCCUPATION_ALERTE }
         : null,
+      redis: this.etatRedis(),
+    };
+  }
+
+  /**
+   * PEUT-ON FAIRE TOURNER PLUS D'UNE INSTANCE ?
+   *
+   * C'est la seule question que Redis décide ici, et elle ne se lisait que
+   * dans le journal de démarrage.
+   *
+   * `configure` dit si `REDIS_URL` est posée. `compteursPartages` dit si Redis
+   * RÉPOND, maintenant : l'état se remet à jour à chaque requête de
+   * limitation, donc un rétablissement se voit sans redémarrer.
+   *
+   * `plusieursInstances` est la réponse en un mot. À `false`, une seule
+   * instance peut servir : avec deux, les salons Socket.IO vivent dans la
+   * mémoire de chaque conteneur et l'opératrice connectée à l'une ne reçoit
+   * pas les commandes annoncées par l'autre. La vente continue — c'est le
+   * COMPTOIR qui devient aveugle, ce qui est pire que visible.
+   */
+  private etatRedis() {
+    const configure = Boolean(process.env.REDIS_URL);
+    const partages = compteursPartages();
+    return {
+      configure,
+      compteursPartages: partages,
+      plusieursInstances: configure && partages,
     };
   }
 

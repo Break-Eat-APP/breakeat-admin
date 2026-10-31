@@ -1,5 +1,6 @@
 import { PretController } from './pret.controller';
 import type { PrismaService } from '../database/prisma.service';
+import { reinitialiserEtatDesCompteurs } from '../common/securite/limitation-redis';
 
 /**
  * `/ready` — LA QUESTION QUE PERSONNE NE POUVAIT POSER.
@@ -45,6 +46,68 @@ describe('/ready', () => {
     expect(corps.status).toBe('pret');
     expect(corps.base.ok).toBe(true);
     expect(corps.migrations.ok).toBe(true);
+  });
+
+  // ─── Redis : PEUT-ON TOURNER À PLUSIEURS INSTANCES ? ───────────
+
+  /**
+   * CE QU'ON NE POUVAIT SAVOIR QU'EN LISANT LE JOURNAL DE DÉMARRAGE.
+   *
+   * Sans Redis, les salons Socket.IO vivent dans la mémoire de chaque
+   * conteneur : une commande annoncée par l'un n'atteint pas l'opératrice
+   * connectée à l'autre. La vente continue — c'est le COMPTOIR qui devient
+   * aveugle, ce qui est pire que visible.
+   *
+   * On le saura désormais de l'extérieur, avant d'ajouter un replica.
+   */
+  describe('l’état Redis', () => {
+    const avant = process.env.REDIS_URL;
+    afterEach(() => {
+      if (avant === undefined) delete process.env.REDIS_URL;
+      else process.env.REDIS_URL = avant;
+      reinitialiserEtatDesCompteurs();
+    });
+
+    it('dit NON quand REDIS_URL est absente', async () => {
+      delete process.env.REDIS_URL;
+      const { controleur } = monter({ base: [{ '?column?': 1 }], migrations: [] });
+
+      const corps = await controleur.pret(reponse() as never);
+
+      expect(corps.redis.configure).toBe(false);
+      expect(corps.redis.plusieursInstances).toBe(false);
+    });
+
+    it('dit OUI quand Redis est posée et répond', async () => {
+      process.env.REDIS_URL = 'redis://essai:6379';
+      reinitialiserEtatDesCompteurs();
+      const { controleur } = monter({ base: [{ '?column?': 1 }], migrations: [] });
+
+      const corps = await controleur.pret(reponse() as never);
+
+      expect(corps.redis.configure).toBe(true);
+      expect(corps.redis.compteursPartages).toBe(true);
+      expect(corps.redis.plusieursInstances).toBe(true);
+    });
+
+    /**
+     * N'EMPÊCHE JAMAIS DE VENDRE.
+     *
+     * Un Redis absent dégrade le temps réel et les compteurs ; il ne rend pas
+     * l'API inapte. Déclarer « pas prêt » ferait retirer du service un
+     * conteneur qui prend parfaitement les commandes — et un soir de match,
+     * c'est la panne qu'on cherchait à éviter.
+     */
+    it('ne fait PAS échouer la mise en service', async () => {
+      delete process.env.REDIS_URL;
+      const { controleur } = monter({ base: [{ '?column?': 1 }], migrations: [] });
+      const res = reponse();
+
+      const corps = await controleur.pret(res as never);
+
+      expect(res.code).toBe(200);
+      expect(corps.status).toBe('pret');
+    });
   });
 
   /**
