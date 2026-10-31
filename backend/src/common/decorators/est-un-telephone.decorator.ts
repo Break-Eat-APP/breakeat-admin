@@ -1,5 +1,5 @@
 import { registerDecorator, type ValidationOptions } from 'class-validator';
-import { normaliserTelephone } from '../helpers/telephone';
+import { estUnTelephonePlausible } from '../helpers/telephone';
 
 /**
  * LA RÈGLE DU TÉLÉPHONE, POSÉE UNE SEULE FOIS.
@@ -31,7 +31,7 @@ export function EstUnTelephone(options?: ValidationOptions) {
           // L'absence, elle, est l'affaire de `@IsOptional`.
           if (valeur === '') return true;
           if (typeof valeur !== 'string') return false;
-          return normaliserTelephone(valeur) !== null;
+          return estUnTelephonePlausible(valeur);
         },
         defaultMessage(): string {
           return 'Numéro de téléphone invalide';
