@@ -106,6 +106,41 @@ export default registerAs('app', () => ({
   },
 
   /**
+   * L'ENVOI DE COURRIEL — pour la récupération de mot de passe.
+   *
+   * Le projet n'avait AUCUN moyen d'envoyer un courriel : ni SMTP, ni
+   * fournisseur, ni dépendance. Le lien « Mot de passe oublié ? » affichait
+   * « Réinitialisation du mot de passe à venir », et un client qui perdait son
+   * mot de passe perdait son compte.
+   *
+   * ── DEUX FOURNISSEURS, PARCE QU'UN SUFFIT ──────────────────────
+   *
+   * `resend` et `brevo` s'appellent tous deux par un seul POST, avec `fetch`,
+   * qui est dans Node. Aucune dépendance ajoutée — et c'est un choix : chaque
+   * paquet de plus est une montée à surveiller et un risque de build.
+   *
+   * ── TANT QUE RIEN N'EST CONFIGURÉ, LA FONCTION N'EXISTE PAS ────
+   *
+   * Sans clé, `/auth/password-reset/available` répond `false` et l'application
+   * n'offre pas le parcours. C'est voulu : promettre « vérifie tes courriels »
+   * sans pouvoir en envoyer est pire que le message d'attente d'avant. Rien
+   * n'est à moitié livré — c'est éteint, et ça se voit.
+   */
+  courriel: {
+    /** `resend` | `brevo` | '' (éteint). */
+    fournisseur: (process.env.MAIL_PROVIDER ?? '').trim().toLowerCase(),
+    cle: process.env.MAIL_API_KEY ?? '',
+    /**
+     * L'expéditeur. Son domaine doit être VÉRIFIÉ chez le fournisseur, sinon
+     * le message part en indésirable ou ne part pas du tout — et c'est la
+     * première chose qui se remarque quand le parcours ne marche pas.
+     */
+    expediteur: process.env.MAIL_FROM ?? '',
+    /** Ce que le client lit comme nom d'expéditeur. */
+    expediteurNom: process.env.MAIL_FROM_NAME ?? 'Break Eat',
+  },
+
+  /**
    * Adresse publique de CETTE API, telle que Stripe doit la rappeler.
    *
    * Elle n'est pas deductible de `PUBLIC_WEB_URL` : le site vit sur Vercel,

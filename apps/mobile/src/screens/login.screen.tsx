@@ -15,10 +15,12 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import {
+  ApiError,
   apiConnexionSociale,
   apiFournisseursSociaux,
   apiLogin,
   apiRegister,
+  apiReinitialisationDisponible,
   type FournisseurSocial,
 } from '@lib/api/mobile-api';
 
@@ -26,6 +28,8 @@ import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { THEME, shadowCard, HEAD } from '@lib/theme';
+import { VERSION_DOCUMENTS } from '@lib/textes-legaux';
+import { normaliserTelephone } from '@lib/telephone';
 import { BreakEatLogo } from '@components/break-eat-logo';
 // Extraction commune : l'écran du profil en a besoin aussi, et deux copies
 // finiraient par diverger sur le format que le serveur renvoie.
@@ -124,6 +128,21 @@ export function LoginScreen({ navigation, route }: Props) {
    */
   const [cguAcceptees, setCguAcceptees] = useState(false);
 
+  /**
+   * « MOT DE PASSE OUBLIÉ » EST-IL OFFERT ?
+   *
+   * Il demande un fournisseur de courriel configuré côté serveur. `false` par
+   * défaut : si la question échoue — hors réseau, serveur muet — on n'affiche
+   * pas un lien dont on ne sait pas s'il mène quelque part.
+   */
+  const [reinitPossible, setReinitPossible] = useState(false);
+
+  useEffect(() => {
+    void apiReinitialisationDisponible()
+      .then((r) => setReinitPossible(r.available))
+      .catch(() => setReinitPossible(false));
+  }, []);
+
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
       showAlert('Champs requis', 'Email et mot de passe sont obligatoires.');
@@ -142,8 +161,20 @@ export function LoginScreen({ navigation, route }: Props) {
     // Le comptoir s'en sert pour joindre un client qui ne vient pas chercher sa
     // commande. On refuse une saisie manifestement fausse, sans prétendre
     // l'avoir vérifiée : seul un code envoyé par SMS le prouverait.
-    if (mode === 'register' && !/^\+?[\d\s\-().]{9,20}$/.test(telephone.trim())) {
-      showAlert('Numéro à vérifier', 'Indiquez un numéro de téléphone valide.');
+    //
+    // ── POURQUOI UNE FONCTION, ET PLUS UNE EXPRESSION ICI ──────
+    //
+    // L'expression qui tenait sur cette ligne acceptait la PONCTUATION SEULE :
+    // « --------- » passait, et partait au serveur, qui l'acceptait aussi. Le
+    // comptoir héritait d'un champ rempli avec lequel il ne pouvait joindre
+    // personne.
+    //
+    // Elle exigeait aussi 9 caractères là où le serveur en demandait 7 : un
+    // numéro refusé par cet écran pouvait être enregistré par ailleurs. Les
+    // deux appellent désormais la même fonction.
+    const telE164 = normaliserTelephone(telephone);
+    if (mode === 'register' && telE164 === null) {
+      showAlert('Numéro à vérifier', 'Indiquez un numéro de téléphone valide, par exemple 06 12 34 56 78.');
       return;
     }
     // L'acceptation des conditions ne se déduit PAS d'un clic sur « S'inscrire ».
@@ -169,7 +200,20 @@ export function LoginScreen({ navigation, route }: Props) {
               password,
               firstName: prenom.trim(),
               lastName: nom.trim(),
-              phone: telephone.trim(),
+              // E.164, pas la saisie : le serveur normalise de son côté, mais
+              // envoyer la forme canonique évite qu'un journal, un support ou
+              // un lien partenaire montre trois écritures du même numéro.
+              phone: telE164 ?? undefined,
+              // LA CASE COCHÉE PART AVEC L'INSCRIPTION.
+              //
+              // On n'envoyait rien : le refus ci-dessus prouvait seulement
+              // qu'une case était cochée sur CE téléphone, à un instant que
+              // personne ne consignait. Les CGU affirment pourtant recueillir
+              // l'acceptation à l'inscription.
+              //
+              // C'est la VERSION qui part, pas un « oui » : les conditions
+              // changent, et « accepté » ne dit pas à quoi.
+              cguVersion: VERSION_DOCUMENTS,
             });
       await setAuth(res.accessToken, res.user, res.refreshToken);
       if (mode === 'register') {
@@ -192,9 +236,21 @@ export function LoginScreen({ navigation, route }: Props) {
       proceed();
     } catch (e: unknown) {
       let msg = messageServeur(e) || 'Erreur inconnue';
-      if (msg.includes('401') || msg.toLowerCase().includes('invalid credentials')) {
+      /**
+       * LE CODE HTTP, pas la phrase du serveur.
+       *
+       * Ces deux cas se reconnaissaient au TEXTE : « invalid credentials »,
+       * « already exists », « conflict ». Or le serveur répond « Email already
+       * in use », qui ne contient aucun des trois. Le client lisait donc
+       * l'anglais du serveur pour le cas le plus banal de l'inscription : une
+       * adresse déjà prise.
+       *
+       * Un code de statut ne se reformule pas sans qu'on le remarque. Une
+       * phrase, si — et c'est arrivé.
+       */
+      if (e instanceof ApiError && e.status === 401) {
         msg = 'Email ou mot de passe incorrect.';
-      } else if (msg.toLowerCase().includes('already exists') || msg.toLowerCase().includes('conflict')) {
+      } else if (e instanceof ApiError && e.status === 409) {
         msg = 'Un compte existe déjà avec cet email.';
       }
       showAlert('Erreur', msg);
@@ -355,7 +411,10 @@ export function LoginScreen({ navigation, route }: Props) {
         {mode === 'register' && (
           <TextInput
             style={styles.input}
-            placeholder="Téléphone*"
+            // LE FORMAT ATTENDU, MONTRÉ. Le champ ne disait rien de ce qu'il
+            // voulait : un client hors de France n'avait aucun moyen de savoir
+            // qu'un numéro sans indicatif serait lu comme français.
+            placeholder="Téléphone* — 06 12 34 56 78"
             placeholderTextColor={THEME.grey}
             value={telephone}
             onChangeText={setTelephone}
@@ -385,9 +444,17 @@ export function LoginScreen({ navigation, route }: Props) {
           </Pressable>
         </View>
 
-        {mode === 'login' && (
+        {/* LE LIEN NE S'AFFICHE QUE SI LE PARCOURS EXISTE.
+
+            Il affichait « Réinitialisation du mot de passe à venir » : un
+            client qui perdait son mot de passe perdait son compte. Le parcours
+            est désormais écrit, mais il demande un fournisseur de courriel
+            configuré côté serveur — et tant qu'il n'y en a pas, mieux vaut pas
+            de lien du tout qu'un lien qui promet un courriel qui ne partira
+            jamais. */}
+        {mode === 'login' && reinitPossible && (
           <Pressable
-            onPress={() => showAlert('Bientôt', 'Réinitialisation du mot de passe à venir.')}
+            onPress={() => navigation.navigate('MotDePasseOublie')}
             style={styles.forgot}
           >
             <Text style={styles.forgotText}>Mot de passe oublié ?</Text>

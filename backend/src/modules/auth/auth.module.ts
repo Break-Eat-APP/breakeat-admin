@@ -8,11 +8,14 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsersModule } from '../users/users.module';
 import { GroupsModule } from '../groups/groups.module';
+import { CourrielModule } from '../courriel/courriel.module';
+import { PasswordResetService } from './password-reset.service';
 
 @Module({
   imports: [
     UsersModule,
     GroupsModule,
+    CourrielModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -25,7 +28,7 @@ import { GroupsModule } from '../groups/groups.module';
       }),
     }),
   ],
-  providers: [AuthService, SocialIdentityService, JwtStrategy],
+  providers: [AuthService, SocialIdentityService, JwtStrategy, PasswordResetService],
   controllers: [AuthController],
   exports: [AuthService],
 })

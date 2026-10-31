@@ -13,6 +13,8 @@ import {
 
 import { THEME, FONT } from '@lib/theme';
 import { apiMettreAJourProfil, type MonProfil } from '@lib/api/mobile-api';
+import { afficherTelephone, normaliserTelephone } from '@lib/telephone';
+import { messageServeur } from '@lib/message-serveur';
 
 const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null;
 
@@ -49,7 +51,10 @@ export function DemandeCoordonnees({
   const edition = mode === 'profil';
   const [prenom, setPrenom] = useState(profil?.firstName ?? '');
   const [nom, setNom] = useState(profil?.lastName ?? '');
-  const [tel, setTel] = useState(profil?.phone ?? '');
+  // LE NUMÉRO SE MONTRE EN NATIONAL, et se stocke en E.164. Pré-remplir le
+  // champ avec « +33612345678 » faisait douter le client de son propre numéro,
+  // et l'invitait à le réécrire — donc à créer une écriture de plus.
+  const [tel, setTel] = useState(afficherTelephone(profil?.phone));
   const [affiche, setAffiche] = useState(profil?.displayName ?? '');
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState('');
@@ -67,19 +72,36 @@ export function DemandeCoordonnees({
     if (!visible) return;
     setPrenom(profil?.firstName ?? '');
     setNom(profil?.lastName ?? '');
-    setTel(profil?.phone ?? '');
+    setTel(afficherTelephone(profil?.phone));
     setAffiche(profil?.displayName ?? '');
     setErreur('');
   }, [visible, profil]);
 
   const enregistrer = async () => {
+    /**
+     * LE NUMÉRO EST REFUSÉ ICI, dans la langue du client.
+     *
+     * Un champ VIDE reste permis : c'est ainsi qu'on retire un numéro qu'on ne
+     * veut plus voir partir chez un partenaire. Ce qui est refusé, c'est une
+     * saisie qui ne peut pas être un numéro — et l'ancienne règle en acceptait
+     * beaucoup, la ponctuation seule comprise.
+     */
+    const saisi = tel.trim();
+    const telE164 = normaliserTelephone(saisi);
+    if (saisi !== '' && telE164 === null) {
+      setErreur('Numéro de téléphone à vérifier — par exemple 06 12 34 56 78.');
+      return;
+    }
+
     setEnvoi(true);
     setErreur('');
     try {
       await apiMettreAJourProfil({
         firstName: prenom.trim(),
         lastName: nom.trim(),
-        phone: tel.trim(),
+        // E.164. Un champ vide part VIDE, et c'est ce qui efface le numéro —
+        // `null` ou l'absence du champ ne toucheraient à rien.
+        phone: telE164 ?? '',
         // Le nom affiché n'est modifiable que depuis le profil : avant une
         // commande, il n'a rien à voir avec ce que Flaix demande, et une
         // question de plus à cet instant fait reculer.
@@ -87,8 +109,9 @@ export function DemandeCoordonnees({
       });
       onTermine(true);
     } catch (e) {
-      // Le serveur dit POURQUOI il refuse (numéro mal formé, par exemple).
-      setErreur(e instanceof Error ? e.message : 'Enregistrement impossible.');
+      // LA PHRASE DU SERVEUR, pas son JSON. `e.message` porte le CORPS BRUT de
+      // la réponse : le client lisait `{"message":…,"statusCode":400}`.
+      setErreur(messageServeur(e, 'Enregistrement impossible.'));
     } finally {
       setEnvoi(false);
     }

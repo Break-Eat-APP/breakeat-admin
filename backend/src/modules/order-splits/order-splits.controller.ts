@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { OrderSplitsService } from './order-splits.service';
 import { OpenSplitDto } from './dto/open-split.dto';
 import { ClaimUnitsDto } from './dto/claim-units.dto';
@@ -52,15 +52,21 @@ export class OrderSplitsController {
   // ─── Convives (sans compte) ─────────────────────────────────
 
   /**
-   * GET /api/v1/public/order-splits/enabled — la fonction est-elle ouverte ?
+   * GET /api/v1/public/order-splits/enabled?eventId=… — la fonction est-elle
+   * ouverte ?
    *
    * L'app le demande avant d'afficher « Partager l'addition ». Un bouton visible
    * qui répond « non disponible » est pire que pas de bouton du tout, et c'est
    * ce qui arriverait à chaque fois que l'interrupteur est coupé.
+   *
+   * `eventId` EST FACULTATIF, et le rester est voulu : la page des convives
+   * n'a pas d'événement en main. Fourni, il fait résoudre le flag dans la même
+   * portée que l'ouverture — événement, puis club, puis global — pour que le
+   * bouton dise la même chose que le serveur.
    */
   @Get('public/order-splits/enabled')
-  async estActive() {
-    return { enabled: await this.service.estActive() };
+  async estActive(@Query('eventId') eventId?: string) {
+    return { enabled: await this.service.estActivePourAffichage(eventId) };
   }
 
   /** GET /api/v1/public/order-splits/:code — la liste, telle qu'elle est. */

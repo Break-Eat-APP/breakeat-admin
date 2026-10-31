@@ -135,6 +135,39 @@ export class OrderSplitsService {
     return dit ?? this.config.get<boolean>('app.split.enabled') === true;
   }
 
+  /**
+   * LA MEME QUESTION, POSEE PAR L'APPLICATION AVANT D'AFFICHER LE BOUTON.
+   *
+   * L'application ne connait que l'evenement ; elle ignore de quel club il
+   * releve. Elle envoyait donc la question SANS PORTEE, et l'affichage se
+   * decidait sur le seul flag global.
+   *
+   * Consequence : un club pour qui on venait d'ACTIVER l'ardoise voyait le
+   * serveur l'accepter — `ouvrir` resout bien evenement > organisation >
+   * global — pendant que le bouton restait cache dans l'app. Une fonction
+   * activee, payee, et invisible. L'inverse se produisait aussi : coupee pour
+   * un club, le bouton restait visible et le refus n'arrivait qu'au clic.
+   *
+   * On remonte donc l'organisation depuis l'evenement, ici, ou l'app ne peut
+   * pas le faire.
+   *
+   * UN IDENTIFIANT INCONNU NE CACHE RIEN. On repond la portee globale, comme
+   * avant. Cette route ne garde aucune action : elle decide d'un affichage.
+   * C'est `assertActive`, au moment d'ouvrir, qui autorise ou refuse — et lui
+   * travaille sur un panier dont l'evenement existe forcement.
+   */
+  async estActivePourAffichage(eventId?: string): Promise<boolean> {
+    if (!eventId) return this.estActive();
+
+    const evenement = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { organizationId: true },
+    });
+    if (!evenement) return this.estActive();
+
+    return this.estActive({ orgId: evenement.organizationId, eventId });
+  }
+
   private async assertActive(portee: { orgId?: string; eventId?: string } = {}): Promise<void> {
     if (!(await this.estActive(portee))) {
       throw new BadRequestException('Le partage d’addition n’est pas activé.');

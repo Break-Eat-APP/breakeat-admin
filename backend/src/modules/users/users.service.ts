@@ -1,7 +1,9 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
 import { libererCompteArchive } from '../../common/helpers/liberation-archives';
+import { normaliserTelephone } from '../../common/helpers/telephone';
 import type { User } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 export interface CreateUserInput {
@@ -12,6 +14,13 @@ export interface CreateUserInput {
   firstName?: string;
   lastName?: string;
   phone?: string;
+  /**
+   * La version des CGU lue par la personne. La DATE est posée ici, par le
+   * serveur : une date venue du client ne prouverait rien.
+   *
+   * Absente pour les inscriptions Apple/Google et pour les builds antérieures.
+   */
+  cguVersion?: string;
 }
 
 /**
@@ -67,18 +76,64 @@ export class UsersService {
 
     const passwordHash = await argon2.hash(input.password);
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: input.email.toLowerCase(),
-        passwordHash,
-        displayName: nomAffiche(input),
-        firstName: input.firstName?.trim() || null,
-        lastName: input.lastName?.trim() || null,
-        phone: input.phone?.trim() || null,
-      },
-    });
+    // Décidé une fois, ici : une chaîne vide n'est pas une acceptation, et la
+    // version et la date doivent tomber ensemble.
+    const cguVersion = input.cguVersion?.trim() || null;
 
-    return this.toSafeUser(user);
+    try {
+      const user = await this.prisma.user.create({
+        data: {
+          email: input.email.toLowerCase(),
+          passwordHash,
+          displayName: nomAffiche(input),
+          firstName: input.firstName?.trim() || null,
+          lastName: input.lastName?.trim() || null,
+          // E.164, pas la saisie. « 06 12 34 56 78 », « +33 6 12 34 56 78 »
+          // et « 0033612345678 » sont le même téléphone et donnaient trois
+          // valeurs en base : le comptoir ne pouvait pas rapprocher un client
+          // de lui-même, et le lien Flaix recevait une forme qui changeait
+          // d'une inscription à l'autre.
+          phone: normaliserTelephone(input.phone),
+          // LES DEUX ENSEMBLE, OU AUCUN DES DEUX — une contrainte de la base
+          // l'impose. Une version sans date ne se situe pas dans le temps ;
+          // une date sans version ne dit pas à quoi on a consenti.
+          //
+          // La date est celle du SERVEUR. Le client envoie ce qu'il a affiché,
+          // jamais quand il l'a affiché : une horloge de téléphone se règle à
+          // la main.
+          cguVersion: cguVersion ?? null,
+          cguAcceptedAt: cguVersion ? new Date() : null,
+        },
+      });
+
+      return this.toSafeUser(user);
+    } catch (e) {
+      /**
+       * DEUX INSCRIPTIONS SIMULTANÉES SUR LA MÊME ADRESSE.
+       *
+       * La lecture ci-dessus ne protège de rien : deux requêtes peuvent la
+       * franchir ensemble. Et l'écart est large — Argon2 tient le processus
+       * plusieurs dizaines de millisecondes ENTRE la lecture et l'écriture,
+       * ce qui suffit largement à un double appui sur « S'inscrire ».
+       *
+       * L'index unique faisait son travail : un seul compte existait. Mais le
+       * `P2002` du perdant remontait au filtre général, qui rend un 500. Le
+       * client lisait « Erreur inconnue » pour une adresse déjà prise, et
+       * l'application — qui sait traduire un conflit — n'avait rien à
+       * traduire.
+       *
+       * On vérifie la CIBLE de l'index : un autre doublon, s'il en apparaît
+       * un jour, ne doit pas se faire passer pour une adresse déjà prise.
+       */
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002' &&
+        JSON.stringify(e.meta?.target ?? '').includes('email')
+      ) {
+        throw new ConflictException('Email already in use');
+      }
+      throw e;
+    }
   }
 
   /**

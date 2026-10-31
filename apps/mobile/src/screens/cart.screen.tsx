@@ -40,11 +40,20 @@ export function CartScreen({ navigation }: Props) {
   // L'interrupteur est cote serveur : on n'affiche pas un bouton qui refuserait.
   const [ardoisePossible, setArdoisePossible] = useState(false);
 
+  // L'EVENEMENT FAIT PARTIE DE LA QUESTION.
+  //
+  // L'interrupteur se pose par evenement, par club ou pour tout le monde. Pose
+  // sans l'evenement, la question ne portait que sur le flag global : un club
+  // dont l'ardoise venait d'etre activee ne voyait pas le bouton apparaitre, et
+  // un club pour qui elle venait d'etre coupee le gardait visible jusqu'au clic.
+  //
+  // Relance quand l'evenement change : le panier suit le lieu, et deux clubs
+  // n'ont pas forcement le meme reglage.
   useEffect(() => {
-    void apiSplitEnabled()
+    void apiSplitEnabled(eventId ?? undefined)
       .then((r) => setArdoisePossible(r.enabled))
       .catch(() => setArdoisePossible(false));
-  }, []);
+  }, [eventId]);
 
   /**
    * « Partager l'addition » — l'ardoise.

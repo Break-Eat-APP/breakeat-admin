@@ -3,6 +3,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { partagerLApplication } from '@lib/partage';
+import { afficherTelephone } from '@lib/telephone';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { useAuthStore } from '@store/auth.store';
@@ -93,7 +94,9 @@ export function ProfileScreen() {
           <View style={styles.infos}>
             <Ligne libelle="Prénom" valeur={profil?.firstName} />
             <Ligne libelle="Nom" valeur={profil?.lastName} />
-            <Ligne libelle="Téléphone" valeur={profil?.phone} />
+            {/* AFFICHÉ EN NATIONAL : on stocke « +33612345678 », et un
+                client ne reconnaît pas son numéro sous cette forme. */}
+            <Ligne libelle="Téléphone" valeur={afficherTelephone(profil?.phone) || null} />
           </View>
 
           <Pressable style={styles.modifier} onPress={() => setEditionOuverte(true)}>

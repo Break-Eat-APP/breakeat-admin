@@ -48,7 +48,22 @@ const EDITEUR = [
   'Site : https://breakeatapp.com',
 ];
 
-const VERSION = 'Version du 19 octobre 2026';
+/**
+ * LA VERSION DES QUATRE DOCUMENTS, et la preuve d'acceptation.
+ *
+ * Exportée parce que l'inscription l'ENVOIE au serveur : la case cochée ne
+ * quittait pas le téléphone, et aucune trace ne disait à quel texte la
+ * personne avait consenti. C'est cette chaîne-là qui est enregistrée — celle
+ * qu'elle avait sous les yeux — et non un numéro tenu à part, qui divergerait
+ * à la première mise à jour.
+ *
+ * ⚠️ LA MODIFIER CHANGE CE QU'ON ENREGISTRE. C'est le régime normal d'un
+ * document contractuel : les acceptations déjà consignées gardent l'ancienne
+ * valeur, et doivent rester consultables.
+ */
+export const VERSION_DOCUMENTS = 'Version du 19 octobre 2026';
+
+const VERSION = VERSION_DOCUMENTS;
 
 const MENTIONS: DocumentLegal = {
   cle: 'mentions',

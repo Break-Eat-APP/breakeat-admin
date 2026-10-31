@@ -15,6 +15,11 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { SocialLoginDto } from './dto/social-login.dto';
 import { MettreAJourProfilDto } from './dto/mettre-a-jour-profil.dto';
+import {
+  ConfirmerReinitialisationDto,
+  DemanderReinitialisationDto,
+} from './dto/password-reset.dto';
+import { PasswordResetService } from './password-reset.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from './strategies/jwt.strategy';
@@ -26,7 +31,10 @@ import type { JwtPayload } from './strategies/jwt.strategy';
  */
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly passwordReset: PasswordResetService,
+  ) {}
 
   /** POST /auth/register */
   /**
@@ -76,6 +84,59 @@ export class AuthController {
   @Get('providers')
   providers() {
     return { providers: this.authService.fournisseursDisponibles() };
+  }
+
+  /**
+   * GET /auth/password-reset/available — le parcours est-il offert ?
+   *
+   * L'application le demande avant d'afficher « Mot de passe oublié ? ». Sans
+   * fournisseur de courriel configuré, la réponse est `false` et le lien garde
+   * son message d'attente.
+   *
+   * Un lien qui promet « vérifie tes courriels » sans pouvoir en envoyer est
+   * pire que le message d'attente qu'il remplace : le client attend,
+   * recommence, et finit par croire que son adresse est inconnue.
+   */
+  @Get('password-reset/available')
+  reinitialisationDisponible() {
+    return { available: this.passwordReset.estDisponible() };
+  }
+
+  /**
+   * POST /auth/password-reset/request — envoie un code à six chiffres.
+   *
+   * RÉPOND PAREIL que l'adresse existe ou non : cette route ne doit pas
+   * pouvoir servir d'annuaire. Limitée à huit requêtes par quart d'heure et
+   * par ADRESSE — voir `common/securite/limitation.ts`, qui reconnaît la route
+   * de lui-même.
+   *
+   * 202 et non 200 : on a ACCEPTÉ la demande, on ne garantit pas qu'un
+   * courriel est parti — et on ne le dira pas, puisque le dire révélerait
+   * l'existence du compte.
+   */
+  @Post('password-reset/request')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async demanderReinitialisation(@Body() dto: DemanderReinitialisationDto) {
+    await this.passwordReset.demander(dto.email);
+    return { message: 'Si un compte existe pour cette adresse, un code vient de partir.' };
+  }
+
+  /**
+   * POST /auth/password-reset/confirm — le code, et le nouveau mot de passe.
+   *
+   * Toutes les sessions tombent : quelqu'un qui reprend son compte le reprend
+   * souvent à un autre, et un jeton de renouvellement encore valide laisserait
+   * cet autre connecté.
+   */
+  @Post('password-reset/confirm')
+  @HttpCode(HttpStatus.OK)
+  async confirmerReinitialisation(@Body() dto: ConfirmerReinitialisationDto) {
+    await this.passwordReset.confirmer({
+      email: dto.email,
+      code: dto.code,
+      nouveauMotDePasse: dto.nouveauMotDePasse,
+    });
+    return { message: 'Mot de passe modifié. Connecte-toi avec le nouveau.' };
   }
 
   /** POST /auth/refresh */

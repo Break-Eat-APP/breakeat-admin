@@ -418,10 +418,61 @@ export const apiRegister = (identite: {
   firstName: string;
   lastName: string;
   phone?: string;
+  /**
+   * La version des CGU affichee a l'ecran. ENVOYEE, desormais : la case
+   * cochee ne quittait pas le telephone, et le serveur n'avait aucune trace
+   * de ce a quoi la personne avait consenti — alors que les CGU affirment le
+   * recueillir a l'inscription.
+   *
+   * La DATE n'est pas envoyee : le serveur la pose lui-meme. Une horloge de
+   * telephone se regle a la main.
+   */
+  cguVersion?: string;
 }) =>
   req<LoginResponse>('/auth/register', {
     method: 'POST',
     body: JSON.stringify(identite),
+  });
+
+// ─── « Mot de passe oublié » ────────────────────────────────────────────────
+
+/**
+ * LE PARCOURS EST-IL OFFERT ?
+ *
+ * Il demande un fournisseur de courriel configuré côté serveur. Sans lui, le
+ * lien garde son message d'attente : promettre « vérifie tes courriels » sans
+ * pouvoir en envoyer est pire que de ne rien promettre — le client attend,
+ * recommence, et finit par croire que son adresse est inconnue.
+ */
+export const apiReinitialisationDisponible = () =>
+  req<{ available: boolean }>('/auth/password-reset/available');
+
+/**
+ * Demande un code à six chiffres.
+ *
+ * RÉPOND PAREIL que l'adresse existe ou non — le serveur ne dit jamais si un
+ * compte existe, et l'app ne doit donc pas chercher à l'afficher.
+ */
+export const apiDemanderReinitialisation = (email: string) =>
+  req<{ message: string }>('/auth/password-reset/request', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+
+/**
+ * Le code reçu, et le nouveau mot de passe.
+ *
+ * L'ADRESSE REPART AVEC : c'est elle qui fait compter la tentative dans la
+ * limite serrée par adresse, côté serveur.
+ */
+export const apiConfirmerReinitialisation = (entree: {
+  email: string;
+  code: string;
+  nouveauMotDePasse: string;
+}) =>
+  req<{ message: string }>('/auth/password-reset/confirm', {
+    method: 'POST',
+    body: JSON.stringify(entree),
   });
 
 /** Apple, Google — ceux que le serveur sait réellement vérifier. */
@@ -930,9 +981,18 @@ export interface OrderSplit {
   units: SplitUnit[];
 }
 
-/** La fonction est-elle ouverte ? On ne montre pas un bouton qui refuserait. */
-export const apiSplitEnabled = () =>
-  req<{ enabled: boolean }>('/public/order-splits/enabled');
+/**
+ * La fonction est-elle ouverte ? On ne montre pas un bouton qui refuserait.
+ *
+ * `eventId` COMPTE : l'interrupteur se pose par evenement, par club ou pour
+ * tout le monde, et sans cet argument la question ne portait que sur le flag
+ * global. Un club pour qui l'ardoise venait d'etre activee ne voyait pas le
+ * bouton apparaitre.
+ */
+export const apiSplitEnabled = (eventId?: string) =>
+  req<{ enabled: boolean }>(
+    `/public/order-splits/enabled${eventId ? `?eventId=${encodeURIComponent(eventId)}` : ''}`,
+  );
 
 /** Ouvre l'ardoise a partir de mon panier (hote, connecte). */
 export const apiOpenSplit = (cartId: string) =>

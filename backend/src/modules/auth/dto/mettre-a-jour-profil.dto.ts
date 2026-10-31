@@ -1,4 +1,5 @@
-import { IsOptional, IsString, Matches, MaxLength } from 'class-validator';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { EstUnTelephone } from '../../../common/decorators/est-un-telephone.decorator';
 
 /**
  * Ce qu'un client peut corriger de SON profil, et rien de plus.
@@ -22,12 +23,18 @@ export class MettreAJourProfilDto {
   lastName?: string;
 
   /**
-   * Même règle que l'inscription — sinon un numéro accepté ici serait refusé
-   * là-bas, et le client n'y comprendrait rien.
+   * Même règle que l'inscription — et maintenant, littéralement la même.
+   *
+   * Les deux portaient une COPIE de l'expression, avec ce commentaire pour
+   * seule garantie qu'elles resteraient identiques. Elles partagent désormais
+   * la fonction qui écrit la valeur en base.
+   *
+   * Un champ VIDE reste accepté : c'est ainsi qu'un client retire un numéro
+   * qu'il ne veut plus voir partir chez un partenaire.
    */
   @IsString()
   @IsOptional()
-  @Matches(/^\+?[\d\s\-().]{7,20}$/, { message: 'Numéro de téléphone invalide' })
+  @EstUnTelephone()
   phone?: string;
 
   @IsString()

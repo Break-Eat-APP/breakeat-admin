@@ -8,6 +8,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { useAuthStore } from '@store/auth.store';
 import { LoginScreen } from '@screens/login.screen';
+import { MotDePasseOublieScreen } from '@screens/mot-de-passe-oublie.screen';
 import { VenueDiscoveryScreen } from '@screens/venue-discovery.screen';
 import { OrderHistoryScreen } from '@screens/order-history.screen';
 import { EventHomeScreen } from '@screens/event-home.screen';
@@ -87,6 +88,15 @@ export type RootStackParamList = {
   InformationsLegales: undefined;
   /** Un document en entier. La clé dit lequel — voir `lib/textes-legaux.ts`. */
   DocumentLegal: { cle: 'mentions' | 'confidentialite' | 'cgu' | 'cgv' };
+  /**
+   * « Mot de passe oublié » — code à six chiffres reçu par courriel.
+   *
+   * SANS PARAMÈTRE, et sans l'adresse déjà saisie à la connexion : le client
+   * la retape. C'est voulu — il doit choisir en conscience la boîte qu'il va
+   * ouvrir, et il arrive ici précisément parce que quelque chose de son
+   * identifiant ne va pas.
+   */
+  MotDePasseOublie: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -140,6 +150,7 @@ export function RootNavigator() {
 
           {/* Auth — plein écran au premier lancement, modale depuis l'intérieur */}
           <Stack.Screen name="Login" component={LoginScreen} />
+          <Stack.Screen name="MotDePasseOublie" component={MotDePasseOublieScreen} />
 
           {/* Flux de commande / deep links */}
           <Stack.Screen

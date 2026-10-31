@@ -49,8 +49,23 @@ import { compteursPartages } from './limitation-redis';
  * dix mille supporters n'y changent rien.
  */
 
-/** Les routes où essayer des mots de passe a un sens. */
-const ROUTES_SENSIBLES = /\/auth\/(login|register)\b/;
+/**
+ * Les routes où essayer des mots de passe — ou des adresses — a un sens.
+ *
+ * `password-reset` en fait partie, et pour DEUX raisons distinctes :
+ *
+ *   · `/request` est un annuaire en puissance. Sans limite, on y teste une
+ *     liste d'adresses pour savoir lesquelles ont un compte chez nous. La
+ *     réponse est volontairement la même dans les deux cas, mais rien
+ *     n'empêcherait d'en poser cent mille ;
+ *   · `/confirm` porte un code à six chiffres. La base compte les essais sur
+ *     UN code donné ; elle ne voit pas quelqu'un qui demande un code neuf à
+ *     chaque tentative. Ce compteur-ci le voit.
+ *
+ * Les deux routes portent l'adresse dans leur corps — c'est ce qui les rend
+ * comptables ici, et c'est pour cela que `/confirm` la redemande.
+ */
+const ROUTES_SENSIBLES = /\/auth\/(login|register|password-reset)\b/;
 
 /** La requête telle qu'on a besoin de la lire — rien de plus. */
 type RequeteLue = { url?: unknown; body?: unknown; ip?: unknown };

@@ -61,6 +61,7 @@ import { signalerVisite } from '@lib/frequentation';
 import { useNotifStore } from '@store/notif.store';
 import { NotificationsScreen } from '@screens/notifications.screen';
 import { AideScreen } from '@screens/aide.screen';
+import { MotDePasseOublieScreen } from '@screens/mot-de-passe-oublie.screen';
 import {
   DocumentLegalScreen,
   InformationsLegalesScreen,
@@ -248,6 +249,11 @@ export default function AppPreview() {
 
               {/* Auth */}
               <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
+              {/* « Mot de passe oublie » — le lien de l'ecran de connexion menait a
+                  une alerte « a venir ». Le parcours existe desormais : un code a
+                  six chiffres par courriel, et pas un lien — un lien devrait
+                  rouvrir l'app depuis une messagerie. */}
+              <Stack.Screen name="MotDePasseOublie" component={MotDePasseOublieScreen} />
 
               {/* Flux de commande (réels, web-safe) */}
               <Stack.Screen name="FlaixOrder" component={FlaixOrderScreen} />

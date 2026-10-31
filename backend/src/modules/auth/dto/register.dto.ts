@@ -1,4 +1,5 @@
-import { IsEmail, IsString, MinLength, MaxLength, IsOptional, Matches } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, IsOptional } from 'class-validator';
+import { EstUnTelephone } from '../../../common/decorators/est-un-telephone.decorator';
 
 export class RegisterDto {
   @IsEmail({}, { message: 'Invalid email address' })
@@ -42,8 +43,43 @@ export class RegisterDto {
   @MaxLength(50, { message: 'Display name must not exceed 50 characters' })
   displayName?: string;
 
+  /**
+   * LE NUMÉRO, VALIDÉ PAR LA MÊME RÈGLE QUI L'ÉCRIT.
+   *
+   * L'expression précédente — `/^\+?[\d\s\-().]{7,20}$/` — acceptait la
+   * ponctuation seule : « --------- » était un numéro valide. Et sa borne
+   * basse (7) ne correspondait pas à celle du formulaire mobile (9), donc un
+   * numéro refusé par l'un passait chez l'autre.
+   *
+   * `EstUnTelephone` délègue à `normaliserTelephone`, que le service appelle
+   * aussi pour STOCKER la valeur. Accepter et normaliser sont désormais le
+   * même test.
+   */
   @IsOptional()
   @IsString()
-  @Matches(/^\+?[\d\s\-().]{7,20}$/, { message: 'Invalid phone number format' })
+  @EstUnTelephone()
   phone?: string;
+
+  /**
+   * LA VERSION DES CGU QUE LA PERSONNE A LUE.
+   *
+   * L'écran impose une case décochée au départ et refuse de continuer sans
+   * elle — mais la réponse ne quittait pas le téléphone. On affirmait, dans les
+   * CGU elles-mêmes, recueillir l'acceptation à l'inscription, sans pouvoir
+   * montrer ni la date ni le texte accepté.
+   *
+   * On reçoit la VERSION, pas un booléen : les conditions changent, et
+   * « accepté » ne dit pas à quoi. La date, elle, est posée par le serveur —
+   * une date fournie par le client ne prouverait rien.
+   *
+   * FACULTATIF, et ce n'est pas un oubli. Le rendre obligatoire casserait deux
+   * parcours existants : les builds déjà installées, qui ne l'envoient pas, et
+   * les inscriptions par Apple ou Google, qui passent par une autre route. Un
+   * compte refusé à l'inscription est une vente perdue ; une preuve manquante
+   * se voit et se corrige.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  cguVersion?: string;
 }

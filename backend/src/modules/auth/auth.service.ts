@@ -12,6 +12,7 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../../database/prisma.service';
 import { UsersService } from '../users/users.service';
 import { GroupsService } from '../groups/groups.service';
+import { normaliserTelephone } from '../../common/helpers/telephone';
 import type { SafeUser } from '../users/users.service';
 import { SocialIdentityService, type Fournisseur } from './social-identity.service';
 import {
@@ -103,6 +104,7 @@ export class AuthService {
       firstName: dto.firstName,
       lastName: dto.lastName,
       phone: dto.phone,
+      cguVersion: dto.cguVersion,
     });
 
     // Phase 14 — auto-join any group whose emailDomain matches this address.
@@ -402,8 +404,28 @@ export class AuthService {
 
     const prenom = net(dto.firstName);
     const nom = net(dto.lastName);
-    const tel = net(dto.phone);
     const affiche = net(dto.displayName);
+
+    /**
+     * LE TÉLÉPHONE PASSE PAR LA NORMALISATION, pas par `net`.
+     *
+     * `net` ne faisait qu'un `trim()` : trois écritures du même numéro
+     * donnaient trois valeurs en base, et le client qui corrigeait son profil
+     * en créait une quatrième.
+     *
+     * L'ABSENCE ET LE VIDE RESTENT DISTINCTS — c'est ce que `net` protégeait,
+     * et il faut le garder :
+     *
+     *   · champ ABSENT (`undefined`) → on ne touche à rien ;
+     *   · champ VIDE (`''`) → on EFFACE, et c'est la seule façon pour un
+     *     client de retirer un numéro qu'il ne veut plus voir partir chez un
+     *     partenaire ;
+     *   · champ rempli → la forme E.164.
+     *
+     * Le DTO a déjà refusé ce qui n'est pas normalisable, donc `null` ici ne
+     * peut venir que d'un champ vide.
+     */
+    const tel = dto.phone === undefined ? undefined : normaliserTelephone(dto.phone);
 
     if (prenom !== undefined) data.firstName = prenom;
     if (nom !== undefined) data.lastName = nom;

@@ -59,6 +59,46 @@ describe('Limitation de débit', () => {
       ).toBe(true);
     });
 
+    /**
+     * « MOT DE PASSE OUBLIÉ » EST COMPTÉ, et pour deux raisons distinctes.
+     *
+     *   · `/request` est un annuaire en puissance : sans limite, on y teste
+     *     une liste d'adresses pour savoir lesquelles ont un compte chez nous.
+     *     La réponse est volontairement la même dans les deux cas, mais rien
+     *     n'empêcherait d'en poser cent mille ;
+     *   · `/confirm` porte un code à six chiffres. La base compte les essais
+     *     sur UN code donné ; elle ne voit pas quelqu'un qui redemande un code
+     *     neuf à chaque tentative. Ce compteur-ci le voit.
+     */
+    it('compte les deux routes de « mot de passe oublié »', () => {
+      expect(
+        concerneUneAuthentification({
+          url: '/api/v1/auth/password-reset/request',
+          body: { email: 'jo@exemple.fr' },
+        }),
+      ).toBe(true);
+      expect(
+        concerneUneAuthentification({
+          url: '/api/v1/auth/password-reset/confirm',
+          body: { email: 'jo@exemple.fr', code: '123456', nouveauMotDePasse: 'motdepasse1' },
+        }),
+      ).toBe(true);
+    });
+
+    /**
+     * MAIS PAS LA QUESTION « EST-CE OFFERT ? ».
+     *
+     * C'est un GET sans corps, donc sans adresse : il ne peut pas servir à
+     * tâtonner, et le compter ferait disparaître le lien « Mot de passe
+     * oublié ? » chez tous les clients d'un stade dès qu'ils ouvrent l'écran
+     * de connexion derrière le même wifi.
+     */
+    it('ne compte pas la question de disponibilité, qui n’a pas de corps', () => {
+      expect(
+        concerneUneAuthentification({ url: '/api/v1/auth/password-reset/available' }),
+      ).toBe(false);
+    });
+
     it('JAMAIS sur une route ordinaire, même si elle porte une adresse', () => {
       // Une invitation d'équipier porte une adresse : sans cette règle, elle
       // hériterait d'une limite de huit par quart d'heure que personne n'a

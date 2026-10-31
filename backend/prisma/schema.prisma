@@ -239,6 +239,22 @@ model User {
   firstName     String?    @map("first_name")
   lastName      String?    @map("last_name")
   phone         String?
+  /// LA PREUVE D'ACCEPTATION DES CGU : la version LUE, et la date.
+  ///
+  /// L'écran impose une case décochée au départ, mais la réponse ne quittait
+  /// pas le téléphone. On affirmait recueillir l'acceptation sans pouvoir la
+  /// montrer — ni la date, ni le texte accepté.
+  ///
+  /// La version est la chaîne telle qu'affichée (« Version du 19 octobre
+  /// 2026 ») : c'est ce que la personne avait sous les yeux. Un numéro séparé
+  /// serait une deuxième source de vérité pour la même date.
+  ///
+  /// Nuls ensemble ou remplis ensemble — une contrainte de la base l'impose.
+  /// Nuls pour les comptes antérieurs, et pour ceux créés par Apple ou Google,
+  /// qui passent par une autre route : une preuve fabriquée serait pire
+  /// qu'une preuve absente.
+  cguVersion    String?    @map("cgu_version")
+  cguAcceptedAt DateTime?  @map("cgu_accepted_at")
   globalRole    GlobalRole @default(CUSTOMER) @map("global_role")
   isActive      Boolean    @default(true) @map("is_active")
   createdAt     DateTime   @default(now()) @map("created_at")
@@ -247,6 +263,7 @@ model User {
   memberships      OrganizationMember[]
   identities       UserIdentity[]
   refreshTokens    RefreshToken[]
+  passwordResets   PasswordReset[]
   carts            Cart[]
   orders           Order[]
   notifications    UserNotification[]
@@ -256,6 +273,46 @@ model User {
   liveActivities   LiveActivity[]
 
   @@map("users")
+}
+
+/// UN CODE DE RÉINITIALISATION DE MOT DE PASSE, envoyé par courriel.
+///
+/// Le lien « Mot de passe oublié ? » affichait « à venir » : un client qui
+/// perdait son mot de passe perdait son compte, sans recours.
+///
+/// ── UN CODE À SIX CHIFFRES, ET PAS UN LIEN ──────────────────────
+///
+/// Un lien cliquable devrait rouvrir l'application depuis un courriel, donc
+/// des liens universels à déclarer chez Apple et Google, ou une page web de
+/// repli à écrire et à héberger. Un code se tape dans l'écran où le client se
+/// trouve déjà. Même sécurité pour autant qu'on compte les essais — et c'est
+/// ce que fait `attempts`.
+///
+/// ── LE CODE EST HACHÉ ───────────────────────────────────────────
+///
+/// `code_hash`, jamais le code. Une base lue — sauvegarde égarée, accès de
+/// lecture de trop — donnerait sinon tous les comptes dont une demande est en
+/// cours. Le hachage est un SHA-256 : le code est éphémère et à forte entropie
+/// relative pour sa durée de vie, donc inutile d'y mettre Argon2 (qu'on
+/// paierait à chaque essai, y compris aux essais d'un attaquant).
+model PasswordReset {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  codeHash  String    @map("code_hash")
+  expiresAt DateTime  @map("expires_at")
+  /// Rempli à l'usage. UN SEUL USAGE : un code rejoué ne doit pas permettre de
+  /// reprendre un compte dont le propriétaire vient de reprendre la main.
+  usedAt    DateTime? @map("used_at")
+  /// Essais RATÉS sur ce code. Au-delà, il meurt — six chiffres ne résistent
+  /// pas à un million d'essais, mais ne survivent pas à cinq.
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// La lecture est toujours « la demande en cours de cette personne ».
+  @@index([userId, createdAt])
+  @@map("password_resets")
 }
 
 /// Push programmé (C2) ou campagne promo automatique (C3).
