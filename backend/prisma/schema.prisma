@@ -759,7 +759,26 @@ model Stock {
   productId     String   @map("product_id")
   supplierId    String   @map("supplier_id")
   pickupPointId String?  @map("pickup_point_id")
+  /// Ce qui est SUR L'ÉTAGÈRE. Pas ce qui est disponible à la vente — voir
+  /// `reserved` juste en dessous.
   quantity      Int      @default(0)
+  /// CE QUI EST DÉJÀ PROMIS À UN PAIEMENT EN COURS.
+  ///
+  /// Le stock n'était que LU avant Stripe, jamais retenu. Deux clients sur la
+  /// dernière bière lisaient tous les deux « il en reste une », passaient tous
+  /// les deux, et payaient tous les deux. Après le débit,
+  /// `decrementerStock` ne pouvait plus que CONSTATER : il mettait l'étagère à
+  /// zéro et créait la commande quand même, l'argent étant encaissé. Le
+  /// comptoir devait substituer ou rembourser.
+  ///
+  /// DISPONIBLE = `quantity - reserved`. C'est cette différence que le panier
+  /// et le paiement vérifient désormais.
+  ///
+  /// La réservation est posée au PAIEMENT, pas à l'ajout au panier : retenir
+  /// du stock dès qu'un client coche un article le gèlerait pour tous les
+  /// paniers abandonnés de la soirée — on affamerait l'étagère pour protéger
+  /// des commandes qui n'arriveront jamais.
+  reserved      Int      @default(0)
   isAvailable   Boolean  @default(true) @map("is_available")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
@@ -805,6 +824,17 @@ model Cart {
   /// Nul : aucune place tenue — pas de créneau choisi, ou panier engagé avant
   /// cette version.
   slotReservedAt  DateTime?  @map("slot_reserved_at")
+  /// QUAND LE STOCK DE CE PANIER A ÉTÉ RETENU — avant le paiement.
+  ///
+  /// Même rôle que `slotReservedAt`, pour l'étagère : il dit que ce panier
+  /// tient ses articles, donc que la création de commande doit les CONSOMMER
+  /// au lieu de les décrémenter, qu'un second appel au paiement ne doit pas en
+  /// retenir davantage, et qu'un échec ou une péremption doit les rendre.
+  ///
+  /// Remis à nul dès que le contenu du panier change : une réservation posée
+  /// sur un contenu qui n'est plus le bon ne vaut rien, et le paiement la
+  /// reprendra sur le contenu réel.
+  stockReservedAt DateTime?  @map("stock_reserved_at")
   status          CartStatus @default(OPEN)
   /// PHASE 20 — points que le client a choisi d'utiliser sur ce panier.
   /// Stocké en points (et non en centimes) : la valeur d'un point peut changer

@@ -22,6 +22,7 @@ import { SlotsService } from '../slots/slots.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { LiveActivityService } from '../live-activity/live-activity.service';
 import { jourDeService } from '../../common/helpers/jour-de-service';
+import { consommerLeStock, rendreLeStock } from '../stock/retenue-stock';
 
 /**
  * OrdersService — owns the Order lifecycle from PaymentIntent.succeeded onward.
@@ -299,10 +300,23 @@ export class OrdersService {
         },
       });
 
-      // 5. Le stock descend, atomiquement. Même code pour l'ardoise : le
-      //    commentaire de `decrementerStock` explique pourquoi il ne refuse
-      //    jamais rien.
-      await this.decrementerStock(tx, pickupPointId, cart.items);
+      /**
+       * 5. LE STOCK DESCEND.
+       *
+       * Deux chemins, et la différence est tout le sujet :
+       *
+       *   · le panier avait RETENU ses articles au paiement — alors on les
+       *     CONSOMME : `quantity` et `reserved` descendent ensemble.
+       *     Décrémenter sans rendre la retenue laisserait une retenue
+       *     orpheline qui gèlerait du stock pour toujours ;
+       *   · sinon (panier engagé avant cette version), on décrémente comme
+       *     avant, en constatant.
+       */
+      if (cart.stockReservedAt) {
+        await consommerLeStock(tx, pickupPointId, cart.items);
+      } else {
+        await this.decrementerStock(tx, pickupPointId, cart.items);
+      }
 
       /**
        * Le créneau choisi au panier devient celui de la commande.
@@ -711,17 +725,33 @@ export class OrdersService {
       try {
         const panier = await this.prisma.cart.findUnique({
           where: { id: cartId },
-          select: { selectedSlotId: true, slotReservedAt: true },
+          select: {
+            selectedSlotId: true,
+            slotReservedAt: true,
+            stockReservedAt: true,
+            pickupPointId: true,
+            items: { select: { productId: true, quantity: true } },
+          },
         });
         if (panier?.selectedSlotId && panier.slotReservedAt) {
           await this.slotsService.libererUnePlace(panier.selectedSlotId);
-          await this.prisma.cart.update({
-            where: { id: cartId },
-            data: { slotReservedAt: null },
-          });
           this.logger.log(
             `Paiement echoue : place rendue sur le creneau ${panier.selectedSlotId}.`,
           );
+        }
+        // ET LES ARTICLES RETENUS. Sans cela, chaque carte refusée gèlerait
+        // des articles que personne n'achète : en fin de soirée, une étagère
+        // annoncée vide serait pleine, et le club aurait refusé des clients
+        // pour rien.
+        if (panier?.stockReservedAt) {
+          await rendreLeStock(this.prisma, panier.pickupPointId, panier.items);
+          this.logger.log(`Paiement echoue : articles rendus au stock.`);
+        }
+        if (panier?.slotReservedAt || panier?.stockReservedAt) {
+          await this.prisma.cart.update({
+            where: { id: cartId },
+            data: { slotReservedAt: null, stockReservedAt: null },
+          });
         }
       } catch (e: unknown) {
         this.logger.warn(

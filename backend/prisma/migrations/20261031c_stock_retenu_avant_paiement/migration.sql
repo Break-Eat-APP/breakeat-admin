@@ -1,0 +1,73 @@
+-- LE STOCK ÉTAIT CONTRÔLÉ, JAMAIS RETENU.
+--
+-- Le paiement relisait le stock avant d'appeler Stripe. Une LECTURE n'empêche
+-- aucun autre panier de lire la même quantité : deux clients sur la dernière
+-- bière lisaient tous les deux « il en reste une », passaient tous les deux le
+-- contrôle, et payaient tous les deux.
+--
+-- Après le débit, `decrementerStock` ne pouvait plus rien refuser — et son
+-- commentaire le dit en toutes lettres : « passé le débit, il n'a plus rien à
+-- refuser : il CONSTATE ». Il mettait l'étagère à zéro, retirait le produit de
+-- la carte, et créait la commande quand même, puisque l'argent était encaissé.
+-- Le comptoir devait substituer ou rembourser, devant le client.
+--
+-- ── DISPONIBLE = quantity - reserved ────────────────────────────
+--
+-- `quantity` reste ce qui est SUR L'ÉTAGÈRE. `reserved` est ce qui est déjà
+-- promis à un paiement en cours. La différence est ce qui se vend, et c'est
+-- elle que le panier et le paiement vérifient désormais.
+--
+-- La retenue est atomique — `UPDATE … WHERE quantity - reserved >= n` — donc
+-- c'est PostgreSQL qui arbitre la dernière unité, pas l'ordre d'arrivée dans
+-- Node. Deux clients ne peuvent plus la retenir tous les deux.
+--
+-- ── POURQUOI AU PAIEMENT, ET PAS À L'AJOUT AU PANIER ────────────
+--
+-- Retenir du stock dès qu'un client coche un article le gèlerait pour tous les
+-- paniers abandonnés de la soirée. On affamerait l'étagère pour protéger des
+-- commandes qui n'arriveront jamais — et un soir de match, la plupart des
+-- paniers ouverts ne sont jamais payés.
+--
+-- Le prix de ce choix, et il est assumé : deux clients peuvent composer des
+-- paniers qui, ensemble, dépassent le stock. Le second l'apprend au paiement,
+-- où refuser ne coûte qu'un message. C'est le bon endroit pour le lui dire.
+--
+-- ── CE QUI REND LA RETENUE ──────────────────────────────────────
+--
+-- Sans ces chemins, chaque paiement abandonné gèlerait des articles que
+-- personne n'achète : en fin de soirée, une étagère annoncée vide serait
+-- pleine, et le club aurait refusé des clients pour rien.
+--
+--   · la commande créée les CONSOMME (quantity et reserved descendent
+--     ensemble) ;
+--   · un paiement refusé les rend ;
+--   · un panier périmé les rend ;
+--   · et tout changement du contenu du panier les rend, parce qu'une retenue
+--     posée sur un contenu qui n'est plus le bon ne vaut rien.
+--
+-- `reserved` à 0 et `stock_reserved_at` NUL pour tout l'existant : c'est le
+-- bon défaut. Un panier engagé avant cette version ne retient rien, donc la
+-- création de commande décrémentera comme avant. Aucune reprise de données.
+ALTER TABLE "stock" ADD COLUMN "reserved" INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE "carts" ADD COLUMN "stock_reserved_at" TIMESTAMP(3);
+
+-- UNE RETENUE NE PEUT PAS ÊTRE NÉGATIVE. C'est la dernière ligne de défense :
+-- si un chemin de code libérait deux fois, un `reserved` négatif ferait
+-- apparaître du stock qui n'existe pas — `quantity - reserved` deviendrait
+-- plus grand que l'étagère, et on vendrait des bières qu'on n'a pas.
+--
+-- On préfère une écriture refusée à un stock qui raconte n'importe quoi.
+--
+-- ── MAIS PAS `reserved <= quantity`, ET C'EST DÉLIBÉRÉ ──────────
+--
+-- La contrainte paraît évidente, et elle bloquerait une opératrice. Cinq
+-- bières sur l'étagère, cinq retenues par des paiements en cours : elle
+-- recompte, en trouve trois, et corrige. PostgreSQL refuserait sa correction.
+--
+-- Au comptoir, pendant le service, être bloqué par une contrainte qu'on ne
+-- comprend pas est pire que d'avoir un instant plus de retenues que de stock.
+-- Cet état se résorbe tout seul — les paiements aboutissent ou expirent — et
+-- `disponible()` le borne à zéro, donc rien ne se vend en trop.
+ALTER TABLE "stock" ADD CONSTRAINT "stock_reserved_positif"
+    CHECK ("reserved" >= 0);

@@ -34,6 +34,7 @@ import {
   assertCreneauCompatible,
   assertPointDeRetraitCompatible,
 } from '../../common/helpers/retrait-compatible';
+import { disponible, rendreLeStock, retenirLeStock } from '../stock/retenue-stock';
 
 /**
  * COMBIEN DE TEMPS UN PANIER RESTE VALABLE — cinq minutes d'inactivité.
@@ -427,6 +428,11 @@ export class CartService {
       );
     }
 
+    // LA RETENUE NE VAUT PLUS RIEN si le contenu change. Posée sur trois
+    // bières, elle ne dit rien d'un panier qui en porte cinq. Le paiement la
+    // reprendra sur le contenu réel.
+    await this.rendreLaRetenueDeStock(cartId);
+
     await this.prisma.$transaction(async (tx) => {
       await tx.cartItem.deleteMany({
         where: { cartId, productId: { notIn: [...vus] } },
@@ -550,9 +556,14 @@ export class CartService {
       if (cart.selectedSlotId && cart.slotReservedAt) {
         await this.slotsService.libererUnePlace(cart.selectedSlotId);
       }
+      // ET LES ARTICLES RETENUS. Sans cela, chaque panier périmé gèlerait des
+      // articles que personne n'achète : en fin de soirée, une étagère
+      // annoncée vide serait pleine, et le club aurait refusé des clients
+      // pour rien.
+      await this.rendreLaRetenueDeStock(cartId);
       await this.prisma.cart.update({
         where: { id: cartId },
-        data: { status: CartStatus.EXPIRED, slotReservedAt: null },
+        data: { status: CartStatus.EXPIRED, slotReservedAt: null, stockReservedAt: null },
       });
       throw new BadRequestException(
         'Ton panier a expiré — reprends ta commande, les stocks ont pu changer.',
@@ -608,7 +619,12 @@ export class CartService {
        * refus existait « au départ du paiement ». Il n'y était pas. Ici,
        * refuser ne coûte qu'un message : rien n'a encore été débité.
        */
-      await this.verifierStockDisponible(item.productId, cart.pickupPointId, item.quantity);
+      await this.verifierStockDisponible(
+        item.productId,
+        cart.pickupPointId,
+        item.quantity,
+        item.productName,
+      );
     }
     // Même seuil que la remise fidélité : le paiement refuse en dessous, autant
     // le dire ici avec un message compréhensible plutôt que de laisser Stripe
@@ -644,6 +660,50 @@ export class CartService {
     }
 
     /**
+     * ── LE STOCK EST RETENU ICI, AVANT STRIPE ─────────────────
+     *
+     * Il n'était que LU. Une lecture n'empêche aucun autre panier de lire la
+     * même quantité : deux clients sur la dernière bière passaient tous les
+     * deux le contrôle et payaient tous les deux. Passé le débit,
+     * `decrementerStock` ne pouvait plus que CONSTATER — il mettait l'étagère
+     * à zéro et créait la commande quand même. Le comptoir devait substituer
+     * ou rembourser, devant le client.
+     *
+     * La retenue est ATOMIQUE et TOUT OU RIEN : c'est PostgreSQL qui arbitre
+     * la dernière unité, et un panier de trois articles dont le deuxième
+     * manque ne part pas avec le premier retenu.
+     *
+     * `stockReservedAt` empêche d'en retenir davantage quand le client
+     * revient sur l'écran de paiement.
+     */
+    if (!cart.stockReservedAt) {
+      const lignes = view.items.map((it) => ({
+        productId: it.productId,
+        quantity: it.quantity,
+      }));
+      const nomsParProduit = new Map(view.items.map((it) => [it.productId, it.productName]));
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          await retenirLeStock(tx, cart.pickupPointId, lignes, (id) =>
+            nomsParProduit.get(id),
+          );
+          await tx.cart.update({
+            where: { id: cart.id },
+            data: { stockReservedAt: new Date() },
+          });
+        });
+      } catch (e: unknown) {
+        // ON REND LES POINTS AVANT DE REFUSER : ils viennent d'être réservés
+        // juste au-dessus, et partir en erreur sans les rendre laisserait un
+        // solde bloqué sur un panier que le client va reprendre.
+        if (view.loyalty.pointsUsed > 0) {
+          await this.loyaltyService.releaseHoldForCart(cart.id).catch(() => undefined);
+        }
+        throw e;
+      }
+    }
+
+    /**
      * ── LA PLACE DU CRÉNEAU EST PRISE ICI, AVANT STRIPE ───────
      *
      * Elle était prise en CRÉANT la commande, donc après l'encaissement. Un
@@ -674,12 +734,14 @@ export class CartService {
           });
         });
       } catch (e: unknown) {
-        // ON REND LES POINTS AVANT DE REFUSER. Ils viennent d'être réservés
-        // quelques lignes plus haut ; partir en erreur sans les rendre
-        // laisserait un solde bloqué sur un panier que le client va reprendre.
+        // ON REND TOUT CE QU'ON VIENT DE PRENDRE. Les points et le stock ont
+        // été retenus quelques lignes plus haut ; partir en erreur sans les
+        // rendre laisserait un solde bloqué et des articles invendables sur
+        // un panier que le client va reprendre.
         if (view.loyalty.pointsUsed > 0) {
           await this.loyaltyService.releaseHoldForCart(cart.id).catch(() => undefined);
         }
+        await this.rendreLaRetenueDeStock(cart.id);
         if (e instanceof ConflictException || e instanceof BadRequestException) {
           throw new BadRequestException(
             'Ce créneau de retrait vient d’être complet. Choisis-en un autre — ' +
@@ -1323,10 +1385,53 @@ export class CartService {
    * l'inventaire est le décrément conditionnel, dans la transaction de
    * commande.
    */
+  /**
+   * REND LES ARTICLES RETENUS PAR UN PANIER, s'il en retenait.
+   *
+   * Appelé sur TOUS les chemins où la retenue n'a plus d'objet : paiement
+   * refusé, panier périmé, contenu modifié, créneau complet. Chacun de ces
+   * chemins est déjà un échec ou un changement — on ne le transforme pas en
+   * erreur serveur pour un stock mal rendu, on journalise.
+   */
+  private async rendreLaRetenueDeStock(cartId: string): Promise<void> {
+    try {
+      const panier = await this.prisma.cart.findUnique({
+        where: { id: cartId },
+        select: {
+          pickupPointId: true,
+          stockReservedAt: true,
+          items: { select: { productId: true, quantity: true } },
+        },
+      });
+      if (!panier?.stockReservedAt) return;
+
+      await rendreLeStock(this.prisma, panier.pickupPointId, panier.items);
+      await this.prisma.cart.update({
+        where: { id: cartId },
+        data: { stockReservedAt: null },
+      });
+      this.logger.log(`Panier ${cartId} : articles retenus rendus.`);
+    } catch (e: unknown) {
+      this.logger.warn(
+        `Panier ${cartId} : retenue de stock non rendue (${String(e)}) — ` +
+          `quelques articles resteront invendables jusqu'a correction.`,
+      );
+    }
+  }
+
+  /**
+   * `nom` SERT À DIRE QUOI AJUSTER.
+   *
+   * Le message disait « Il n'en reste que 1 » sans nommer le produit. Sur un
+   * panier à plusieurs lignes, le client ne pouvait pas savoir lequel poser —
+   * il voyait un refus et devait deviner. Facultatif : les appelants qui ont
+   * le nom sous la main le passent, les autres gardent l'ancien message.
+   */
   private async verifierStockDisponible(
     productId: string,
     pickupPointId: string | null,
     quantiteVoulue: number,
+    nom?: string,
   ): Promise<void> {
     const stock = await this.resolveStock(productId, pickupPointId);
     // Pas de stock déclaré : `assertProductOrderable` a déjà tranché.
@@ -1336,9 +1441,14 @@ export class CartService {
     // l'a déjà refusé, plus haut, avec son propre message. Ne pas écrire de
     // branche pour ce cas — elle ne s'exécuterait jamais, et donnerait à
     // croire qu'elle protège de quelque chose.
-    if (quantiteVoulue > stock.quantity) {
+    // DISPONIBLE, et non ce qui est sur l'étagère : une partie peut être
+    // déjà retenue par des paiements en cours. Lire `quantity` seul laissait
+    // composer un panier sur du stock déjà promis à quelqu'un d'autre.
+    const reste = disponible(stock);
+    if (quantiteVoulue > reste) {
       throw new BadRequestException(
-        `Il n’en reste que ${stock.quantity}. Ton panier n’a pas été modifié.`,
+        `${nom ? `« ${nom} » : il` : 'Il'} n’en reste que ${reste}. ` +
+          `Ton panier n’a pas été modifié.`,
       );
     }
   }

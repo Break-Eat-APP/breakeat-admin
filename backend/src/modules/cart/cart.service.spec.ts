@@ -81,8 +81,19 @@ function mockProduct() {
     availableUntil: null as Date | null,
   };
 }
-function mockStock(quantity = 50) {
-  return { id: 'stock-1', productId: PRODUCT_ID, pickupPointId: null, quantity, isAvailable: true };
+function mockStock(quantity = 50, reserved = 0) {
+  // `reserved` compte : DISPONIBLE = quantity - reserved. Sans ce champ,
+  // `disponible()` calculait `quantity - undefined` = NaN, et plus aucun refus
+  // ne passait — une doublure en retard sur le modèle cache précisément le
+  // comportement qu'elle est censée éprouver.
+  return {
+    id: 'stock-1',
+    productId: PRODUCT_ID,
+    pickupPointId: null,
+    quantity,
+    reserved,
+    isAvailable: true,
+  };
 }
 
 describe('CartService', () => {
@@ -1033,15 +1044,27 @@ describe('CartService', () => {
 
       await service.checkout(CART_ID, USER_ID);
 
-      // Stripe MUST be called before the freeze/transition transaction.
-      const stripeOrder = stripe.createHostedCheckout.mock.invocationCallOrder[0];
-      const txOrder = txSpy.mock.invocationCallOrder[0];
-      expect(stripeOrder).toBeLessThan(txOrder);
+      /**
+       * DEUX TRANSACTIONS DESORMAIS, et il faut dire laquelle on juge.
+       *
+       * La RETENUE du stock et la place du creneau sont prises AVANT Stripe,
+       * chacune dans une transaction interactive — c'est le seul endroit ou
+       * refuser ne coute qu'un message. Le GEL des prix, lui, reste apres
+       * Stripe, et c'est ce que ce test tient.
+       *
+       * On les distingue par leur FORME : le gel passe un TABLEAU
+       * d'ecritures, les retenues passent une fonction. Compter les appels
+       * sans distinguer aurait fait echouer ce test a chaque ajout de
+       * retenue, pour une raison qui n'a rien a voir avec ce qu'il protege.
+       */
+      const appelsGel = txSpy.mock.calls
+        .map((args, i) => ({ args, i }))
+        .filter(({ args }) => Array.isArray(args[0]));
+      expect(appelsGel).toHaveLength(1);
 
-      // One single transaction carries BOTH the price-snapshot updates AND the
-      // CHECKOUT_PENDING status flip — so a cart is never OPEN-with-snapshot.
-      expect(txSpy).toHaveBeenCalledTimes(1);
-      expect(Array.isArray(txSpy.mock.calls[0][0])).toBe(true);
+      const stripeOrder = stripe.createHostedCheckout.mock.invocationCallOrder[0];
+      const gelOrder = txSpy.mock.invocationCallOrder[appelsGel[0].i];
+      expect(stripeOrder).toBeLessThan(gelOrder);
       expect(prisma.cartItem.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { priceSnapshotCents: 800 } }),
       );
@@ -1066,9 +1089,14 @@ describe('CartService', () => {
       // No snapshot write, no status flip: the freeze/transition transaction
       // must never run when the PaymentIntent could not be created. The cart
       // therefore stays OPEN, and computeView() re-reads live prices on retry.
-      expect(txSpy).not.toHaveBeenCalled();
+      //
+      // On ne juge QUE le gel, reconnaissable a sa forme — un TABLEAU
+      // d'ecritures. Les transactions de retenue (stock, creneau) ont bien eu
+      // lieu avant Stripe, et c'est voulu : elles seront rendues par la
+      // peremption du panier ou par un changement de son contenu.
+      const appelsGel = txSpy.mock.calls.filter((args) => Array.isArray(args[0]));
+      expect(appelsGel).toHaveLength(0);
       expect(prisma.cartItem.update).not.toHaveBeenCalled();
-      expect(prisma.cart.update).not.toHaveBeenCalled();
     });
 
     it('rejects with 403 when the owner lost PRIVATE-event access since cart creation (Phase 14.4)', async () => {
