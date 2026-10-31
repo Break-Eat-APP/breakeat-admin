@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   Logger,
@@ -541,9 +542,17 @@ export class CartService {
      * commande.
      */
     if (cart.status === CartStatus.OPEN && cart.expiresAt.getTime() <= Date.now()) {
+      // ET ON REND LA PLACE DU CRÉNEAU, s'il en tenait une.
+      //
+      // Un panier OUVERT peut en tenir : la place est prise avant Stripe, et
+      // un appel à Stripe qui échoue laisse le panier OUVERT avec sa place.
+      // Le périmer sans la rendre la perdrait pour la soirée.
+      if (cart.selectedSlotId && cart.slotReservedAt) {
+        await this.slotsService.libererUnePlace(cart.selectedSlotId);
+      }
       await this.prisma.cart.update({
         where: { id: cartId },
-        data: { status: CartStatus.EXPIRED },
+        data: { status: CartStatus.EXPIRED, slotReservedAt: null },
       });
       throw new BadRequestException(
         'Ton panier a expiré — reprends ta commande, les stocks ont pu changer.',
@@ -632,6 +641,53 @@ export class CartService {
         organizationId: event.organizationId,
         points: view.loyalty.pointsUsed,
       });
+    }
+
+    /**
+     * ── LA PLACE DU CRÉNEAU EST PRISE ICI, AVANT STRIPE ───────
+     *
+     * Elle était prise en CRÉANT la commande, donc après l'encaissement. Un
+     * créneau rempli entre-temps faisait échouer l'affectation, que
+     * `OrdersService` attrapait pour garder la commande SANS créneau —
+     * l'argent étant déjà encaissé. Le client avait choisi « 17h45 », l'écran
+     * le lui avait répété, il avait payé, et sa commande arrivait au comptoir
+     * en « dès que prête ». En rafale sur un même horaire, plusieurs clients
+     * perdaient l'heure qu'ils croyaient avoir réservée sans que personne le
+     * leur dise.
+     *
+     * Ici, refuser ne coûte qu'un message : rien n'est débité. Même
+     * raisonnement que les points juste au-dessus, et que le stock.
+     *
+     * `slotReservedAt` empêche d'en prendre une seconde : un client qui
+     * revient sur l'écran de paiement repasse par ici, et la clé
+     * d'idempotence Stripe lui rend la même session. Sans ce garde, chaque
+     * retour consommerait une place de plus.
+     */
+    if (cart.selectedSlotId && !cart.slotReservedAt) {
+      const creneau = cart.selectedSlotId;
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          await this.slotsService.reserverUnePlace(creneau, tx);
+          await tx.cart.update({
+            where: { id: cart.id },
+            data: { slotReservedAt: new Date() },
+          });
+        });
+      } catch (e: unknown) {
+        // ON REND LES POINTS AVANT DE REFUSER. Ils viennent d'être réservés
+        // quelques lignes plus haut ; partir en erreur sans les rendre
+        // laisserait un solde bloqué sur un panier que le client va reprendre.
+        if (view.loyalty.pointsUsed > 0) {
+          await this.loyaltyService.releaseHoldForCart(cart.id).catch(() => undefined);
+        }
+        if (e instanceof ConflictException || e instanceof BadRequestException) {
+          throw new BadRequestException(
+            'Ce créneau de retrait vient d’être complet. Choisis-en un autre — ' +
+              'rien n’a été débité.',
+          );
+        }
+        throw e;
+      }
     }
 
     // Capture the exact unit prices that back the PaymentIntent amount.
@@ -964,7 +1020,33 @@ export class CartService {
       await assertCreneauCompatible(this.prisma, slotId, cart, true);
     }
 
-    await this.prisma.cart.update({ where: { id: cartId }, data: { selectedSlotId: slotId } });
+    /**
+     * ── CHANGER DE CRÉNEAU REND LA PLACE DE L'ANCIEN ───────────
+     *
+     * Le paiement prend la place avant Stripe. Si le client revient en
+     * arrière et choisit un autre horaire, la place du PREMIER resterait
+     * tenue pour toujours — personne ne l'occuperait, et le créneau
+     * paraîtrait complet alors qu'il est vide.
+     *
+     * On ne rend rien quand il repose le MÊME créneau : ce n'est pas un
+     * changement, et rendre puis reprendre ouvrirait une fenêtre où
+     * quelqu'un d'autre peut le prendre.
+     */
+    if (cart.slotReservedAt && cart.selectedSlotId && cart.selectedSlotId !== slotId) {
+      await this.slotsService.libererUnePlace(cart.selectedSlotId);
+    }
+
+    await this.prisma.cart.update({
+      where: { id: cartId },
+      data: {
+        selectedSlotId: slotId,
+        // La nouvelle place sera prise au paiement. Garder la date ferait
+        // croire qu'elle l'est déjà, et la commande partirait sans l'avoir
+        // comptée : un créneau accepterait alors plus de monde que sa
+        // capacité.
+        ...(cart.selectedSlotId !== slotId && { slotReservedAt: null }),
+      },
+    });
     return { cartId, selectedSlotId: slotId };
   }
 

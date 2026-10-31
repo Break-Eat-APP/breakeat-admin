@@ -1,0 +1,33 @@
+-- UN CRÉNEAU CHOISI POUVAIT DISPARAÎTRE APRÈS LE PAIEMENT.
+--
+-- La place d'un créneau était prise au moment de CRÉER la commande, donc
+-- APRÈS l'encaissement. Si le créneau s'était rempli entre-temps,
+-- `assignOrderToSlot` levait — et `OrdersService` attrapait l'erreur pour
+-- garder la commande SANS créneau, puisque l'argent était déjà encaissé.
+--
+-- Le client avait choisi « 17h45 », l'écran le lui avait répété, il avait
+-- payé, et sa commande arrivait au comptoir en « dès que prête ». En rafale
+-- sur un même horaire, plusieurs clients perdaient ainsi l'heure qu'ils
+-- croyaient avoir réservée, et personne ne le leur disait.
+--
+-- La place se prend désormais au PAIEMENT, avant Stripe : là, refuser ne coûte
+-- qu'un message. Cette colonne dit que le panier la tient.
+--
+-- Elle sert trois fois, et c'est pourquoi c'est une DATE et pas un booléen —
+-- savoir DEPUIS QUAND une place est tenue permet d'enquêter sur un créneau
+-- qui paraît complet sans commande :
+--
+--   · la création de commande ne recompte pas une place déjà tenue, sinon la
+--     capacité se consommerait deux fois et un créneau de vingt se
+--     remplirait en dix ;
+--   · un second appel au paiement — le client revient sur l'écran, la clé
+--     d'idempotence Stripe rend la même session — n'en prend pas une de plus ;
+--   · un paiement refusé ou un panier périmé la REND. Sans cela, chaque
+--     paiement abandonné grignoterait la capacité sans qu'aucune commande ne
+--     l'occupe : en fin de soirée, un horaire annoncé complet serait vide et
+--     le club aurait refusé des clients pour rien.
+--
+-- NULLE pour tous les paniers existants, et c'est le bon défaut : un panier
+-- engagé avant cette version ne tient pas de place, donc la création de
+-- commande la prendra comme avant. Aucune reprise de données n'est nécessaire.
+ALTER TABLE "carts" ADD COLUMN "slot_reserved_at" TIMESTAMP(3);

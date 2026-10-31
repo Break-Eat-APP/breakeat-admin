@@ -598,7 +598,9 @@ describe('CartService', () => {
       await service.choisirCreneau(CART_ID, USER_ID, 'slot-1');
 
       expect(prisma.cart.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { selectedSlotId: 'slot-1' } }),
+        expect.objectContaining({
+          data: expect.objectContaining({ selectedSlotId: 'slot-1' }),
+        }),
       );
     });
 
@@ -637,7 +639,9 @@ describe('CartService', () => {
       await service.choisirCreneau(CART_ID, USER_ID, null);
 
       expect(prisma.cart.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { selectedSlotId: null } }),
+        expect.objectContaining({
+          data: expect.objectContaining({ selectedSlotId: null }),
+        }),
       );
       // Aucun creneau a verifier : on n'interroge pas la base pour rien.
       expect(prisma.slot.findUnique).not.toHaveBeenCalled();
@@ -697,7 +701,9 @@ describe('CartService', () => {
 
       await expect(service.checkout(CART_ID, USER_ID)).rejects.toThrow(/expiré/);
       expect(prisma.cart.update).toHaveBeenCalledWith(
-        expect.objectContaining({ data: { status: CartStatus.EXPIRED } }),
+        expect.objectContaining({
+          data: expect.objectContaining({ status: CartStatus.EXPIRED }),
+        }),
       );
     });
 

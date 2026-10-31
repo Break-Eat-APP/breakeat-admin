@@ -304,19 +304,37 @@ export class OrdersService {
       //    jamais rien.
       await this.decrementerStock(tx, pickupPointId, cart.items);
 
-      // Le créneau choisi au panier devient celui de la commande.
-      //
-      // Il ne suivait pas : le client choisissait « 17h45 », l'écran le lui
-      // répétait, et le comptoir recevait une commande sans heure — affichée
-      // « Retrait dès que prête ». Un service de click & collect qui perd
-      // l'heure de retrait ne rend plus le service pour lequel on l'utilise.
-      //
-      // L'échec est absorbé, comme pour l'ardoise : l'argent est DÉJÀ encaissé,
-      // et un créneau devenu complet ne doit pas faire disparaître la commande.
-      // On sert sans créneau, et l'incident est tracé.
+      /**
+       * Le créneau choisi au panier devient celui de la commande.
+       *
+       * Il ne suivait pas : le client choisissait « 17h45 », l'écran le lui
+       * répétait, et le comptoir recevait une commande sans heure — affichée
+       * « Retrait dès que prête ». Un service de click & collect qui perd
+       * l'heure de retrait ne rend plus le service pour lequel on l'utilise.
+       *
+       * ── LA PLACE EST DÉJÀ TENUE, ET C'EST TOUT CE QUI A CHANGÉ ──
+       *
+       * Elle était PRISE ici, donc après l'encaissement : un créneau rempli
+       * entre-temps faisait échouer l'affectation, l'échec était absorbé — à
+       * raison, l'argent étant encaissé — et la commande partait sans heure.
+       * Le client ne l'apprenait qu'au comptoir.
+       *
+       * Le paiement la prend désormais AVANT Stripe, où un refus ne coûte
+       * qu'un message. `slotReservedAt` dit que ce panier la tient : on ne
+       * compte donc pas une seconde fois, sinon la capacité se consommerait
+       * deux fois par commande et un créneau de vingt se remplirait en dix.
+       *
+       * L'échec reste absorbé pour les paniers engagés AVANT cette version,
+       * qui ne tiennent pas de place et la prennent encore ici.
+       */
       if (cart.selectedSlotId) {
         try {
-          await this.slotsService.assignOrderToSlot(createdOrder.id, cart.selectedSlotId, tx);
+          await this.slotsService.assignOrderToSlot(
+            createdOrder.id,
+            cart.selectedSlotId,
+            tx,
+            cart.slotReservedAt !== null,
+          );
         } catch (e: unknown) {
           this.logger.warn(
             `Commande ${publicOrderNumber} : créneau ${cart.selectedSlotId} non assigné (${String(e)})`,
@@ -671,6 +689,47 @@ export class OrdersService {
         rawStripeEvent: rawEvent,
       },
     });
+
+    /**
+     * ON REND LA PLACE DU CRÉNEAU — le paiement n'aura pas lieu.
+     *
+     * Le paiement prend une place AVANT Stripe, pour ne pas faire perdre son
+     * horaire à un client qui vient de payer. Il faut donc la rendre quand le
+     * paiement échoue : sans cela, chaque carte refusée grignoterait la
+     * capacité d'un créneau sans qu'aucune commande ne l'occupe. En fin de
+     * soirée, un horaire annoncé complet serait vide, et le club aurait refusé
+     * des clients pour rien.
+     *
+     * Par le PANIER, pas par la commande : il n'y en a pas, c'est tout le
+     * sujet. `metadata.cartId` est ce qui relie le paiement au panier.
+     *
+     * Rien ici ne lève. Un webhook d'échec qui répond en erreur serait rejoué
+     * par Stripe, pour aboutir au même constat une minute plus tard.
+     */
+    const cartId = intent.metadata?.cartId;
+    if (cartId) {
+      try {
+        const panier = await this.prisma.cart.findUnique({
+          where: { id: cartId },
+          select: { selectedSlotId: true, slotReservedAt: true },
+        });
+        if (panier?.selectedSlotId && panier.slotReservedAt) {
+          await this.slotsService.libererUnePlace(panier.selectedSlotId);
+          await this.prisma.cart.update({
+            where: { id: cartId },
+            data: { slotReservedAt: null },
+          });
+          this.logger.log(
+            `Paiement echoue : place rendue sur le creneau ${panier.selectedSlotId}.`,
+          );
+        }
+      } catch (e: unknown) {
+        this.logger.warn(
+          `Place du creneau non rendue pour le panier ${cartId} (${String(e)}) — ` +
+            `capacite sous-estimee d'une unite.`,
+        );
+      }
+    }
 
     this.logger.warn(`Payment failed: ${paymentIntentId} — ${failureReason}`);
   }

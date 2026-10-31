@@ -278,19 +278,25 @@ export class SlotsService {
   // ─── Capacity management ────────────────────────────────────
 
   /**
-   * Atomically assigns an order to a slot:
-   *   1. Increments currentLoad with conditional WHERE (currentLoad < capacity)
-   *   2. If no rows updated → slot is full → ConflictException
-   *   3. Auto-flips status to FULL when currentLoad reaches capacity
+   * PRENDRE UNE PLACE — avant le paiement, et non après.
    *
-   * Must be called INSIDE a Prisma $transaction when used with other writes.
+   * La place était prise au moment de CRÉER la commande, donc après
+   * l'encaissement. Un créneau rempli entre-temps faisait échouer
+   * l'affectation ; `OrdersService` attrapait l'erreur et gardait la commande
+   * SANS créneau, puisque l'argent était déjà encaissé. Le client avait choisi
+   * « 17h45 », l'écran le lui avait répété, il avait payé — et sa commande
+   * arrivait au comptoir en « dès que prête ».
+   *
+   * En rafale sur un même horaire, plusieurs clients perdaient ainsi l'heure
+   * qu'ils croyaient avoir réservée, et personne ne le leur disait.
+   *
+   * Ici, refuser ne coûte qu'un message : rien n'est débité.
+   *
+   * L'incrémentation est CONDITIONNELLE — `currentLoad < capacity` — donc deux
+   * clients sur la dernière place ne peuvent pas la prendre tous les deux.
+   * C'est PostgreSQL qui arbitre, pas l'ordre d'arrivée dans Node.
    */
-  async assignOrderToSlot(
-    orderId: string,
-    slotId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<void> {
-    // Fetch current state within the transaction
+  async reserverUnePlace(slotId: string, tx: Prisma.TransactionClient): Promise<void> {
     const slot = await tx.slot.findUnique({ where: { id: slotId } });
     if (!slot) throw new NotFoundException(`Slot ${slotId} not found`);
     if (slot.status === SlotStatus.CLOSED) {
@@ -300,8 +306,7 @@ export class SlotsService {
       throw new ConflictException(`Slot ${slotId} is full`);
     }
 
-    // Conditional increment — only if still below capacity (race-safe)
-    const updated = await tx.slot.updateMany({
+    const pris = await tx.slot.updateMany({
       where: {
         id: slotId,
         currentLoad: { lt: slot.capacity },
@@ -309,19 +314,81 @@ export class SlotsService {
       },
       data: { currentLoad: { increment: 1 } },
     });
-
-    if (updated.count === 0) {
+    if (pris.count === 0) {
       throw new ConflictException(`Slot ${slotId} is full or was closed concurrently`);
     }
 
-    // Update the order's slotId
-    await tx.order.update({ where: { id: orderId }, data: { slotId } });
-
-    // Flip status to FULL if we've reached capacity
+    // COMPLET dès que la capacité est atteinte, pour que l'écran de choix
+    // cesse de le proposer.
     await tx.slot.updateMany({
       where: { id: slotId, currentLoad: slot.capacity },
-      data:  { status: SlotStatus.FULL },
+      data: { status: SlotStatus.FULL },
     });
+  }
+
+  /**
+   * RENDRE UNE PLACE — un paiement abandonné ne doit pas garder un horaire.
+   *
+   * Sans cela, chaque paiement échoué grignoterait la capacité d'un créneau
+   * sans qu'aucune commande ne l'occupe : à la fin de la soirée, un horaire
+   * annoncé complet serait en réalité vide, et le club aurait refusé des
+   * clients pour rien.
+   *
+   * Ne lève JAMAIS. On libère sur des chemins d'échec — un paiement refusé,
+   * un panier périmé — et une libération qui échoue ne doit pas transformer
+   * un échec propre en erreur serveur. L'écart se verrait au pire comme une
+   * place de moins, jamais comme une commande perdue.
+   */
+  async libererUnePlace(slotId: string, client?: Prisma.TransactionClient): Promise<void> {
+    const base = client ?? this.prisma;
+    try {
+      // Jamais en dessous de zéro : une double libération ne doit pas créer
+      // de la capacité qui n'existe pas.
+      const rendu = await base.slot.updateMany({
+        where: { id: slotId, currentLoad: { gt: 0 } },
+        data: { currentLoad: { decrement: 1 } },
+      });
+      if (rendu.count === 0) return;
+
+      // Le créneau redevient proposable. On ne touche PAS à un créneau
+      // FERMÉ : celui-là a été fermé par un humain, et rendre une place ne
+      // le rouvre pas.
+      await base.slot.updateMany({
+        where: { id: slotId, status: SlotStatus.FULL },
+        data: { status: SlotStatus.OPEN },
+      });
+      this.logger.debug(`SlotsService: une place rendue sur le creneau ${slotId}`);
+    } catch (e: unknown) {
+      this.logger.warn(
+        `Place non rendue sur le creneau ${slotId} (${String(e)}) — ` +
+          `capacite sous-estimee d'une unite jusqu'a correction manuelle.`,
+      );
+    }
+  }
+
+  /**
+   * Rattache la commande à son créneau.
+   *
+   * `placeDejaTenue` dit si le panier avait RÉSERVÉ sa place au paiement. Dans
+   * ce cas on ne compte pas une seconde fois — sinon la capacité se
+   * consommerait deux fois par commande, et un créneau de vingt se
+   * remplirait en dix.
+   *
+   * Sans réservation (un panier engagé avant cette version), on garde
+   * l'ancien comportement : on prend la place ici.
+   *
+   * Doit être appelé DANS une transaction quand il accompagne d'autres
+   * écritures.
+   */
+  async assignOrderToSlot(
+    orderId: string,
+    slotId: string,
+    tx: Prisma.TransactionClient,
+    placeDejaTenue = false,
+  ): Promise<void> {
+    if (!placeDejaTenue) await this.reserverUnePlace(slotId, tx);
+
+    await tx.order.update({ where: { id: orderId }, data: { slotId } });
 
     this.logger.debug(`SlotsService: order ${orderId} assigned to slot ${slotId}`);
   }

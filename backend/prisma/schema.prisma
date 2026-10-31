@@ -787,6 +787,24 @@ model Cart {
   pickupPointId   String?    @map("pickup_point_id")
   /// Phase 7 — customer-selected slot before checkout.
   selectedSlotId  String?    @map("selected_slot_id")
+  /// QUAND LA PLACE DE CE CRÉNEAU A ÉTÉ PRISE — avant le paiement.
+  ///
+  /// La place était prise en CRÉANT la commande, donc après l'encaissement. Un
+  /// créneau rempli entre-temps faisait échouer l'affectation, que
+  /// `OrdersService` attrapait pour garder la commande SANS créneau — l'argent
+  /// étant déjà encaissé. Le client avait choisi « 17h45 », l'écran le lui
+  /// avait répété, il avait payé, et sa commande arrivait au comptoir en
+  /// « dès que prête ».
+  ///
+  /// Cette date dit trois choses d'un coup :
+  ///   · le panier TIENT une place, donc la création de commande ne doit pas
+  ///     la compter une seconde fois ;
+  ///   · un second appel au paiement ne doit pas en prendre une de plus ;
+  ///   · et un échec ou une péremption doit la RENDRE.
+  ///
+  /// Nul : aucune place tenue — pas de créneau choisi, ou panier engagé avant
+  /// cette version.
+  slotReservedAt  DateTime?  @map("slot_reserved_at")
   status          CartStatus @default(OPEN)
   /// PHASE 20 — points que le client a choisi d'utiliser sur ce panier.
   /// Stocké en points (et non en centimes) : la valeur d'un point peut changer
