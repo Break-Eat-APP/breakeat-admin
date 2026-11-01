@@ -62,7 +62,7 @@ function getNav() {
 /** Message d'aide adapté à la plateforme quand l'accès est bloqué. */
 function deniedHelp(): string {
   if (Platform.OS !== 'web') {
-    return "L'accès à votre position est refusé.\n\nActivez la localisation pour Break Eat dans les réglages de votre téléphone, puis réessayez.";
+    return "L'accès à votre position est refusé.\n\nActivez la localisation pour BreakEat dans les réglages de votre téléphone, puis réessayez.";
   }
   const ua = getNav()?.userAgent ?? '';
   if (/iPhone|iPad|iPod/i.test(ua)) {

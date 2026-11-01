@@ -27,7 +27,7 @@ const BUNDLE_ID = process.env.BUNDLE_ID ?? 'com.shapper.breakeat';
 
 /** @type {import('expo/config').ExpoConfig} */
 module.exports = {
-  name: 'BREAK EAT',
+  name: 'BreakEat',
   slug: 'break-eat',
   owner: 'break-eat-app-spe',
   // Doit DEPASSER la version publiee sur les stores — 1.0.10 au 20/05/2026,
@@ -67,7 +67,7 @@ module.exports = {
       // la position en silence : la decouverte des lieux par proximite serait
       // definitivement muette, sans la moindre erreur visible.
       NSLocationWhenInUseUsageDescription:
-        'BREAK EAT utilise votre position pour vous montrer les lieux et buvettes autour de vous.',
+        'BreakEat utilise votre position pour vous montrer les lieux et buvettes autour de vous.',
       // Apple reclame AUSSI la variante « Always » : la bibliotheque de
       // geolocalisation reference les API d'arriere-plan, et l'analyse
       // statique les voit dans le binaire — meme si l'app ne les appelle
@@ -76,12 +76,12 @@ module.exports = {
       //
       // Le texte le dit franchement : Break Eat n'a aucun usage en arriere-plan.
       NSLocationAlwaysAndWhenInUseUsageDescription:
-        'BREAK EAT utilise votre position uniquement pendant que vous utilisez l’app, pour vous montrer les lieux autour de vous. Aucun suivi en arriere-plan.',
+        'BreakEat utilise votre position uniquement pendant que vous utilisez l’app, pour vous montrer les lieux autour de vous. Aucun suivi en arriere-plan.',
       // Cle historique (iOS 10 et anterieur), sans effet a partir de notre
       // cible 16.4 : presente uniquement pour satisfaire le controle d'Apple,
       // qui ne revele ses exigences qu'une par envoi.
       NSLocationAlwaysUsageDescription:
-        'BREAK EAT utilise votre position uniquement pendant que vous utilisez l’app.',
+        'BreakEat utilise votre position uniquement pendant que vous utilisez l’app.',
     },
   },
   android: {
@@ -162,7 +162,7 @@ module.exports = {
       'react-native-vision-camera',
       {
         cameraPermissionText:
-          'BREAK EAT a besoin de la caméra pour scanner les QR codes des événements.',
+          'BreakEat a besoin de la caméra pour scanner les QR codes des événements.',
         enableCodeScanner: true,
       },
     ],
