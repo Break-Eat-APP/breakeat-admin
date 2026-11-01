@@ -13,6 +13,7 @@ import {
   Star,
   Store,
   Tags,
+  ToggleLeft,
   Users,
   Wand2,
   type LucideIcon,
@@ -217,6 +218,18 @@ export const NAV_GROUPS: GroupeNav[] = [
     title: 'Système',
     sous: 'Les réglages techniques. Rarement nécessaires.',
     items: [
+      {
+        // AVANT « Paramètres », et c'est voulu : c'est l'écran qu'on ouvre en
+        // urgence. Le mécanisme existait sans aucune interface — pour couper
+        // « Partager l'addition » sur un club un samedi soir, il fallait
+        // appeler l'API en ligne de commande. C'est-à-dire : au moment où l'on
+        // en a besoin, on ne peut pas.
+        href: '/interrupteurs',
+        icon: ToggleLeft,
+        label: 'Interrupteurs',
+        description:
+          'Allumer ou éteindre une fonction tout de suite — pour tous, pour un club, ou pour un seul match.',
+      },
       {
         href: '/settings',
         icon: Settings,

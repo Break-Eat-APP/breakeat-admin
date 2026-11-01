@@ -1022,6 +1022,26 @@ export async function apiDeleteFeatureFlag(id: string): Promise<void> {
   return req<void>('DELETE', `/feature-flags/${id}`);
 }
 
+/**
+ * CE QUE L'APPLICATION VOIT, demandé à la même adresse qu'elle.
+ *
+ * Volontairement SANS JETON : cette route est publique, et c'est exactement
+ * la question que pose un téléphone. Y envoyer la session d'un manager
+ * reviendrait à mesurer autre chose que ce qu'on veut savoir.
+ *
+ * ── POURQUOI PAS `/feature-flags/resolve` ──────────────────────
+ *
+ * Parce qu'il rend `false` quand AUCUNE ligne n'existe, et que sans ligne
+ * c'est la variable d'environnement qui décide. L'écran afficherait donc
+ * « inactif » pour une fonction qui marche. Le service le dit lui-même :
+ * « un flag existe et il est à faux » et « aucun flag n'existe » ne doivent
+ * jamais être confondus.
+ */
+export async function apiSonderInterrupteur(chemin: string): Promise<boolean> {
+  const r = await req<{ enabled: boolean }>('GET', chemin, undefined, true);
+  return r.enabled;
+}
+
 // ─── App Settings ─────────────────────────────────────────────────────────────
 
 export interface SettingListResponse {
