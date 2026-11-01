@@ -226,7 +226,7 @@ export function CheckoutScreen({ navigation }: Props) {
         clientSecret: paiement.clientSecret,
         publishableKey: paiement.publishableKey,
         checkoutUrl: paiement.checkoutUrl,
-        libelle: 'Break Eat',
+        libelle: 'BreakEat',
       });
 
       if (reglement.issue === 'annule') {

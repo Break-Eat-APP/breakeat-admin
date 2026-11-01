@@ -40,7 +40,7 @@ export async function partagerLApplication(nomDuLieu?: string | null): Promise<v
 
   await Share.share({
     message:
-      `Avec Break Eat, tu commandes à la buvette depuis ton téléphone${ou} — ` +
+      `Avec BreakEat, tu commandes à la buvette depuis ton téléphone${ou} — ` +
       `tu récupères ta commande sans faire la queue.\n\n${LIEN_APP_STORE}`,
   });
 }

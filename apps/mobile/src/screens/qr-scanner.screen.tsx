@@ -55,7 +55,7 @@ export function QRScannerScreen({ navigation }: Props) {
         // Reset after a short delay to allow re-scanning
         setTimeout(() => setScanned(false), 2000);
       } else {
-        showAlert('QR invalide', "Ce QR code n'est pas un code Break Eat valide.");
+        showAlert('QR invalide', "Ce QR code n'est pas un code BreakEat valide.");
       }
     },
     [scanned, navigation],

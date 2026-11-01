@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Constants from 'expo-constants';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
@@ -129,12 +130,15 @@ export function AideScreen({ navigation }: Props) {
       '—',
       `Compte : ${user?.email ?? 'non connecté'}`,
       `Appareil : ${Platform.OS} ${Platform.Version}`,
-      'Application : Break Eat 1.1.0',
+      // LUE, PAS ECRITE. Elle etait en dur, donc fausse des la version
+      // suivante — et un support qui lit « 1.1.0 » sur un telephone qui
+      // porte 1.2.0 cherche la panne dans la mauvaise version.
+      `Application : BreakEat ${Constants.expoConfig?.version ?? 'version inconnue'}`,
     ].join('\n');
 
     const adresse =
       `mailto:${ADRESSE_SUPPORT}` +
-      `?subject=${encodeURIComponent(`Break Eat — ${motif.titre}`)}` +
+      `?subject=${encodeURIComponent(`BreakEat — ${motif.titre}`)}` +
       `&body=${encodeURIComponent(`${motif.amorce}${pied}`)}`;
 
     try {

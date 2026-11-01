@@ -35,7 +35,7 @@ export function InformationsLegalesScreen() {
       <PageHeader title="Informations légales" />
       <ScrollView contentContainerStyle={[styles.contenu, { paddingBottom: espaceBas }]}>
         <Text style={styles.intro}>
-          Les documents qui encadrent l’utilisation de Break Eat. Ils sont
+          Les documents qui encadrent l’utilisation de BreakEat. Ils sont
           consultables ici à tout moment, même sans réseau.
         </Text>
 

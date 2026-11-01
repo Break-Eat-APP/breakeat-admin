@@ -322,7 +322,7 @@ export function LoginScreen({ navigation, route }: Props) {
               <Text style={styles.backIcon}>‹</Text>
             </Pressable>
           )}
-          <Text style={styles.title}>Bienvenue chez Break Eat</Text>
+          <Text style={styles.title}>Bienvenue chez BreakEat</Text>
         </View>
 
         {/* Logo */}

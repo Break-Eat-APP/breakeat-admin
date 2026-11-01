@@ -275,13 +275,13 @@ function NotificationsMenuItem() {
       // cadenas de navigateur qui n'existe pas sur son téléphone.
       confirmAction(
         'Notifications refusées',
-        'Elles se réactivent depuis les réglages de ton téléphone, à la ligne Break Eat.',
+        'Elles se réactivent depuis les réglages de ton téléphone, à la ligne BreakEat.',
         () => {
           void ouvrirReglagesNotifs().then((ouvert) => {
             if (!ouvert) {
               showAlert(
                 'Réglages',
-                "Ouvre Réglages › Break Eat › Notifications pour les réactiver.",
+                "Ouvre Réglages › BreakEat › Notifications pour les réactiver.",
               );
             }
           });

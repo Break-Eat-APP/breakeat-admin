@@ -27,7 +27,7 @@ export function PartnersScreen() {
       <PageHeader title="Nos lieux" />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: espaceBas }]}>
         <Text style={styles.intro}>
-          Ils nous font confiance — clubs, salles et restaurateurs qui proposent Break Eat.
+          Ils nous font confiance — clubs, salles et restaurateurs qui proposent BreakEat.
         </Text>
 
         <View style={[styles.list, shadowCard]}>
