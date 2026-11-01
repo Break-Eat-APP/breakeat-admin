@@ -9,13 +9,12 @@
  *  · LE DÉCOMPTE QUI MENT. Un match demain à 14 h, consulté ce soir à 22 h,
  *    est à seize heures : compté en tranches de 24 h, il dirait
  *    « aujourd'hui » ;
- *  · LE VOCABULAIRE. Ce qui ouvre, c'est LA COMMANDE. `heureLisible` est le
+ *  · LE VOCABULAIRE. Ce qui ouvre, c'est LA COMMANDE. l’heure d’ouverture est le
  *    seul endroit qui met l'heure du lieu en mots — si elle se trompe, toutes
  *    les phrases de l'écran se trompent avec elle.
  */
 import {
   heureDuJour,
-  heureLisible,
   initialesAdversaire,
   libelleAttente,
   libelleDateLongue,
@@ -53,7 +52,7 @@ describe('les mois du ruban', () => {
       OCTOBRE_2026,
     );
 
-    expect(mois.map((m) => m.libelle)).toEqual(['octobre', 'novembre']);
+    expect(mois.map((m) => m.libelle)).toEqual(['Octobre', 'Novembre']);
     expect(mois[0].matchs.map((m) => m.id)).toEqual(['a', 'b']);
     expect(mois[1].matchs.map((m) => m.id)).toEqual(['c']);
   });
@@ -67,11 +66,11 @@ describe('les mois du ruban', () => {
       [match('a', '2026-12-20T18:00'), match('b', '2027-01-10T16:00')],
       OCTOBRE_2026,
     );
-    expect(mois.map((m) => m.libelle)).toEqual(['décembre', 'janvier 2027']);
+    expect(mois.map((m) => m.libelle)).toEqual(['Décembre', 'Janvier 2027']);
   });
 
   it('ne répète pas l’année de l’année en cours', () => {
-    expect(parMois([match('a', '2026-10-03T14:30')], OCTOBRE_2026)[0].libelle).toBe('octobre');
+    expect(parMois([match('a', '2026-10-03T14:30')], OCTOBRE_2026)[0].libelle).toBe('Octobre');
   });
 
   /**
@@ -125,31 +124,6 @@ describe('les dates écrites', () => {
   it('une date illisible rend une chaîne vide, pas « Invalid Date »', () => {
     expect(libelleJour('n’importe quoi')).toBe('');
     expect(libelleDateLongue('n’importe quoi')).toBe('');
-  });
-});
-
-describe('l’heure d’ouverture de LA COMMANDE', () => {
-  it('« 08:00 » devient « 8 h » — pas « 08 h »', () => {
-    expect(heureLisible('08:00')).toBe('8 h');
-  });
-
-  it('garde les minutes quand il y en a', () => {
-    expect(heureLisible('08:30')).toBe('8 h 30');
-    expect(heureLisible('13:05')).toBe('13 h 05');
-  });
-
-  it('accepte une saisie sans zéro de tête', () => {
-    expect(heureLisible('8:00')).toBe('8 h');
-  });
-
-  /**
-   * Un réglage illisible ne doit pas faire DISPARAÎTRE l'information : mieux
-   * vaut un affichage bancal qu'un écran qui ne dit plus quand ça ouvre.
-   */
-  it('rend la saisie telle quelle quand elle est illisible', () => {
-    expect(heureLisible('midi')).toBe('midi');
-    expect(heureLisible('25:00')).toBe('25:00');
-    expect(heureLisible('08:99')).toBe('08:99');
   });
 });
 

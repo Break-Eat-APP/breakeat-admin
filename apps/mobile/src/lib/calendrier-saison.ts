@@ -65,7 +65,11 @@ export function parMois(saison: readonly EvenementDeSaison[], maintenant: Date):
       dernier.matchs.push(m);
       continue;
     }
-    const nom = MOIS[d.getMonth()];
+    // MAJUSCULE a la source, et non `textTransform` dans la vue : le libelle
+    // est aussi lu par les tests et pourra servir ailleurs. Une capitale posee
+    // par le style ne suit pas la donnee.
+    const brut = MOIS[d.getMonth()];
+    const nom = brut.charAt(0).toUpperCase() + brut.slice(1);
     groupes.push({
       cle,
       libelle: d.getFullYear() === anneeCourante ? nom : `${nom} ${d.getFullYear()}`,
@@ -102,22 +106,6 @@ export function heureDuJour(d: Date): string {
   const h = d.getHours();
   const m = d.getMinutes();
   return m === 0 ? `${h} h` : `${h} h ${String(m).padStart(2, '0')}`;
-}
-
-/**
- * « 08:00 » → « 8 h ». L'heure réglée sur le LIEU, rendue lisible.
- *
- * Le zéro de tête disparaît : « la commande ouvre à 08 h » n'est pas une
- * phrase. Une saisie illisible rend la chaîne telle quelle — mieux vaut
- * afficher « 8h0 » que faire disparaître l'information.
- */
-export function heureLisible(hhmm: string): string {
-  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
-  if (!m) return hhmm.trim();
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (h > 23 || min > 59) return hhmm.trim();
-  return min === 0 ? `${h} h` : `${h} h ${String(min).padStart(2, '0')}`;
 }
 
 /**

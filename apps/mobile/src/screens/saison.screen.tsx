@@ -25,7 +25,6 @@ import { useUserLocation } from '@lib/hooks/use-user-location';
 import { showAlert } from '@lib/alert';
 import { heureDOuverture, ouvertALaCommande } from '@lib/ouverture-lieu';
 import {
-  heureLisible,
   initialesAdversaire,
   libelleAttente,
   libelleDateLongue,
@@ -265,12 +264,31 @@ export function SaisonScreen({ route, navigation }: Props) {
   // ── Ce que le bandeau annonce ─────────────────────────────────────
 
   const ouvert = lieu ? ouvertALaCommande(lieu) : false;
-  // `heureDOuverture` rend « 08:00 » ; `heureLisible` en fait « 8 h ».
+  /**
+   * L'HEURE S'ÉCRIT 08:00, PAS « 8 h ».
+   *
+   * `heureDOuverture` rend déjà « 08:00 ». On passait par `heureLisible` pour
+   * en faire « 8 h », une forme plus française mais plus lente à lire : on
+   * hésite une demi-seconde entre 8 h du matin et 8 h du soir, et le zéro de
+   * tête lève le doute sans y penser. Sur un écran qu'on consulte en marchant
+   * vers le stade, cette demi-seconde compte.
+   */
   const ouvreA = lieu ? heureDOuverture(lieu) : null;
 
-  const etatCommande = (): { icone: keyof typeof Ionicons.glyphMap; texte: string } => {
-    if (ouvert) return { icone: 'ellipse', texte: 'Commande ouverte' };
-    if (ouvreA) return { icone: 'time-outline', texte: `La commande ouvre à ${heureLisible(ouvreA)}` };
+  /**
+   * CE QUE LE BANDEAU ANNONCE — ET CE QU'IL TAIT.
+   *
+   * « Commande ouverte » a été retiré : quand la commande est ouverte, le
+   * bouton de chaque match le dit déjà, et le client est en train de
+   * l'utiliser. Répéter l'état normal en haut de l'écran occupe la ligne la
+   * plus lue pour une information que personne ne cherche.
+   *
+   * `null` fait disparaître la pastille entière, pas seulement son texte : une
+   * pastille vide serait une tache orange sans raison.
+   */
+  const etatCommande = (): { icone: keyof typeof Ionicons.glyphMap; texte: string } | null => {
+    if (ouvert) return null;
+    if (ouvreA) return { icone: 'time-outline', texte: `La commande ouvre à ${ouvreA}` };
     if (lieu?.prochainEvenement) {
       const quand = libelleAttente(lieu.prochainEvenement.startAt, new Date());
       return {
@@ -282,6 +300,10 @@ export function SaisonScreen({ route, navigation }: Props) {
     }
     return { icone: 'calendar-outline', texte: 'Aucun match programmé' };
   };
+
+  // Une seule evaluation : l’appeler deux fois dans le rendu refaisait le
+  // travail, et laissait croire que les deux appels pouvaient differer.
+  const etat = etatCommande();
 
   return (
     <View style={styles.root}>
@@ -310,15 +332,14 @@ export function SaisonScreen({ route, navigation }: Props) {
           </Text>
         </View>
 
-        {chargement ? null : (
+        {/* Calculé UNE fois : l'appeler deux fois refaisait le travail à
+            chaque rendu, et laissait croire que les deux appels pouvaient
+            répondre différemment. */}
+        {chargement || !etat ? null : (
           <View style={styles.pastille}>
-            <Ionicons
-              name={etatCommande().icone}
-              size={ouvert ? 9 : 14}
-              color={ouvert ? '#fff' : 'rgba(255,255,255,0.9)'}
-            />
+            <Ionicons name={etat.icone} size={14} color="rgba(255,255,255,0.9)" />
             <Text style={styles.pastilleTexte} numberOfLines={1}>
-              {etatCommande().texte}
+              {etat.texte}
             </Text>
           </View>
         )}
@@ -487,7 +508,7 @@ export function SaisonScreen({ route, navigation }: Props) {
 function phraseAttente(match: EvenementDeSaison, lieu: PublicVenue | null): string {
   if (match.passe) return 'Match terminé';
   if (lieu?.flaixEnabled) {
-    return `La commande ouvre à ${heureLisible(lieu.heureOuvertureCommande)} le jour du match`;
+    return `La commande ouvre à ${lieu.heureOuvertureCommande} le jour du match`;
   }
   return 'La commande n’est pas encore ouverte';
 }
@@ -555,6 +576,18 @@ function CaseMatch({
  *
  * `contain` et non `cover` : un écusson recadré perd son contour, et c'est le
  * contour qui le rend reconnaissable.
+ *
+ * ── POURQUOI 0,94 ET PAS 0,72 ──────────────────────────────────
+ *
+ * 0,72, c'était 1/√2 : le plus grand CARRÉ qui tienne entièrement dans le
+ * cercle. Mathématiquement prudent, visuellement timide — le blason flottait
+ * au milieu d'une couronne vide, et un écusson qu'on ne distingue pas ne sert
+ * à rien sur un ruban qu'on parcourt du pouce.
+ *
+ * À 0,94, les quatre coins de l'image débordent du cercle et sont rognés par
+ * `overflow: hidden`. C'est sans conséquence : un écusson est rond, en bouclier
+ * ou en losange, et ses coins sont vides. Le contour, lui, reste entier — ce
+ * qui était la raison de `contain`.
  */
 function Blason({
   match,
@@ -580,7 +613,7 @@ function Blason({
       <View style={[styles.blason, cadre]}>
         <Image
           source={{ uri: logo }}
-          style={{ width: taille * 0.72, height: taille * 0.72 }}
+          style={{ width: taille * 0.94, height: taille * 0.94 }}
           resizeMode="contain"
         />
       </View>
@@ -641,7 +674,9 @@ const styles = StyleSheet.create({
 
   mois: { marginBottom: 18 },
   moisTitre: {
-    color: THEME.inkSoft,
+    // En NOIR, et non en gris : c'est un repère de navigation dans une liste
+    // qu'on fait défiler, pas une légende.
+    color: THEME.ink,
     fontSize: 12.5,
     fontFamily: HEAD.semibold,
     marginLeft: 18,
