@@ -18,6 +18,7 @@ import type { UpdateEventStatusDto } from './dto/update-event-status.dto';
 import type { Event, EventSupplier, Supplier } from '@prisma/client';
 import { verifierLienFlaix } from './lien-flaix';
 import { nettoyerNomAdversaire, verifierLogoAdversaire } from './adversaire';
+import { verifierAffiche } from './image-distante';
 
 /**
  * CE QUE L'ENREGISTREMENT D'UNE LIGNE DE MATCH REND.
@@ -32,6 +33,7 @@ export interface LigneMatchFlaix {
   flaixOrderUrl?: string | null;
   opponentName?: string | null;
   opponentLogoUrl?: string | null;
+  posterUrl?: string | null;
 }
 
 export type EventWithSuppliers = Event & {
@@ -344,6 +346,7 @@ export class EventsService {
       url?: string | null;
       opponentName?: string | null;
       opponentLogoUrl?: string | null;
+      posterUrl?: string | null;
     }[],
   ): Promise<LigneMatchFlaix[]> {
     await requireOrgAccess(this.prisma, userId, organizationId, MANAGE_ROLES);
@@ -418,6 +421,27 @@ export class EventsService {
         }
       }
 
+      // L'AFFICHE — le flyer d'un concert. Elle suit le blason, parce qu'elle
+      // se saisit sur la même ligne et obéit aux mêmes règles d'adresse.
+      //
+      // On ne refuse PAS d'avoir les deux : c'est le cas d'un derby dont le
+      // club a fait une affiche, et il est légitime. C'est l'APP qui tranche
+      // — l'affiche gagne (`saison.screen.tsx`), parce qu'elle a été posée
+      // pour cet événement-là. Refuser ici obligerait le club à vider son
+      // blason pour ajouter une affiche, puis à le ressaisir après le match.
+      if (l.posterUrl !== undefined) {
+        const saisie = l.posterUrl?.trim();
+        if (!saisie) {
+          data.posterUrl = null;
+          retour.posterUrl = null;
+        } else {
+          const verdict = verifierAffiche(saisie);
+          if (!verdict.valide) throw new BadRequestException(`${ev.name} — ${verdict.raison}`);
+          data.posterUrl = verdict.url;
+          retour.posterUrl = verdict.url;
+        }
+      }
+
       // Une ligne qui ne demande rien n'a rien à faire dans la transaction :
       // `update` avec un `data` vide touche `updatedAt` pour rien.
       if (Object.keys(data).length > 0) aEcrire.push({ id: ev.id, data, retour });
@@ -431,9 +455,11 @@ export class EventsService {
 
     const poses = aEcrire.filter((e) => e.data.flaixOrderUrl).length;
     const blasons = aEcrire.filter((e) => e.data.opponentLogoUrl).length;
+    const affiches = aEcrire.filter((e) => e.data.posterUrl).length;
     this.logger.log(
-      `Liens de commande Flaix : ${poses} posé(s), ${blasons} blason(s) ` +
-        `sur ${aEcrire.length} événement(s) (org ${organizationId}) par ${userId}`,
+      `Liens de commande Flaix : ${poses} posé(s), ${blasons} blason(s), ` +
+        `${affiches} affiche(s) sur ${aEcrire.length} événement(s) ` +
+        `(org ${organizationId}) par ${userId}`,
     );
 
     return aEcrire.map((e) => e.retour);

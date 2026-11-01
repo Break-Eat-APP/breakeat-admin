@@ -332,6 +332,18 @@ export interface AdminEvent {
   opponentName?: string | null;
   opponentLogoUrl?: string | null;
   /**
+   * L'AFFICHE DE L'EVENEMENT — le flyer d'un concert, en PORTRAIT.
+   *
+   * Un blason est rond ; une affiche est un portrait 2:3 dont le titre,
+   * l'artiste et la date vivent dans la hauteur. Remplie, elle remplace le
+   * blason dans le calendrier de l'app, et la case change de forme.
+   *
+   * Un troisieme champ plutot qu'un reemploi de `opponentLogoUrl` : les deux
+   * ne se DESSINENT pas pareil, et un seul champ pour les deux obligerait le
+   * code a deviner lequel il tient.
+   */
+  posterUrl?: string | null;
+  /**
    * Vrai pour le contenant unique d'un lieu OUVERT EN CONTINU (restaurant).
    * Il n'a ni date ni fin : son lien Flaix vaut tous les jours.
    */
@@ -478,6 +490,7 @@ export interface LigneMatchFlaix {
   flaixOrderUrl?: string | null;
   opponentName?: string | null;
   opponentLogoUrl?: string | null;
+  posterUrl?: string | null;
 }
 
 /**
@@ -495,6 +508,7 @@ export async function apiDefinirLiensCommandeFlaix(
     url?: string | null;
     opponentName?: string | null;
     opponentLogoUrl?: string | null;
+    posterUrl?: string | null;
   }[],
 ): Promise<LigneMatchFlaix[]> {
   return req('PATCH', `/organizations/${orgId}/events/flaix/liens-commande`, { liens });

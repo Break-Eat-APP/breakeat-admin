@@ -68,6 +68,14 @@ export function LiensCommandeFlaix({
   // ancien devenu invalide ferait refuser tout le lot.
   const [noms, setNoms] = useState<Record<string, string>>({});
   const [logos, setLogos] = useState<Record<string, string>>({});
+  /**
+   * L'AFFICHE — le flyer d'un concert, en portrait.
+   *
+   * Un quatrieme etat et non un champ ajoute aux `logos` : les deux coexistent
+   * sur un meme evenement (un derby dont le club a fait une affiche), et
+   * l'enregistrement n'envoie que ce qui a bouge.
+   */
+  const [affiches, setAffiches] = useState<Record<string, string>>({});
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState('');
   const [enregistre, setEnregistre] = useState(false);
@@ -83,11 +91,13 @@ export function LiensCommandeFlaix({
   const valeur = (e: AdminEvent) => saisies[e.id] ?? e.flaixOrderUrl ?? '';
   const valeurNom = (e: AdminEvent) => noms[e.id] ?? e.opponentName ?? '';
   const valeurLogo = (e: AdminEvent) => logos[e.id] ?? e.opponentLogoUrl ?? '';
+  const valeurAffiche = (e: AdminEvent) => affiches[e.id] ?? e.posterUrl ?? '';
 
   const aChange = (e: AdminEvent) =>
     valeur(e).trim() !== (e.flaixOrderUrl ?? '') ||
     valeurNom(e).trim() !== (e.opponentName ?? '') ||
-    valeurLogo(e).trim() !== (e.opponentLogoUrl ?? '');
+    valeurLogo(e).trim() !== (e.opponentLogoUrl ?? '') ||
+    valeurAffiche(e).trim() !== (e.posterUrl ?? '');
   const modifie = aVenir.some(aChange);
 
   /** Repli quand le club n'a pas (encore) de blason : les initiales, comme dans l'app. */
@@ -139,6 +149,9 @@ export function LiensCommandeFlaix({
         ...(valeurLogo(e).trim() !== (e.opponentLogoUrl ?? '')
           ? { opponentLogoUrl: valeurLogo(e).trim() || null }
           : {}),
+        ...(valeurAffiche(e).trim() !== (e.posterUrl ?? '')
+          ? { posterUrl: valeurAffiche(e).trim() || null }
+          : {}),
       }));
       if (liens.length === 0) return;
 
@@ -147,6 +160,7 @@ export function LiensCommandeFlaix({
       setSaisies({});
       setNoms({});
       setLogos({});
+      setAffiches({});
       setEnregistre(true);
     } catch (e) {
       // Le serveur NOMME l'événement fautif : à dix lignes, « ce n'est pas un
@@ -184,6 +198,10 @@ export function LiensCommandeFlaix({
             Dis aussi <strong>contre qui on joue</strong> : le nom et le blason de
             l&apos;adversaire remplissent le calendrier de la saison dans l&apos;app. Les deux
             sont optionnels — sans blason, l&apos;app affiche les initiales.
+            <br />
+            Pour un <strong>concert</strong> ou tout événement qui a une affiche, colle-la
+            dans le dernier champ : l&apos;app montre alors le flyer en portrait, à la place
+            du rond du blason.
           </>
         )}
       </p>
@@ -201,6 +219,7 @@ export function LiensCommandeFlaix({
           const v = valeur(e);
           const nom = valeurNom(e);
           const logo = valeurLogo(e);
+          const affiche = valeurAffiche(e);
           return (
             <div
               key={e.id}
@@ -368,6 +387,101 @@ export function LiensCommandeFlaix({
                       fontFamily: 'inherit',
                     }}
                   />
+
+                  {/*
+                    L'AFFICHE — sur sa propre ligne, et pas a cote du blason.
+
+                    Les deux ne jouent pas le meme role : le blason dit CONTRE
+                    QUI on joue, l'affiche dit ce QU'ON VIENT VOIR. Les mettre
+                    cote a cote ferait croire a deux variantes de la meme chose,
+                    et un club remplirait l'un en pensant remplir l'autre.
+
+                    `flexBasis: '100%'` et non un conteneur en colonne autour de
+                    tout : la ligne existante garde son indentation et ses
+                    reglages, et une retouche de forme ne deplace pas du code
+                    qui marche.
+                  */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      flexWrap: 'wrap',
+                      flexBasis: '100%',
+                      marginTop: 2,
+                    }}
+                  >
+                    {/*
+                      L'APERCU EST UN PORTRAIT, a la forme exacte que l'app
+                      rendra. C'est tout l'interet : un flyer colle dans le
+                      champ du blason se verrait ici, decoupe en rond.
+                    */}
+                    {affiche.trim() && !casses.has(affiche.trim()) ? (
+                      <img
+                        src={affiche.trim()}
+                        alt=""
+                        width={26}
+                        height={39}
+                        onError={() => setCasses((s) => new Set(s).add(affiche.trim()))}
+                        style={{
+                          width: 26,
+                          height: 39,
+                          borderRadius: 5,
+                          // `cover` comme dans le ruban de l'app : a 26 pixels
+                          // de large, `contain` n'ajouterait que des bandes
+                          // grises autour d'une image qu'on ne lit deja plus.
+                          objectFit: 'cover',
+                          background: '#fff',
+                          border: `1px solid ${BRAND.border}`,
+                          flex: '0 0 auto',
+                        }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: 26,
+                          height: 39,
+                          borderRadius: 5,
+                          background: BRAND.bgSubtle,
+                          border: `1px dashed ${BRAND.border}`,
+                          flex: '0 0 auto',
+                        }}
+                        aria-hidden
+                      />
+                    )}
+
+                    <input
+                      type="url"
+                      value={affiche}
+                      onChange={(ev) => {
+                        setAffiches((s) => ({ ...s, [e.id]: ev.target.value }));
+                        setErreur('');
+                        setEnregistre(false);
+                      }}
+                      placeholder="https://…/affiche-concert.jpg (portrait, optionnel)"
+                      aria-label={`Affiche de l’evenement ${e.name}`}
+                      style={{
+                        flex: '1 1 240px',
+                        minWidth: 200,
+                        padding: '8px 11px',
+                        borderRadius: 9,
+                        border: `1px solid ${BRAND.border}`,
+                        fontSize: 13,
+                        fontFamily: 'inherit',
+                      }}
+                    />
+
+                    {/*
+                      PAS DE PHRASE D'EXPLICATION SOUS CHAQUE LIGNE.
+
+                      Il y en avait une, et elle disait juste. Mais une saison
+                      compte treize matchs a domicile : la meme phrase treize
+                      fois ecartait les lignes les unes des autres et faisait
+                      du bruit la ou le club cherche un champ. Elle est dans le
+                      paragraphe d'introduction, dite UNE fois, et le champ
+                      porte « portrait, optionnel » en texte d'invite.
+                    */}
+                  </div>
                 </div>
               )}
             </div>

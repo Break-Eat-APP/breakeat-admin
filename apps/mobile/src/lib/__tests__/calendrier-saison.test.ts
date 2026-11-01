@@ -33,6 +33,7 @@ const match = (id: string, local: string, over: Partial<EvenementDeSaison> = {})
     endAt: new Date(d.getTime() + 7_200_000).toISOString(),
     opponentName: null,
     opponentLogoUrl: null,
+    posterUrl: null,
     passe: false,
     ouvert: false,
     ...over,

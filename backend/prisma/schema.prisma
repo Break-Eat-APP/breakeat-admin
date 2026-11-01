@@ -558,6 +558,32 @@ model Event {
   /// que pas de logo, c'est un calendrier dont la moitié manque.
   opponentName         String?         @map("opponent_name")
   opponentLogoUrl      String?         @map("opponent_logo_url")
+  /// L'AFFICHE DE L'EVENEMENT — le flyer d'un concert, en PORTRAIT.
+  ///
+  /// Un blason est rond et se lit a 48 pixels ; une affiche est un portrait
+  /// 2:3 dont tout le propos — le titre, l'artiste, la date — vit dans sa
+  /// hauteur. Glissee dans le rond du calendrier, il ne reste que son centre :
+  /// une tache de couleur qui ne dit rien.
+  ///
+  /// Quand ce champ est rempli, le calendrier de l'app bascule de forme pour
+  /// CET evenement : une vignette portrait dans le ruban, et l'affiche en
+  /// grand dans la carte du bas (`apps/mobile/src/screens/saison.screen.tsx`).
+  ///
+  /// POURQUOI UN TROISIEME CHAMP et pas `opponentLogoUrl` ni `logoUrl` : c'est
+  /// la meme raison qui a fait naitre `opponentLogoUrl` a cote de `logoUrl`,
+  /// quinze lignes plus haut. Un blason et une affiche ne se DESSINENT pas
+  /// pareil — l'un se centre dans un cercle, l'autre remplit un rectangle. Le
+  /// code doit savoir lequel il tient ; un seul champ pour les deux l'obligerait
+  /// a le deviner, par l'extension du fichier ou par les proportions de
+  /// l'image, deux indices qui se trompent.
+  ///
+  /// QUAND LES DEUX SONT REMPLIS, l'affiche gagne. Elle a ete posee pour CET
+  /// evenement et porte son identite propre ; un blason ne designe que le
+  /// camp d'en face. Un club qui veut revoir l'ecusson vide l'affiche.
+  ///
+  /// FACULTATIF, comme les deux precedents : un lieu qui ne recoit que des
+  /// matchs ne le remplira jamais.
+  posterUrl            String?         @map("poster_url")
   /// Le lien de COMMANDE Flaix de cet événement — la page que le client
   /// ouvre quand il touche le lieu.
   ///

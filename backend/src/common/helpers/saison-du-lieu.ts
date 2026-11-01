@@ -50,6 +50,7 @@ export interface EvenementDeSaisonSource {
   isPermanentContainer?: boolean;
   opponentName?: string | null;
   opponentLogoUrl?: string | null;
+  posterUrl?: string | null;
 }
 
 /** Un match, tel que l'application le reçoit. */
@@ -63,6 +64,17 @@ export interface EvenementDeSaison {
   opponentName: string | null;
   /** Son blason. Nul : l'app rend un disque aux initiales, jamais un trou. */
   opponentLogoUrl: string | null;
+  /**
+   * L'AFFICHE de l'événement — le flyer d'un concert, en portrait.
+   *
+   * Remplie, elle change la FORME de la case dans l'app : une vignette
+   * portrait au lieu du rond, parce qu'un flyer 2:3 glissé dans un cercle de
+   * 48 pixels n'en garde que le centre. L'affiche l'emporte sur le blason
+   * quand les deux sont là : elle a été posée pour CET événement.
+   *
+   * Nul — le cas courant d'un stade : le blason, ou les initiales, reprennent.
+   */
+  posterUrl: string | null;
   /**
    * Le match est joué. Calculé ICI et non dans l'app : un téléphone à l'heure
    * de Tokyo, ou simplement en retard, estomperait le match du jour.
@@ -134,6 +146,7 @@ export function saisonDuLieu(
     endAt: ev.endAt.toISOString(),
     opponentName: ev.opponentName ?? null,
     opponentLogoUrl: ev.opponentLogoUrl ?? null,
+    posterUrl: ev.posterUrl ?? null,
     passe: ev.endAt.getTime() <= t,
     ouvert: estOuvert(ev),
   }));

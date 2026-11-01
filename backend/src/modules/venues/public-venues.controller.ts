@@ -117,6 +117,9 @@ const SELECTION_LIEU = {
       // d'un numéro de jour (`common/helpers/saison-du-lieu.ts`).
       opponentName: true,
       opponentLogoUrl: true,
+      // L'affiche, quand il y en a une : un concert n'a pas d'adversaire, et
+      // son flyer est un PORTRAIT que le rond du blason décapiterait.
+      posterUrl: true,
     },
   },
 } satisfies Prisma.VenueSelect;

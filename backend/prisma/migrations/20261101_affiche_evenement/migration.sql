@@ -1,0 +1,23 @@
+-- L'AFFICHE DE L'ÉVÉNEMENT — le flyer d'un concert, en portrait.
+--
+-- UNE SEULE COLONNE, NULLABLE, SANS VALEUR PAR DÉFAUT : rien à réécrire sur
+-- les lignes existantes. PostgreSQL ne fait qu'enregistrer la colonne dans son
+-- catalogue, sans toucher une seule page de la table — la migration passe sur
+-- une base pleine en quelques millisecondes, et sans verrou long.
+--
+-- TEXT, comme `opponent_logo_url` et `flaix_order_url` : c'est une adresse,
+-- pas un identifiant. (La migration du 23/10 avait coûté deux jours de
+-- production pour avoir déclaré en TEXT ce que la base déclare en UUID ;
+-- `pnpm db:verifier` existe depuis pour cette raison, et l'inverse — déclarer
+-- UUID une adresse — serait tout aussi faux.)
+--
+-- PAS DE CONTRAINTE CHECK sur le format de l'adresse, et c'est volontaire :
+-- l'adresse est déjà validée à l'écriture (`modules/events/image-distante.ts`
+-- — https obligatoire, pas d'identifiant dedans). Doubler cette règle en SQL
+-- la figerait dans la base, où elle ne pourrait plus suivre : le jour où un
+-- club héberge son affiche sur un nouveau service, c'est une migration qu'il
+-- faudrait écrire pour l'accepter.
+--
+-- PAS D'INDEX NON PLUS : personne ne cherche un événement PAR son affiche.
+-- Elle est lue avec l'événement, jamais filtrée dessus.
+ALTER TABLE "events" ADD COLUMN "poster_url" TEXT;

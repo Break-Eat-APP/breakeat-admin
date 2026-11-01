@@ -577,6 +577,17 @@ export interface EvenementDeSaison {
   opponentName: string | null;
   /** Son blason. Nul : l'écran rend un disque aux initiales, jamais un trou. */
   opponentLogoUrl: string | null;
+  /**
+   * L'AFFICHE de l'événement — le flyer d'un concert, en portrait.
+   *
+   * Remplie, elle change la FORME de la case : une vignette portrait au lieu
+   * du rond. Un flyer 2:3 glissé dans un cercle de 48 pixels n'en garde que
+   * le centre — on perd le titre, l'artiste et la date, c'est-à-dire tout.
+   *
+   * Elle l'emporte sur `opponentLogoUrl` quand les deux sont là : elle a été
+   * posée pour CET événement, un blason ne désigne que le camp d'en face.
+   */
+  posterUrl: string | null;
   /** Le match est joué — il s'estompe dans le ruban. */
   passe: boolean;
   /**

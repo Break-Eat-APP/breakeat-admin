@@ -160,6 +160,51 @@ describe('la saison d’un lieu', () => {
     const [m] = saisonDuLieu([match('a', 1)], MAINTENANT, AUCUN);
     expect(m.opponentName).toBeNull();
     expect(m.opponentLogoUrl).toBeNull();
+    expect(m.posterUrl).toBeNull();
+  });
+
+  // ─── L'affiche ──────────────────────────────────────────────────
+
+  /**
+   * Un concert n'a pas d'adversaire : il a une AFFICHE, et c'est le seul
+   * champ qui soit rempli. Elle doit traverser seule — un calendrier qui
+   * n'afficherait le flyer que si un adversaire l'accompagne ne montrerait
+   * jamais un concert.
+   */
+  it('rend l’affiche seule, sans adversaire', () => {
+    const [m] = saisonDuLieu(
+      [match('a', 1, { posterUrl: 'https://x.test/orelsan.jpg' })],
+      MAINTENANT,
+      AUCUN,
+    );
+    expect(m.posterUrl).toBe('https://x.test/orelsan.jpg');
+    expect(m.opponentName).toBeNull();
+    expect(m.opponentLogoUrl).toBeNull();
+  });
+
+  /**
+   * LES DEUX ENSEMBLE TRAVERSENT TOUS LES DEUX.
+   *
+   * C'est le derby dont le club a fait une affiche. Ce helper ne choisit pas
+   * : il rend ce qui est en base, et c'est l'APP qui décide de la forme
+   * (l'affiche gagne — `saison.screen.tsx`). Trancher ici priverait
+   * définitivement l'écran d'une des deux images, et le jour où on voudrait
+   * montrer le blason DANS la carte du bas, la donnée ne serait plus là.
+   */
+  it('rend le blason ET l’affiche sans choisir entre les deux', () => {
+    const [m] = saisonDuLieu(
+      [
+        match('a', 1, {
+          opponentName: 'Racing 92',
+          opponentLogoUrl: 'https://x.test/r92.png',
+          posterUrl: 'https://x.test/derby.jpg',
+        }),
+      ],
+      MAINTENANT,
+      AUCUN,
+    );
+    expect(m.opponentLogoUrl).toBe('https://x.test/r92.png');
+    expect(m.posterUrl).toBe('https://x.test/derby.jpg');
   });
 
   // ─── Où on COUPE ────────────────────────────────────────────────

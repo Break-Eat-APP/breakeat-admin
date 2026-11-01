@@ -11,12 +11,12 @@ import {
 } from 'class-validator';
 
 /**
- * UNE LIGNE DE MATCH : son lien de commande, et son adversaire.
+ * UNE LIGNE DE MATCH : son lien de commande, et de quoi remplir le calendrier.
  *
- * Les trois voyagent ensemble parce qu'ils se saisissent ensemble — le club
- * ouvre sa saison et renseigne chaque rencontre d'un geste, lien et blason
- * compris. Trois enregistrements séparés, c'est trois fois plus d'occasions
- * d'en oublier un, et un calendrier à moitié rempli.
+ * Tout voyage ensemble parce que tout se saisit ensemble — le club ouvre sa
+ * saison et renseigne chaque rencontre d'un geste, lien, blason et affiche
+ * compris. Un enregistrement par champ, c'est autant d'occasions d'en oublier
+ * un, et un calendrier à moitié rempli.
  *
  * Chaque champ absent laisse la valeur en place ; `null` ou vide l'efface.
  */
@@ -40,6 +40,23 @@ export class LienCommandeFlaixDto {
   @IsString()
   @MaxLength(1000)
   opponentLogoUrl?: string | null;
+
+  /**
+   * L'AFFICHE de l'événement — le flyer d'un concert, en portrait.
+   *
+   * Mêmes règles que le blason (https, pas d'identifiants : voir
+   * `events/image-distante.ts`), mais un DESSIN différent dans l'app : une
+   * vignette portrait au lieu d'un rond. Remplie, elle prend la place du
+   * blason sur cet événement.
+   *
+   * `MaxLength(1000)` ici alors que le vérificateur s'arrête à 500 : cette
+   * borne-là protège le serveur d'une chaîne absurde avant tout traitement,
+   * l'autre rend un refus LISIBLE au club. Deux rôles, deux valeurs.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  posterUrl?: string | null;
 }
 
 /**
