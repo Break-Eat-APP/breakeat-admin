@@ -5,6 +5,194 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.4.0] — 2026-11-01 — Le calendrier prend forme, et le nom entre dans l'app
+
+**Le mécanisme des interrupteurs n'avait aucune poignée.** `apiSetFeatureFlag`
+vivait dans le client d'API avec **zéro appelant**. Pour couper « Partager
+l'addition » sur un club un samedi soir — la fonction qui **rembourse de
+l'argent déjà encaissé** — il fallait appeler l'API en ligne de commande ou
+écrire du SQL.
+
+L'écran est livré sous **Système → Interrupteurs**, et il est construit à
+l'envers d'un formulaire :
+
+- les clés viennent d'une **liste** (`lib/interrupteurs.ts`), jamais du
+  clavier : une faute de frappe crée une ligne que personne ne lira ;
+- une section à part montre **les lignes posées en base que personne ne lit** ;
+- et l'écran **ne recalcule rien** — il demande l'état à l'adresse que
+  l'application interroge elle-même.
+
+**Surtout pas `/feature-flags/resolve`.** Il rend `false` quand aucune ligne
+n'existe, alors que sans ligne c'est la **variable d'environnement** qui
+décide : l'écran aurait affiché « inactif » pour une fonction qui marche. D'où
+le bandeau permanent « aucun réglage posé n'est pas éteint », et la distinction
+**Retirer / Couper** répétée jusque dans la confirmation.
+
+**Le calendrier de la saison, quatre retouches.** Le blason passe de 0,72 à
+0,94 du cercle — 0,72 était 1/√2, le plus grand *carré* qui tienne dans un
+rond : mathématiquement prudent, visuellement timide. « Commande ouverte » quitte
+le bandeau orange : répéter l'état *normal* occupait la ligne la plus lue pour
+une information que personne ne cherche. Le mois passe en noir avec sa
+majuscule. L'heure s'écrit `08:00` et non « 8 h » — on hésite une demi-seconde
+entre le matin et le soir, et le zéro de tête lève le doute.
+
+**Un concert n'a pas de blason, il a un flyer.** Le calendrier ne savait
+dessiner qu'un rond de 48 pixels. Une affiche est un portrait 2:3 dont tout le
+propos vit dans la hauteur ; glissée dans le rond, il n'en reste que le centre.
+`Event.posterUrl` rejoint `opponentLogoUrl` — **un troisième champ, pas un
+réemploi** : le code doit *savoir* laquelle des deux images il tient, pas la
+deviner à l'extension du fichier ou aux proportions, deux indices qui se
+trompent. Quand les deux sont remplis, **l'affiche gagne** : elle a été posée
+pour cet événement-là. Dans le ruban elle prend exactement la hauteur du blason
+(chaque case pose sa date sous son image, une rangée désalignée se voit) ; dans
+la carte elle passe à 88 × 132 en `contain`, rien n'est rogné.
+
+**La validation des deux adresses ne vit plus qu'à un endroit**
+(`image-distante.ts`) : https obligatoire — iOS refuse le http simple et
+l'image ne s'afficherait sur **aucun** iPhone — et pas d'identifiants dans
+l'adresse, qui partiraient dans la réponse publique. Les recopier aurait créé
+deux exemplaires d'une règle de sécurité.
+
+**Le nom.** « BREAK EAT » devient **BreakEat** partout où le client le lit, et
+l'icône passe de 480 × 480 à 1024 : elle était *agrandie* à la construction,
+donc floue sur la fiche App Store et sur tous les iPhone récents. Le renommage
+s'était arrêté à la porte — huit endroits restaient, dont l'écran de connexion,
+la feuille de paiement Stripe, et surtout **« Ouvre Réglages › Break Eat ›
+Notifications »**, une ligne qui n'existe plus dans iOS depuis le renommage :
+on envoyait chercher un nom introuvable. Le nom **légal** ne bouge pas — les
+textes disent « BREAK EAT APP », c'est la dénomination de la SAS.
+
+**La politique de confidentialité dit enfin ce que le code fait** : la preuve
+des CGU conservée, la finalité du code de réinitialisation et sa durée, et
+**Flaix nommé** comme logiciel de la même société, donc même responsable de
+traitement. Les quatre textes sont exportés dans `documents-legaux/` par un
+script qui **lit la source** : retaper le texte à côté ferait diverger la page
+web et l'application au premier changement.
+
+**Mesures de capacité, prises sur le code du jour.** L'inscription coûte 107 ms
+par hachage et **sature à 16,5/s par instance quelle que soit la concurrence**
+(4 fils libuv, 296 Mo de pointe). La commande tient **134/s répartie sur 30
+lieux** contre 44/s sur un seul comptoir, soit **3,08× : les lieux ne se gênent
+pas**, le verrou est bien par produit et par point de retrait.
+
+```
++ apps/admin/src/app/(admin)/interrupteurs/page.tsx     ← Système → Interrupteurs
++ apps/admin/src/lib/interrupteurs.ts                   ← le catalogue, et la sonde
++ backend/src/modules/events/image-distante.ts          (+ son spec, 6 cas)
++ backend/prisma/migrations/20261101_affiche_evenement/ ← events.poster_url
++ documents-legaux/*.txt                                ← exportés de la source
++ apps/mobile/scripts/exporter-legal.py                 ← lit textes-legaux.ts
+~ apps/mobile/src/screens/saison.screen.tsx             ← Vignette : 3 formes
+~ apps/mobile/src/lib/calendrier-saison.ts              ← mois capitalisé à la source
+~ apps/admin/src/components/liens-commande-flaix.tsx    ← le champ affiche
+~ backend/src/common/helpers/saison-du-lieu.ts          ← posterUrl traverse
+~ backend/src/modules/events/adversaire.ts              ← délègue la règle
+~ apps/mobile/app.config.js, assets/logo-mark-orange.png ← BreakEat, 1024×1024
+~ apps/mobile/src/lib/textes-legaux.ts                  ← Flaix, CGU, code de reprise
+~ apps/mobile/src/screens/{login,profile,aide,checkout,…} ← le nom, et la version lue
+```
+
+---
+
+## [1.3.0] — 2026-10-31 — L'audit V3, et cinq défauts d'argent (puis cinq P2)
+
+**L'interrupteur global ne pouvait pas être posé du tout** — pire que ce que
+l'audit signalait. Les services écrivaient par `upsert` sur une clé composée
+avec `(scopeId ?? null) as string` : le cast fait taire TypeScript, Prisma
+valide au *runtime* et refuse. `app.split.enabled`, l'interrupteur qui coupe
+l'ardoise, rendait un **500**. Aucun test ne pouvait le voir : les deux suites
+doublent `upsert` par un `jest.fn()` qui accepte tout. Et l'unicité n'était
+garantie par rien — deux `NULL` sont **distincts** dans un index unique
+PostgreSQL ; index partiel ajouté.
+
+**Deux bières devenaient quatre** si le paiement échouait une fois : l'écran
+synchronisait le panier par des *ajouts*, et `POST /carts` réutilise le panier
+déjà ouvert. `PUT /carts/:id/items` pose désormais le contenu **voulu**, en
+quantités absolues.
+
+**Deux clients payaient la même dernière bière** : le stock était contrôlé
+avant Stripe, jamais **retenu**. Disponible = `quantity - reserved`, retenu au
+paiement. *Mon premier correctif était faux et le test l'a attrapé* — je
+comparais `reserved` lu **avant**, donc cinq clients retenaient sur un stock de
+trois ; il faut comparer la colonne à elle-même, en SQL brut.
+
+**Un créneau choisi disparaissait après l'encaissement** : la place était prise
+en créant la commande, et un créneau rempli entre-temps laissait la commande
+sans heure — le client l'apprenait au comptoir.
+
+**Un visiteur partait chez Flaix avec les étiquettes en clair**
+(`phone=[#Votre portable]`) : la substitution ne se faisait que pour un client
+connecté, et le `#` d'une étiquette ouvre un **fragment** d'URL — tout ce qui
+suit n'arrivait jamais chez Flaix.
+
+> La règle commune aux trois retenues (stock, créneau, points) : on retient
+> **avant** Stripe, où refuser ne coûte qu'un message ; et on **rend** sur tous
+> les chemins d'échec, sinon une étagère annoncée vide serait pleine en fin de
+> soirée.
+
+**Puis les cinq P2 du même audit, le même jour.**
+
+**« Mot de passe oublié » existe.** Le lien affichait « à venir » : un client
+qui perdait son mot de passe perdait son compte. Un code à **six chiffres** par
+courriel, pas un lien — un lien devrait rouvrir l'app depuis une messagerie,
+donc des liens universels chez Apple et Google, ou une page web à héberger.
+Code **haché** en base, quinze minutes, usage unique, cinq essais, et toutes
+les sessions tombent à la reprise. **Aucune dépendance ajoutée** : Resend et
+Brevo s'appellent par un seul `POST`. ⚠️ **Il manque la clé d'API et un domaine
+d'expédition vérifié** — tant qu'ils manquent,
+`/auth/password-reset/available` répond `false` et l'app **n'affiche pas** le
+lien, plutôt que de promettre un courriel qui ne partira pas.
+
+**Le téléphone est normalisé en E.164.** L'ancienne règle acceptait la
+**ponctuation seule** — neuf tirets étaient un numéro valide — et l'écran
+exigeait 9 caractères quand le serveur en demandait 7. « 06 12 34 56 78 »,
+« +33 6 12 34 56 78 » et « 0033612345678 » donnaient trois valeurs en base : le
+comptoir ne pouvait pas rapprocher un client de lui-même. Une seule fonction,
+écrite **deux fois** (serveur et app) parce qu'un paquet partagé ajouterait un
+lien que Metro doit résoudre — avec un test qui compare le **code** des deux
+copies et tombe à la première divergence. **Pas d'unicité sur le numéro**, et
+c'est un choix écrit : un foyer partage un fixe, et un champ non vérifié rendu
+unique se retourne en arme.
+
+**L'acceptation des CGU est conservée** : la case cochée ne quittait pas le
+téléphone, alors que les CGU affirment la recueillir. On enregistre la
+**version lue** et la date du **serveur** — une horloge de téléphone se règle à
+la main — et une contrainte de la base interdit l'une sans l'autre. Nullable
+pour les comptes antérieurs et pour Apple/Google : une preuve fabriquée serait
+pire qu'une preuve absente.
+
+**L'inscription concurrente rend un conflit** : `create` lit, calcule Argon2 —
+plusieurs dizaines de millisecondes — puis insère ; deux requêtes franchissaient
+la lecture ensemble et le `P2002` du perdant remontait en **500**. Le client
+lisait « Erreur inconnue » pour une adresse déjà prise. Et l'app reconnaissait
+le conflit **au texte** quand le serveur répond « Email already in use » : elle
+lit le **code HTTP** désormais.
+
+**Le flag par événement est résolu avec son contexte** : le serveur savait
+résoudre événement > club > global, l'affichage ne lui passait rien. Un club
+dont l'ardoise venait d'être activée voyait le serveur accepter pendant que le
+bouton restait caché.
+
+**Et `/ready` dit si Redis permet plus d'une instance** — l'information
+n'existait qu'au journal de démarrage.
+
+```
++ backend/src/modules/auth/password-reset.service.ts   (+ son spec)
++ backend/src/modules/courriel/courriel.service.ts     ← Resend/Brevo par fetch
++ backend/src/common/helpers/telephone.ts              (+ sa copie mobile, + le test de dérive)
++ backend/src/common/helpers/poser-portee.ts           ← la clé composée, sans cast
++ apps/mobile/src/screens/mot-de-passe-oublie.screen.tsx
++ backend/scripts/banc-de-charge/cout-inscription.js   ← 16,5/s par instance
++ backend/scripts/banc-de-charge/cout-commande.js      ← 3,08× sur 30 lieux
++ backend/prisma/migrations/20261031{,b,c,d,e}_*/      ← unicité, créneau, stock, CGU, reprise
+~ backend/src/modules/users/users.service.ts           ← P2002 → 409, téléphone, CGU
+~ backend/src/modules/cart/cart.controller.ts          ← PUT items, quantités absolues
+~ backend/src/modules/orders/orders.service.ts         ← retenir avant Stripe, rendre après
+~ backend/src/health/pret.controller.ts                ← Redis, et plusieurs instances
+```
+
+---
+
 ## [1.2.0] — 2026-10-30 — L'outbox, et la revérification Codex (phases 71-73)
 
 **Rien ne doit se perdre pour l'opérateur.** Une commande payée, c'est deux
