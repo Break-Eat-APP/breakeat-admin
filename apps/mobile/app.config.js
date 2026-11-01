@@ -100,6 +100,25 @@ module.exports = {
   },
   plugins: [
     'expo-apple-authentication',
+    // « Continuer avec Google ». Le greffon pose dans la build le SCHEMA D'URL
+    // INVERSE de l'identifiant client iOS — « com.googleusercontent.apps.123… ».
+    // Sans lui, la feuille de Google s'ouvre et ne sait pas revenir dans l'app.
+    //
+    // Pose SEULEMENT s'il est fourni, comme l'identifiant marchand Apple plus
+    // bas : un schema d'URL invente ne correspondrait a aucun client OAuth, et
+    // la connexion echouerait sur l'appareil — jamais a la compilation.
+    //
+    // ⚠️ C'est une variable de BUILD : elle doit exister au moment ou EAS
+    // construit, donc dans `eas.json` ou dans les secrets EAS. La poser apres
+    // coup ne change rien a une build deja faite.
+    ...(process.env.GOOGLE_IOS_URL_SCHEME
+      ? [
+          [
+            '@react-native-google-signin/google-signin',
+            { iosUrlScheme: process.env.GOOGLE_IOS_URL_SCHEME },
+          ],
+        ]
+      : []),
     // PHASE 21 — prérequis Live Activity : NSSupportsLiveActivities + cible iOS
     // 16.2. Le dossier ios/ étant régénéré à chaque build, ces réglages ne
     // peuvent pas vivre ailleurs que dans un plugin.
@@ -207,6 +226,40 @@ module.exports = {
      */
     ...(process.env.APPLE_MERCHANT_ID
       ? { applePayMerchantId: process.env.APPLE_MERCHANT_ID }
+      : {}),
+    /**
+     * LES IDENTIFIANTS CLIENTS GOOGLE, quand ils existent.
+     *
+     * Trois valeurs, trois roles distincts, et c'est la que la confusion
+     * s'installe :
+     *
+     *  · GOOGLE_WEB_CLIENT_ID  — le client « Web » de la console Google. C'est
+     *    LUI qui fait rendre un jeton d'IDENTITE par le SDK, meme sur iPhone.
+     *    Sans lui on obtient un jeton d'ACCES, que le serveur ne sait pas — et
+     *    ne doit pas — verifier. Son nom trompe : il ne sert pas au web.
+     *  · GOOGLE_IOS_CLIENT_ID  — le client « iOS ». Necessaire ici parce qu'on
+     *    n'utilise PAS Firebase : avec un GoogleService-Info.plist, le SDK l'y
+     *    lirait seul.
+     *  · GOOGLE_IOS_URL_SCHEME — le MEME identifiant iOS, ecrit a l'envers
+     *    (« com.googleusercontent.apps.123… »). Il va dans le greffon ci-dessus,
+     *    pas ici : l'un se pose dans la build, l'autre se lit a l'execution.
+     *
+     * Absentes plutot que `null` : Expo serialise `null` en `{}`, qui est VRAI
+     * en JavaScript. L'app croirait avoir un identifiant, afficherait le bouton,
+     * et la feuille echouerait. Meme piege que l'identifiant marchand, meme
+     * parade — et une seconde garde de forme dans `connexion-google.native.ts`.
+     *
+     * Le SERVEUR, lui, a sa propre liste (`GOOGLE_CLIENT_IDS` sur Railway) :
+     * c'est elle qui decide quels destinataires sont acceptes. Les deux
+     * doivent concorder, sinon le bouton s'affiche et chaque connexion est
+     * refusee — le journal du serveur ecrit alors le `aud` recu a cote de ceux
+     * qu'il attendait.
+     */
+    ...(process.env.GOOGLE_WEB_CLIENT_ID
+      ? { googleWebClientId: process.env.GOOGLE_WEB_CLIENT_ID }
+      : {}),
+    ...(process.env.GOOGLE_IOS_CLIENT_ID
+      ? { googleIosClientId: process.env.GOOGLE_IOS_CLIENT_ID }
       : {}),
   },
   // PAS de bloc `updates` ni `runtimeVersion` : ils declarent des mises a

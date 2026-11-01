@@ -14,6 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { connecterAvecGoogle, googleEstConfigure } from '@lib/connexion-google';
+import { LogoGoogle } from '@components/logo-google';
 import {
   ApiError,
   apiConnexionSociale,
@@ -93,6 +95,15 @@ export function LoginScreen({ navigation, route }: Props) {
     Platform.OS === 'ios' ? ['apple'] : [],
   );
   const [appleDispo, setAppleDispo] = useState(false);
+  /**
+   * Google n'est pas une question de réseau mais de BUILD.
+   *
+   * C'est un module natif : il n'existe pas dans une build qui ne l'embarque
+   * pas, et ses identifiants clients sont posés à la compilation. `useState`
+   * avec la valeur définitive, donc — rien n'arrivera plus tard pour la
+   * changer, et un bouton qui apparaîtrait après coup clignoterait pour rien.
+   */
+  const [googleDispo] = useState(googleEstConfigure);
 
   useEffect(() => {
     apiFournisseursSociaux()
@@ -309,6 +320,49 @@ export function LoginScreen({ navigation, route }: Props) {
     }
   };
 
+  /**
+   * « Continuer avec Google ».
+   *
+   * L'ANNULATION ARRIVE COMME UNE RÉPONSE, pas comme une exception — c'est la
+   * différence avec Apple, qui lève `ERR_REQUEST_CANCELED`. Elle est traitée
+   * dans `connexion-google.native.ts` et revient ici en `annule` : un client
+   * qui referme la feuille a changé d'avis, il n'a pas besoin qu'on le lui
+   * annonce.
+   */
+  const connexionGoogle = async () => {
+    setLoading(true);
+    try {
+      const issue = await connecterAvecGoogle();
+      if (issue.etat === 'annule') return;
+
+      // ON N'ENVOIE QUE `displayName`, et c'est délibéré.
+      //
+      // Le prénom et le nom sont DÉJÀ dans le jeton signé (`given_name`,
+      // `family_name`), et le serveur préfère toujours ceux-là à ce que l'app
+      // lui raconte : les renvoyer serait de la donnée morte.
+      //
+      // Le nom AFFICHÉ, lui, ne se lit QUE dans ce champ côté serveur. Sans
+      // lui, un compte neuf s'appellerait « jean.dupont » — la partie gauche
+      // de l'adresse — en tête de « Mes commandes ».
+      const res = await apiConnexionSociale('google', issue.identite.jeton, {
+        displayName: issue.identite.nomComplet,
+      });
+      await setAuth(res.accessToken, res.user, res.refreshToken);
+      void requestLocation();
+      proceed();
+    } catch (e: unknown) {
+      showAlert('Connexion impossible', messageServeur(e) || 'Réessayez dans un instant.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Les deux boutons tiers, et le séparateur qui ne s'affiche que s'il en
+  // existe au moins un — un « ou » seul au-dessus d'un formulaire n'annonce
+  // rien.
+  const montrerApple = fournisseurs.includes('apple') && appleDispo;
+  const montrerGoogle = fournisseurs.includes('google') && googleDispo;
+
   return (
     <KeyboardAvoidingView
       style={styles.root}
@@ -352,25 +406,54 @@ export function LoginScreen({ navigation, route }: Props) {
           </Pressable>
         </View>
 
-        {fournisseurs.includes('apple') && appleDispo && (
-          <>
-            {/* Le bouton d'Apple, et pas une imitation : la règle 4.8 impose son
-                apparence, sa taille et son libellé. Un bouton dessiné à la main
-                se fait refuser à la revue. */}
-            <AppleAuthentication.AppleAuthenticationButton
-              buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
-              buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
-              cornerRadius={14}
-              style={styles.appleButton}
-              onPress={() => void connexionApple()}
-            />
+        {/* APPLE EN PREMIER, ET CE N'EST PAS UN DÉTAIL DE GOÛT : la règle 4.8
+            de l'App Store veut que « Se connecter avec Apple » ne soit pas
+            moins visible que les autres connexions tierces. Au-dessus, c'est
+            réglé sans avoir à en débattre à la revue. */}
+        {montrerApple && (
+          /* Le bouton d'Apple, et pas une imitation : la règle 4.8 impose son
+             apparence, sa taille et son libellé. Un bouton dessiné à la main se
+             fait refuser à la revue. */
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+            cornerRadius={14}
+            style={styles.appleButton}
+            onPress={() => void connexionApple()}
+          />
+        )}
 
-            <View style={styles.orRow}>
-              <View style={styles.orLine} />
-              <Text style={styles.orText}>ou</Text>
-              <View style={styles.orLine} />
+        {/* Google n'impose PAS son composant — il n'en fournit pas pour React
+            Native. Mais ses règles de marque demandent le logo officiel sur
+            fond blanc, et c'est exactement ce que `styles.social` dessine
+            depuis que ces boutons existent (ils affichaient « bientôt
+            disponible » ; le style attendait le jour où ils marcheraient). */}
+        {montrerGoogle && (
+          <Pressable
+            onPress={() => void connexionGoogle()}
+            disabled={loading}
+            style={({ pressed }) => [
+              styles.social,
+              styles.googleButton,
+              pressed && styles.pressed,
+              loading && styles.pressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Continuer avec Google"
+          >
+            <View style={styles.socialIcon}>
+              <LogoGoogle taille={18} />
             </View>
-          </>
+            <Text style={styles.socialText}>Continuer avec Google</Text>
+          </Pressable>
+        )}
+
+        {(montrerApple || montrerGoogle) && (
+          <View style={styles.orRow}>
+            <View style={styles.orLine} />
+            <Text style={styles.orText}>ou</Text>
+            <View style={styles.orLine} />
+          </View>
         )}
 
         {/* Champs */}
@@ -558,6 +641,16 @@ const styles = StyleSheet.create({
 
   // 50 pt : la hauteur recommandee par Apple. Plus bas, le logo se tasse.
   appleButton: { width: '100%', height: 50, marginBottom: 14 },
+  /**
+   * LA MÊME HAUTEUR QUE LE BOUTON D'APPLE.
+   *
+   * `styles.social` est dessiné en `paddingVertical`, donc sa hauteur dépend
+   * de la police du téléphone : les deux boutons se retrouvaient de tailles
+   * différentes selon l'appareil, et deux boutons voisins qui ne s'alignent
+   * pas ont l'air d'un bug. La hauteur est donc POSÉE, et le remplissage
+   * neutralisé.
+   */
+  googleButton: { height: 50, paddingVertical: 0, marginBottom: 14 },
 
   orRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 12 },
   orLine: { flex: 1, height: 1, backgroundColor: THEME.border },
