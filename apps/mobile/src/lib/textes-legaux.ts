@@ -61,7 +61,7 @@ const EDITEUR = [
  * document contractuel : les acceptations déjà consignées gardent l'ancienne
  * valeur, et doivent rester consultables.
  */
-export const VERSION_DOCUMENTS = 'Version du 19 octobre 2026';
+export const VERSION_DOCUMENTS = 'Version du 1er novembre 2026';
 
 const VERSION = VERSION_DOCUMENTS;
 
@@ -170,6 +170,7 @@ const CONFIDENTIALITE: DocumentLegal = {
         'Les données traitées comprennent : nom et prénom, adresse e-mail, numéro de téléphone, informations de compte, commandes et historique de commandes, informations nécessaires au suivi d’un paiement ou d’une réclamation, préférences de communication, choix de consentement, et données techniques de connexion.',
         'Lorsque l’utilisateur autorise la géolocalisation, sa position est utilisée pour afficher les lieux proches. Elle n’est ni enregistrée ni conservée : elle sert au calcul de la distance, le temps de la recherche.',
         'Les données de carte bancaire sont traitées exclusivement par le prestataire de paiement. Break Eat App ne les reçoit pas et ne les conserve pas.',
+        'La preuve d’acceptation des conditions générales d’utilisation est conservée : la version du texte affichée au moment de l’inscription, et la date, posée par nos serveurs et non par l’appareil.',
       ],
     },
     {
@@ -182,6 +183,7 @@ const CONFIDENTIALITE: DocumentLegal = {
         'Géolocalisation facultative : consentement, retirable à tout moment dans les réglages de l’appareil.',
         'Notifications commerciales : consentement, retirable à tout moment.',
         'Mesure d’audience : intérêt légitime. Elle est réalisée par nos propres serveurs, sans outil publicitaire ni prestataire d’analyse tiers.',
+        'Récupération d’un mot de passe oublié : exécution du contrat et intérêt légitime à sécuriser l’accès au compte.',
       ],
     },
     {
@@ -196,6 +198,7 @@ const CONFIDENTIALITE: DocumentLegal = {
       titre: '5. Destinataires et prestataires',
       paragraphes: [
         'Les données sont accessibles, dans la limite de leurs missions, aux personnes habilitées de Break Eat App et aux buvettes partenaires pour les commandes qui les concernent.',
+        'La prise de commande de certains lieux s’effectue au moyen de Flaix, un logiciel édité et exploité par BREAK EAT APP — la même société, le même responsable de traitement. Il s’affiche à l’intérieur de l’application et reçoit le prénom, le nom, l’adresse e-mail et le numéro de téléphone afin de pré-remplir le formulaire de commande. Il ne s’agit donc pas d’une transmission à un tiers.',
         'Les prestataires intervenant dans le fonctionnement du service sont : Railway (hébergement du serveur et de la base de données), Wix (hébergement du site), Vercel (interfaces d’administration), Stripe (paiement), Expo et Apple (acheminement des notifications).',
         'Aucun outil publicitaire, aucun traceur commercial et aucun prestataire de mesure d’audience tiers n’est intégré à l’application.',
       ],
@@ -214,6 +217,8 @@ const CONFIDENTIALITE: DocumentLegal = {
         'Les pièces comptables et justificatifs de transaction sont conservés pendant les durées légales applicables, y compris après la suppression du compte : la loi l’impose, et les comptes du club en dépendent.',
         'Les données de support sont conservées le temps nécessaire au traitement de la demande et à la gestion d’un éventuel litige.',
         'Les données de prospection sont conservées jusqu’au retrait du consentement.',
+        'Les codes de réinitialisation de mot de passe sont valables quinze minutes, ne servent qu’une fois, et sont enregistrés sous forme d’empreinte : ils ne sont jamais conservés en clair.',
+        'La preuve d’acceptation des conditions est conservée avec le compte.',
       ],
     },
     {

@@ -245,8 +245,8 @@ model User {
   /// pas le téléphone. On affirmait recueillir l'acceptation sans pouvoir la
   /// montrer — ni la date, ni le texte accepté.
   ///
-  /// La version est la chaîne telle qu'affichée (« Version du 19 octobre
-  /// 2026 ») : c'est ce que la personne avait sous les yeux. Un numéro séparé
+  /// La version est la chaîne telle qu'affichée (« Version du … », datée) :
+  /// c'est ce que la personne avait sous les yeux. Un numéro séparé
   /// serait une deuxième source de vérité pour la même date.
   ///
   /// Nuls ensemble ou remplis ensemble — une contrainte de la base l'impose.
