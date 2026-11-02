@@ -35,7 +35,10 @@
       },
       "env": {
         "APP_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1",
+        "GOOGLE_WEB_CLIENT_ID": "482274786646-e7vefqekm2658dtisufgqoi3lelkt398.apps.googleusercontent.com",
+        "GOOGLE_IOS_CLIENT_ID": "482274786646-gocqpvlj3b61v9iftdik94k623qr08rq.apps.googleusercontent.com",
+        "GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.482274786646-gocqpvlj3b61v9iftdik94k623qr08rq"
       },
       "autoIncrement": true,
       "node": "22.14.0",
@@ -65,7 +68,10 @@
       },
       "env": {
         "APP_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1"
+        "EXPO_PUBLIC_API_URL": "https://breakeat-admin-production.up.railway.app/api/v1",
+        "GOOGLE_WEB_CLIENT_ID": "482274786646-e7vefqekm2658dtisufgqoi3lelkt398.apps.googleusercontent.com",
+        "GOOGLE_IOS_CLIENT_ID": "482274786646-gocqpvlj3b61v9iftdik94k623qr08rq.apps.googleusercontent.com",
+        "GOOGLE_IOS_URL_SCHEME": "com.googleusercontent.apps.482274786646-gocqpvlj3b61v9iftdik94k623qr08rq"
       },
       "autoIncrement": true,
       "node": "22.14.0",
