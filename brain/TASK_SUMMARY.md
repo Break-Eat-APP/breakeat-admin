@@ -4,6 +4,94 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-11-03] L'audit V3, Google de bout en bout, et Android qui compile
+
+### Livré
+
+| | |
+|---|---|
+| **Audit chirurgical V3** (31/10) | cinq défauts d'argent, de commande et d'horaire, puis les cinq P2 du même audit le même jour |
+| **Écran Interrupteurs** (01/11) | `apiSetFeatureFlag` avait zéro appelant : couper « Partager l'addition » demandait du SQL |
+| **Affiche d'événement** (01/11) | `Event.posterUrl` — un concert n'a pas de blason, il a un flyer |
+| **Connexion Google** (02/11) | SDK natif, bouton, trois variables de build ; essayée sur un vrai téléphone |
+| **iOS 1.1.0 build 36** | sur TestFlight — première build « BreakEat », icône 1024 |
+| **Android compile** (03/11) | 9ᵉ tentative, APK livré (`b2337b52`) |
+| **Quatre retouches** (03/11) | icône refaite, blasons qui remplissent, étapes fusionnées, numéro de commande en grand |
+
+### Décisions d'architecture
+
+- **`posterUrl` est un TROISIÈME champ**, pas un réemploi de `opponentLogoUrl`.
+  Un blason se centre dans un cercle, une affiche remplit un rectangle : le
+  code doit *savoir* lequel il tient, pas le deviner à l'extension du fichier
+  ou aux proportions — deux indices qui se trompent. Quand les deux sont
+  remplis, l'affiche gagne ; le serveur, lui, ne tranche pas et rend les deux.
+- **Google par le SDK natif, pas `expo-auth-session`.** Ce dernier repasserait
+  par un navigateur système et un rebond `breakeat://` — exactement le parcours
+  qu'on a quitté pour Stripe. Le coût est assumé : module natif, donc aucune
+  build antérieure ne le porte.
+- **Les identifiants OAuth vivent en clair dans `eas.json`.** Un client ID est
+  embarqué dans le binaire, donc public. Et **seulement** sur `beta` et
+  `production` : `preview` construit avec `.preview`, or un client iOS est lié
+  à un seul identifiant de paquet — sans variables, le bouton ne s'affiche pas,
+  ce qui vaut mieux qu'un bouton qui échoue.
+- **L'écran Interrupteurs NE RECALCULE RIEN.** Il demande l'état à l'adresse
+  que l'application interroge elle-même, et surtout **pas** à
+  `/feature-flags/resolve`, qui rend `false` en l'absence de ligne alors que
+  c'est la variable d'environnement qui décide.
+- **Un état retiré d'une séquence se REPLIE, il ne se supprime pas.** En
+  fusionnant « Payé » et « Acceptée », retirer `ACCEPTED` de `STEPS` aurait
+  donné `indexOf` = -1 et une barre de progression qui revient en arrière.
+
+### Tests
+
+- 1 034 unitaires backend, 204 d'intégration, 91 côté mobile.
+- Chaque correctif de l'audit V3 prouvé **en réintroduisant la faute**.
+- Le test qui compte pour `image-distante.ts` envoie les mêmes mauvaises
+  adresses dans les deux portes (blason, affiche) et exige le même refus : il
+  tombe dès que l'une se met à vivre sa vie.
+- Deux tests du reçu réécrits pour viser l'encadré, pas le texte d'avant.
+
+### Erreurs commises, à ne pas reproduire
+
+1. **« Le même dessin, à la bonne résolution » était faux.** Le PNG de 1024 qui
+   remplaçait un 480 était lui-même un agrandissement — mesuré : un
+   aller-retour 1024→480→1024 ne le changeait que de 0,42 sur 255.
+2. **Régler un paramètre au lieu de mesurer la donnée qui entre.** Les blasons
+   sont passés de 0,72 à 0,94 du cercle sans effet visible, parce que les
+   images portaient 45 % de marge (PSG 54 % de remplissage, Beşiktaş 53 %).
+   *Une retouche qui ne change rien à l'écran dit que la cause est ailleurs.*
+3. **Une note de diagnostic périmée a coûté deux semaines.** `REPRISE.md`
+   accusait `expo.core.ExpoModulesPackage` ; cette classe n'existait nulle
+   part, et la vraie cause — `expo-store-review` à un SDK d'écart — était
+   écrite en toutes lettres par Gradle.
+4. **J'ai cru ce journal à l'abandon.** Il se lit du plus récent au plus
+   ancien ; j'ai grepé ses titres, vu une vieille section « Session 2026-09-06 »
+   en bas de fichier, et conclu à un trou de deux mois. J'ai alors ajouté mon
+   entrée **au mauvais bout**, précédée d'un avertissement faux. *Avant
+   d'affirmer qu'un document n'est pas tenu, lire son premier écran.*
+5. **Le renommage « BreakEat » s'était arrêté à la porte.** Huit endroits
+   restaient, dont « Ouvre Réglages › Break Eat › Notifications » — une ligne
+   qui n'existe plus dans iOS depuis le renommage.
+
+### Reste à faire
+
+| Sujet | État |
+|---|---|
+| `MAIL_PROVIDER` / `MAIL_API_KEY` / `MAIL_FROM` | **à poser** — sans eux « mot de passe oublié » reste masqué |
+| Compte de test pour la revue Apple | **à créer** — `compte.test@test.com` n'existe nulle part. Premier motif de rejet |
+| Contact de revue App Store | encore au nom de Shapper / Synertic |
+| `google-services.json` | **absent** — pas de notifications push Android |
+| `google-play-service-account.json` | **absent** — `eas submit` impossible |
+| Deux clients OAuth Android | à créer, un par empreinte SHA-1 (les deux sont dans `REPRISE.md`) |
+| JDK + SDK Android en local | chaque essai coûte une heure sur EAS faute de pouvoir compiler ici |
+| Onze paquets en retard de correctifs | dont `expo` (57.0.16 contre 57.0.31). Aucun à un SDK d'écart — rattrapage à faire dans sa propre session |
+| Écran de suivi et ruban de saison | **non vérifiés à l'écran** — la machine n'a pas tenu le montage complet |
+| Inscription par SMS/OTP | n'existe pas — décision produit, pas défaut |
+| P2-4 (lectures non bornées) | reporté sciemment depuis le 26/10 |
+| Flaix Ops — 3 décisions | inchangé depuis le 01/10 |
+
+---
+
 ## [2026-10-26] L'audit Codex traité de bout en bout — 4 bloquants, 9 risques élevés
 
 > Détail dans `CHANGELOG.md` [0.98.0] → [0.99.0] ; analyse dans
@@ -2635,82 +2723,3 @@ arrière au lieu d'ouvrir la caméra, carte de commande redessinée.
 d'annoncer**. Les deux sont dans `REPRISE.md` et en mémoire.
 
 **511 tests au vert.** Build 12 à pousser.
-
----
-
-> ⚠️ **CE JOURNAL A UN TROU DE DEUX MOIS** — du 06/09/2026 au 31/10/2026.
->
-> Son en-tête dit qu'il doit être tenu « après chaque tâche » ; il ne l'a pas
-> été. Pendant cette période, c'est `CHANGELOG.md` et `REPRISE.md` qui ont
-> porté la mémoire du dossier, et ils l'ont fait en détail — rien n'est perdu,
-> mais rien n'est ici.
->
-> Le trou n'est pas comblé rétroactivement : réécrire deux mois de sessions
-> depuis le git produirait un récit reconstitué, c'est-à-dire plus sûr de lui
-> que de ce qu'il raconte. Ce qui suit reprend au 31/10.
-
----
-
-## Session 2026-10-31 → 2026-11-03 — L'audit V3, Google, et Android qui compile
-
-**Quatre journées, et deux d'entre elles passées à défaire ce que les deux
-premières croyaient avoir fait.**
-
-### L'audit chirurgical V3 (31/10)
-
-Cinq défauts qui coûtaient de l'argent, une commande ou un horaire. Le pire :
-**l'interrupteur global ne pouvait pas être posé du tout** — `(scopeId ?? null)
-as string` fait taire TypeScript, Prisma refuse au *runtime*, et
-`app.split.enabled` rendait un 500. Aucun test ne pouvait le voir : les deux
-suites doublaient `upsert` par un `jest.fn()` qui accepte tout.
-
-Puis les cinq P2 du même audit, le même jour : « mot de passe oublié »,
-téléphone normalisé en E.164, preuve des CGU, conflit d'inscription
-concurrente, résolution du flag avec son contexte.
-
-Détail complet dans `CHANGELOG.md`, entrée `[1.3.0]`.
-
-### Les interrupteurs, et le calendrier (01/11)
-
-L'écran qui manquait pour couper une fonction sans redéployer. Construit à
-l'envers d'un formulaire : les clés viennent d'une **liste**, jamais du
-clavier, et l'écran **ne recalcule rien** — il demande l'état à l'adresse que
-l'application interroge elle-même.
-
-Puis l'affiche d'événement (`posterUrl`), un troisième champ et non un réemploi
-du blason, parce que le code doit *savoir* laquelle des deux images il tient.
-
-### Google, de bout en bout (02/11)
-
-Le serveur savait déjà vérifier un jeton Google. Il manquait tout le côté app.
-Posé en une soirée, essayé sur un vrai téléphone via TestFlight.
-
-**Ce qui a coûté le plus de temps n'était pas le code** : le contrat de licence
-Apple, non signé, gelait le compte développeur et empêchait toute build.
-
-### Android, enfin (03/11)
-
-Neuvième tentative. `expo-store-review` en 58.0.2 dans un projet SDK 57.
-Deux semaines de fausse piste à cause d'une note de diagnostic périmée dans
-`REPRISE.md`.
-
-### Ce que je retiens pour la suite
-
-1. **Mesurer la donnée qui entre avant de régler un paramètre.** Deux
-   « corrections » d'affichage, l'icône et les blasons, n'avaient rien corrigé
-   parce que le défaut était dans les fichiers eux-mêmes.
-2. **Lire ce que l'outil dit avant de construire une théorie.** Gradle nommait
-   le module fautif et le champ manquant ; on cherchait une classe fantôme.
-3. **Rejouer une étape hors ligne quand c'est possible.** `prebuild` et
-   `expo-modules-autolinking resolve` coûtent dix secondes là où un essai EAS
-   coûte une heure.
-
-Les six règles qui en sortent sont consignées dans
-`brain/ENGINEERING_MANUAL.md`.
-
-### Ce qui n'a pas été vérifié à l'écran
-
-L'écran de suivi et le ruban de la saison. La machine (5,86 Go de RAM) n'a pas
-tenu le montage complet — base semée, API locale, export web — et Docker a
-cessé de répondre. Dit plutôt que tu, pour qu'on ne croie pas à un contrôle qui
-n'a pas eu lieu.
