@@ -842,6 +842,21 @@ export function formatOrderNumber(order: {
 }
 
 /**
+ * LE NUMERO SEUL, sans le « N° » devant.
+ *
+ * Pour les endroits qui portent deja leur propre etiquette — « Numero de
+ * commande » au-dessus, le chiffre en grand en dessous. Y mettre
+ * `formatOrderNumber` ecrirait « Numero de commande N° 5 », et une etiquette
+ * qui se repete dans sa valeur se lit deux fois avant d'etre comprise.
+ */
+export function numeroDeCommandeNu(order: {
+  dailyNumber?: number | null;
+  publicOrderNumber: string;
+}): string {
+  return order.dailyNumber != null ? String(order.dailyNumber) : order.publicOrderNumber;
+}
+
+/**
  * Fixe le créneau de retrait du panier.
  *
  * Le choix ne vivait QUE dans l'application : le client choisissait « 17h45 »,

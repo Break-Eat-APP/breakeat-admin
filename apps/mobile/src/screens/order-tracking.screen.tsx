@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { THEME } from '@lib/theme';
+import { FONT, HEAD, THEME } from '@lib/theme';
 import {
   ActivityIndicator,
   Animated,
@@ -12,7 +12,13 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
-import { apiGetOrder, formatOrderNumber, formatPrice, type Order } from '@lib/api/mobile-api';
+import {
+  apiGetOrder,
+  formatOrderNumber,
+  formatPrice,
+  numeroDeCommandeNu,
+  type Order,
+} from '@lib/api/mobile-api';
 import { PageHeader } from '@components/page-header';
 import { Ionicons } from '@expo/vector-icons';
 import { MissingItemsBanner, ROUGE_MANQUANT } from '@components/missing-items-banner';
@@ -41,12 +47,24 @@ const STATUS_MAP: Record<string, StatusConfig> = {
     description: 'Votre commande a été reçue. En attente de confirmation du stand.',
     isFinal: false,
   },
+  /**
+   * ACCEPTED PORTE LE MEME LIBELLE QUE PAID — c'est voulu.
+   *
+   * Du point de vue du client, « payé » et « acceptée » sont le meme moment :
+   * sa commande est arrivée. La distinction appartient au comptoir, qui sait
+   * ce qu'il a validé ; elle n'appelait aucun geste de sa part, et occupait
+   * pourtant une etape entiere sur quatre.
+   *
+   * Ce qui change quand meme, c'est la DESCRIPTION : elle dit que le stand a
+   * vu la commande. L'information n'est donc pas perdue, elle cesse
+   * simplement de reclamer une ligne du parcours.
+   */
   ACCEPTED: {
-    label: 'Acceptée',
+    label: 'Payé',
     icon: 'checkmark-circle-outline',
     color: '#16a34a',
     bg: '#ecfdf5',
-    description: 'Le stand a accepté votre commande. Préparation en cours.',
+    description: 'Le stand a bien reçu votre commande. Préparation à venir.',
     isFinal: false,
   },
   PREPARING: {
@@ -91,7 +109,24 @@ const STATUS_MAP: Record<string, StatusConfig> = {
   },
 };
 
-const STEPS = ['PAID', 'ACCEPTED', 'PREPARING', 'READY', 'PICKED_UP'];
+/**
+ * LES ETAPES MONTREES AU CLIENT — quatre, et non cinq.
+ *
+ * `ACCEPTED` n'y figure plus : elle se replie sur `PAID` (voir ci-dessus).
+ * Une commande acceptée reste donc sur l'etape « Payé », et avance a « En
+ * préparation » quand le comptoir s'en saisit vraiment.
+ */
+const STEPS = ['PAID', 'PREPARING', 'READY', 'PICKED_UP'];
+
+/**
+ * CE QUI N'EST PAS UNE ETAPE, ET SUR QUOI IL FAUT LE REPLIER.
+ *
+ * Sans cette table, `STEPS.indexOf('ACCEPTED')` rendrait -1 : aucune etape
+ * cochée, et un client qui vient de payer verrait sa barre de progression
+ * REVENIR EN ARRIERE au moment ou le stand accepte. Le defaut serait
+ * invisible en relisant `STEPS`, et spectaculaire a l'ecran.
+ */
+const ETAPE_DE_L_ETAT: Record<string, string> = { ACCEPTED: 'PAID' };
 
 /**
  * Retour en arriere — l'ecran precedent, ou l'accueil a defaut.
@@ -206,12 +241,12 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
     isFinal: false,
   };
 
-  const currentStepIndex = STEPS.indexOf(order.status);
+  const currentStepIndex = STEPS.indexOf(ETAPE_DE_L_ETAT[order.status] ?? order.status);
 
   return (
     <View style={styles.root}>
       <PageHeader
-        title={`Suivi ${formatOrderNumber(order)}`}
+        title={`Commande ${formatOrderNumber(order)}`}
         onBack={() => retourEnArriere(navigation)}
         right={
           !STATUS_MAP[order.status]?.isFinal ? (
@@ -224,6 +259,23 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
       />
 
       <ScrollView contentContainerStyle={styles.content}>
+        {/*
+          LE NUMERO DE COMMANDE, EN GRAND ET EN PREMIER.
+
+          C'est le seul chiffre que le client aura a donner — au comptoir, a
+          voix haute, dans le bruit. Il vivait jusqu'ici dans le titre de
+          l'ecran, a seize pixels et en gris : lisible assis au calme,
+          introuvable debout devant un stand.
+
+          Au-DESSUS de l'etat, parce qu'on ouvre cet ecran pour deux raisons —
+          savoir ou en est la commande, et retrouver son numero — et que la
+          seconde est la plus pressee des deux.
+        */}
+        <View style={styles.numeroCarte}>
+          <Text style={styles.numeroLabel}>Numéro de commande</Text>
+          <Text style={styles.numeroValeur}>{numeroDeCommandeNu(order)}</Text>
+        </View>
+
         {/* Status hero */}
         <View style={[styles.statusHero, { backgroundColor: statusCfg.bg }]}>
           <Text style={[styles.statusLabel, { color: statusCfg.color }]}>
@@ -376,6 +428,40 @@ const styles = StyleSheet.create({
   liveText: { color: '#f87171', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
 
   content: { padding: 20, gap: 14, paddingBottom: 60 },
+
+  /**
+   * LA CARTE DU NUMERO — sobre, et c'est le chiffre qui porte.
+   *
+   * Pas de fond orange : l'ecran en a deja un (l'etat), et deux blocs colores
+   * l'un sur l'autre ne hierarchisent plus rien. Ici c'est la TAILLE du
+   * chiffre qui fait le travail, pas la couleur du cadre.
+   */
+  numeroCarte: {
+    alignItems: 'center',
+    backgroundColor: THEME.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    gap: 4,
+  },
+  numeroLabel: {
+    color: THEME.grey,
+    fontSize: 12.5,
+    fontFamily: FONT.medium,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
+  numeroValeur: {
+    color: THEME.ink,
+    fontSize: 44,
+    lineHeight: 50,
+    fontFamily: HEAD.bold,
+    // Chiffres de largeur fixe : un numero se lit et se dicte, et un « 11 »
+    // plus etroit qu'un « 44 » se lit moins vite d'un coup d'oeil.
+    fontVariant: ['tabular-nums'],
+  },
 
   statusHero: {
     borderRadius: 16,

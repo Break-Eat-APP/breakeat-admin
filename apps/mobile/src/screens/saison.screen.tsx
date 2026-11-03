@@ -703,26 +703,41 @@ function Vignette({
   const cadre = { width: taille, height: taille, borderRadius: taille / 2, ...bordure };
 
   /*
-    LE BLASON — `contain`, et à 0,94 du cercle.
+    LE BLASON REMPLIT LE ROND — `cover`, et toute la surface.
 
-    `contain` et non `cover` : un écusson recadré perd son contour, et c'est le
-    contour qui le rend reconnaissable.
+    ── CE QUI A ETE ESSAYE AVANT, ET POURQUOI CA NE SUFFISAIT PAS ──
 
-    0,94 et non 0,72 : 0,72 était 1/√2, le plus grand CARRÉ qui tienne
-    entièrement dans le cercle. Mathématiquement prudent, visuellement timide —
-    le blason flottait au milieu d'une couronne vide, et un écusson qu'on ne
-    distingue pas ne sert à rien sur un ruban qu'on parcourt du pouce. À 0,94
-    les quatre coins de l'image débordent et sont rognés par `overflow: hidden`,
-    sans conséquence : un écusson est rond, en bouclier ou en losange, et ses
-    coins sont vides. Le contour, lui, reste entier.
+    `contain` à 0,72 (soit 1/√2, le plus grand carré inscrit), puis `contain` à
+    0,94. Les deux laissaient le blason flotter au milieu d'une couronne vide,
+    et la seconde tentative n'a presque rien changé à l'écran.
+
+    LA CAUSE N'ETAIT PAS DANS CE FICHIER. Les blasons que les clubs collent
+    viennent de sites d'images, et portent LEUR PROPRE MARGE. Mesuré sur les
+    adresses réellement en production : le logo du PSG occupe 54 % de son
+    fichier, celui de Beşiktaş 53 %, dans des images de 3840×2160. `contain`
+    respectait fidèlement cette marge — il rendait donc un blason à mi-taille,
+    quelle que soit la valeur qu'on écrivait ici.
+
+    ── POURQUOI `cover` REGLE CA SANS RIEN COUPER ──
+
+    `cover` remplit le cadre et rogne ce qui dépasse. Sur ces images-là, ce
+    qui dépasse EST la marge : le dessin est centré et plus petit que le côté
+    le plus court. Recalculé sur les trois blasons de production, aucun n'est
+    entamé, et tous passent de ~55 % à plus de 85 % du rond.
+
+    Le risque existe et il faut le nommer : un blason collé au bord de son
+    fichier, ou accompagné d'un texte sur le côté, se ferait rogner. C'est le
+    prix à payer pour que les cas courants cessent d'être minuscules — et un
+    écusson légèrement rogné reste reconnaissable, là où un écusson deux fois
+    trop petit ne l'est pas.
   */
   if (logo) {
     return (
       <View style={[styles.blason, cadre]}>
         <Image
           source={{ uri: logo }}
-          style={{ width: taille * 0.94, height: taille * 0.94 }}
-          resizeMode="contain"
+          style={{ width: '100%', height: '100%' }}
+          resizeMode="cover"
         />
       </View>
     );

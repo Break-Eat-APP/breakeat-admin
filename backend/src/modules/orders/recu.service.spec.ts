@@ -114,15 +114,21 @@ describe('RecuService — ce que porte le document', () => {
     // Le numéro court est celui que le client entend au comptoir ; la
     // référence longue est la seule unique à vie, et c'est elle que le support
     // retrouvera dans six mois.
-    expect(html).toContain('Commande n° 5');
+    //
+    // On vérifie le BLOC et pas seulement le chiffre : « 5 » se trouve dans
+    // n'importe quel prix, et une assertion qui passerait sur un document
+    // ayant perdu son encadré ne prouverait rien.
+    expect(html).toContain('Numéro de commande');
+    expect(html).toMatch(/<span class="chiffre">5<\/span>/);
     expect(html).toContain('Reçu n° BE-00000005');
   });
 
   it('se passe du numéro du jour quand la commande n’en a pas', async () => {
-    // Les commandes antérieures au compteur n'en ont pas. Un « Commande n° »
-    // suivi d'un vide ferait douter de la validité du document.
+    // Les commandes antérieures au compteur n'en ont pas. Un encadré orange
+    // refermé sur un vide ferait douter de la validité du document.
     const html = await service({ dailyNumber: null }).html(COMMANDE);
-    expect(html).not.toContain('Commande n°');
+    expect(html).not.toContain('Numéro de commande');
+    expect(html).not.toContain('class="commande"');
     expect(html).toContain('Reçu n° BE-00000005');
   });
 

@@ -441,16 +441,20 @@ function OrderCard({
   return (
     <Pressable style={({ pressed }) => [styles.card, shadowCard, pressed && styles.pressed]} onPress={onPress}>
       {/* En-tête.
-          La BUVETTE d'abord, en gros : c'est ce que le client cherche des yeux
-          quand il tient son téléphone devant un stade. Le numéro de commande
-          n'est utile qu'au comptoir, une fois arrivé — il descend en seconde
-          ligne, dans une graisse tabulaire qui le rend lisible à voix haute. */}
+          La BUVETTE d'abord : c'est ce que le client cherche des yeux quand il
+          tient son téléphone devant un stade.
+
+          Le numéro vient juste après, et il DIT SON NOM — « Commande n° 5 » et
+          non « N° 5 » tout seul. Posé nu sous un nom de buvette, ce numéro se
+          confondait avec une référence interne ; écrit en entier, il ne se
+          confond plus avec rien, et c'est pourtant le seul chiffre que le
+          client aura à donner au comptoir. */}
       <View style={styles.cardHeader}>
         <View style={styles.headerLeft}>
           <Text style={styles.supplierText} numberOfLines={1}>
             {order.supplierName ?? 'Commande'}
           </Text>
-          <Text style={styles.orderNumber}>{formatOrderNumber(order)}</Text>
+          <Text style={styles.orderNumber}>Commande {formatOrderNumber(order)}</Text>
         </View>
         <View style={styles.priceBlock}>
           <Text style={styles.price}>{formatPrice(order.totalCents)}</Text>
@@ -700,9 +704,11 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
   headerLeft: { flex: 1, gap: 3 },
   orderNumber: {
-    color: THEME.grey,
-    fontSize: 12,
-    fontFamily: HEAD.medium,
+    // Plus sombre et plus gros qu'avant : c'est le chiffre qu'on cherche en
+    // rouvrant cette liste au comptoir, pas une mention de bas de page.
+    color: THEME.inkSoft,
+    fontSize: 13.5,
+    fontFamily: HEAD.semibold,
     // Chiffres de largeur fixe : un numéro de commande se lit et se dicte.
     fontVariant: ['tabular-nums'],
     letterSpacing: 0.4,

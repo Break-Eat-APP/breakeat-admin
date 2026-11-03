@@ -122,6 +122,19 @@ export class RecuService {
      sinon rien ne ressort. */
   h1 { font-size: 17px; margin: 0 0 2px; color: #FD4000; }
   .club { color: #6b625c; font-size: 13.5px; margin: 0 0 18px; }
+  /* LE NUMERO DE COMMANDE, EN GRAND.
+     Il vivait dans le petit gris, au milieu des references techniques. C'est
+     pourtant le SEUL chiffre que le client aura a donner — au comptoir, a
+     voix haute, dans le bruit. Le reste du bloc (reference du recu, nom du
+     client) reste en petit : ce sont des informations qu'on relit, pas qu'on
+     dicte. */
+  .commande { margin: 0 0 14px; padding: 14px 16px; border-radius: 12px;
+              background: #fff6f2; border: 1px solid #ffd9c9; text-align: center; }
+  .commande .etiquette { display: block; font-size: 11.5px; letter-spacing: .6px;
+                         text-transform: uppercase; color: #9a7b6c; margin-bottom: 2px; }
+  .commande .chiffre { display: block; font-size: 38px; line-height: 1.1;
+                       font-weight: 800; color: #FD4000;
+                       font-variant-numeric: tabular-nums; }
   .num { font-size: 13px; color: #6b625c; font-variant-numeric: tabular-nums;
          letter-spacing: .4px; margin: 0 0 20px; line-height: 1.7; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -150,8 +163,19 @@ export class RecuService {
     <div class="ticket">
       <h1>${echapper(buvette?.name ?? 'Commande')}</h1>
       <p class="club">${echapper(club?.name ?? '')}</p>
+      ${
+        // Pas de bloc quand il n'y a pas de numero : les commandes anterieures
+        // au compteur n'en ont pas, et un cadre orange vide autour d'un tiret
+        // serait pire que son absence. La reference du recu, elle, existe
+        // toujours et suffit a identifier la commande.
+        order.dailyNumber != null
+          ? `<p class="commande">
+        <span class="etiquette">Numéro de commande</span>
+        <span class="chiffre">${order.dailyNumber}</span>
+      </p>`
+          : ''
+      }
       <p class="num">
-        ${order.dailyNumber != null ? `Commande n° ${order.dailyNumber}<br>` : ''}
         Reçu n° ${echapper(order.publicOrderNumber)}
         ${
           // « Délivré à » introduit la LIGNE, pas le nom : un client sans nom
