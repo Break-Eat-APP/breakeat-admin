@@ -5,6 +5,123 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.5.0] — 2026-11-03 — Google de bout en bout, et Android qui compile enfin
+
+**La connexion Google existe, du jeton jusqu'à la build.** Le serveur savait
+déjà vérifier un jeton Google exactement comme un jeton Apple — signature
+contre les clés publiques, émetteur, **destinataire**, date. Il manquait tout
+le côté app : pas de bouton, pas de dépendance.
+
+Posé : le SDK natif (`@react-native-google-signin` 17), un bouton au « G »
+officiel dessiné en SVG, et le garde-fou habituel — **un bouton visible est un
+bouton qui marche**, ici garanti par trois verrous. Le troisième n'est pas de
+la prudence gratuite : Expo sérialise une valeur `null` de la configuration en
+`{}`, qui est **vrai** en JavaScript. Un simple test de vérité laisserait
+passer un objet vide, le bouton s'afficherait, et la feuille échouerait.
+
+**Pas `expo-auth-session`** : il repasserait par un navigateur système et un
+rebond `breakeat://`, exactement le parcours qu'on a *quitté* pour le paiement
+Stripe. Le coût est réel et assumé — c'est un module natif, donc aucune build
+antérieure ne le porte.
+
+**Rien sur le web**, et ce n'est pas un oubli : le SDK natif n'a pas
+d'implémentation navigateur, et l'importer casserait le paquet web. Vérifié
+que le bundle web construit n'en contient aucune trace.
+
+**Trois valeurs, trois rôles, et c'est là que tout se mélange :**
+
+| Variable | Ce qu'elle fait |
+|---|---|
+| `GOOGLE_WEB_CLIENT_ID` | fait rendre un jeton d'**identité**, même sur iPhone. Son nom trompe : il ne sert pas au web |
+| `GOOGLE_IOS_CLIENT_ID` | nécessaire parce qu'on n'utilise **pas** Firebase |
+| `GOOGLE_IOS_URL_SCHEME` | le même identifiant iOS à l'envers — il va dans le **greffon**, pas dans `extra` |
+
+Posées dans `eas.json` en clair et versionnées : un identifiant client OAuth
+**n'est pas un secret**, il est embarqué dans le binaire. Et **seulement** sur
+`beta` et `production` : `preview` et `development` construisent avec
+`.preview` et `.dev`, or un client OAuth iOS est lié à **un seul** identifiant
+de paquet.
+
+**iOS 1.1.0 build 36 est sur TestFlight**, et la connexion Google y a été
+essayée sur un vrai téléphone. La première tentative de build avait échoué sans
+toucher au code : Apple avait publié un nouveau contrat de licence et **gelait
+le compte** (403, *« your team's Account Holder must agree »*).
+
+---
+
+**Android compile — neuvième tentative, après huit échecs.**
+
+`expo-store-review` était en **58.0.2** quand tout le projet est en SDK **57**.
+Son `expo-module.config.json` déclarait une publication Maven au format du SDK
+58, sans le champ `version` que le greffon Gradle de SDK 57 exige. La
+compilation mourait à l'évaluation des réglages, **avant la première ligne
+compilée**.
+
+Gradle le disait en toutes lettres. On cherchait une classe fantôme : ce dépôt
+affirmait depuis deux semaines que « l'autolinking génère un import vers
+`expo.core.ExpoModulesPackage`, cause non expliquée ». Cette classe n'apparaît
+nulle part — vérifié en rejouant l'autolinking hors ligne.
+
+**iOS ne pouvait pas le révéler** : une publication Maven est une notion
+Android. D'où onze builds iOS réussies pendant que huit Android tombaient, avec
+le même arbre de dépendances.
+
+Corrigé en une ligne, et **vérifié sans construire** : relire la sortie de
+`expo-modules-autolinking resolve -p android` coûte dix secondes contre une
+heure d'essai sur EAS.
+
+---
+
+**Deux « corrections » d'avant-hier n'en étaient pas.**
+
+**L'icône.** Le 31/10, « le même dessin, à la bonne résolution » : faux. Le
+fichier de 1024 fourni était **lui-même un agrandissement** — un aller-retour
+1024→480→1024 ne le changeait que de 0,42 sur 255. La vraie source dormait dans
+le dépôt : `logo/…(4).svg` porte un PNG de 1254×1254 incrusté, orange sur
+**noir**, avec le mot « BREAKEAT » sous la marque. Masque par le canal
+**rouge** (la luminosité, essayée d'abord, donnait un orange délavé à 70 %
+d'opacité), découpe de la marque seule, réduction à 1024.
+
+**Les blasons.** Passer de 0,72 à 0,94 du cercle n'avait presque rien changé,
+parce que **le défaut n'était pas dans notre code**. Mesuré sur les adresses
+réellement en production : le logo du PSG occupe **54 %** de son fichier,
+Beşiktaş 53 %, dans des images de 3840×2160. `contain` respectait fidèlement
+cette marge. `cover` rogne ce qui dépasse — et ici, ce qui dépasse *est* la
+marge : aucun des trois n'est entamé, tous passent de ~55 % à plus de 85 %.
+
+> **La leçon commune** : une retouche qui ne change rien à l'écran dit que la
+> cause est ailleurs. Deux fois, un paramètre a été réglé au lieu de mesurer la
+> donnée qui entrait.
+
+---
+
+**Et deux retouches de parcours.** « Payé » et « Acceptée » n'en font plus
+qu'une — du point de vue du client c'est le même moment, et la distinction
+occupait une étape sur quatre sans appeler le moindre geste. Repli par une
+**table** et non par une suppression : sans elle, `STEPS.indexOf('ACCEPTED')`
+rendrait -1 et la barre de progression **reviendrait en arrière**.
+
+Le **numéro de commande** dit son nom et passe en grand — suivi, historique,
+reçu. C'est le seul chiffre que le client aura à donner, au comptoir, à voix
+haute, dans le bruit.
+
+```
++ apps/mobile/src/lib/connexion-google.ts           ← version navigateur (absente, et c'est écrit)
++ apps/mobile/src/lib/connexion-google.native.ts    ← le SDK natif
++ apps/mobile/src/components/logo-google.tsx        ← le « G » officiel, en SVG
+~ apps/mobile/src/screens/login.screen.tsx          ← le bouton, Apple au-dessus (règle 4.8)
+~ apps/mobile/app.config.js, eas.json               ← greffon + `extra`, profils beta/production
+~ apps/mobile/package.json                          ← expo-store-review 58.0.2 → ~57.0.3
+~ apps/mobile/assets/logo-mark-orange.png           ← reconstruite depuis le 1254 du SVG
+~ apps/mobile/src/screens/saison.screen.tsx         ← blasons en `cover`
+~ apps/mobile/src/screens/order-tracking.screen.tsx ← 4 étapes, numéro en 44 pt
+~ apps/mobile/src/screens/order-history.screen.tsx  ← « Commande n° 5 »
+~ backend/src/modules/orders/recu.service.ts        ← encadré du numéro (+ 2 tests réécrits)
+~ backend/.env.example                              ← GOOGLE_CLIENT_IDS documenté
+```
+
+---
+
 ## [1.4.0] — 2026-11-01 — Le calendrier prend forme, et le nom entre dans l'app
 
 **Le mécanisme des interrupteurs n'avait aucune poignée.** `apiSetFeatureFlag`

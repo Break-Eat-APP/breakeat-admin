@@ -8111,3 +8111,106 @@ Les autres P2 — healthcheck purement *liveness*, historique du dépôt trop
 lourd — relèvent du confort d'exploitation.
 
 ---
+
+## Ce que les phases 71 à 73 ont laissé ici (30/10/2026)
+
+Ce manuel saute de la phase 70 à ce qui suit. Les phases 71 à 73 — l'outbox
+temps réel, la revérification Codex, le coupe-circuit de limitation — sont
+décrites en détail dans `CHANGELOG.md`, entrée `[1.2.0]`. Elles n'ont pas été
+recopiées ici : le CHANGELOG les porte mieux, et deux récits du même travail
+divergent au premier correctif.
+
+---
+
+## Six règles tirées des journées du 31/10 au 03/11/2026
+
+Ces journées ont produit peu de code neuf et beaucoup de leçons. Les voici
+séparées de leur contexte, parce que c'est sous cette forme qu'elles
+resserviront.
+
+### 1. Une retouche qui ne change rien à l'écran dit que la cause est ailleurs
+
+Deux fois en trois jours, un réglage a été modifié au lieu de **mesurer la
+donnée qui entrait**.
+
+**L'icône.** Remplacer un PNG de 480 par un PNG de 1024 n'a pas supprimé le
+flou, parce que le fichier de 1024 était lui-même un agrandissement. La mesure
+qui le prouve tient en trois lignes : réduire l'image de moitié, la ragrandir,
+comparer. Une image portant du vrai détail perd beaucoup à ce jeu ; celle-ci
+perdait 0,42 sur 255. Les pixels étaient vides d'information.
+
+**Les blasons.** Passer le cadre de 0,72 à 0,94 du cercle n'a presque rien
+changé, parce que les images elles-mêmes portaient 45 % de marge. Mesuré sur
+les adresses réellement en production, pas sur un échantillon choisi : PSG
+54 %, Beşiktaş 53 %, Monaco 85 %.
+
+> **La règle.** Avant de régler un paramètre d'affichage, mesurer ce qui entre.
+> Un cadre ne peut pas corriger une marge incluse dans le fichier.
+
+### 2. Une note de diagnostic périmée coûte plus cher qu'une absence de note
+
+`REPRISE.md` affirmait depuis deux semaines qu'Android échouait sur un import
+vers `expo.core.ExpoModulesPackage`, « cause non expliquée ». Cette classe
+n'apparaissait nulle part. Tant que la note existait, personne ne lisait le
+message que Gradle écrivait en toutes lettres — et surtout, elle décourageait
+de réessayer.
+
+> **La règle.** Une note qui a cessé d'être vraie se corrige **avec ce qui l'a
+> remplacée**, pas en la supprimant. Savoir qu'une piste a été fausse vaut
+> mieux que de la voir disparaître — sinon quelqu'un la reprendra.
+
+### 3. Un défaut Android peut survivre à onze builds iOS réussies
+
+`expo-store-review` était en 58.0.2 dans un projet SDK 57. Sa publication
+**Maven** — une notion exclusivement Android — n'avait pas le champ que le
+greffon Gradle exigeait. iOS ne pouvait pas le voir.
+
+> **La règle.** Quand une seule plateforme échoue, `expo install --check`
+> avant toute théorie : un paquet à un SDK d'écart ne se voit nulle part
+> ailleurs.
+
+Et le corollaire de méthode : l'autolinking se rejoue **hors ligne**.
+
+```
+npx expo-modules-autolinking resolve -p android --json
+```
+
+Dix secondes, contre une heure d'essai sur les serveurs EAS. La sortie contient
+exactement ce que Gradle lira, champ par champ.
+
+### 4. Un bouton visible est un bouton qui marche — et ça se garde à trois verrous
+
+Pour la connexion Google, le bouton ne s'affiche que si **le serveur annonce le
+fournisseur**, **les identifiants sont dans la build**, et **ils ont la forme
+d'un identifiant Google**.
+
+Le troisième n'est pas de la prudence gratuite. **Expo sérialise une valeur
+`null` de la configuration en `{}`**, qui est *vrai* en JavaScript. Un simple
+test de vérité laisse passer un objet vide : le bouton s'affiche, la feuille
+s'ouvre, et elle échoue. C'est le défaut qui avait déjà fait naître
+`identifiantMarchand` dans `paiement.native.ts` ; la parade est la même —
+vérifier la **forme**, jamais la seule présence.
+
+### 5. Replier un état vaut mieux que le supprimer
+
+En fusionnant « Payé » et « Acceptée » dans le parcours client, retirer
+`ACCEPTED` de la liste des étapes aurait suffi — et `STEPS.indexOf('ACCEPTED')`
+aurait rendu `-1`. Aucune étape cochée, et une barre de progression qui
+**revient en arrière** au moment où le stand accepte. Invisible en relisant la
+liste, spectaculaire à l'écran.
+
+> **La règle.** Un état retiré d'une séquence doit être **replié** sur celui
+> qui le remplace, par une table explicite. Une liste raccourcie ne dit rien
+> de ce qu'il advient des valeurs qu'elle ne contient plus.
+
+### 6. Un identifiant client OAuth n'est pas un secret
+
+Les trois valeurs Google vivent dans `eas.json`, en clair et versionnées. Un
+identifiant client est **embarqué dans le binaire** de l'app, donc lisible par
+quiconque la télécharge. Le cacher n'aurait protégé personne, et aurait rendu
+invisible la raison d'une panne.
+
+Ce qui est secret chez Google, c'est le *client secret* du client web — et on
+ne s'en sert pas : le serveur **vérifie** un jeton signé, il n'échange rien.
+
+---

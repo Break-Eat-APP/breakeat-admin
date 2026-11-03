@@ -2635,3 +2635,82 @@ arrière au lieu d'ouvrir la caméra, carte de commande redessinée.
 d'annoncer**. Les deux sont dans `REPRISE.md` et en mémoire.
 
 **511 tests au vert.** Build 12 à pousser.
+
+---
+
+> ⚠️ **CE JOURNAL A UN TROU DE DEUX MOIS** — du 06/09/2026 au 31/10/2026.
+>
+> Son en-tête dit qu'il doit être tenu « après chaque tâche » ; il ne l'a pas
+> été. Pendant cette période, c'est `CHANGELOG.md` et `REPRISE.md` qui ont
+> porté la mémoire du dossier, et ils l'ont fait en détail — rien n'est perdu,
+> mais rien n'est ici.
+>
+> Le trou n'est pas comblé rétroactivement : réécrire deux mois de sessions
+> depuis le git produirait un récit reconstitué, c'est-à-dire plus sûr de lui
+> que de ce qu'il raconte. Ce qui suit reprend au 31/10.
+
+---
+
+## Session 2026-10-31 → 2026-11-03 — L'audit V3, Google, et Android qui compile
+
+**Quatre journées, et deux d'entre elles passées à défaire ce que les deux
+premières croyaient avoir fait.**
+
+### L'audit chirurgical V3 (31/10)
+
+Cinq défauts qui coûtaient de l'argent, une commande ou un horaire. Le pire :
+**l'interrupteur global ne pouvait pas être posé du tout** — `(scopeId ?? null)
+as string` fait taire TypeScript, Prisma refuse au *runtime*, et
+`app.split.enabled` rendait un 500. Aucun test ne pouvait le voir : les deux
+suites doublaient `upsert` par un `jest.fn()` qui accepte tout.
+
+Puis les cinq P2 du même audit, le même jour : « mot de passe oublié »,
+téléphone normalisé en E.164, preuve des CGU, conflit d'inscription
+concurrente, résolution du flag avec son contexte.
+
+Détail complet dans `CHANGELOG.md`, entrée `[1.3.0]`.
+
+### Les interrupteurs, et le calendrier (01/11)
+
+L'écran qui manquait pour couper une fonction sans redéployer. Construit à
+l'envers d'un formulaire : les clés viennent d'une **liste**, jamais du
+clavier, et l'écran **ne recalcule rien** — il demande l'état à l'adresse que
+l'application interroge elle-même.
+
+Puis l'affiche d'événement (`posterUrl`), un troisième champ et non un réemploi
+du blason, parce que le code doit *savoir* laquelle des deux images il tient.
+
+### Google, de bout en bout (02/11)
+
+Le serveur savait déjà vérifier un jeton Google. Il manquait tout le côté app.
+Posé en une soirée, essayé sur un vrai téléphone via TestFlight.
+
+**Ce qui a coûté le plus de temps n'était pas le code** : le contrat de licence
+Apple, non signé, gelait le compte développeur et empêchait toute build.
+
+### Android, enfin (03/11)
+
+Neuvième tentative. `expo-store-review` en 58.0.2 dans un projet SDK 57.
+Deux semaines de fausse piste à cause d'une note de diagnostic périmée dans
+`REPRISE.md`.
+
+### Ce que je retiens pour la suite
+
+1. **Mesurer la donnée qui entre avant de régler un paramètre.** Deux
+   « corrections » d'affichage, l'icône et les blasons, n'avaient rien corrigé
+   parce que le défaut était dans les fichiers eux-mêmes.
+2. **Lire ce que l'outil dit avant de construire une théorie.** Gradle nommait
+   le module fautif et le champ manquant ; on cherchait une classe fantôme.
+3. **Rejouer une étape hors ligne quand c'est possible.** `prebuild` et
+   `expo-modules-autolinking resolve` coûtent dix secondes là où un essai EAS
+   coûte une heure.
+
+Les six règles qui en sortent sont consignées dans
+`brain/ENGINEERING_MANUAL.md`.
+
+### Ce qui n'a pas été vérifié à l'écran
+
+L'écran de suivi et le ruban de la saison. La machine (5,86 Go de RAM) n'a pas
+tenu le montage complet — base semée, API locale, export web — et Docker a
+cessé de répondre. Dit plutôt que tu, pour qu'on ne croie pas à un contrôle qui
+n'a pas eu lieu.

@@ -4,6 +4,13 @@
 spectateur commande depuis son téléphone, la buvette prépare, il récupère sans
 faire la queue.
 
+> **Deux orthographes, et ce n'est pas une coquille.** Depuis le 31/10/2026,
+> l'application s'appelle **BreakEat** en un mot — c'est ce que le client lit,
+> sous l'icône et dans la fiche App Store. **Break Eat** en deux mots reste le
+> nom commercial de la société (SAS BREAK EAT APP), et c'est lui qui figure
+> dans les mentions légales, les CGU et les CGV. Ne pas « harmoniser » : la
+> dénomination d'une société ne se change pas dans un dépôt de code.
+
 ---
 
 ## 🚪 Tu ouvres ce dossier pour la première fois ?
@@ -85,6 +92,10 @@ Elles ne sont pas décoratives : la plupart viennent d'un incident précis, et
    plus cher qu'un commentaire absent.
 9. **Jamais de secret dans le dépôt.** Ni clé Stripe, ni `DATABASE_URL`, ni
    certificat APNs. Les variables d'environnement vivent sur Railway et EAS.
+   *Ce qui n'est PAS un secret y reste en clair, et c'est voulu* : les
+   identifiants clients OAuth de `eas.json` sont embarqués dans le binaire de
+   l'app, donc lisibles par quiconque la télécharge. Les cacher ne protégerait
+   personne et rendrait invisible la raison d'une panne.
 10. **Le vocabulaire client est fixe.** On dit « partager l'addition » — jamais
     « ardoise » ni « tournée », qui sont le vocabulaire interne.
 
