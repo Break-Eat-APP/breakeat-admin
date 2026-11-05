@@ -17,18 +17,27 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
-import { formatOrderNumber, apiLienRecu, apiGetMyOrders, apiMarkArrived, formatPrice, formatTime, type Order } from '@lib/api/mobile-api';
+import {
+  formatOrderNumber,
+  numeroDeCommandeNu,
+  apiLienRecu,
+  apiGetMyOrders,
+  apiMarkArrived,
+  formatPrice,
+  formatTime,
+  type Order,
+} from '@lib/api/mobile-api';
 import { NoterCommande } from '@components/noter-commande';
 import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
-import { THEME, shadowCard, HEAD } from '@lib/theme';
+import { THEME, shadowCard, HEAD, FONT } from '@lib/theme';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { endTrackingForFinishedOrders } from '@lib/live-activity-tracking';
 import { EVT_COMMANDES_A_RECHARGER } from '@lib/hooks/use-deep-links';
 import { useCartStore } from '@store/cart.store';
 import { useSuiviStore } from '@store/suivi.store';
-import { JAUNE, JAUNE_FOND, JAUNE_TEXTE } from '@lib/suivi-commande';
+import { JAUNE_FOND, JAUNE_TEXTE } from '@lib/suivi-commande';
 import * as WebBrowser from 'expo-web-browser';
 import { MissingItemsBanner } from '@components/missing-items-banner';
 import { RemboursementBanner } from '@components/remboursement-banner';
@@ -42,19 +51,19 @@ const GREEN = '#16a34a';
 const GREEN_TINT = 'rgba(22, 163, 74, 0.10)';
 const RED = '#dc2626';
 const RED_TINT = 'rgba(220, 38, 38, 0.10)';
-/**
- * Le violet du reçu.
+/*
+ * LE VIOLET DU REÇU A ÉTÉ RETIRÉ (03/11/2026).
  *
- * Une couleur À ELLE, distincte de l'orange de la marque : le reçu n'est pas
- * une étape du parcours, c'est un document qu'on va chercher. Lui donner
- * l'orange le mettrait en concurrence avec « Je suis arrivé », qui est LE geste
- * du moment. Le violet se repère sans réclamer le premier regard.
+ * Il donnait au reçu une couleur à lui, distincte de l'orange de la marque.
+ * L'intention était juste ; le résultat ne l'était plus une fois la carte
+ * passée en ticket blanc : sur un fond clair, un bouton violet plein tirait
+ * l'œil PLUS FORT que le numéro de commande — c'est-à-dire plus fort que la
+ * seule chose qu'on vient chercher.
  *
- * Même teinte que la vignette « TVA collectée » du back-office : un reçu et une
- * TVA parlent de la même chose, la comptabilité.
+ * Le reçu et la note sont désormais deux boutons à bordure fine, tous deux
+ * secondaires, et « Y aller » est le seul bouton plein de la carte. Une seule
+ * couleur pleine, donc une seule hiérarchie.
  */
-const VIOLET = '#7c3aed';
-const VIOLET_TINT = 'rgba(124, 58, 237, 0.10)';
 
 /**
  * Parcours client résumé en 3 étapes visibles : reçue → en préparation → prête.
@@ -70,6 +79,15 @@ interface StatusUi {
   tint: string;
   icon: React.ComponentProps<typeof Ionicons>['name'];
 }
+
+/**
+ * LE DIAMETRE D'UNE ENCOCHE DE TICKET.
+ *
+ * Partage par les trois (haut, gauche, droite) : trois valeurs voisines
+ * mais distinctes se verraient, et c'est exactement ce qui fait qu'un
+ * ticket dessine a la main a l'air dessine a la main.
+ */
+const ENCOCHE = 18;
 
 const STATUS_UI: Record<string, StatusUi> = {
   PAID: { phase: 'received', label: 'Commande reçue', color: JAUNE_TEXTE, tint: JAUNE_FOND, icon: 'receipt-outline' },
@@ -104,11 +122,15 @@ const isLive = (status: string): boolean => {
  * `texte` à part pour la réception : le jaune vif se voit sur un trait, mais
  * écrit sur fond blanc il ne se lit presque pas.
  */
-const STEPS: { phase: Phase; label: string; color: string; texte: string }[] = [
-  { phase: 'received', label: 'Reçue', color: JAUNE, texte: JAUNE_TEXTE },
-  { phase: 'preparing', label: 'Préparation', color: THEME.orange, texte: THEME.orange },
-  { phase: 'ready', label: 'Prête', color: GREEN, texte: GREEN },
-];
+/**
+ * LES TROIS PHASES VISIBLES, ET RIEN D'AUTRE.
+ *
+ * Ce tableau portait aussi un libelle et deux couleurs par etape, du temps ou
+ * la carte affichait trois traits LEGENDES. La barre actuelle ne lit que
+ * l'ordre : des donnees qu'aucun code ne touche finissent par mentir, et
+ * personne ne s'en apercoit puisque personne ne les lit.
+ */
+const STEPS: Phase[] = ['received', 'preparing', 'ready'];
 
 export function OrderHistoryScreen() {
   // Espace sous le contenu : la barre flottante ne doit rien recouvrir.
@@ -435,196 +457,225 @@ function OrderCard({
   const cfg = ui(order.status);
   const live = isLive(order.status);
   const [recuEnCours, setRecuEnCours] = useState(false);
-  const stepIndex = STEPS.findIndex((s) => s.phase === cfg.phase);
+  const stepIndex = STEPS.indexOf(cfg.phase);
   const arrived = Boolean(order.customerArrivedAt);
 
-  return (
-    <Pressable style={({ pressed }) => [styles.card, shadowCard, pressed && styles.pressed]} onPress={onPress}>
-      {/* En-tête.
-          La BUVETTE d'abord : c'est ce que le client cherche des yeux quand il
-          tient son téléphone devant un stade.
+  // CE QUI OCCUPE LA PREMIERE PLACE, ET POURQUOI ELLE CHANGE.
+  //
+  // En cours, c'est « Y aller » : le geste qui deplace le client. Une fois la
+  // commande recuperee, plus rien a rejoindre — la place revient a la note,
+  // qu'on ne demande jamais avant.
+  //
+  // `null` quand le plan n'est pas renseigne, ou quand la note est deja
+  // donnee : le recu prend alors toute la largeur. Un bouton grise, ou qui
+  // ouvre une page vide, vaut moins qu'un bouton absent.
+  const principale: 'plan' | 'noter' | null = live
+    ? order.pickupPlanUrl
+      ? 'plan'
+      : null
+    : order.note == null
+      ? 'noter'
+      : null;
 
-          Le numéro vient juste après, et il DIT SON NOM — « Commande n° 5 » et
-          non « N° 5 » tout seul. Posé nu sous un nom de buvette, ce numéro se
-          confondait avec une référence interne ; écrit en entier, il ne se
-          confond plus avec rien, et c'est pourtant le seul chiffre que le
-          client aura à donner au comptoir. */}
-      <View style={styles.cardHeader}>
-        <View style={styles.headerLeft}>
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.carte, shadowCard, pressed && styles.pressed]}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`Commande ${formatOrderNumber(order)} — ${cfg.label}. Toucher pour suivre.`}
+    >
+      {/*
+        DEUX VUES IMBRIQUEES, ET CE N'EST PAS DECORATIF.
+
+        Les encoches du ticket sont des disques POSES A CHEVAL sur le bord : il
+        faut `overflow: hidden` pour n'en garder que la moitie visible. Or sur
+        iOS, une vue qui rogne son contenu ne dessine plus son ombre. L'ombre
+        reste donc dehors, le rognage dedans.
+      */}
+      <View style={styles.ticket}>
+        {/* L'encoche du haut — celle qui fait lire « ticket » avant meme
+            d'avoir lu un mot. De la couleur du FOND de page, pas du blanc :
+            c'est un trou, pas une pastille. */}
+        <View style={styles.encocheHaut} />
+
+        <View style={styles.ticketHaut}>
+          <View style={styles.ligneEtat}>
+            <View style={[styles.statusPill, { backgroundColor: cfg.tint }]}>
+              <Ionicons name={cfg.icon} size={14} color={cfg.color} />
+              <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+            </View>
+            {/* Le chevron dit que la carte s'ouvre. Pose au bout de la ligne du
+                prix, la ou l'oeil termine sa course — pas au milieu de nulle
+                part. */}
+            <View style={styles.prixBloc}>
+              <Text style={styles.price}>{formatPrice(order.totalCents)}</Text>
+              <Ionicons name="chevron-forward" size={16} color={THEME.grey} />
+            </View>
+          </View>
+
+          {/*
+            LA PROGRESSION, EN TROIS TRAITS DE TROIS PIXELS.
+
+            Elle remplace trois etapes legendees qui prenaient une ligne
+            entiere et repetaient ce que la pastille dit deja. Ici on voit
+            l'avancement SANS LIRE, et on touche la carte pour le detail —
+            le principe meme d'une Live Activity.
+
+            Absente une fois la commande recuperee : trois traits pleins
+            n'apprennent plus rien, et faisaient ressembler une commande finie
+            a une commande en cours.
+          */}
+          {live ? (
+            <View style={styles.barre}>
+              {STEPS.map((phase, i) => (
+                <View
+                  key={phase}
+                  style={[styles.barreSegment, stepIndex >= i && styles.barreSegmentFait]}
+                />
+              ))}
+            </View>
+          ) : null}
+
+          {/* Produit manquant — haut dans la carte, parce que c'est la
+              nouvelle qui change ce que le client doit faire. */}
+          {live ? (
+            <MissingItemsBanner
+              lignes={order.items}
+              comptoir={order.supplierName}
+              style={styles.manquant}
+            />
+          ) : null}
+
           <Text style={styles.supplierText} numberOfLines={1}>
             {order.supplierName ?? 'Commande'}
           </Text>
-          <Text style={styles.orderNumber}>Commande {formatOrderNumber(order)}</Text>
+
+          {/*
+            LE NUMERO — le plus gros caractere de la carte, et en orange
+            MEME UNE FOIS RECUPEREE.
+
+            C'est le seul chiffre que le client aura a dire a voix haute, au
+            comptoir, dans le bruit. L'etiquette le nomme en toutes lettres :
+            pose nu sous un nom de buvette, « 1045 » se confond avec une
+            reference interne.
+
+            Cadre pour QUATRE chiffres : le compteur repart a 1 chaque jour et
+            par lieu, mais un gros match depasse mille commandes.
+          */}
+          <Text style={styles.numeroLabel}>Numéro de commande</Text>
+          <Text style={styles.numeroValeur} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+            {numeroDeCommandeNu(order)}
+          </Text>
         </View>
-        <View style={styles.priceBlock}>
-          <Text style={styles.price}>{formatPrice(order.totalCents)}</Text>
+
+        {/* LA DECHIRURE : deux encoches et un pointille. */}
+        <View style={styles.dechirure}>
+          <View style={[styles.encocheCote, styles.encocheGauche]} />
+          <View style={styles.pointille} />
+          <View style={[styles.encocheCote, styles.encocheDroite]} />
         </View>
-      </View>
 
-      {/* Statut */}
-      <View style={[styles.statusPill, { backgroundColor: cfg.tint }]}>
-        <Ionicons name={cfg.icon} size={14} color={cfg.color} />
-        <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
-      </View>
-
-      {/* Produit manquant — signalé par le comptoir.
-          Juste sous le statut : c'est la nouvelle qui change ce que le client
-          doit faire. Le détail dit QUOI manque, la phrase dit OÙ aller. Masqué
-          une fois la commande terminée : il n'appelle plus aucun geste. */}
-      {live && (
-        <MissingItemsBanner
-          lignes={order.items}
-          comptoir={order.supplierName}
-          style={styles.manquant}
-        />
-      )}
-
-      {/* Remboursement — JAMAIS masqué par l'état de la commande.
-          Un remboursement arrive le plus souvent APRÈS que tout est terminé :
-          le limiter aux commandes en cours reviendrait à ne l'afficher
-          quasiment jamais. */}
-      <RemboursementBanner paymentStatus={order.paymentStatus} style={styles.manquant} />
-
-      {/* Progression — trois traits légendés, arrondis.
-          Le libellé compte : « Préparation » dit ce qui se passe, là où un point
-          demande de deviner. L'étape EN COURS est plus épaisse, pour se repérer
-          sans lire. */}
-      {/* Le résumé des étapes ne sert QUE pendant l'attente. Une fois la
-          commande récupérée, ces trois traits pleins n'apprennent plus rien et
-          font ressembler une commande finie à une commande en cours — c'est
-          précisément ce qui rendait la liste illisible. */}
-      {live && (
-        <View style={styles.steps}>
-          {STEPS.map((s, i) => {
-            const atteint = stepIndex >= i || cfg.phase === 'done';
-            const actif = stepIndex === i && cfg.phase !== 'done';
-            return (
-              <View key={s.phase} style={styles.step}>
-                <View
-                  style={[
-                    styles.stepBar,
-                    { backgroundColor: atteint ? s.color : THEME.border },
-                    actif && styles.stepBarActive,
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.stepLabel,
-                    atteint && { color: s.texte, fontFamily: HEAD.bold },
-                  ]}
-                >
-                  {s.label}
-                </Text>
-              </View>
-            );
-          })}
-        </View>
-      )}
-
-      {/* Retrait : l'information qu'on relit dix fois en attendant. */}
-      <View style={styles.retrait}>
-        <Ionicons name="time-outline" size={15} color={live ? cfg.color : THEME.inkSoft} />
-        <Text style={[styles.timeStrong, live && { color: cfg.color }]}>{pickupLabel(order)}</Text>
-        <Text style={styles.timeSoft}>
-          {formatDate(order.createdAt)} · {formatTime(order.createdAt)}
-        </Text>
-      </View>
-
-      {/* « Y aller » — le plan de CETTE buvette, pas celui du lieu entier. */}
-      {live && order.pickupPlanUrl ? (
-        <Pressable
-          style={({ pressed }) => [styles.planBtn, pressed && styles.pressed]}
-          onPress={() => onPlan(order)}
-          hitSlop={4}
-        >
-          <Ionicons name="map-outline" size={16} color={THEME.orange} />
-          <Text style={styles.planBtnText}>Y aller — voir le plan</Text>
-        </Pressable>
-      ) : null}
-
-      {/* Le reçu — disponible à tout moment, y compris longtemps après.
-          C'est un justificatif : il sert souvent APRÈS le service, pour une
-          note de frais ou une comptabilité, quand la commande a quitté les
-          écrans de suivi. */}
-      <Pressable
-        style={({ pressed }) => [styles.recuBtn, pressed && styles.pressed]}
-        onPress={() => void ouvrirRecu(order.id, setRecuEnCours)}
-        disabled={recuEnCours}
-        hitSlop={4}
-      >
-        <Ionicons name="receipt-outline" size={16} color={VIOLET} />
-        <Text style={styles.recuBtnText}>
-          {recuEnCours ? 'Ouverture…' : 'Reçu'}
-        </Text>
-      </Pressable>
-
-      {/*
-        LES ÉTOILES — seulement sur une commande RÉCUPÉRÉE.
-
-        Proposées ici et non en fin de parcours : au comptoir, le client a son
-        plat dans les mains et range son téléphone. C'est en rouvrant
-        « Mes commandes » qu'il a une seconde à donner.
-
-        Déjà notée, le bloc ne disparaît pas : il montre les étoiles choisies.
-        Faire disparaître la question laisserait croire qu'elle n'a pas été
-        enregistrée.
-      */}
-      {!live && order.note != null ? (
-        <View style={styles.noteDonnee}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <Ionicons
-              key={n}
-              name={n <= (order.note ?? 0) ? 'star' : 'star-outline'}
-              size={14}
-              color={THEME.orange}
-            />
-          ))}
-          <Text style={styles.noteDonneeTexte}>Merci pour ta note</Text>
-        </View>
-      ) : null}
-      {!live && order.note == null ? (
-        <Pressable
-          style={({ pressed }) => [styles.noterBtn, pressed && styles.pressed]}
-          onPress={() => onNoter(order)}
-          hitSlop={4}
-        >
-          <Ionicons name="star-outline" size={16} color={THEME.orange} />
-          <Text style={styles.noterBtnText}>Noter ma commande</Text>
-        </Pressable>
-      ) : null}
-
-      {/* « Je suis arrivé » — uniquement tant que la commande est en cours. */}
-      {live &&
-        (arrived ? (
-          <View style={styles.arrivedBadge}>
-            <Ionicons name="checkmark-circle" size={16} color={GREEN} />
-            <Text style={styles.arrivedText}>Le stand sait que tu es là</Text>
-          </View>
-        ) : (
-          <Pressable
-            style={({ pressed }) => [styles.arrivedBtn, pressed && styles.pressed]}
-            onPress={() => onArrived(order.id)}
-            hitSlop={4}
-            accessibilityRole="button"
-            accessibilityLabel="Clique ici pour nous avertir lorsque tu es devant le point de retrait"
-          >
-            {/* Deux lignes FORCEES, de longueur voisine (36 et 32 signes).
-                Laissee libre, la coupure tombait ou le hasard de la largeur
-                la mettait : une ligne pleine, un mot orphelin. Pas d'icone :
-                la main prenait la largeur dont le texte avait besoin.
-                `adjustsFontSizeToFit` est le filet des petits ecrans (iPhone
-                SE) — le texte retrecit legerement plutot que de passer a
-                trois lignes. */}
-            <Text
-              style={styles.arrivedBtnText}
-              numberOfLines={2}
-              adjustsFontSizeToFit
-              minimumFontScale={0.85}
-            >
-              {'Clique ici pour nous avertir lorsque\ntu es devant le point de retrait'}
+        <View style={styles.ticketBas}>
+          <View style={styles.retrait}>
+            <Ionicons name="time-outline" size={15} color={live ? cfg.color : THEME.inkSoft} />
+            <Text style={[styles.timeStrong, live && { color: cfg.color }]}>{pickupLabel(order)}</Text>
+            <Text style={styles.timeSoft}>
+              {formatDate(order.createdAt)} · {formatTime(order.createdAt)}
             </Text>
-          </Pressable>
-        ))}
+          </View>
+
+          {/* Remboursement — JAMAIS masque par l'etat de la commande : il
+              arrive le plus souvent APRES que tout est termine. */}
+          <RemboursementBanner paymentStatus={order.paymentStatus} style={styles.manquant} />
+
+          <View style={styles.actions}>
+            {principale === 'plan' ? (
+              <Pressable
+                style={({ pressed }) => [styles.action, styles.actionPleine, pressed && styles.pressed]}
+                onPress={() => onPlan(order)}
+                hitSlop={4}
+              >
+                <Ionicons name="map-outline" size={15} color="#fff" />
+                <Text style={[styles.actionTexte, styles.actionTextePlein]}>Y aller</Text>
+              </Pressable>
+            ) : null}
+
+            {principale === 'noter' ? (
+              <Pressable
+                style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+                onPress={() => onNoter(order)}
+                hitSlop={4}
+              >
+                <Ionicons name="star-outline" size={15} color={THEME.orange} />
+                <Text style={[styles.actionTexte, { color: THEME.orange }]}>Noter</Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+              onPress={() => void ouvrirRecu(order.id, setRecuEnCours)}
+              disabled={recuEnCours}
+              hitSlop={4}
+            >
+              <Ionicons name="receipt-outline" size={15} color={THEME.inkSoft} />
+              <Text style={styles.actionTexte}>{recuEnCours ? 'Ouverture…' : 'Reçu'}</Text>
+            </Pressable>
+          </View>
+
+          {/*
+            « JE SUIS ARRIVE » reste SOUS les deux boutons, et c'est l'ordre du
+            parcours : on rejoint le stand, PUIS on signale qu'on y est. Le
+            mettre au-dessus demanderait au client de confirmer une arrivee
+            avant de savoir ou aller.
+          */}
+          {live
+            ? arrived
+              ? (
+                <View style={styles.arrivedBadge}>
+                  <Ionicons name="checkmark-circle" size={16} color={GREEN} />
+                  <Text style={styles.arrivedText}>Le stand sait que tu es là</Text>
+                </View>
+              )
+              : (
+                <Pressable
+                  style={({ pressed }) => [styles.arrivedBtn, pressed && styles.pressed]}
+                  onPress={() => onArrived(order.id)}
+                  hitSlop={4}
+                  accessibilityRole="button"
+                  accessibilityLabel="Clique ici pour nous avertir lorsque tu es devant le point de retrait"
+                >
+                  {/* Deux lignes FORCEES, de longueur voisine (36 et 32 signes).
+                      Laissee libre, la coupure tombait ou le hasard de la
+                      largeur la mettait : une ligne pleine, un mot orphelin. */}
+                  <Text
+                    style={styles.arrivedBtnText}
+                    numberOfLines={2}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.85}
+                  >
+                    {'Clique ici pour nous avertir lorsque\ntu es devant le point de retrait'}
+                  </Text>
+                </Pressable>
+              )
+            : null}
+
+          {/* Deja notee : on montre les etoiles choisies. Faire disparaitre la
+              question laisserait croire qu'elle n'a pas ete enregistree. */}
+          {!live && order.note != null ? (
+            <View style={styles.noteDonnee}>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <Ionicons
+                  key={n}
+                  name={n <= (order.note ?? 0) ? 'star' : 'star-outline'}
+                  size={14}
+                  color={THEME.orange}
+                />
+              ))}
+              <Text style={styles.noteDonneeTexte}>Merci pour ta note</Text>
+            </View>
+          ) : null}
+        </View>
+      </View>
     </Pressable>
   );
 }
@@ -642,7 +693,20 @@ function formatDate(iso: string): string {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: THEME.bg },
+  /**
+   * LE FOND DE CET ECRAN N'EST PAS BLANC, ET C'EST CE QUI REND LE TICKET
+   * LISIBLE.
+   *
+   * `THEME.bg` et `THEME.surface` valent TOUS LES DEUX #ffffff. Une encoche
+   * decoupee dans une carte blanche, posee sur une page blanche, est donc
+   * invisible par construction : on l'a vue a l'ecran, elle n'existait pas.
+   *
+   * `bgSubtle` derriere les cartes blanches rend aux encoches leur role de
+   * TROU, et au passage detache les cartes autrement que par un filet d'un
+   * pixel. C'est le fond legerement teinte de toutes les interfaces a
+   * tickets — et la raison pour laquelle la maquette d'origine en avait un.
+   */
+  root: { flex: 1, backgroundColor: THEME.bgSubtle },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 16, paddingBottom: 8 },
   screenTitle: { color: THEME.ink, fontSize: 22, fontFamily: HEAD.bold },
 
@@ -692,33 +756,125 @@ const styles = StyleSheet.create({
    * cassé, l'ombre seule donnait des cartes molles, aux limites incertaines.
    * Le trait fin les pose ; l'ombre ne fait plus que les décoller.
    */
-  card: {
+  /**
+   * LA CARTE PORTE L'OMBRE, LE TICKET PORTE LE ROGNAGE.
+   *
+   * Sur iOS, une vue en `overflow: hidden` ne dessine plus son ombre. Les deux
+   * ne peuvent donc pas vivre sur la meme vue — d'ou ces deux styles la ou il
+   * n'y en avait qu'un.
+   */
+  carte: {
     backgroundColor: THEME.surface,
+    borderRadius: 22,
+  },
+  ticket: {
     borderRadius: 22,
     borderWidth: 1,
     borderColor: THEME.border,
-    padding: 18,
-    gap: 14,
+    // Indispensable : c'est lui qui coupe les encoches en deux.
+    overflow: 'hidden',
+    backgroundColor: THEME.surface,
   },
-  pressed: { opacity: 0.85 },
-  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 },
-  headerLeft: { flex: 1, gap: 3 },
-  orderNumber: {
-    // Plus sombre et plus gros qu'avant : c'est le chiffre qu'on cherche en
-    // rouvrant cette liste au comptoir, pas une mention de bas de page.
-    color: THEME.inkSoft,
-    fontSize: 13.5,
-    fontFamily: HEAD.semibold,
-    // Chiffres de largeur fixe : un numéro de commande se lit et se dicte.
-    fontVariant: ['tabular-nums'],
-    letterSpacing: 0.4,
-  },
-  priceBlock: {
+
+  /**
+   * LES ENCOCHES — de la couleur du FOND DE PAGE, jamais du blanc.
+   *
+   * Ce sont des TROUS dans le ticket. Peintes en blanc elles disparaitraient
+   * sur la carte, peintes en gris elles ressembleraient a des pastilles. La
+   * moitie qui depasse est rognee par `overflow: hidden` du parent.
+   */
+  encocheHaut: {
+    position: 'absolute',
+    top: -ENCOCHE / 2,
+    left: '50%',
+    marginLeft: -ENCOCHE / 2,
+    width: ENCOCHE,
+    height: ENCOCHE,
+    borderRadius: ENCOCHE / 2,
     backgroundColor: THEME.bgSubtle,
-    borderRadius: THEME.radius.pill,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    zIndex: 2,
   },
+  encocheCote: {
+    width: ENCOCHE,
+    height: ENCOCHE,
+    borderRadius: ENCOCHE / 2,
+    backgroundColor: THEME.bgSubtle,
+  },
+  encocheGauche: { marginLeft: -ENCOCHE / 2 },
+  encocheDroite: { marginRight: -ENCOCHE / 2 },
+
+  dechirure: { flexDirection: 'row', alignItems: 'center' },
+  // `borderStyle: 'dashed'` sur une bordure d'UN SEUL cote est ignore par
+  // Android : il rend un trait plein. On passe donc par une vue a quatre
+  // bordures dont trois sont transparentes.
+  pointille: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderTopColor: THEME.border,
+    borderStyle: 'dashed',
+  },
+
+  ticketHaut: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 13, gap: 10 },
+  ticketBas: { paddingHorizontal: 16, paddingTop: 13, paddingBottom: 16, gap: 10 },
+
+  ligneEtat: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  prixBloc: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+
+  /**
+   * TROIS TRAITS DE TROIS PIXELS, et pas trois etapes legendees.
+   *
+   * Les libelles repetaient ce que la pastille dit juste au-dessus, et
+   * prenaient une ligne entiere. Ici l'avancement se voit sans lire ; le
+   * detail est a un doigt, puisque la carte entiere ouvre le suivi.
+   */
+  barre: { flexDirection: 'row', gap: 4, marginTop: -2 },
+  barreSegment: { flex: 1, height: 3, borderRadius: 2, backgroundColor: THEME.border },
+  barreSegmentFait: { backgroundColor: THEME.orange },
+
+  numeroLabel: {
+    color: THEME.grey,
+    fontSize: 11,
+    fontFamily: FONT.medium,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginTop: -4,
+  },
+  /**
+   * 40 POINTS, ET EN ORANGE MEME UNE FOIS RECUPEREE.
+   *
+   * Chiffres de largeur fixe : un numero se lit et se dicte, et un « 11 » plus
+   * etroit qu'un « 44 » se lit moins vite d'un coup d'oeil. `adjustsFontSizeToFit`
+   * est le filet du jour ou un lieu depassera cinq chiffres.
+   */
+  numeroValeur: {
+    color: THEME.orange,
+    fontSize: 40,
+    lineHeight: 46,
+    fontFamily: HEAD.bold,
+    fontVariant: ['tabular-nums'],
+    marginTop: -2,
+  },
+
+  actions: { flexDirection: 'row', gap: 8 },
+  action: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: THEME.radius.pill,
+    borderWidth: 1,
+    borderColor: THEME.border,
+  },
+  // Pleine et orange : c'est le geste qui deplace le client. Un seul par
+  // carte — deux boutons pleins ne hierarchisent plus rien.
+  actionPleine: { backgroundColor: THEME.orange, borderColor: THEME.orange },
+  actionTexte: { color: THEME.inkSoft, fontSize: 13.5, fontFamily: HEAD.bold },
+  actionTextePlein: { color: '#fff' },
+
+  pressed: { opacity: 0.85 },
   price: { color: THEME.ink, fontSize: 15, fontFamily: HEAD.bold, fontVariant: ['tabular-nums'] },
 
   statusPill: {
@@ -727,13 +883,6 @@ const styles = StyleSheet.create({
   },
   statusText: { fontSize: 13, fontFamily: HEAD.bold },
 
-  steps: { flexDirection: 'row', gap: 8 },
-  step: { flex: 1, gap: 6 },
-  // Extremites arrondies : un trait a angles vifs jurait avec des cartes a
-  // rayon 22 et des boutons en gelule.
-  stepBar: { height: 6, borderRadius: THEME.radius.pill },
-  stepBarActive: { height: 8 },
-  stepLabel: { color: THEME.grey, fontSize: 11, fontFamily: HEAD.medium },
 
   manquant: { marginTop: 10 },
 
@@ -752,19 +901,6 @@ const styles = StyleSheet.create({
   dateLine: { color: THEME.grey, fontSize: 11.5, fontFamily: HEAD.medium },
 
   supplierText: { color: THEME.ink, fontSize: 16.5, fontFamily: HEAD.bold, letterSpacing: -0.2 },
-  planBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    marginTop: 10,
-    paddingVertical: 12,
-    borderRadius: THEME.radius.pill,
-    borderWidth: 1.5,
-    borderColor: THEME.orange,
-    backgroundColor: THEME.orangeTint,
-  },
-  planBtnText: { color: THEME.orange, fontSize: 14, fontFamily: HEAD.bold },
   arrivedBtn: {
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: THEME.orange, borderRadius: THEME.radius.pill,
@@ -773,20 +909,6 @@ const styles = StyleSheet.create({
     paddingVertical: 11, paddingHorizontal: 18, marginTop: 2,
   },
   arrivedBtnText: { color: '#fff', fontSize: 12, fontFamily: HEAD.bold, textAlign: 'center', lineHeight: 17 },
-  // Le bouton de note reprend la forme de celui du reçu — même rang, même
-  // discrétion : ce sont deux gestes d'après-commande, aucun ne doit crier.
-  noterBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    marginTop: 10,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: THEME.orangeTint,
-  },
-  noterBtnText: { color: THEME.orange, fontSize: 13, fontFamily: HEAD.semibold },
   noteDonnee: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -799,19 +921,6 @@ const styles = StyleSheet.create({
     fontFamily: HEAD.medium,
     marginLeft: 6,
   },
-  recuBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    marginTop: 10,
-    paddingVertical: 12,
-    borderRadius: THEME.radius.pill,
-    backgroundColor: VIOLET_TINT,
-    borderWidth: 1,
-    borderColor: 'rgba(124, 58, 237, 0.28)',
-  },
-  recuBtnText: { color: VIOLET, fontSize: 14, fontFamily: HEAD.bold },
   arrivedBadge: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
     backgroundColor: GREEN_TINT, borderRadius: THEME.radius.pill,
