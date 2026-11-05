@@ -109,6 +109,19 @@ const FALLBACK_UI: StatusUi = {
 };
 
 const ui = (status: string): StatusUi => STATUS_UI[status] ?? FALLBACK_UI;
+
+/**
+ * Les trois pastilles, dans l'ordre ou on les lit.
+ *
+ * Une LISTE plutot que trois blocs recopies : trois boutons ecrits a la main
+ * finissent par diverger d'un pixel ou d'une graisse, et c'est toujours le
+ * troisieme qu'on oublie.
+ */
+const FILTRES: { cle: 'toutes' | 'encours' | 'terminees'; libelle: string }[] = [
+  { cle: 'toutes', libelle: 'Toutes' },
+  { cle: 'encours', libelle: 'En cours' },
+  { cle: 'terminees', libelle: 'Récupérées' },
+];
 const isLive = (status: string): boolean => {
   const p = ui(status).phase;
   return p === 'received' || p === 'preparing' || p === 'ready';
@@ -206,21 +219,36 @@ export function OrderHistoryScreen() {
   // Suivi live : on ne sonde que s'il reste une commande en cours (économie
   // batterie/réseau — une liste 100 % terminée est figée).
   const hasLive = orders.some((o) => isLive(o.status));
+  // Son pendant, pour les pastilles : elles n'ont de sens qu'avec les deux.
+  const hasTerminees = orders.some((o) => !isLive(o.status));
 
   /**
-   * Deux groupes : ce qui attend le client, puis ce qui est derrière lui.
+   * LES PASTILLES ET LES SECTIONS FONT DEUX TRAVAUX DIFFERENTS.
    *
-   * Les commandes arrivaient mélangées, la plus récente en tête : une commande
-   * récupérée hier pouvait passer devant celle qu'on attend au comptoir.
+   * Les sections RANGENT — ce qui attend le client, puis ce qui est derriere
+   * lui. Les commandes arrivaient melangees, la plus recente en tete : une
+   * commande recuperee hier pouvait passer devant celle qu'on attend au
+   * comptoir.
+   *
+   * Les pastilles REDUISENT. Elles ne servent a rien sur trois commandes ;
+   * elles servent quand l'historique d'une saison s'est accumule et qu'on
+   * cherche celle de ce soir.
    */
+  const [filtre, setFiltre] = useState<'toutes' | 'encours' | 'terminees'>('toutes');
+
   const sections = useMemo(() => {
     const enCours = orders.filter((o) => isLive(o.status));
     const terminees = orders.filter((o) => !isLive(o.status));
+    const garder = (quoi: 'encours' | 'terminees') => filtre === 'toutes' || filtre === quoi;
     return [
-      ...(enCours.length > 0 ? [{ titre: 'En cours', data: enCours }] : []),
-      ...(terminees.length > 0 ? [{ titre: 'Terminées', data: terminees }] : []),
+      ...(garder('encours') && enCours.length > 0
+        ? [{ titre: 'En cours', data: enCours }]
+        : []),
+      ...(garder('terminees') && terminees.length > 0
+        ? [{ titre: 'Terminées', data: terminees }]
+        : []),
     ];
-  }, [orders]);
+  }, [orders, filtre]);
   useEffect(() => {
     if (!token || !hasLive) return;
     const t = setInterval(() => void load(), LIVE_POLL_MS);
@@ -316,6 +344,40 @@ export function OrderHistoryScreen() {
         {hasLive && <LiveBadge />}
       </View>
 
+      {/*
+        LES PASTILLES NE S'AFFICHENT QUE S'IL Y A LES DEUX GROUPES.
+
+        Sur une liste entierement en cours, « Terminees » ne rendrait rien et
+        « Toutes » ne retirerait rien : trois boutons dont deux inutiles et un
+        sans effet. La meme regle que celle des titres de section, et pour la
+        meme raison — un controle qui ne change rien apprend au client a ne
+        plus y toucher.
+      */}
+      {hasLive && hasTerminees ? (
+        <View style={styles.filtres}>
+          {FILTRES.map((f) => {
+            const actif = filtre === f.cle;
+            return (
+              <Pressable
+                key={f.cle}
+                onPress={() => setFiltre(f.cle)}
+                style={({ pressed }) => [
+                  styles.pastille,
+                  actif && styles.pastilleActive,
+                  pressed && styles.pressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: actif }}
+              >
+                <Text style={[styles.pastilleTexte, actif && styles.pastilleTexteActif]}>
+                  {f.libelle}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
       {vientDePayer && orders.length === 0 && (
         <View style={styles.bandeauPaiement}>
           <ActivityIndicator size="small" color={THEME.orange} />
@@ -339,6 +401,17 @@ export function OrderHistoryScreen() {
       ) : orders.length === 0 ? (
         <View style={styles.centered}>
           <Text style={styles.emptyText}>Aucune commande pour le moment.</Text>
+        </View>
+      ) : sections.length === 0 ? (
+        /* Le filtre ne rend rien : on dit LEQUEL, pas « aucune commande ».
+           Un client qui a trois commandes sous les yeux et lit « aucune
+           commande » croit a une panne. */
+        <View style={styles.centered}>
+          <Text style={styles.emptyText}>
+            {filtre === 'encours'
+              ? 'Aucune commande en cours.'
+              : 'Aucune commande terminée.'}
+          </Text>
         </View>
       ) : (
         <SectionList
@@ -740,6 +813,26 @@ const styles = StyleSheet.create({
   ctaText: { color: '#fff', fontFamily: HEAD.bold, fontSize: 15 },
 
   list: { padding: 16, gap: 14 },
+
+  filtres: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
+  /**
+   * L'ACTIVE EST BLANCHE, LES AUTRES SONT TRANSPARENTES.
+   *
+   * Le fond de l'ecran est teinte depuis que la carte est un ticket : une
+   * pastille blanche s'y detache sans avoir besoin d'orange. Reserver
+   * l'orange au bouton « Y aller » garde une seule couleur pleine par ecran —
+   * sinon plus rien ne ressort.
+   */
+  pastille: {
+    paddingHorizontal: 15,
+    paddingVertical: 7,
+    borderRadius: THEME.radius.pill,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  pastilleActive: { backgroundColor: THEME.surface, borderColor: THEME.border },
+  pastilleTexte: { color: THEME.grey, fontSize: 13, fontFamily: HEAD.semibold },
+  pastilleTexteActif: { color: THEME.ink },
   sectionTitre: {
     color: THEME.inkSoft,
     fontSize: 12.5,
