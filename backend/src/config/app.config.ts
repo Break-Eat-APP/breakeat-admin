@@ -137,7 +137,11 @@ export default registerAs('app', () => ({
      */
     expediteur: process.env.MAIL_FROM ?? '',
     /** Ce que le client lit comme nom d'expéditeur. */
-    expediteurNom: process.env.MAIL_FROM_NAME ?? 'Break Eat',
+    // « BreakEat » en un mot depuis le 31/10 : c'est le nom sous l'icône, et
+    // celui que le client lit dans la colonne « De » de sa boîte. Un expéditeur
+    // qui ne ressemble pas à l'app qu'il vient d'utiliser fait ouvrir le
+    // dossier des indésirables — c'est là qu'il range ce qu'il ne reconnaît pas.
+    expediteurNom: process.env.MAIL_FROM_NAME ?? 'BreakEat',
   },
 
   /**

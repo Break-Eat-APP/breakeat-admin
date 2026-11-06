@@ -175,7 +175,7 @@ export class PasswordResetService {
     try {
       await this.courriel.envoyer({
         a: user.email,
-        sujet: 'Break Eat — code de réinitialisation',
+        sujet: 'BreakEat — code de réinitialisation',
         texte: [
           `Voici le code pour choisir un nouveau mot de passe :`,
           ``,
@@ -186,7 +186,7 @@ export class PasswordResetService {
           `Si vous n'avez rien demandé, ignorez ce message : votre mot de passe`,
           `actuel reste valable et personne n'a pu y accéder.`,
           ``,
-          `— Break Eat`,
+          `— BreakEat`,
         ].join('\n'),
       });
     } catch {
@@ -300,7 +300,7 @@ export class PasswordResetService {
     try {
       await this.courriel.envoyer({
         a: adresse,
-        sujet: 'Break Eat — votre connexion',
+        sujet: 'BreakEat — votre connexion',
         texte: [
           `Vous avez demandé à réinitialiser votre mot de passe.`,
           ``,
@@ -310,7 +310,7 @@ export class PasswordResetService {
           ``,
           `Si vous n'avez rien demandé, ignorez ce message.`,
           ``,
-          `— Break Eat`,
+          `— BreakEat`,
         ].join('\n'),
       });
     } catch {
