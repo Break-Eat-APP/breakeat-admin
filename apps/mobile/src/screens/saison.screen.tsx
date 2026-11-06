@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,7 +24,6 @@ import { useUserLocation } from '@lib/hooks/use-user-location';
 import { showAlert } from '@lib/alert';
 import { heureDOuverture, ouvertALaCommande } from '@lib/ouverture-lieu';
 import {
-  initialesAdversaire,
   libelleAttente,
   libelleDateLongue,
   libelleJour,
@@ -33,6 +31,7 @@ import {
 } from '@lib/calendrier-saison';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { DemandeCoordonnees } from '@components/demande-coordonnees';
+import { VignetteEvenement } from '@components/vignette-evenement';
 import { THEME, shadowCard, HEAD, FONT } from '@lib/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Saison'>;
@@ -420,7 +419,7 @@ export function SaisonScreen({ route, navigation }: Props) {
                   {/* `lecture` : la carte n'a qu'une image, elle peut la
                       donner en grand — une affiche de concert y passe de 32
                       pixels de large à 88, et devient lisible. */}
-                  <Vignette match={selection} taille={44} role="lecture" />
+                  <VignetteEvenement evenement={selection} taille={44} role="lecture" />
                   <View style={styles.carteTextes}>
                     <Text style={styles.carteNom} numberOfLines={2}>
                       {selection.opponentName ?? selection.name}
@@ -555,8 +554,8 @@ function CaseMatch({
       accessibilityLabel={`${match.opponentName ?? match.name}, ${libelleDateLongue(match.startAt)}`}
       accessibilityState={{ selected: selectionne }}
     >
-      <Vignette
-        match={match}
+      <VignetteEvenement
+        evenement={match}
         taille={48}
         anneau={match.ouvert ? 'ouvert' : selectionne ? 'choisi' : 'aucun'}
       />
@@ -567,188 +566,6 @@ function CaseMatch({
         {sousTitre}
       </Text>
     </Pressable>
-  );
-}
-
-/**
- * LES PROPORTIONS D'UNE AFFICHE — 2:3.
- *
- * C'est le format de tout ce qui s'imprime et se colle : A4, A3, le 40×60 des
- * panneaux. Les affiches de concert en sortent rarement.
- *
- * On ne LIT PAS les proportions réelles du fichier : il faudrait l'avoir
- * téléchargé, et un flyer carré ou en 4:5 doit s'afficher quand même. C'est
- * donc le CADRE qui impose la forme, et l'image qui s'y adapte — rognée dans
- * le ruban, entière dans la carte. Voir `Vignette`.
- */
-const RATIO_AFFICHE = 2 / 3;
-
-/**
- * COMBIEN DE FOIS LE BLASON, quand l'affiche passe en lecture.
- *
- * Trois : assez pour reconnaître l'artiste et la date sur un flyer, assez peu
- * pour que le bouton « Commander » reste à l'écran sans faire défiler.
- *
- * Une affiche PLEINE LARGEUR a été essayée d'abord, et écartée : dans une
- * carte de 343 pixels de large, un 2:3 fait 514 pixels de haut — il pousse le
- * bouton sous le bord de l'écran, et le seul geste utile de la carte disparaît
- * derrière l'image.
- */
-const AFFICHE_EN_LECTURE = 3;
-
-/**
- * CE QUE LA CASE MONTRE — une affiche, un blason, ou des initiales.
- *
- * Trois formes, et une seule règle pour choisir : ce que le club a saisi. Un
- * calendrier dont les images manquent à moitié est pire que pas d'images du
- * tout, d'où le repli final sur un disque sourd aux initiales — jamais un trou
- * ni une image cassée.
- *
- * ── POURQUOI L'AFFICHE A SA PROPRE FORME ───────────────────
- *
- * Un écusson est rond, ou presque : il tient dans un cercle sans rien perdre.
- * Une affiche est un portrait dont TOUT le propos vit dans la hauteur — le
- * titre en haut, l'artiste au milieu, la date en bas. Glissée dans le même
- * cercle de 48 pixels, il n'en reste que le centre : une tache de couleur.
- *
- * C'est pourquoi la forme suit la donnée, et non l'inverse. Et c'est pourquoi
- * l'affiche est un CHAMP à part en base (`posterUrl`) : le code doit savoir
- * laquelle des deux il tient, pas le deviner à l'extension du fichier ou aux
- * proportions de l'image — deux indices qui se trompent.
- *
- * ── L'AFFICHE L'EMPORTE SUR LE BLASON ────────────────────
- *
- * Les deux peuvent être remplis : c'est le derby dont le club a fait une
- * affiche. Le serveur ne tranche pas — il rend les deux, et garde donc le
- * blason pour le jour où on voudrait les montrer ensemble. Ici on choisit
- * l'affiche : elle a été posée pour CET événement et porte son identité
- * propre, là où un blason ne désigne que le camp d'en face.
- */
-function Vignette({
-  match,
-  taille,
-  role = 'index',
-  anneau = 'aucun',
-}: {
-  match: EvenementDeSaison;
-  /** Le diamètre du blason — et, en rôle d'index, la hauteur de l'affiche. */
-  taille: number;
-  /**
-   * CE QU'ON FAIT DE L'IMAGE — la repérer, ou la lire.
-   *
-   * `index` (le ruban) : on parcourt du pouce, on reconnaît, on appuie.
-   * L'affiche y prend la HAUTEUR DU BLASON, et ce n'est pas un raccourci :
-   * chaque case pose son libellé juste sous son image. Une affiche plus haute
-   * décalerait le sien de quelques pixels, et une rangée de dates désalignée
-   * se voit tout de suite.
-   *
-   * `lecture` (la carte du bas) : une seule image, et de la place. Elle passe
-   * en grand, et on ne rogne plus rien.
-   */
-  role?: 'index' | 'lecture';
-  anneau?: 'ouvert' | 'choisi' | 'aucun';
-}) {
-  const affiche = match.posterUrl?.trim();
-  const logo = match.opponentLogoUrl?.trim();
-
-  const bordure = {
-    borderWidth: anneau === 'aucun' ? 1 : 2,
-    borderColor:
-      anneau === 'ouvert' ? THEME.orange : anneau === 'choisi' ? THEME.ink : THEME.border,
-  };
-
-  if (affiche) {
-    const lecture = role === 'lecture';
-    const hauteur = lecture ? taille * AFFICHE_EN_LECTURE : taille;
-    const largeur = Math.round(hauteur * RATIO_AFFICHE);
-    return (
-      <View
-        style={[
-          styles.blason,
-          bordure,
-          {
-            width: largeur,
-            height: hauteur,
-            // Un arrondi PROPORTIONNEL : la même image doit avoir l'air du
-            // même objet à 48 et à 132 pixels. Un rayon fixe paraît dur en
-            // grand et avale les coins en petit. Le plancher de 6 évite
-            // l'angle vif au format du ruban.
-            borderRadius: Math.max(6, Math.round(hauteur * 0.08)),
-          },
-        ]}
-      >
-        <Image
-          source={{ uri: affiche }}
-          style={{ width: '100%', height: '100%' }}
-          /*
-            `cover` DANS LE RUBAN, `contain` DANS LA CARTE — et l'asymétrie
-            est le but.
-
-            À 32 pixels de large on ne lit plus rien : ce qu'il faut, c'est un
-            rectangle PLEIN aux couleurs du flyer, qu'on reconnaît entre deux
-            ronds. `contain` n'y ajouterait que des bandes blanches.
-
-            Dans la carte on lit : `contain` montre l'affiche ENTIÈRE. C'est
-            exactement ce qu'on cherchait — rogner y couperait le titre, qui
-            est en haut de tous les flyers du monde. Le fond de la vignette est
-            celui de la carte, donc les bandes d'un flyer qui n'est pas en 2:3
-            ne se voient pas.
-          */
-          resizeMode={lecture ? 'contain' : 'cover'}
-        />
-      </View>
-    );
-  }
-
-  const cadre = { width: taille, height: taille, borderRadius: taille / 2, ...bordure };
-
-  /*
-    LE BLASON REMPLIT LE ROND — `cover`, et toute la surface.
-
-    ── CE QUI A ETE ESSAYE AVANT, ET POURQUOI CA NE SUFFISAIT PAS ──
-
-    `contain` à 0,72 (soit 1/√2, le plus grand carré inscrit), puis `contain` à
-    0,94. Les deux laissaient le blason flotter au milieu d'une couronne vide,
-    et la seconde tentative n'a presque rien changé à l'écran.
-
-    LA CAUSE N'ETAIT PAS DANS CE FICHIER. Les blasons que les clubs collent
-    viennent de sites d'images, et portent LEUR PROPRE MARGE. Mesuré sur les
-    adresses réellement en production : le logo du PSG occupe 54 % de son
-    fichier, celui de Beşiktaş 53 %, dans des images de 3840×2160. `contain`
-    respectait fidèlement cette marge — il rendait donc un blason à mi-taille,
-    quelle que soit la valeur qu'on écrivait ici.
-
-    ── POURQUOI `cover` REGLE CA SANS RIEN COUPER ──
-
-    `cover` remplit le cadre et rogne ce qui dépasse. Sur ces images-là, ce
-    qui dépasse EST la marge : le dessin est centré et plus petit que le côté
-    le plus court. Recalculé sur les trois blasons de production, aucun n'est
-    entamé, et tous passent de ~55 % à plus de 85 % du rond.
-
-    Le risque existe et il faut le nommer : un blason collé au bord de son
-    fichier, ou accompagné d'un texte sur le côté, se ferait rogner. C'est le
-    prix à payer pour que les cas courants cessent d'être minuscules — et un
-    écusson légèrement rogné reste reconnaissable, là où un écusson deux fois
-    trop petit ne l'est pas.
-  */
-  if (logo) {
-    return (
-      <View style={[styles.blason, cadre]}>
-        <Image
-          source={{ uri: logo }}
-          style={{ width: '100%', height: '100%' }}
-          resizeMode="cover"
-        />
-      </View>
-    );
-  }
-
-  return (
-    <View style={[styles.blason, styles.blasonVide, cadre]}>
-      <Text style={[styles.initiales, { fontSize: taille * 0.3 }]}>
-        {initialesAdversaire(match.opponentName, match.name)}
-      </Text>
-    </View>
   );
 }
 
@@ -819,14 +636,6 @@ const styles = StyleSheet.create({
   },
   caseJourOuvert: { color: THEME.orange, fontFamily: FONT.bold },
 
-  blason: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: THEME.surface,
-    overflow: 'hidden',
-  },
-  blasonVide: { backgroundColor: THEME.bgSubtle },
-  initiales: { color: THEME.inkSoft, fontFamily: HEAD.bold },
 
   carte: {
     backgroundColor: THEME.surface,

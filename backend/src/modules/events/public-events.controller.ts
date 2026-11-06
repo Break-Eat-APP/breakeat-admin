@@ -8,7 +8,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
-import { ProductStatus, SlotStatus, FlagScope } from '@prisma/client';
+import {
+  ProductStatus,
+  SlotStatus,
+  FlagScope,
+  EventStatus,
+  EventVisibility,
+  VenueStatus,
+} from '@prisma/client';
 import { GroupsService } from '../groups/groups.service';
 import { SlotTemplatesService } from '../slots/slot-templates.service';
 import { jourCalendaireLocal } from '../../common/helpers/jour-de-service';
@@ -16,6 +23,23 @@ import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guar
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { OrgStatus } from '@prisma/client';
+import {
+  aNePasManquer,
+  type EvenementANePasManquer,
+  type LieuEtSesEvenements,
+} from '../../common/helpers/a-ne-pas-manquer';
+
+/**
+ * Combien de lieux favoris on accepte d'interroger d'un coup.
+ *
+ * Vingt : bien au-dela de ce qu'un supporter suit, et assez bas pour
+ * qu'une liste fabriquee a la main ne fasse pas parcourir la table des
+ * evenements. Les identifiants au-dela sont ignores, pas refuses.
+ */
+const MAX_LIEUX_INTERROGES = 20;
+
+/** Prisma leve sur un UUID mal forme : on filtre avant de l'interroger. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * PublicEventsController — read-only endpoints for mobile customers.
@@ -67,6 +91,108 @@ export class PublicEventsController {
    * GET /api/v1/public/events/:eventId
    * Returns event info + attached suppliers (any status).
    */
+  /**
+   * « À NE PAS MANQUER » — les prochains événements des lieux favoris.
+   *
+   * ⚠️ DÉCLARÉE AVANT `@Get(':eventId')`, ET CE N'EST PAS UN HASARD. Nest
+   * essaie les routes dans l'ordre : placée après, « a-venir » serait prise
+   * pour un identifiant, et le `ParseUUIDPipe` rendrait un 400 au lieu de
+   * laisser passer. Le défaut ne se verrait qu'à l'exécution.
+   *
+   * UNE SEULE REQUÊTE POUR TOUS LES FAVORIS. L'app aurait pu appeler
+   * `/public/venues/:id` une fois par favori — trois requêtes à chaque
+   * ouverture de l'accueil, dans un stade où le réseau est déjà saturé. Et
+   * surtout, la règle de répartition vivrait alors DANS l'app : la changer
+   * demanderait de publier une version.
+   *
+   * La confidentialité est celle du reste : un événement PRIVÉ n'apparaît que
+   * pour un membre d'un groupe qui y donne accès. Un visiteur anonyme ne voit
+   * que le public, et rien ne lui dit que le reste existe.
+   */
+  @Get('a-venir')
+  async aVenir(
+    @Query('venueIds') venueIds?: string,
+    @CurrentUser() user?: JwtPayload,
+  ): Promise<EvenementANePasManquer[]> {
+    // Des identifiants MAL FORMÉS sont ignorés, pas refusés : une liste de
+    // favoris vient du téléphone et peut porter une vieille valeur. Refuser
+    // tout le lot viderait la section pour une seule entrée périmée. Prisma,
+    // lui, lève sur un UUID invalide — d'où le filtre.
+    const ids = (venueIds ?? '')
+      .split(',')
+      .map((v) => v.trim())
+      .filter((v) => UUID.test(v))
+      .slice(0, MAX_LIEUX_INTERROGES);
+
+    if (ids.length === 0) return [];
+
+    // Les événements PRIVÉS auxquels ce client a droit, par ses groupes.
+    const prives = new Set<string>();
+    if (user?.sub) {
+      const appartenances = await this.prisma.groupMember.findMany({
+        where: { userId: user.sub },
+        select: { group: { select: { events: { select: { eventId: true } } } } },
+      });
+      for (const a of appartenances) {
+        for (const ge of a.group.events) prives.add(ge.eventId);
+      }
+    }
+
+    const evenements = await this.prisma.event.findMany({
+      where: {
+        venueId: { in: ids },
+        // À VENIR au sens du calendrier : un match commencé n'y figure plus,
+        // c'est l'écran du lieu qui le porte.
+        startAt: { gt: new Date() },
+        status: { not: EventStatus.CANCELLED },
+        // Le contenant d'un lieu PERMANENT n'est pas un événement : il n'a ni
+        // adversaire ni fin, et remplirait la section d'une ligne vide.
+        isPermanentContainer: false,
+        venue: { status: VenueStatus.ACTIVE, organization: { status: OrgStatus.ACTIVE } },
+        OR: [
+          { visibility: EventVisibility.PUBLIC },
+          ...(prives.size > 0 ? [{ id: { in: [...prives] } }] : []),
+        ],
+      },
+      orderBy: { startAt: 'asc' },
+      // Borne de sécurité. La répartition ne garde au plus que trois
+      // événements par lieu ; ce plafond-ci protège seulement d'un lieu qui
+      // aurait programmé trois saisons d'avance.
+      take: MAX_LIEUX_INTERROGES * 20,
+      select: {
+        id: true,
+        name: true,
+        startAt: true,
+        opponentName: true,
+        opponentLogoUrl: true,
+        posterUrl: true,
+        venueId: true,
+        venue: { select: { name: true } },
+      },
+    });
+
+    // Regroupés DANS L'ORDRE DES FAVORIS reçus, et non dans celui de la base :
+    // à nombre d'événements égal, c'est la liste du client qui décide.
+    const parLieu = new Map<string, LieuEtSesEvenements>();
+    for (const id of ids) parLieu.set(id, { venueId: id, venueName: '', evenements: [] });
+
+    for (const e of evenements) {
+      const lieu = parLieu.get(e.venueId);
+      if (!lieu) continue;
+      lieu.venueName = e.venue.name;
+      (lieu.evenements as Omit<EvenementANePasManquer, 'venueId' | 'venueName'>[]).push({
+        id: e.id,
+        name: e.name,
+        startAt: e.startAt.toISOString(),
+        opponentName: e.opponentName,
+        opponentLogoUrl: e.opponentLogoUrl,
+        posterUrl: e.posterUrl,
+      });
+    }
+
+    return aNePasManquer([...parLieu.values()]);
+  }
+
   @Get(':eventId')
   async findEvent(
     @Param('eventId', ParseUUIDPipe) eventId: string,

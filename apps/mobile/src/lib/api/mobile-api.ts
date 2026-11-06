@@ -695,6 +695,48 @@ export const apiGetPublicVenue = (id: string, pos?: { lat: number; lng: number }
   );
 
 /**
+ * UN ÉVÉNEMENT DE LA SECTION « À NE PAS MANQUER » DE L'ACCUEIL.
+ *
+ * Il porte son LIEU, contrairement à ceux du calendrier de saison : sur
+ * l'accueil, plusieurs clubs se mélangent dans la même liste, et « samedi
+ * 21 h » ne dit rien sans savoir où.
+ */
+export interface EvenementANePasManquer {
+  id: string;
+  /** Ce que le club a saisi : « Marseille vs Monaco », « Concert … ». */
+  name: string;
+  /** ISO. */
+  startAt: string;
+  opponentName: string | null;
+  opponentLogoUrl: string | null;
+  /** L'affiche d'un concert : la vignette passe alors en portrait. */
+  posterUrl: string | null;
+  venueId: string;
+  venueName: string;
+}
+
+/**
+ * LES PROCHAINS ÉVÉNEMENTS DES LIEUX FAVORIS — en UNE requête.
+ *
+ * L'app aurait pu interroger `/public/venues/:id` une fois par favori. Trois
+ * favoris, trois allers-retours à chaque ouverture de l'accueil, dans un
+ * stade où le réseau est déjà saturé — et surtout la règle de répartition
+ * aurait vécu ICI, donc impossible à corriger sans publier une version.
+ *
+ * Le serveur répartit (un favori → trois événements, deux → deux chacun,
+ * trois et plus → un chacun), trie par date et plafonne. L'app affiche ce
+ * qu'elle reçoit, dans l'ordre reçu.
+ *
+ * Sans favori, on n'appelle rien : la section a son propre message.
+ */
+export const apiEvenementsANePasManquer = (venueIds: readonly string[]) =>
+  venueIds.length === 0
+    ? Promise.resolve([] as EvenementANePasManquer[])
+    : req<EvenementANePasManquer[]>(
+        `/public/events/a-venir?venueIds=${encodeURIComponent(venueIds.join(','))}`,
+      );
+
+/**
  * OÙ COMMANDER POUR **CE** MATCH-LÀ.
  *
  * La liste des lieux ne porte AUCUNE adresse de commande, et ce n'est pas

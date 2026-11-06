@@ -19,10 +19,15 @@ import type { RootStackParamList } from '@navigation/root-navigator';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { useNotifStore } from '@store/notif.store';
 import {
+  apiEvenementsANePasManquer,
   apiGetPublicVenue,
   apiSearchVenues,
+  type EvenementANePasManquer,
   type PublicVenue,
 } from '@lib/api/mobile-api';
+import { ecrireFavoris, lireFavoris } from '@lib/favoris';
+import { dateEtHeure, titreEvenement } from '@lib/libelle-evenement';
+import { VignetteEvenement } from '@components/vignette-evenement';
 import { showAlert } from '@lib/alert';
 import { heureDOuverture, ouvertALaCommande } from '@lib/ouverture-lieu';
 import { visuelDeLieu } from '@lib/visuel-lieu';
@@ -39,21 +44,24 @@ const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as 
 // Un favori retient les DEUX visuels : la tuile montre le logo, mais si le
 // club n'en a pas, c'est la photo qui prend le relais (voir `visuelDeLieu`).
 type Fav = { id: string; name: string; photoUrl: string | null; imageUrl: string | null };
-type Up = { id: string; title: string; date: string; venue: string; image: string };
-
 /**
- * « À venir » — vide tant que la source de données n'existe pas.
+ * « À NE PAS MANQUER » — enfin branchée, le 06/11/2026.
  *
  * Cette section a longtemps affiché trois événements ÉCRITS EN DUR, avec des
  * photos tirées d'un service d'images aléatoires. Ils ressemblaient à de vrais
- * matchs, n'existaient dans aucune base, et ne pouvaient donc être supprimés
- * depuis aucun écran d'administration. Un club y voyait une programmation
- * qu'il n'avait pas saisie et ne pouvait pas corriger.
+ * matchs, n'existaient dans aucune base, et aucun club ne pouvait les
+ * corriger. On les a retirés, et la section est restée VIDE — mieux vaut une
+ * section vide qui dit la vérité qu'une fausse programmation crédible.
  *
- * Mieux vaut une section vide, qui dit la vérité, qu'une fausse programmation
- * crédible. Elle se remplira quand les événements viendront de Flaix.
+ * Elle montre désormais ce que les clubs saisissent vraiment, pris dans les
+ * LIEUX FAVORIS du client. La répartition (un favori → trois événements, deux
+ * → deux chacun, trois et plus → un chacun) est calculée par le serveur :
+ * `backend/src/common/helpers/a-ne-pas-manquer.ts`. L'app affiche ce qu'elle
+ * reçoit, dans l'ordre reçu.
+ *
+ * Le titre a changé avec elle : « À venir » décrivait un contenu, « À ne pas
+ * manquer » dit pourquoi on le regarde.
  */
-const UPCOMING: Up[] = [];
 
 export function VenueDiscoveryScreen() {
   // Espace sous le contenu : la barre flottante ne doit rien recouvrir.
@@ -72,13 +80,66 @@ export function VenueDiscoveryScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Favoris pilotés par le cœur (CTA). Local pour l'instant — persistance backend à venir.
+  /**
+   * Favoris pilotés par le cœur, et GARDÉS d'une ouverture à l'autre.
+   *
+   * Ils ne vivaient que dans cet état : tout disparaissait à la fermeture de
+   * l'app. Tant que rien ne les lisait, la perte ne se voyait pas. Depuis que
+   * « À ne pas manquer » en dépend, une section vide à chaque lancement
+   * aurait fait passer la fonction pour cassée.
+   */
   const [favorites, setFavorites] = useState<Fav[]>([]);
+  const [favorisLus, setFavorisLus] = useState(false);
+  const [aNePasManquer, setANePasManquer] = useState<EvenementANePasManquer[]>([]);
+
+  useEffect(() => {
+    void lireFavoris().then((f) => {
+      setFavorites(f);
+      // Le drapeau évite d'ÉCRASER le stockage par la liste vide du premier
+      // rendu : sans lui, l'effet d'enregistrement partirait avant la
+      // lecture et effacerait les favoris à chaque lancement.
+      setFavorisLus(true);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!favorisLus) return;
+    void ecrireFavoris(favorites);
+  }, [favorites, favorisLus]);
+
   const isFav = (id: string) => favorites.some((f) => f.id === id);
   const toggleFav = (fav: Fav) =>
     setFavorites((cur) =>
       cur.some((f) => f.id === fav.id) ? cur.filter((f) => f.id !== fav.id) : [...cur, fav],
     );
+
+  /**
+   * LES ÉVÉNEMENTS À NE PAS MANQUER, redemandés quand les favoris changent.
+   *
+   * Dépend des IDENTIFIANTS, pas du tableau : renommer un lieu ou changer sa
+   * photo ne change pas sa programmation, et relancer une requête pour cela
+   * serait du réseau dépensé pour rien.
+   */
+  const clefFavoris = favorites.map((f) => f.id).join(',');
+  useEffect(() => {
+    if (!favorisLus) return;
+    let vivant = true;
+    void apiEvenementsANePasManquer(clefFavoris ? clefFavoris.split(',') : [])
+      .then((e) => {
+        // L'écran a pu changer de favoris pendant l'aller-retour : une
+        // réponse en retard écraserait la bonne.
+        if (vivant) setANePasManquer(e);
+      })
+      .catch((e: unknown) => {
+        // Une section d'accueil qui échoue ne doit rien casser : elle reste
+        // vide, et le reste de l'écran fonctionne.
+        console.warn('« À ne pas manquer » indisponible :', e);
+        if (vivant) setANePasManquer([]);
+      });
+    return () => {
+      vivant = false;
+    };
+  }, [clefFavoris, favorisLus]);
 
   const openPlan = (name: string, url: string) => {
     setPlanTitle(`Buvettes · ${name}`);
@@ -438,35 +499,62 @@ export function VenueDiscoveryScreen() {
           </ScrollView>
         )}
 
-        {/* 3. Vos prochains événements */}
-        <SectionHeader icon="calendar" title="À venir" action="Voir tout" />
-        {UPCOMING.length === 0 ? (
-          <EmptyHint icon="calendar-outline" text="Ajoute des lieux en favoris pour voir leurs événements à venir." />
+        {/* 3. À ne pas manquer */}
+        <SectionHeader icon="flame" title="À ne pas manquer" />
+        {aNePasManquer.length === 0 ? (
+          <EmptyHint
+            icon="calendar-outline"
+            text={
+              favorites.length === 0
+                ? "Ajoute des lieux en favoris pour voir leurs événements à venir."
+                : "Rien de programmé pour l'instant dans tes lieux favoris."
+            }
+          />
         ) : (
-        <View style={[styles.upcomingCard, shadowCard]}>
-          {UPCOMING.map((e, i) => (
-            <View key={e.id}>
-              {i > 0 && <View style={styles.divider} />}
-              <View style={styles.upRow}>
-                <View style={styles.upLogo}>
-                  <Image source={{ uri: e.image }} style={styles.fillImg} resizeMode="cover" />
-                </View>
-                <View style={styles.upInfo}>
-                  <Text style={styles.upTitle} numberOfLines={1}>{e.title}</Text>
-                  <View style={styles.upMetaRow}>
-                    <Ionicons name="calendar-outline" size={12} color={THEME.inkSoft} />
-                    <Text style={styles.upMeta} numberOfLines={1}>{e.date}</Text>
+          <View style={[styles.upcomingCard, shadowCard]}>
+            {aNePasManquer.map((e, i) => (
+              <View key={e.id}>
+                {i > 0 && <View style={styles.divider} />}
+                <Pressable
+                  style={({ pressed }) => [styles.upRow, pressed && styles.pressed]}
+                  onPress={() =>
+                    navigation.navigate('Saison', { venueId: e.venueId, venueName: e.venueName })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={`${titreEvenement(e)}, ${e.venueName}`}
+                >
+                  {/* La MÊME vignette que le calendrier de saison : rond pour
+                      un blason, portrait pour une affiche de concert. Deux
+                      écrans qui dessinent la même chose doivent la dessiner
+                      avec le même composant. */}
+                  <VignetteEvenement evenement={e} taille={52} />
+                  <View style={styles.upInfo}>
+                    {/* DEUX LIGNES, parce que le titre porte desormais le nom
+                        ET l'adversaire. « Match de gala – Dragons de Rouen » ne
+                        tient pas sur 375 pixels : sur une seule ligne, c'est
+                        justement l'adversaire qu'on venait d'ajouter qui se
+                        fait couper. La ligne ne grandit que quand il le faut. */}
+                    <Text style={styles.upTitle} numberOfLines={2}>
+                      {titreEvenement(e)}
+                    </Text>
+                    <View style={styles.upMetaRow}>
+                      <Ionicons name="calendar-outline" size={12} color={THEME.inkSoft} />
+                      <Text style={styles.upMeta} numberOfLines={1}>
+                        {dateEtHeure(e.startAt)}
+                      </Text>
+                    </View>
+                    <View style={styles.upMetaRow}>
+                      <Ionicons name="location-outline" size={12} color={THEME.inkSoft} />
+                      <Text style={styles.upMeta} numberOfLines={1}>
+                        {e.venueName}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={styles.upMetaRow}>
-                    <Ionicons name="location-outline" size={12} color={THEME.inkSoft} />
-                    <Text style={styles.upMeta} numberOfLines={1}>{e.venue}</Text>
-                  </View>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={THEME.grey} />
+                  <Ionicons name="chevron-forward" size={20} color={THEME.grey} />
+                </Pressable>
               </View>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
         )}
       </ScrollView>
 
@@ -686,6 +774,7 @@ const styles = StyleSheet.create({
   upcomingCard: { backgroundColor: THEME.surface, borderRadius: 16, marginHorizontal: 16, paddingHorizontal: 14 },
   divider: { height: 1, backgroundColor: THEME.border },
   upRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14 },
+  pressed: { opacity: 0.7 },
   upLogo: {
     width: 52, height: 52, borderRadius: 12, backgroundColor: THEME.bgSubtle, overflow: 'hidden',
     alignItems: 'center', justifyContent: 'center',
