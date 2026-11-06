@@ -5,6 +5,58 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.6.0] — 2026-11-06 — Le ticket, « À ne pas manquer », et la fiche d'un match Flaix
+
+**« Mes commandes » devient une pile de tickets** (05/11). Blanc sur fond
+gris clair — blanc sur blanc, les encoches ne se voyaient pas. Le numéro
+(4 chiffres chez Flaix, ex. 1045) est en orange et c'est le sujet du ticket.
+La barre de progression reste. « Y aller » passe en premier seulement si le
+plan du lieu est activé, et devient « Noter » une fois la commande récupérée.
+Le ticket entier ouvre le suivi. Trois pastilles (Toutes · En cours ·
+Récupérées) filtrent, les sections « En cours / Terminées » rangent : elles
+n'apparaissent que si les deux groupes existent.
+
+**« À venir » devient « À ne pas manquer »** (06/11), alimenté par les lieux
+**favoris** : `par lieu = max(1, 4 − lieux qui ont un événement)`, tri par
+date, plafond 6, pas de remplissage. Une seule requête,
+`GET /public/events/a-venir?venueIds=…`, déclarée **avant** `@Get(':eventId')`.
+Les favoris sont enfin gardés sur l'appareil (`break_eat_favoris`). Le titre
+porte nom et adversaire quand les deux disent quelque chose.
+
+**Les courriels signent « BreakEat »** (06/11) : expéditeur, objets et
+signatures étaient restés en deux mots. La réinitialisation du mot de passe
+reste masquée tant que `MAIL_PROVIDER` n'est pas posé sur Railway.
+
+**La fiche d'un événement sur un lieu Flaix** (06/11). Trois défauts signalés
+par Rémi :
+
+- **Un match déjà créé ne pouvait pas recevoir son lien Flaix ni son blason**
+  depuis sa fiche : ces champs ne vivaient que dans la liste, et seulement pour
+  les matchs à venir. La fiche porte maintenant « Commande Flaix et affichage »
+  — le **même** composant `LiensCommandeFlaix`, en `portee="evenement"`, qui
+  montre l'événement tel qu'il est, même terminé ou annulé.
+- **Sur un lieu Flaix, la fiche ne propose plus aucune configuration Break
+  Eat** : statistiques (elles y valent zéro), fournisseurs, produits, points de
+  retrait, créneaux, QR, branding, poste opérateur. Un bandeau dit où ils sont
+  passés — dans Flaix. Le drapeau est lu sur le **lieu** (`flaixEnabled`) ;
+  tant qu'il n'est pas chargé, la fiche reste complète. Un lieu Break Eat garde
+  ses onze cartes.
+- **« endAt must be after startAt »** s'affichait tel quel à la création.
+  Le serveur rend désormais une phrase française (avec l'astuce du lendemain
+  pour un match qui finit après minuit), et le formulaire la donne **avant**
+  d'envoyer quoi que ce soit.
+
+Vérifié à l'écran sur un faux serveur local : la fiche Flaix courte et
+préremplie, la fiche Break Eat intacte, le message français sans requête
+envoyée. Types et lint admin verts, 50 tests du module événements.
+
+`~ apps/admin/src/app/(admin)/events/[id]/page.tsx`
+`~ apps/admin/src/app/(admin)/events/page.tsx`
+`~ apps/admin/src/components/liens-commande-flaix.tsx`
+`~ backend/src/modules/events/events.service.ts`
+
+---
+
 ## [1.5.0] — 2026-11-03 — Google de bout en bout, et Android qui compile enfin
 
 **La connexion Google existe, du jeton jusqu'à la build.** Le serveur savait

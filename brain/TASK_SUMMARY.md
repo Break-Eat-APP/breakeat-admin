@@ -4,6 +4,42 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-11-06] Le ticket, « À ne pas manquer », et la fiche d'un match Flaix
+
+### Livré
+
+| | |
+|---|---|
+| **Tickets « Mes commandes »** (05/11) | numéro orange en sujet, pastilles + sections, ticket cliquable vers le suivi |
+| **« À ne pas manquer »** (06/11) | vrais événements des lieux favoris, règle `max(1, 4 − n)` côté serveur, plafond 6 |
+| **Courriels « BreakEat »** (06/11) | expéditeur, objets, signatures |
+| **Fiche d'un match Flaix** (06/11) | lien + blason éditables depuis la fiche ; aucune config Break Eat sur un lieu Flaix ; erreur de dates en français |
+
+### Décisions d'architecture
+
+- **Le lieu décide, pas l'événement** : la fiche lit `venue.flaixEnabled`.
+  Tant que le lieu n'est pas chargé, la fiche est complète — mieux vaut montrer
+  trop un instant que masquer les réglages d'un lieu Break Eat.
+- **Un seul formulaire pour les champs Flaix** : la fiche réutilise
+  `LiensCommandeFlaix` (prop `portee`) au lieu d'en écrire un second, qui
+  finirait par valider autrement.
+
+### Tests
+
+Admin : tsc et eslint verts. Backend : 50 tests du module événements. Écran
+vérifié sur faux serveur (lieu Flaix / lieu Break Eat / création à dates
+inversées sans POST).
+
+### Reste à faire
+
+- Brevo : compte, DNS de breakeatapp.com, `MAIL_PROVIDER`/`MAIL_API_KEY`/`MAIL_FROM`
+  sur Railway, puis politique de confidentialité §5.
+- Données : renommer l'événement « test », corriger les adversaires inversés
+  au Vélodrome, programmer Aréna et Spartiates.
+- Synchronisation des favoris entre appareils.
+
+---
+
 ## [2026-11-03] L'audit V3, Google de bout en bout, et Android qui compile
 
 ### Livré

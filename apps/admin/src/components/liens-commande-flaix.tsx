@@ -28,8 +28,25 @@ export function LiensCommandeFlaix({
   events,
   modeContinu,
   onSaved,
+  portee = 'saison',
 }: {
   orgId: string;
+  /**
+   * TOUTE LA SAISON, OU UN SEUL ÉVÉNEMENT.
+   *
+   * `saison` (la liste des événements) : les matchs à venir, du plus proche
+   * au plus lointain — on y colle les liens d'une saison d'un coup.
+   *
+   * `evenement` (la fiche d'un événement) : CELUI-LÀ, qu'il soit passé, en
+   * cours ou annulé. C'est la porte qui manquait : un club qui ouvrait la
+   * fiche d'un match pour corriger son lien ou son blason n'y trouvait rien,
+   * et devait revenir à la liste — où un match terminé n'apparaît plus.
+   *
+   * La MÊME ligne dans les deux cas, et ce n'est pas un détail : deux
+   * formulaires pour les mêmes champs finiraient par valider différemment,
+   * et c'est toujours celui qu'on teste le moins qui accepterait l'erreur.
+   */
+  portee?: 'saison' | 'evenement';
   /**
    * Le lieu est-il OUVERT EN CONTINU (restaurant) plutôt que par événement ?
    *
@@ -52,13 +69,18 @@ export function LiensCommandeFlaix({
     // d'autre. Par événement : les matchs datés, et jamais le contenant.
     if (modeContinu) return events.filter((e) => e.isPermanentContainer);
 
+    // Sur la fiche d'un événement, on le montre TEL QU'IL EST : terminé ou
+    // annulé, il peut encore avoir besoin d'une correction — c'est même
+    // souvent après le match qu'on remarque le mauvais blason.
+    if (portee === 'evenement') return events.filter((e) => !e.isPermanentContainer);
+
     const maintenant = Date.now();
     return events
       .filter((e) => !e.isPermanentContainer)
       .filter((e) => new Date(e.endAt).getTime() > maintenant)
       .filter((e) => e.status !== 'CANCELLED')
       .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
-  }, [events, modeContinu]);
+  }, [events, modeContinu, portee]);
 
   const [saisies, setSaisies] = useState<Record<string, string>>({});
   // L'ADVERSAIRE, saisi sur la même ligne que le lien.
@@ -181,8 +203,14 @@ export function LiensCommandeFlaix({
     );
   }
 
+  // L'introduction parle de SAISON (« colle les liens de tes dix prochains
+  // matchs ») : sur la fiche d'un seul match, elle décrirait un geste qu'on
+  // n'est pas en train de faire.
+  const enSaison = portee === 'saison';
+
   return (
     <div>
+      {enSaison ? (
       <p style={{ margin: '0 0 10px', fontSize: 13.5, color: BRAND.inkSoft, lineHeight: 1.55 }}>
         {modeContinu ? (
           <>
@@ -205,6 +233,7 @@ export function LiensCommandeFlaix({
           </>
         )}
       </p>
+      ) : null}
       <p style={{ margin: '0 0 14px', fontSize: 12.5, color: BRAND.grey, lineHeight: 1.6 }}>
         Tu peux garder tes étiquettes d&apos;identité, comme dans ton ancien back-office :{' '}
         <code style={codeStyle}>[#firstname]</code> <code style={codeStyle}>[#lastname]</code>{' '}
@@ -515,7 +544,9 @@ export function LiensCommandeFlaix({
       ) : null}
       {enregistre ? (
         <div style={{ marginTop: 12, fontSize: 13, color: '#16a34a' }}>
-          Liens enregistrés. L&apos;application ouvrira le bon selon la date.
+          {enSaison
+            ? 'Liens enregistrés. L’application ouvrira le bon selon la date.'
+            : 'Enregistré. L’application affiche déjà ces informations.'}
         </div>
       ) : null}
 
@@ -536,7 +567,7 @@ export function LiensCommandeFlaix({
           fontFamily: 'inherit',
         }}
       >
-        {envoi ? 'Enregistrement…' : 'Enregistrer les liens'}
+        {envoi ? 'Enregistrement…' : enSaison ? 'Enregistrer les liens' : 'Enregistrer'}
       </button>
     </div>
   );

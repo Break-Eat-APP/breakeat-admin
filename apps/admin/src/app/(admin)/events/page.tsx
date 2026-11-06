@@ -139,8 +139,26 @@ ${msg}`);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    setCreating(true);
     setCreateError('');
+
+    // LA MÊME RÈGLE QUE LE SERVEUR, vérifiée AVANT l'envoi.
+    //
+    // Le serveur refuse déjà une fin antérieure au début — et son message est
+    // désormais en français. Mais une erreur qui revient d'un aller-retour
+    // arrive après le clic, quand le club a déjà détourné les yeux. Dite ici,
+    // elle apparaît sous le champ qu'il vient de remplir.
+    //
+    // Le serveur reste l'arbitre : ce contrôle-ci n'est qu'un confort, et une
+    // requête fabriquée à la main serait toujours refusée là-bas.
+    if (form.startAt && form.endAt && new Date(form.endAt) <= new Date(form.startAt)) {
+      setCreateError(
+        'La fin de l’événement doit être après son début. Vérifie l’heure de fin — ' +
+          'pour un match qui finit après minuit, mets la date du lendemain.',
+      );
+      return;
+    }
+
+    setCreating(true);
     try {
       await apiCreateEvent(orgId, form);
       setShowForm(false);

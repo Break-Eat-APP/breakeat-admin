@@ -35,6 +35,7 @@ import {
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 import { RapportFlaix } from '@/components/rapport-flaix';
+import { LiensCommandeFlaix } from '@/components/liens-commande-flaix';
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
@@ -420,6 +421,24 @@ export default function EventDetailPage() {
   const st = STATUS_STYLE[event.status] ?? { bg: BRAND.bgSubtle, color: BRAND.inkSoft };
   const attachedIds = new Set(suppliers.map((s) => s.id));
 
+  /**
+   * CE LIEU PASSE-T-IL PAR FLAIX ?
+   *
+   * Si oui, la commande, le paiement, les buvettes, les produits, les points
+   * de retrait et les créneaux se règlent DANS FLAIX. Les proposer ici aussi
+   * ne faisait pas qu'encombrer : un club qui créait des créneaux sur un
+   * match Flaix les voyait enregistrés, sans jamais voir un client s'en
+   * servir — et se demandait ce qui ne marchait pas.
+   *
+   * On le lit sur le LIEU et pas sur l'événement : c'est le lieu qui choisit
+   * son parcours de commande, pour tous ses matchs à la fois.
+   *
+   * Tant que le lieu n'est pas chargé, on considère qu'il N'EST PAS en Flaix :
+   * mieux vaut montrer brièvement trop de réglages que masquer ceux d'un lieu
+   * Break Eat le temps d'un aller-retour.
+   */
+  const estFlaix = venue?.flaixEnabled === true;
+
   return (
     <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font }}>
       {/* Header */}
@@ -439,7 +458,70 @@ export default function EventDetailPage() {
         </div>
       </div>
 
-      {/* Stats (Phase 15) */}
+      {estFlaix ? (
+        <>
+          {/*
+            LE BANDEAU DIT POURQUOI LA FICHE EST COURTE.
+
+            Sans lui, un club habitué aux réglages complets croirait à une
+            panne en ne trouvant plus ses créneaux. La phrase dit OÙ ils sont
+            passés — dans Flaix — plutôt que de les faire disparaître sans
+            explication.
+          */}
+          <div
+            style={{
+              background: '#fff6f2',
+              border: '1px solid #ffd9c9',
+              borderRadius: 12,
+              padding: '14px 18px',
+              marginBottom: 18,
+              fontSize: 13.5,
+              color: BRAND.inkSoft,
+              lineHeight: 1.55,
+            }}
+          >
+            <strong style={{ color: BRAND.ink }}>Ce lieu passe par Flaix.</strong> La commande, le
+            paiement, les buvettes, les produits et les créneaux de retrait se règlent dans Flaix.
+            Ici, tu renseignes seulement ce que l&apos;application affiche&nbsp;: le lien de
+            commande, l&apos;adversaire, son blason et l&apos;affiche.
+          </div>
+
+          {/*
+            LES RÉGLAGES QUI MANQUAIENT À LA FICHE.
+
+            Ils ne vivaient que dans la liste des événements, et seulement pour
+            les matchs À VENIR. Un club qui ouvrait la fiche d'un match pour
+            corriger son blason n'y trouvait rien ; un match terminé, lui,
+            n'apparaissait plus nulle part.
+
+            La MÊME ligne que la liste, avec la même validation : deux
+            formulaires pour les mêmes champs finiraient par accepter des
+            choses différentes.
+          */}
+          <Card title="Commande Flaix et affichage">
+            <LiensCommandeFlaix
+              orgId={orgId}
+              events={[event]}
+              modeContinu={venue?.operatingMode === 'PERMANENT'}
+              portee="evenement"
+              onSaved={(maj) => {
+                const m = maj.find((x) => x.id === event.id);
+                // `{ ...e, ...m }` : le serveur ne rend QUE ce qu'il a écrit,
+                // et une clé absente ne doit pas effacer ce qui est en base.
+                if (m) setEvent((e) => (e ? { ...e, ...m } : e));
+              }}
+            />
+          </Card>
+        </>
+      ) : null}
+
+      {/*
+        LES CHIFFRES BREAK EAT — masqués sur un lieu Flaix, parce qu'ils y
+        valent ZÉRO. Les commandes passent par Flaix et n'entrent jamais dans
+        cette base : afficher « 0 commande, 0 € » sous un match plein ferait
+        croire à une panne. Le rapport Flaix, juste en dessous, porte les vrais.
+      */}
+      {!estFlaix && (
       <Card title="Statistiques de l'événement">
         {statsLoading ? (
           <p style={{ color: BRAND.grey, fontSize: 14, margin: 0 }}>Chargement des statistiques…</p>
@@ -538,6 +620,8 @@ export default function EventDetailPage() {
           </>
         ) : null}
       </Card>
+
+      )}
 
       {/* Le rapport Flaix : juste sous les chiffres, c'est le même geste — lire
           comment s'est passé le match. */}
@@ -751,7 +835,11 @@ export default function EventDetailPage() {
         </form>
       </Card>
 
-      {/* Suppliers */}
+      {/* Fournisseurs, produits, points de retrait, créneaux, QR, branding et
+          poste opérateur : tout le parcours de commande BREAK EAT. Sur un lieu
+          Flaix, c'est Flaix qui les tient — les proposer ici créait des
+          réglages qu'aucun client ne verrait jamais. */}
+      {!estFlaix && (
       <Card
         title={`Fournisseurs attachés (${suppliers.length})`}
         action={
@@ -850,6 +938,8 @@ export default function EventDetailPage() {
         )}
       </Card>
 
+      )}
+
       {/* Venue info */}
       <Card title="Lieu">
         {venue ? (
@@ -868,6 +958,8 @@ export default function EventDetailPage() {
         )}
       </Card>
 
+      {!estFlaix && (
+        <>
       {/* Suppliers — add link to manage products */}
       {suppliers.length > 0 && (
         <Card title="Gérer les produits par fournisseur">
@@ -1233,6 +1325,8 @@ export default function EventDetailPage() {
           Ouvrir le dashboard →
         </a>
       </Card>
+        </>
+      )}
 
     </div>
   );

@@ -52,6 +52,21 @@ export type EventWithSuppliers = Event & {
  * - Suppliers must belong to the same org before being attached.
  * - ENDED/CANCELLED events cannot be modified (guard in each write method).
  */
+/**
+ * CE QUE LE CLUB LIT QUAND IL SE TROMPE DE DATE.
+ *
+ * Le message s'affiche TEL QUEL dans le back-office. Il disait « endAt must be
+ * after startAt » : un nom de champ technique, en anglais, devant un club qui
+ * vient de taper deux heures dans un formulaire en français. Il ne savait pas
+ * laquelle corriger.
+ *
+ * Une constante plutôt que deux chaînes : la création et la modification
+ * refusent la même chose, et doivent le dire avec les mêmes mots.
+ */
+const FIN_AVANT_DEBUT =
+  'La fin de l’événement doit être après son début. Vérifie l’heure de fin — ' +
+  'pour un match qui finit après minuit, mets la date du lendemain.';
+
 @Injectable()
 export class EventsService {
   private readonly logger = new Logger(EventsService.name);
@@ -73,9 +88,10 @@ export class EventsService {
       throw new NotFoundException('Venue not found in this organization');
     }
 
-    // Business rule: endAt must be after startAt
+    // La fin APRÈS le début — égalité comprise : un événement de durée nulle
+    // n'a aucune fenêtre de commande.
     if (new Date(dto.endAt) <= new Date(dto.startAt)) {
-      throw new BadRequestException('endAt must be after startAt');
+      throw new BadRequestException(FIN_AVANT_DEBUT);
     }
 
     const event = await this.prisma.event.create({
@@ -162,7 +178,7 @@ export class EventsService {
     const startAt = dto.startAt ? new Date(dto.startAt) : existing.startAt;
     const endAt = dto.endAt ? new Date(dto.endAt) : existing.endAt;
     if (endAt <= startAt) {
-      throw new BadRequestException('endAt must be after startAt');
+      throw new BadRequestException(FIN_AVANT_DEBUT);
     }
 
     // Phase 14.7 — when groupIds are provided, every group must belong to this
