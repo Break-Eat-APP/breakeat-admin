@@ -94,7 +94,13 @@ export function VenueDiscoveryScreen() {
 
   useEffect(() => {
     void lireFavoris().then((f) => {
-      setFavorites(f);
+      // FUSION, et pas remplacement : un cœur touché pendant les quelques
+      // centaines de millisecondes de la lecture était écrasé par elle
+      // (audit du 09/11, constat 4). Les gestes déjà faits passent après.
+      setFavorites((cur) => {
+        const deja = new Set(cur.map((x) => x.id));
+        return [...f.filter((x) => !deja.has(x.id)), ...cur];
+      });
       // Le drapeau évite d'ÉCRASER le stockage par la liste vide du premier
       // rendu : sans lui, l'effet d'enregistrement partirait avant la
       // lecture et effacerait les favoris à chaque lancement.
@@ -123,8 +129,15 @@ export function VenueDiscoveryScreen() {
   const clefFavoris = favorites.map((f) => f.id).join(',');
   useEffect(() => {
     if (!favorisLus) return;
+    // Aucun favori : le serveur rendrait une liste vide. On ne l'appelle pas —
+    // une requête de moins à chaque ouverture, pour la plupart des clients,
+    // et au coup d'envoi elles se comptent par milliers.
+    if (!clefFavoris) {
+      setANePasManquer([]);
+      return;
+    }
     let vivant = true;
-    void apiEvenementsANePasManquer(clefFavoris ? clefFavoris.split(',') : [])
+    void apiEvenementsANePasManquer(clefFavoris.split(','))
       .then((e) => {
         // L'écran a pu changer de favoris pendant l'aller-retour : une
         // réponse en retard écraserait la bonne.

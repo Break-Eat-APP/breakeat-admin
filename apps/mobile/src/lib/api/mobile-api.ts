@@ -8,6 +8,7 @@
 import { ENV } from '@lib/config/env';
 import { useAuthStore } from '@store/auth.store';
 import { Platform } from 'react-native';
+import { fetchAvecDelai } from './delai-lecture';
 
 const BASE = ENV.API_URL;
 
@@ -81,7 +82,9 @@ async function req<T>(
 ): Promise<T> {
   const token = useAuthStore.getState().token;
 
-  const res = await fetch(`${BASE}${path}`, {
+  // Un délai pour les LECTURES seulement (`delai-lecture.ts`) : au coup
+  // d'envoi, un serveur saturé ne laisse plus un écran tourner une minute.
+  const res = await fetchAvecDelai(`${BASE}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
