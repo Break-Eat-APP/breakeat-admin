@@ -7,6 +7,7 @@
   },
   "build": {
     "development": {
+      "channel": "development",
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
@@ -25,6 +26,7 @@
       "pnpm": "11.3.0"
     },
     "beta": {
+      "channel": "production",
       "distribution": "store",
       "ios": {
         "simulator": false,
@@ -45,6 +47,7 @@
       "pnpm": "11.3.0"
     },
     "preview": {
+      "channel": "preview",
       "distribution": "internal",
       "ios": {
         "simulator": false,
@@ -62,6 +65,7 @@
       "pnpm": "11.3.0"
     },
     "production": {
+      "channel": "production",
       "distribution": "store",
       "android": {
         "buildType": "app-bundle"

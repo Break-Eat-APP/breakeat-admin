@@ -287,12 +287,33 @@ module.exports = {
       ? { googleIosClientId: process.env.GOOGLE_IOS_CLIENT_ID }
       : {}),
   },
-  // PAS de bloc `updates` ni `runtimeVersion` : ils declarent des mises a
-  // jour a distance (OTA) que `expo-updates` fournirait — or le paquet n'est
-  // pas installe. Declarer une capacite absente faisait echouer la
-  // compilation Android sur une reference manquante.
-  //
-  // Installer `expo-updates` est une DECISION PRODUIT (livrer un correctif
-  // sans passer par les stores), pas un correctif de build : `npx expo
-  // install expo-updates` puis `eas update:configure` retabliront ce bloc.
+  /**
+   * LES MISES À JOUR À DISTANCE (EAS Update) — décidées par Rémi le 09/11.
+   *
+   * Un changement d'écran, de design ou de texte part avec `eas update` et
+   * arrive chez le client sans passer par les stores : l'app le télécharge en
+   * arrière-plan au lancement, et l'applique au lancement suivant.
+   *
+   * CE QUI NE PASSE PAS PAR LÀ : tout ce qui est natif — icône, écran
+   * d'ouverture, permissions, nouveau module natif, Live Activity (Swift).
+   * Ceux-là demandent toujours une build et une vérification.
+   *
+   * `runtimeVersion` = LA VERSION DE L'APP (`appVersion`), et non l'empreinte
+   * calculée (`fingerprint`) : les mises à jour sont publiées depuis un poste
+   * Windows sous OneDrive et les builds faites sur les machines d'EAS ; une
+   * empreinte calculée des deux côtés peut différer pour un retour à la ligne,
+   * et la mise à jour ne serait jamais reçue. La contrepartie est une RÈGLE :
+   *
+   *   ⚠️ TOUT CHANGEMENT NATIF → MONTER `version` (1.1.0 → 1.1.1) AVANT LA
+   *   BUILD. Sinon une mise à jour écrite pour la nouvelle build serait
+   *   envoyée aussi aux anciennes, qui n'ont pas le code natif attendu.
+   *
+   * `fallbackToCacheTimeout: 0` : on n'attend JAMAIS le réseau au lancement.
+   * Dans un stade saturé, l'app s'ouvre sur ce qu'elle a déjà.
+   */
+  runtimeVersion: { policy: 'appVersion' },
+  updates: {
+    url: 'https://u.expo.dev/a6f65999-68f3-4f33-a8de-449d568ab0b5',
+    fallbackToCacheTimeout: 0,
+  },
 };
