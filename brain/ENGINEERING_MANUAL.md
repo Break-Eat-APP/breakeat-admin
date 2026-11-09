@@ -8214,3 +8214,82 @@ Ce qui est secret chez Google, c'est le *client secret* du client web — et on
 ne s'en sert pas : le serveur **vérifie** un jeton signé, il n'échange rien.
 
 ---
+
+## Ce que les journées du 05 au 09/11/2026 ont laissé ici
+
+Le détail est dans le CHANGELOG (1.6.0 et 1.6.1). Ici, seulement ce qui doit
+guider la prochaine décision.
+
+### 1. Une règle d'affichage qui peut changer vit sur le serveur
+
+« À ne pas manquer » répartit les événements entre les lieux favoris
+(`max(1, 4 − lieux qui ont un événement)`, tri par date, 6 au plus). Cette
+règle est dans `common/helpers/a-ne-pas-manquer.ts`, derrière **une seule**
+route, et non dans l'app. Dans l'app, la changer demanderait une version et
+une revue Apple ; sur le serveur, un déploiement. Et une requête au lieu d'une
+par favori, dans un stade où le réseau est saturé.
+
+Deux choix assumés : **pas de remplissage** (deux lieux, l'un riche, l'autre
+avec un seul match → trois lignes, pas quatre — compléter avec le plus fourni
+recréerait le déséquilibre que la règle évite) et **tri par date, lieux
+mélangés** (grouper ferait passer un match dans trois semaines avant celui de
+samedi).
+
+### 2. Une route littérale se déclare avant la route paramétrée
+
+`@Get('a-venir')` après `@Get(':eventId')` serait capturée par la seconde, et
+le `ParseUUIDPipe` répondrait 400. Le compilateur ne dit rien ; seule
+l'exécution le montre.
+
+### 3. Une donnée dont dépend un écran doit survivre au redémarrage
+
+Les favoris vivaient dans un `useState` : invisibles tant que rien ne les
+lisait. Le jour où « À ne pas manquer » en a dépendu, la section aurait été
+vide à chaque lancement. Ils sont gardés **sur l'appareil** et pas sur le
+serveur : parcourir les lieux ne demande pas de compte, et un favori qui
+impose de s'inscrire n'est plus un raccourci. Le drapeau `favorisLus` existe
+parce que l'effet d'écriture partirait avant la lecture et effacerait tout.
+
+### 4. C'est le lieu qui choisit son parcours de commande
+
+La fiche d'un événement lit `venue.flaixEnabled`. Sur un lieu Flaix, elle ne
+propose aucun réglage Break Eat (créneaux, buvettes, produits, statistiques…) :
+ils s'enregistraient sans qu'aucun client ne s'en serve jamais, et un club se
+demandait ce qui ne marchait pas. Tant que le lieu n'est pas chargé, la fiche
+reste complète : montrer trop un instant vaut mieux que masquer les réglages
+d'un lieu Break Eat.
+
+### 5. Un seul formulaire par jeu de champs
+
+Le lien Flaix, l'adversaire, le blason et l'affiche se saisissent depuis la
+liste (toute la saison) ou depuis la fiche (un match). C'est le **même**
+composant, `LiensCommandeFlaix`, avec une prop `portee`. Deux formulaires pour
+les mêmes champs finissent par valider différemment, et c'est toujours celui
+qu'on teste le moins qui accepte l'erreur.
+
+### 6. Ce que le serveur refuse remonte mot pour mot : il le refuse en français
+
+« endAt must be after startAt » et « Cannot modify an event with status
+ENDED » s'affichaient tels quels dans l'admin. Toute `BadRequestException` et
+tout message de validation d'un DTO lu par une console s'écrivent en français,
+pour la personne qui les lira. Le nettoyage d'un champ (`trim`) se fait dans le
+DTO, avant la mesure de longueur, et se teste derrière le **vrai** pipe de
+validation (`update-event.dto.spec.ts`) : appelé directement, le service ne le
+voit pas.
+
+### 7. Une fonction indisponible se grise, elle ne disparaît pas
+
+Le bouton « Renommer » d'un match terminé reste visible, grisé, avec la raison
+au survol. Un bouton qui disparaît laisse croire que la fonction n'existe pas,
+et l'on vient demander qu'on l'ajoute.
+
+### 8. Un document de reprise se relit en entier, pas seulement en tête
+
+Le 09/11, `REPRISE.md` avait une note de tête de 34 000 caractères, une
+section « Lire d'abord » datée du 06/09 (build 15, Google « en attente »), et
+son tableau des sujets ouverts séparé de son titre par une section insérée le
+26/10. Chaque mise à jour avait ajouté sans relire. Désormais : l'état courant
+en tête, daté ; l'ancien déplacé en historique, jamais effacé ; et, à chaque
+session, vérifier que les points « à faire » ne sont pas déjà faits.
+
+---
