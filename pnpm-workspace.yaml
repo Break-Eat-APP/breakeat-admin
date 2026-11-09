@@ -24,10 +24,19 @@ allowBuilds:
 #
 # Version calee sur le @expo/config-plugins 55 qu'apple-targets embarque
 # lui-meme (^0.5.4) : les deux manipulent les memes plists.
+#
+# MEME DEFAUT, MEME REMEDE, pour `@expo/image-utils` (09/11/2026). Il etait
+# trouve par chance : pnpm le remontait dans son dossier cache tant qu'expo
+# etait en 57.0.16. Le rattrapage en 57.0.32 a change ce qui est remonte, et
+# `expo config` echouait sur « Cannot find module '@expo/image-utils' » — une
+# build lancee la aurait perdu l'extension Live Activity. Version calee sur le
+# @expo/prebuild-config 55 qu'apple-targets embarque (^0.8.15), dont il
+# reprend le code d'icones.
 packageExtensions:
   '@bacons/apple-targets':
     dependencies:
       '@expo/plist': '^0.5.4'
+      '@expo/image-utils': '^0.8.15'
 
 # ─────────────────────────────────────────────────────────────────────────
 # VULNERABILITES TRANSITIVES — corrigees sans toucher a NestJS ni a Prisma.
