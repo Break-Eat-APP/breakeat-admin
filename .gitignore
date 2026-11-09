@@ -28,6 +28,11 @@ firebase-adminsdk-*.json
 **/google-services.json
 **/GoogleService-Info.plist
 service-account*.json
+# La cle du compte de service Google Play, lue par `eas submit` : son nom
+# (`google-play-service-account.json`, fixe dans eas.json) ne commence PAS par
+# « service-account », la regle ci-dessus ne la couvrait donc pas. Une cle
+# privee qui part sur GitHub doit etre revoquee : mieux vaut la nommer.
+*service-account*.json
 gcp-*.json
 # Apple signing & App Store Connect API keys
 *.p8

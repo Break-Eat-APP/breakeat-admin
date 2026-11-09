@@ -32,7 +32,7 @@ _Dernière mise à jour : 2026-11-09 — lire d'abord « ÉTAT AU 09/11/2026 » 
 |---|---|---|
 | **Serveur (Railway)** | En ligne. Le 09/11 il servait `a6e3813` ; `70a04b3` (renommage) venait d'être poussé, déploiement à confirmer | `curl -s https://breakeat-admin-production.up.railway.app/health` → champ `commit`, à comparer à `git log -1 origin/main` |
 | **Consoles (Vercel)** | Admin, back-office et opérateur, publiés depuis `main` | Voir « Déploiement des frontends » plus bas |
-| **iOS** | **1.1.0 build 37** (commit `e186196`) envoyée sur TestFlight le 06/11 : tickets, « À ne pas manquer », Google | App Store Connect → TestFlight |
+| **iOS** | **1.1.0 build 38** (commit `258bd14`) envoyée sur TestFlight le 09/11 : notifications par date, décompte de la Live Activity, aperçu super admin | App Store Connect → TestFlight |
 | **Android** | Compile depuis le 03/11 (APK `b2337b52`). **Pas encore sur le Play Store** | Voir « Ce qui reste » |
 | **Connexion** | E-mail + mot de passe, Apple, Google (vérifié sur TestFlight) | — |
 | **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels n'est pas configuré | `GET /api/v1/auth/password-reset/available` → `false` au 09/11 |
@@ -51,12 +51,10 @@ _Dernière mise à jour : 2026-11-09 — lire d'abord « ÉTAT AU 09/11/2026 » 
 
 ### Ce qui reste — dans l'ordre
 
-1. **Build iOS 38** — porte les notifications par date, le décompte de la
-   Live Activity et son aperçu. C'est aussi la PREMIÈRE compilation du Swift
-   modifié le 09/11 : si elle échoue, regarder d'abord
-   `BreakEatLiveActivity.swift` (`Decompte`, `cibleVisible`) et
-   `LiveActivityModule.swift`. Puis, sur l'iPhone de Rémi : Profil → Outils
-   super admin → Aperçu de la Live Activity.
+1. **Essayer la build iOS 38** (compilée et envoyée sur TestFlight le
+   09/11 — le Swift du décompte compile) : notifications par date, puis
+   Profil → Outils super admin → Aperçu de la Live Activity (décompte de
+   3 minutes, puis bascule sur l'heure de retrait).
 2. **Le flux des commandes Flaix — côté développeur Flaix** (Rémi, 09/11 :
    « mon dev gère ça de son côté »). Une commande passée dans Flaix ne crée
    rien chez BreakEat ; or la Live Activity, la note, la fidélité et « Je suis
@@ -81,13 +79,25 @@ _Dernière mise à jour : 2026-11-09 — lire d'abord « ÉTAT AU 09/11/2026 » 
    boîte personnelle). Notes de revue : présenter Flaix comme un logiciel de
    **la même société**, pas « un partenaire » ; préciser que l'app vend des
    **biens physiques** retirés sur place (règle 3.1.3(e) — pas d'achat intégré).
-6. **Android sur le Play Store** — `google-play-service-account.json` pour
-   `eas submit`, Firebase (`google-services.json` + clé FCM V1 dans EAS),
-   deux clients OAuth Android (paquet `com.shapper.breakeat`, un par SHA-1 :
-   clé d'envoi et clé Play), et vérifier que le keystore EAS est bien la clé
-   d'envoi déclarée.
-7. **Rattrapage des paquets Expo** — onze paquets en retard de correctifs
-   (`expo` 57.0.16 contre 57.0.31). Session dédiée, pas un soir de build.
+6. **Android sur le Play Store** — le code est prêt (09/11) : la clé Play est
+   protégée par le `.gitignore`, le fichier Firebase passe par une variable
+   EAS. Reste, **à faire par Rémi dans les consoles** :
+   - **Google Play** : créer le compte de service (Play Console → Accès à
+     l'API), lui donner les droits de publication, télécharger sa clé JSON
+     et la poser dans `apps/mobile/google-play-service-account.json` (jamais
+     commitée) ;
+   - **Firebase** : créer l'app Android `com.shapper.breakeat` dans le projet
+     Google `482274786646`, télécharger `google-services.json`, le déposer
+     comme variable EAS de type fichier `GOOGLE_SERVICES_JSON`, puis poser la
+     clé FCM V1 dans EAS (`eas credentials` → Android → notifications) ;
+   - **Connexion Google** : deux clients OAuth « Android » dans le même projet,
+     paquet `com.shapper.breakeat`, un par empreinte SHA-1 (clé d'envoi EAS et
+     clé de signature Play). Sans eux, le bouton Google s'affiche sur Android
+     mais échoue (`DEVELOPER_ERROR`) : **ne pas publier sur Android avant**.
+7. **Rattrapage des paquets Expo** — fait sur la branche
+   `maj/expo-57-0-32` (09/11), PAS fusionné : l'export web échoue sur le poste
+   (cause environnement probable, pas prouvée). À valider par la CI Linux et
+   une build EAS, puis fusionner.
 8. **Favoris entre appareils** — aujourd'hui sur le téléphone seulement (clé
    `break_eat_favoris`). À poser le jour où un client en a deux ; il faudra un
    compte, alors que parcourir les lieux n'en demande pas.

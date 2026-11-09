@@ -4,6 +4,30 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-11-09] Build 38, Expo sur une branche, Android préparé
+
+### Livré
+
+Build iOS 38 compilée et envoyée sur TestFlight (le Swift du décompte compile).
+Android : clé Google Play protégée par le `.gitignore`, fichier Firebase branché
+par variable EAS. Mise à jour Expo isolée sur `maj/expo-57-0-32`.
+
+### Erreur évitée, à ne pas reproduire
+
+Lancer la mise à jour Expo dans la MÊME build que le nouveau Swift : un échec
+n'aurait pas dit lequel des deux en était la cause. Build 38 d'abord, la
+mise à jour ensuite, chacune vérifiable seule.
+
+### Environnement du poste
+
+Le magasin pnpm (`AppData\Local\pnpm\store\v11`) renvoie par moments
+`UNKNOWN: stat` et `unable to open database file`, et une installation lancée
+en même temps qu'une suppression massive échoue. Si une installation casse
+`node_modules`, relancer `pnpm install --frozen-lockfile` seul, puis
+`expo export --platform web` pour vérifier.
+
+---
+
 ## [2026-11-09] Le décompte de la Live Activity, et son aperçu
 
 ### Livré

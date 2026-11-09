@@ -5,6 +5,44 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.1] — 2026-11-09 — Build 38, la mise à jour Expo sur une branche, Android préparé
+
+**Build iOS 38** (`2d21debb`, commit `258bd14`) : **elle compile**, et c'était
+la première compilation du Swift du décompte. Envoyée sur TestFlight.
+
+**Rattrapage des correctifs Expo 57 — sur la branche `maj/expo-57-0-32`,
+pas sur `main`.** Onze paquets (expo 57.0.16 → 57.0.32, react-native
+0.86.2 → 0.86.3…). Deux constats :
+
+- **Une dépendance cachée aurait cassé la build** : `@bacons/apple-targets`
+  (l'extension Live Activity) fait `require('@expo/image-utils')` sans le
+  déclarer. pnpm le remontait par chance ; plus avec 57.0.32 — `expo config`
+  échouait. Déclaré dans `packageExtensions` (`^0.8.15`), comme `@expo/plist`
+  avant lui.
+- **L'export web échoue sur le poste de développement**, et la cause n'est
+  pas tranchée : dans le dossier OneDrive, `@react-navigation/native`
+  « introuvable » ; dans une copie propre hors OneDrive, un fichier Babel
+  illisible, le magasin pnpm local renvoyant lui-même `UNKNOWN: stat` et
+  `unable to open database file`. Avec les anciennes versions, l'export
+  passe. **À valider sur la CI (Linux) puis par une build EAS** avant de
+  fusionner. `main` reste sur les versions éprouvées.
+
+**Android, ce que le code pouvait faire seul :**
+
+- **Une fuite évitée** : `eas.json` attend la clé Google Play sous le nom
+  `google-play-service-account.json`, que la règle `service-account*.json`
+  du `.gitignore` ne couvrait pas (il ne commence pas par « service-account »).
+  Le premier `git add .` l'aurait publiée. Règle élargie à
+  `*service-account*.json`.
+- **Le fichier Firebase est branché** : `android.googleServicesFile` lit la
+  variable EAS de type fichier `GOOGLE_SERVICES_JSON` (ou un
+  `google-services.json` local) ; absent, rien n'est déclaré, pour ne pas
+  casser la génération du projet natif.
+
+`~ .gitignore` `~ apps/mobile/app.config.js`
+
+---
+
 ## [1.7.0] — 2026-11-09 — Un décompte dans la Live Activity, et un aperçu pour la voir
 
 **Le décompte.** Tant que la commande est attendue (reçue, en préparation,

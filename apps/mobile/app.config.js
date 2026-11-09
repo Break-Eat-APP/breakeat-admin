@@ -25,6 +25,30 @@
  */
 const BUNDLE_ID = process.env.BUNDLE_ID ?? 'com.shapper.breakeat';
 
+/**
+ * LE FICHIER FIREBASE D'ANDROID (`google-services.json`).
+ *
+ * Sans lui, Android n'a pas de jeton de notification : `expo-notifications`
+ * ne reçoit rien, et les campagnes partent vers zéro téléphone Android.
+ *
+ * Il est exclu de git (`.gitignore`), donc EAS ne l'envoie pas avec le
+ * projet. Il arrive par une variable d'environnement EAS de type FICHIER,
+ * `GOOGLE_SERVICES_JSON`, qui donne son chemin sur la machine de build. En
+ * local, on accepte aussi le fichier posé à côté de ce fichier.
+ *
+ * ABSENT, on ne déclare RIEN plutôt qu'un chemin vers un fichier qui n'existe
+ * pas : la génération du projet natif échouerait, et une build Android sans
+ * notifications vaut mieux qu'aucune build.
+ */
+const GOOGLE_SERVICES_FILE = (() => {
+  const fs = require('fs');
+  const path = require('path');
+  const depuisEas = process.env.GOOGLE_SERVICES_JSON;
+  if (depuisEas && fs.existsSync(depuisEas)) return depuisEas;
+  const local = path.join(__dirname, 'google-services.json');
+  return fs.existsSync(local) ? './google-services.json' : undefined;
+})();
+
 /** @type {import('expo/config').ExpoConfig} */
 module.exports = {
   name: 'BreakEat',
@@ -86,6 +110,7 @@ module.exports = {
   },
   android: {
     package: BUNDLE_ID,
+    ...(GOOGLE_SERVICES_FILE ? { googleServicesFile: GOOGLE_SERVICES_FILE } : {}),
     adaptiveIcon: {
       foregroundImage: './assets/logo-mark-orange.png',
       backgroundColor: '#ffffff',
