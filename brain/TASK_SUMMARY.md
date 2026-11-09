@@ -4,6 +4,29 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-11-09] Un événement se renomme
+
+### Livré
+
+Bouton **Renommer** dans l'en-tête de la fiche d'un événement. Nom nettoyé
+côté serveur (création et modification), refus en français, bouton grisé sur
+un match terminé ou annulé.
+
+### Décisions
+
+- **Le renommage reste interdit sur un match terminé ou annulé** : c'est la
+  règle existante du serveur pour toute modification, et le nom figure sur des
+  reçus déjà émis. Le bouton est grisé avec la raison, pas caché.
+- **Le nettoyage vit dans le DTO**, pas dans le service : c'est le seul chemin
+  par lequel un nom entre, et c'est là que la longueur est mesurée.
+
+### Tests
+
+4 tests du DTO derrière le pipe réel (prouvés en retirant le nettoyage :
+2 échouent), 54 tests du module événements, types et lint admin et backend.
+
+---
+
 ## [2026-11-06] Le ticket, « À ne pas manquer », et la fiche d'un match Flaix
 
 ### Livré

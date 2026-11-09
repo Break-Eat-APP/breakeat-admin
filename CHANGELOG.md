@@ -5,6 +5,40 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.6.1] — 2026-11-09 — Un événement se renomme
+
+**Le serveur acceptait un nouveau nom, l'admin ne le proposait nulle part.**
+Un « test » oublié ou une faute de frappe restait affiché dans l'app, sur le
+ticket et sur le reçu. La fiche d'un événement a maintenant un bouton
+**Renommer** à côté du titre : le titre devient un champ, Entrée enregistre,
+Échap annule.
+
+- **Le nom est nettoyé côté serveur** (création et modification) : espaces
+  retirés avant de mesurer la longueur. Sans ça, « ␣␣ » passait le minimum de
+  2 caractères et l'app affichait un match sans titre.
+- **Les refus sont en français** : longueur minimale, maximale (150), et la
+  garde « événement terminé / annulé », qui disait encore
+  « Cannot modify an event with status ENDED ».
+- **Match terminé ou annulé** : le bouton reste visible mais grisé, avec la
+  raison au survol — un bouton qui disparaît laisse croire que la fonction
+  n'existe pas. Le serveur le refuse de toute façon.
+- Après l'enregistrement, seul le nom est repris de la réponse : le `PATCH`
+  ne rend ni groupes ni fournisseurs, et la reprendre en bloc aurait vidé
+  leurs cartes.
+
+Vérifié à l'écran sur faux serveur : nom vide refusé sans envoi, « ␣␣Marseille
+vs RC Lens␣␣ » enregistré nettoyé en un seul `PATCH`, titre mis à jour,
+bouton grisé sur un match terminé. 4 tests du DTO derrière le vrai pipe de
+validation (2 échouent si l'on retire le nettoyage), 54 tests du module.
+
+`+ backend/src/modules/events/dto/update-event.dto.spec.ts`
+`~ backend/src/modules/events/dto/update-event.dto.ts`
+`~ backend/src/modules/events/dto/create-event.dto.ts`
+`~ backend/src/modules/events/events.service.ts`
+`~ apps/admin/src/app/(admin)/events/[id]/page.tsx`
+
+---
+
 ## [1.6.0] — 2026-11-06 — Le ticket, « À ne pas manquer », et la fiche d'un match Flaix
 
 **« Mes commandes » devient une pile de tickets** (05/11). Blanc sur fond

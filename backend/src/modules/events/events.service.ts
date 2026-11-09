@@ -525,8 +525,12 @@ export class EventsService {
 
   private guardFinalized(event: Event): void {
     if (event.status === EventStatus.ENDED || event.status === EventStatus.CANCELLED) {
+      // En français : ce message remonte tel quel dans l'admin, au club qui
+      // vient d'essayer de renommer un match terminé.
       throw new BadRequestException(
-        `Cannot modify an event with status ${event.status}`,
+        event.status === EventStatus.ENDED
+          ? 'Cet événement est terminé : il ne se modifie plus.'
+          : 'Cet événement est annulé : il ne se modifie plus.',
       );
     }
   }

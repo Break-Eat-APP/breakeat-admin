@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { Globe, Lock, Copy } from 'lucide-react';
+import { Globe, Lock, Copy, Pencil } from 'lucide-react';
 import {
   apiGetEvent,
   apiUpdateEventStatus,
@@ -97,6 +97,12 @@ export default function EventDetailPage() {
   const [error, setError] = useState('');
 
   // Status change
+  // Renommer — le nom se corrige en place, dans l'en-tête où on le lit.
+  const [renommage, setRenommage] = useState(false);
+  const [nouveauNom, setNouveauNom] = useState('');
+  const [renommageEnCours, setRenommageEnCours] = useState(false);
+  const [renommageErreur, setRenommageErreur] = useState('');
+
   const [newStatus, setNewStatus] = useState('');
   const [changingStatus, setChangingStatus] = useState(false);
 
@@ -393,6 +399,49 @@ export default function EventDetailPage() {
     });
   }
 
+  /**
+   * RENOMMER UN ÉVÉNEMENT.
+   *
+   * Le nom est ce que le supporter lit partout : la carte d'accueil, « À ne
+   * pas manquer », le ticket de sa commande et son reçu. Un « test » oublié ou
+   * une faute de frappe s'y voyait sans qu'aucun écran ne permette de la
+   * corriger — le serveur l'acceptait, l'admin ne le proposait pas.
+   *
+   * Les mêmes règles que le serveur, vérifiées AVANT d'envoyer : un refus du
+   * serveur reste possible (match terminé entre-temps), et son message, déjà
+   * en français, s'affiche alors sous le champ.
+   */
+  async function handleRenommer(e: React.FormEvent) {
+    e.preventDefault();
+    if (!event) return;
+    const nom = nouveauNom.trim();
+    if (nom === event.name) {
+      setRenommage(false);
+      return;
+    }
+    if (nom.length < 2) {
+      setRenommageErreur('Le nom de l’événement doit faire au moins 2 caractères.');
+      return;
+    }
+    if (nom.length > 150) {
+      setRenommageErreur('Le nom de l’événement ne peut pas dépasser 150 caractères.');
+      return;
+    }
+    setRenommageEnCours(true);
+    setRenommageErreur('');
+    try {
+      const maj = await apiUpdateEvent(orgId, eventId, { name: nom });
+      // Seul le nom : la réponse du PATCH ne porte ni les groupes ni les
+      // fournisseurs, et les reprendre en bloc viderait leurs cartes.
+      setEvent((ev) => (ev ? { ...ev, name: maj.name } : ev));
+      setRenommage(false);
+    } catch (err) {
+      setRenommageErreur(err instanceof Error ? err.message : 'Erreur');
+    } finally {
+      setRenommageEnCours(false);
+    }
+  }
+
   async function handleSaveAccess(e: React.FormEvent) {
     e.preventDefault();
     setSavingAccess(true);
@@ -443,14 +492,90 @@ export default function EventDetailPage() {
     <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font }}>
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+        {renommage ? (
+          <form onSubmit={handleRenommer} style={{ marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <input
+                autoFocus
+                aria-label="Nom de l'événement"
+                value={nouveauNom}
+                maxLength={150}
+                onChange={(e) => { setNouveauNom(e.target.value); setRenommageErreur(''); }}
+                onKeyDown={(e) => { if (e.key === 'Escape') { setRenommage(false); setRenommageErreur(''); } }}
+                style={{
+                  fontFamily: BRAND.fontDisplay, fontSize: 24, fontWeight: 800, color: BRAND.ink,
+                  letterSpacing: -0.4, padding: '6px 12px', borderRadius: 10,
+                  border: `1.5px solid ${renommageErreur ? '#dc2626' : BRAND.orange}`,
+                  outline: 'none', minWidth: 280, flex: '1 1 320px', maxWidth: 620,
+                }}
+              />
+              <button
+                type="submit"
+                disabled={renommageEnCours}
+                style={{
+                  background: BRAND.orange, color: '#fff', border: 'none', borderRadius: 6,
+                  padding: '9px 16px', fontWeight: 600, fontSize: 13, fontFamily: 'inherit',
+                  cursor: renommageEnCours ? 'wait' : 'pointer', opacity: renommageEnCours ? 0.6 : 1,
+                }}
+              >
+                {renommageEnCours ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setRenommage(false); setRenommageErreur(''); }}
+                style={{
+                  background: 'transparent', color: BRAND.inkSoft, border: `1px solid ${BRAND.border}`,
+                  borderRadius: 6, padding: '8px 14px', fontWeight: 600, fontSize: 13,
+                  fontFamily: 'inherit', cursor: 'pointer',
+                }}
+              >
+                Annuler
+              </button>
+            </div>
+            {renommageErreur ? (
+              <div role="alert" style={{ color: '#dc2626', fontSize: 13, marginTop: 6 }}>{renommageErreur}</div>
+            ) : (
+              <div style={{ color: BRAND.grey, fontSize: 12.5, marginTop: 6 }}>
+                C&apos;est ce nom que le supporter lit dans l&apos;app, sur son ticket et sur son reçu.
+              </div>
+            )}
+          </form>
+        ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4, flexWrap: 'wrap' }}>
           <h1 style={{ fontFamily: BRAND.fontDisplay, fontSize: 30, fontWeight: 800, color: BRAND.ink, margin: 0, letterSpacing: -0.6 }}>
             {event.name}
           </h1>
           <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: '3px 12px', fontSize: 12, fontWeight: 600 }}>
             {event.status}
           </span>
+          {/*
+            Un match terminé ou annulé ne se modifie plus — le serveur le
+            refuse. Le bouton reste VISIBLE mais grisé, avec la raison au
+            survol : un bouton qui disparaît laisse croire que la fonction
+            n'existe pas.
+          */}
+          {(() => {
+            const fige = event.status === 'ENDED' || event.status === 'CANCELLED';
+            return (
+              <button
+                type="button"
+                disabled={fige}
+                title={fige ? 'Un événement terminé ou annulé ne se renomme plus.' : 'Renommer l’événement'}
+                onClick={() => { setNouveauNom(event.name); setRenommageErreur(''); setRenommage(true); }}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  background: 'transparent', border: `1px solid ${BRAND.border}`, borderRadius: 999,
+                  padding: '5px 12px', fontSize: 12.5, fontWeight: 600,
+                  color: fige ? BRAND.grey : BRAND.inkSoft,
+                  cursor: fige ? 'not-allowed' : 'pointer', opacity: fige ? 0.6 : 1,
+                }}
+              >
+                <Pencil size={13} /> Renommer
+              </button>
+            );
+          })()}
         </div>
+        )}
         <div style={{ color: BRAND.grey, fontSize: 13 }}>
           {new Date(event.startAt).toLocaleString('fr-FR')} → {new Date(event.endAt).toLocaleString('fr-FR')}
           {' · ID : '}
