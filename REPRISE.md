@@ -90,10 +90,15 @@ _Dernière mise à jour : 2026-11-09 — lire d'abord « ÉTAT AU 09/11/2026 » 
      Google `482274786646`, télécharger `google-services.json`, le déposer
      comme variable EAS de type fichier `GOOGLE_SERVICES_JSON`, puis poser la
      clé FCM V1 dans EAS (`eas credentials` → Android → notifications) ;
-   - **Connexion Google** : deux clients OAuth « Android » dans le même projet,
-     paquet `com.shapper.breakeat`, un par empreinte SHA-1 (clé d'envoi EAS et
-     clé de signature Play). Sans eux, le bouton Google s'affiche sur Android
-     mais échoue (`DEVELOPER_ERROR`) : **ne pas publier sur Android avant**.
+   - ✅ **Connexion Google** (09/11) : les deux clients OAuth « Android »
+     existent dans le projet « BREAKEAT connexion » — « BreakEat Android —
+     production » (SHA-1 de signature Play `C6:53:…:79:7C`) et « BreakEat
+     Android — import » (clé d'importation `B4:0E:…:32:4A`), paquet
+     `com.shapper.breakeat`. Reste à vérifier que le keystore EAS a bien le
+     SHA-1 `B4:0E:…:32:4A`, sinon Play refusera le premier envoi ;
+   - **Canaux Play à trancher** : `eas.json` envoie le profil `beta` sur le
+     canal `beta` (test OUVERT, public) et `production` sur `internal`. Semble
+     inversé ; proposé à Rémi : beta → `internal`, production → `production`.
 7. **Rattrapage des paquets Expo** — fait sur la branche
    `maj/expo-57-0-32` (09/11), PAS fusionné : l'export web échoue sur le poste
    (cause environnement probable, pas prouvée). À valider par la CI Linux et
