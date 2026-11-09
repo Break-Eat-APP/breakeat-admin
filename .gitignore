@@ -105,3 +105,6 @@ apps/mobile/modules/live-activity/ios/BreakEatOrderAttributes.swift
 # de la comptabilité. Le pousser sur GitHub reviendrait à publier la base.
 sauvegardes/
 *.dump
+
+# Fichiers de verrou d’Office (Word ouvert sur un .docx du dépôt)
+~$*
