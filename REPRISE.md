@@ -96,9 +96,16 @@ _Dernière mise à jour : 2026-11-09 — lire d'abord « ÉTAT AU 09/11/2026 » 
      Android — import » (clé d'importation `B4:0E:…:32:4A`), paquet
      `com.shapper.breakeat`. Reste à vérifier que le keystore EAS a bien le
      SHA-1 `B4:0E:…:32:4A`, sinon Play refusera le premier envoi ;
-   - **Canaux Play à trancher** : `eas.json` envoie le profil `beta` sur le
-     canal `beta` (test OUVERT, public) et `production` sur `internal`. Semble
-     inversé ; proposé à Rémi : beta → `internal`, production → `production`.
+   - ✅ **Canaux Play** (09/11) : `beta` → test **interne** (il partait en
+     test OUVERT, public) ; `production` → **production en brouillon**
+     (`releaseStatus: draft`) — rien n'est publié sans un clic dans la Play
+     Console ;
+   - **Clé d'importation** : Play attend `B4:0E:…:32:4A` (celle de l'éditeur
+     précédent, introuvable) ; EAS signe avec `F8:C8:…:D0:08` (créée par
+     BreakEat le 21/08/2026). Réinitialisation de la clé d'importation à
+     demander dans la Play Console avec le certificat `.pem` de la clé EAS,
+     puis modifier le client OAuth « BreakEat Android — import » pour y mettre
+     le SHA-1 `F8:C8…`.
 7. **Rattrapage des paquets Expo** — fait sur la branche
    `maj/expo-57-0-32` (09/11), PAS fusionné : l'export web échoue sur le poste
    (cause environnement probable, pas prouvée). À valider par la CI Linux et

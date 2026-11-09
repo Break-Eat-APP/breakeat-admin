@@ -90,7 +90,7 @@
       },
       "android": {
         "serviceAccountKeyPath": "./google-play-service-account.json",
-        "track": "beta"
+        "track": "internal"
       }
     },
     "production": {
@@ -101,7 +101,8 @@
       },
       "android": {
         "serviceAccountKeyPath": "./google-play-service-account.json",
-        "track": "internal"
+        "track": "production",
+        "releaseStatus": "draft"
       }
     }
   }
