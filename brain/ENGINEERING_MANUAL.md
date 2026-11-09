@@ -8351,3 +8351,42 @@ l'activent pas. Exclure `DRAFT` à un seul endroit ferait diverger les deux
 écrans ; si on l'exclut, c'est partout à la fois.
 
 ---
+
+## Ce que l'audit charge / lien Flaix du 09/11 a laissé ici
+
+### 1. Un cache ne garde que ce qui est identique pour tous
+
+La découverte est personnalisée (identité dans le lien Flaix, événements
+privés, distance). On ne met donc en cache que la LECTURE BRUTE, et la
+projection est refaite à chaque requête, sur une copie. Le test qui le tient
+fait passer trois clients sur un cache chaud et vérifie que chacun reçoit son
+identité.
+
+### 2. Une foule ne déclenche qu'une lecture
+
+Le gain n'est pas seulement la durée : les requêtes SIMULTANÉES attendent la
+même lecture (`cache-court.ts`). Sans cela, mille requêtes arrivées dans la
+même seconde partiraient toutes en base avant que la première n'ait rempli le
+cache.
+
+### 3. Un refus silencieux est pire qu'une autorisation annoncée
+
+La page Flaix refusait tout ce qui sortait de Flaix. On ne savait pas quel
+prestataire de paiement Flaix emploie : le jour où il redirige, le client
+touche « Payer » et rien ne se passe. La règle accepte désormais le HTTPS et
+AFFICHE l'adresse — la protection qui manquait était la barre d'adresse, pas
+le refus.
+
+### 4. Un décompte de requêtes vieillit avec chaque fonctionnalité
+
+Le plafond par IP reposait sur « une requête à l'ouverture ». Trois
+fonctionnalités plus tard (pastille, cloche, « À ne pas manquer »), c'était
+trois ou quatre. Tout chiffre de capacité écrit en commentaire se relit
+quand on ajoute un appel au lancement.
+
+### 5. Délai sur les lectures, jamais sur les écritures
+
+Couper une lecture lente coûte un « réessayer ». Couper une écriture coûte
+une commande en double.
+
+---

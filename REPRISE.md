@@ -114,6 +114,16 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 
 ### Pièges du moment
 
+- **La découverte des lieux est en cache 15 s** (`CACHE_LIEUX_MS`, `0` l'éteint) : un lien Flaix
+  corrigé ou un club suspendu se voit dans l'app après au plus 15 s. La commande, elle,
+  n'est jamais en cache. Audit : `brain/audits/AUDIT_2026-11-09_chirurgical-charge-flaix.md`.
+- **Mises à jour à distance (EAS Update)** depuis la build 41 : `eas update --channel
+  production` pour un changement JavaScript. **Tout changement natif** (icône, écran
+  d'ouverture, permission, module natif, Live Activity) → **monter `version`** dans
+  `app.config.js` avant la build, sinon la mise à jour partirait vers des builds qui n'ont
+  pas le code natif attendu.
+- **La page Flaix intégrée accepte le HTTPS hors de Flaix et l'annonce** (« Paiement sur
+  … ») : à constater lors d'un vrai paiement avant le 22/11.
 - **Lire la CI après CHAQUE poussée.** Elle a été rouge trois jours sans que
   personne ne la regarde. Sans connexion GitHub, l'API publique répond
   (60 lectures par heure).

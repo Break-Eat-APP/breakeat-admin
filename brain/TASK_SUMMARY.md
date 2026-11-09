@@ -4,6 +4,37 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-11-09] Mises à jour à distance, et l'audit charge / lien Flaix
+
+### Livré
+
+EAS Update (build 41 = la première qui le porte). Audit chirurgical sur les
+priorités de Rémi : sept corrections (navigation de la page Flaix, cache de
+la découverte, plafond par IP, `GET /orders` borné, délai des lectures,
+appel inutile sans favori, favoris au premier chargement).
+
+### Décisions
+
+- **Le cache ne garde que la lecture BRUTE**, jamais une réponse
+  personnalisée : le lien Flaix porte l'identité du client. Copie profonde
+  par requête — garde-fou : la projection actuelle ne modifie pas la lecture
+  (vérifié en retirant la copie), mais rien ne doit pouvoir faire passer une
+  identité d'un client à l'autre.
+- **La page Flaix accepte le HTTPS hors de Flaix, et l'annonce** : refuser
+  sans savoir quel prestataire de paiement Flaix emploie risquait de bloquer
+  tous les paiements le jour J ; accepter sans le dire retirait la
+  protection. Le bandeau d'adresse fait les deux.
+- **Pas de délai sur les écritures** : couper une commande en cours
+  d'enregistrement ferait recommencer le client.
+
+### Non vérifié
+
+L'effet du cache sous charge réelle (banc de charge à refaire sur une base de
+test) ; le nombre d'instances Railway et `REDIS_URL` ; un vrai paiement Flaix
+dans l'app (à faire par Rémi avant le 22/11).
+
+---
+
 ## [2026-11-09] Le ticket d'après la maquette, l'icône vectorielle
 
 ### Livré

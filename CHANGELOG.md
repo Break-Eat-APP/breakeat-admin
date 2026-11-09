@@ -5,6 +5,55 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.4] — 2026-11-09 — Mises à jour à distance, et l'audit charge / lien Flaix
+
+**Les mises à jour à distance (EAS Update)** — décision de Rémi : un écran,
+un design, un texte partent avec `eas update` et arrivent au lancement
+suivant, sans passer par les stores. `expo-updates ~57.0.27`, un canal par
+profil (`beta` et `production` → « production »). `runtimeVersion` = la
+**version de l'app**, pas une empreinte calculée (poste Windows sous OneDrive
+contre machines d'EAS : une empreinte peut différer pour un retour à la
+ligne). Règle écrite dans `app.config.js` : **tout changement natif → monter
+la version avant la build**. Première build qui le porte : la **41**.
+
+**L'audit chirurgical** (`brain/audits/AUDIT_2026-11-09_chirurgical-charge-flaix.md`),
+sur les trois priorités de Rémi :
+
+- **Lien Flaix** — la page de commande intégrée refusait net toute navigation
+  hors de Flaix : un paiement redirigé vers son prestataire, ou un champ de
+  carte hébergé chez lui (iPhone), aurait été bloqué **sans un mot**.
+  Désormais : Flaix toujours, le reste en **HTTPS seulement**, et un
+  **bandeau « Paiement sur <domaine> »** dès qu'on a quitté Flaix
+  (`lib/navigation-flaix.ts`, 5 tests).
+- **Des milliers en simultané** — la découverte relisait tous les lieux et
+  leurs matchs à chaque requête (~45 req/s par instance). La lecture brute est
+  désormais gardée **15 s**, les requêtes simultanées **attendent la même
+  lecture**, et la personnalisation est refaite à chaque requête sur une
+  **copie** (`common/helpers/cache-court.ts` ; test : trois clients successifs,
+  chacun reçoit SON identité). `CACHE_LIEUX_MS` règle ou éteint (`0`).
+  Coupe-circuit par IP relevé à **60 000/min** (3 à 4 requêtes par ouverture,
+  pas 1). `GET /orders` borné aux **50 plus récentes**. **Délai de 15 s** sur
+  les lectures de l'app — jamais sur une écriture. « À ne pas manquer » n'est
+  plus appelé sans favori.
+- Favoris : un cœur touché pendant le premier chargement n'est plus écrasé.
+
+Serveur 1 080 tests, app 130 tests, types et lint verts. **Non mesuré** :
+l'effet du cache au banc de charge (il refuse la production par
+construction) — à refaire sur une base de test.
+
+`+ backend/src/common/helpers/cache-court.ts` (+ spec)
+`~ backend/src/modules/venues/public-venues.controller.ts` (+ spec)
+`~ backend/src/modules/events/public-events.controller.ts`
+`~ backend/src/modules/orders/orders.controller.ts`
+`~ backend/src/common/securite/limitation.ts` (+ spec)
+`~ backend/test/integration/statut-organisation.int-spec.ts`
+`+ apps/mobile/src/lib/navigation-flaix.ts` (+ test) `+ src/lib/api/delai-lecture.ts` (+ test)
+`~ apps/mobile/src/components/relais-flaix.native.tsx` `~ src/lib/api/mobile-api.ts`
+`~ apps/mobile/src/screens/venue-discovery.screen.tsx`
+`~ apps/mobile/app.config.js` `~ apps/mobile/eas.json` `~ apps/mobile/package.json`
+
+---
+
 ## [1.7.3] — 2026-11-09 — Le ticket d'après la maquette, et une icône enfin nette
 
 **« Mes commandes » reprend la maquette de Rémi.** Fond de page orange ; le
