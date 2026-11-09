@@ -5,6 +5,53 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.2] — 2026-11-09 — La CI remise au vert, Android débloqué côté clé, et un audit
+
+**La CI était rouge depuis le 06/11** et personne ne la lisait — moi le
+premier. Deux causes, corrigées (`acf6187`) :
+
+- un test de l'app mobile (`libelle-evenement.test.ts`) fabriquait 07:30 UTC
+  et attendait « 08:30 » : vrai à Paris seulement, faux sur la CI qui tourne
+  en UTC. La date est construite à l'heure locale ; vérifié en `TZ=UTC` ;
+- un test d'intégration (`rapport-flaix.int-spec.ts`) attendait `/ENDED/`
+  dans un message traduit le jour même en « Cet événement est terminé ».
+
+Depuis, les sept jobs sont verts sur `main` et sur la branche Expo.
+
+**Google Play** (`990a4b8`) : les canaux étaient inversés — `beta` partait
+en test OUVERT (public). Désormais `beta` → test interne, `production` →
+production en **brouillon** (rien ne se publie sans un clic).
+
+**La clé d'importation Android** : Google Play attendait `B4:0E…` (clé de
+l'éditeur précédent, introuvable), EAS signe avec `F8:C8…` (créée par
+BreakEat le 21/08/2026). Certificat public extrait du keystore EAS sans son
+mot de passe (`keytool -exportcert`), réinitialisation demandée par Rémi le
+09/11, client OAuth « import » passé sur `F8:C8…`. Les copies téléchargées
+du keystore et de ses mots de passe ont été supprimées du poste.
+
+**La mise à jour Expo 57.0.32** (branche `maj/expo-57-0-32`, demande de
+fusion #4) : CI verte — l'**export web passe sous Linux**, l'échec sur le
+poste venait donc de la machine — et **build iOS 39 compilée**, envoyée sur
+TestFlight. Fusion après la build Android de vérification.
+
+**Audit des modifications du 03 au 09/11**
+(`brain/audits/AUDIT_2026-11-09_dernieres-modifications.md`) : dépôt GitHub
+PUBLIC (aucun secret trouvé dans l'historique) ; « Noter » proposé sur une
+commande annulée, défaut antérieur au ticket ; pastille « Récupérées » qui
+montre les annulées ; et cinq points mineurs.
+
+**Le fichier Word des phases** : `GUIDE_DEVELOPPEMENT/PHASES_DE_DEVELOPPEMENT.docx`,
+généré depuis les documents du dépôt par `generer-phases-docx.js` — toutes les
+phases (0 → 73), toutes les versions, et la méthode pour remonter à la cause
+d'un bug.
+
+`~ apps/mobile/eas.json` `~ apps/mobile/src/lib/__tests__/libelle-evenement.test.ts`
+`~ backend/test/integration/rapport-flaix.int-spec.ts`
+`+ brain/audits/AUDIT_2026-11-09_dernieres-modifications.md`
+`+ GUIDE_DEVELOPPEMENT/PHASES_DE_DEVELOPPEMENT.docx` `+ GUIDE_DEVELOPPEMENT/generer-phases-docx.js`
+
+---
+
 ## [1.7.1] — 2026-11-09 — Build 38, la mise à jour Expo sur une branche, Android préparé
 
 **Build iOS 38** (`2d21debb`, commit `258bd14`) : **elle compile**, et c'était

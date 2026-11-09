@@ -8293,3 +8293,61 @@ en tête, daté ; l'ancien déplacé en historique, jamais effacé ; et, à chaq
 session, vérifier que les points « à faire » ne sont pas déjà faits.
 
 ---
+
+## Ce que la soirée du 09/11/2026 a laissé ici
+
+### 1. Une CI qu'on ne lit pas n'existe pas
+
+Elle a été rouge du 06/11 au 09/11 pendant que les tests passaient sur le
+poste. Personne ne l'a vu : on poussait, on lisait le résultat local, on
+passait à la suite. Désormais, après chaque poussée, on lit les jobs GitHub
+— l'API est publique : `GET /repos/Break-Eat-APP/breakeat-admin/commits/<sha>/check-runs`.
+
+### 2. Une date de test se construit à l'heure locale
+
+`new Date('2026-11-14T07:30:00Z')` vaut 08:30 à Paris et 07:30 sur la CI.
+Un test qui vérifie l'heure AFFICHÉE au client construit sa date avec
+`new Date(2026, 10, 14, 8, 30)` et se vérifie en `TZ=UTC`.
+
+### 3. Traduire un message, c'est chercher qui l'attend
+
+Un message d'erreur est un contrat : un test, un écran, un script peuvent le
+lire. Avant de le changer : `grep` dans `src/` ET `test/integration/`, ces
+derniers ne tournant que sur la CI (base réelle).
+
+### 4. Une dépendance qu'un greffon ne déclare pas se déclare pour lui
+
+`@bacons/apple-targets` utilise `@expo/plist` et `@expo/image-utils` sans
+les déclarer. Il les trouvait par chance, tant que pnpm les remontait. On les
+déclare dans `pnpm-workspace.yaml` (`packageExtensions`), et après toute
+mise à jour Expo, `npx expo config --type prebuild` doit réussir : c'est lui
+qui charge les greffons, et un greffon ignoré fait disparaître l'extension
+Live Activity SANS erreur de build.
+
+### 5. Une mise à jour de dépendances voyage seule
+
+Sur une branche, avec sa propre build. La build 38 portait le nouveau Swift,
+la 39 la mise à jour Expo : si l'une avait échoué, on aurait su laquelle.
+
+### 6. Le poste n'est pas la référence
+
+Le dossier OneDrive et le magasin pnpm local produisent des échecs que la CI
+Linux ne connaît pas (`@react-navigation/native` « introuvable », `UNKNOWN:
+stat`). Quand le poste et la CI divergent, c'est la CI qui fait foi.
+
+### 7. Android : vérifier la clé d'importation AVANT la première build
+
+Comparer le SHA-1 du keystore EAS à celui que la Play Console attend
+(Intégrité de l'application → Signature). S'ils diffèrent, la build sera
+refusée à l'envoi. Le certificat public s'extrait sans le mot de passe du
+keystore (`keytool -exportcert -rfc`) ; les copies du keystore et de ses mots
+de passe se suppriment aussitôt après.
+
+### 8. Les événements en brouillon sont publics, et c'est une décision
+
+Le calendrier de saison et « À ne pas manquer » montrent tout sauf
+l'annulé : un match créé reste `DRAFT` par défaut, et les lieux Flaix ne
+l'activent pas. Exclure `DRAFT` à un seul endroit ferait diverger les deux
+écrans ; si on l'exclut, c'est partout à la fois.
+
+---

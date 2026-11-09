@@ -4,131 +4,138 @@
 >
 > | Question | Document |
 > |---|---|
-> | Où en est-on, que faire ensuite ? | **ce fichier** |
+> | Où en est-on, que faire ensuite ? | **ce fichier**, section « ÉTAT AU … — LIRE D'ABORD » |
+> | Un bug : d'où vient-il ? | **`GUIDE_DEVELOPPEMENT/PHASES_DE_DEVELOPPEMENT.docx`**, section « Remonter à la cause d'un bug » |
 > | Qu'a-t-on livré, quand, et pourquoi ? | `CHANGELOG.md` |
+> | Toutes les phases et versions, d'un coup d'œil | `GUIDE_DEVELOPPEMENT/PHASES_DE_DEVELOPPEMENT.docx` (Word) ou `brain/ROADMAP.md` |
 > | Je découvre le dossier, par où je commence ? | **`README.md`** (racine) puis `GUIDE_DEVELOPPEMENT/` |
-| Comment le code est-il organisé ? | `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md` |
+> | Comment le code est-il organisé ? | `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md` |
 > | Pourquoi cette décision technique ? | `brain/ENGINEERING_MANUAL.md` |
-> | Quel était le plan, phase par phase ? | `brain/ROADMAP.md` (1→10 planifiées, 11→22 reconstituées) |
-> | Résumé d'une session de travail | `brain/TASK_SUMMARY.md` |
-> | État complet du dépôt, dette, tests | `brain/audits/AUDIT_2026-09-18_etat-du-depot.md` |
+> | Quel était le plan, phase par phase ? | `brain/ROADMAP.md` (0→10 planifiées, 11→22 reconstituées, index 24→73 puis versions) |
+> | Résumé d'une session de travail | `brain/TASK_SUMMARY.md` (le plus récent en haut) |
+> | Dernier audit | `brain/audits/AUDIT_2026-11-09_dernieres-modifications.md` |
+> | État complet du dépôt, dette, tests (septembre) | `brain/audits/AUDIT_2026-09-18_etat-du-depot.md` |
 > | Ordre de construction initial (phases 1→19) | `DEVELOPMENT_LOG.md` — historique, non tenu au-delà |
 >
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
 
-_Dernière mise à jour : 2026-11-09 — lire d'abord « ÉTAT AU 09/11/2026 » ci-dessous. Les notes de mise à jour précédentes sont gardées en fin de fichier (« Historique des mises à jour »)._
+_Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2026 » ci-dessous. Les notes de mise à jour précédentes sont gardées en fin de fichier (« Historique des mises à jour »)._
 
-## 🟢 ÉTAT AU 09/11/2026 — LIRE D'ABORD
+## 🟢 ÉTAT AU 09/11/2026 (soir) — LIRE D'ABORD
 
 > Cette section remplace « État au 06/09 » plus bas, gardé pour l'historique.
 > Le détail de chaque livraison est dans `CHANGELOG.md` ; le pourquoi des
 > décisions dans `brain/ENGINEERING_MANUAL.md` ; où vit le code dans
-> `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md`.
+> `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md` ; **toutes les phases et versions,
+> et la méthode pour remonter à la cause d'un bug, dans
+> `GUIDE_DEVELOPPEMENT/PHASES_DE_DEVELOPPEMENT.docx`** (régénéré par
+> `GUIDE_DEVELOPPEMENT/generer-phases-docx.js`). Dernier audit :
+> `brain/audits/AUDIT_2026-11-09_dernieres-modifications.md`.
 
 ### Ce qui tourne
 
 | | État | Comment le vérifier |
 |---|---|---|
-| **Serveur (Railway)** | En ligne. Le 09/11 il servait `a6e3813` ; `70a04b3` (renommage) venait d'être poussé, déploiement à confirmer | `curl -s https://breakeat-admin-production.up.railway.app/health` → champ `commit`, à comparer à `git log -1 origin/main` |
+| **CI GitHub** | ✅ **verte** sur `main` (7 jobs : Build, Tests, Tests d'intégration, Export web, TypeScript, Lint) — elle était ROUGE du 06/11 au 09/11 sans que personne ne la lise | `https://github.com/Break-Eat-APP/breakeat-admin/actions`, ou l'API `commits/<sha>/check-runs` (dépôt public) |
+| **Serveur (Railway)** | En ligne, sert `acf6187` (le code serveur le plus récent) | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit`, à comparer à `git log -1 origin/main` |
 | **Consoles (Vercel)** | Admin, back-office et opérateur, publiés depuis `main` | Voir « Déploiement des frontends » plus bas |
-| **iOS** | **1.1.0 build 38** (commit `258bd14`) envoyée sur TestFlight le 09/11 : notifications par date, décompte de la Live Activity, aperçu super admin | App Store Connect → TestFlight |
-| **Android** | Compile depuis le 03/11 (APK `b2337b52`). **Pas encore sur le Play Store** | Voir « Ce qui reste » |
-| **Connexion** | E-mail + mot de passe, Apple, Google (vérifié sur TestFlight) | — |
-| **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels n'est pas configuré | `GET /api/v1/auth/password-reset/available` → `false` au 09/11 |
+| **iOS** | **Build 38** (`258bd14`) sur TestFlight : notifications par date, décompte et aperçu de la Live Activity. **Build 39** (mise à jour Expo, branche `maj/expo-57-0-32`) compilée et envoyée | App Store Connect → TestFlight |
+| **Android** | Compile. **Aucun envoi possible sur Google Play** avant que Google confirme la nouvelle clé d'importation (demandée le 09/11) | Play Console → Intégrité de l'application |
+| **Connexion** | E-mail + mot de passe, Apple, Google (iOS vérifié ; Android : clients OAuth créés, pas encore essayé) | — |
+| **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels n'est pas configuré | `GET /api/v1/auth/password-reset/available` → `false` |
 
 ### Ce qui a changé du 03 au 09/11
 
 | Date | Quoi | Où lire |
 |---|---|---|
-| 05/11 | « Mes commandes » en **tickets** : numéro (4 chiffres chez Flaix) en orange, pastilles Toutes / En cours / Récupérées + sections | CHANGELOG 1.6.0 |
-| 06/11 | **« À ne pas manquer »** : les vrais événements des lieux **favoris** (1 favori → 3, 2 → 2 chacun, 3+ → 1 chacun, 6 max), route `GET /public/events/a-venir`. Favoris gardés sur l'appareil | CHANGELOG 1.6.0 |
-| 06/11 | Courriels signés « BreakEat » (expéditeur, objets, signatures) | CHANGELOG 1.6.0 |
-| 06/11 | **Fiche d'un événement sur un lieu Flaix** : lien Flaix, adversaire, blason et affiche éditables depuis la fiche ; aucune configuration Break Eat proposée (créneaux, buvettes, produits…) ; erreur de dates en français | CHANGELOG 1.6.0 |
-| 09/11 | **Renommer un événement** depuis sa fiche (grisé si terminé ou annulé) | CHANGELOG 1.6.1 |
-| 09/11 | **Notifications rangées par date** (Aujourd'hui / Hier / Cette semaine / Plus ancien) — dans la prochaine build iOS | CHANGELOG 1.6.2 |
-| 09/11 | **Décompte dans la Live Activity** + **aperçu** pour le super admin (Profil → Outils super admin) — Swift NON compilé, dans la prochaine build iOS | CHANGELOG 1.7.0 |
+| 05/11 | « Mes commandes » en **tickets** : numéro en orange, pastilles Toutes / En cours / Récupérées + sections | CHANGELOG 1.6.0 |
+| 06/11 | **« À ne pas manquer »** : événements des lieux **favoris** (1 → 3, 2 → 2 chacun, 3+ → 1 chacun, 6 max), route `GET /public/events/a-venir` ; favoris gardés sur l'appareil | CHANGELOG 1.6.0 |
+| 06/11 | Courriels signés « BreakEat » | CHANGELOG 1.6.0 |
+| 06/11 | **Fiche d'un événement Flaix** : lien, adversaire, blason, affiche éditables ; aucune configuration Break Eat proposée ; erreurs de dates en français | CHANGELOG 1.6.0 |
+| 09/11 | **Renommer un événement** depuis sa fiche | CHANGELOG 1.6.1 |
+| 09/11 | **Notifications rangées par date** | CHANGELOG 1.6.2 |
+| 09/11 | **Décompte dans la Live Activity** + **aperçu** super admin | CHANGELOG 1.7.0 |
+| 09/11 | Build 38 ; clé Google Play protégée ; fichier Firebase branché | CHANGELOG 1.7.1 |
+| 09/11 | **CI remise au vert** ; canaux Play remis dans le bon sens ; clé d'importation Android : réinitialisation demandée ; mise à jour Expo vérifiée (CI + build 39) ; audit ; fichier Word des phases | CHANGELOG 1.7.2 |
 
 ### Ce qui reste — dans l'ordre
 
-1. **Essayer la build iOS 38** (compilée et envoyée sur TestFlight le
-   09/11 — le Swift du décompte compile) : notifications par date, puis
-   Profil → Outils super admin → Aperçu de la Live Activity (décompte de
-   3 minutes, puis bascule sur l'heure de retrait).
-2. **Le flux des commandes Flaix — côté développeur Flaix** (Rémi, 09/11 :
-   « mon dev gère ça de son côté »). Une commande passée dans Flaix ne crée
-   rien chez BreakEat ; or la Live Activity, la note, la fidélité et « Je suis
-   arrivé » partent d'une commande enregistrée chez nous — les trois lieux en
-   production sont en Flaix, ces fonctions y sont éteintes. Quand le flux
-   arrive : y brancher la Live Activity (le décompte est déjà prêt) et la
-   **note du bon de commande** (choix de Rémi : la note porte sur la commande
-   remontée — match, heure, numéro —, pas sur un lieu ni sur une buvette).
+1. **Essayer la build 39 sur iPhone** (ou la 38) : ouverture, connexion Apple
+   et Google, notifications par date, puis Profil → Outils super admin →
+   Aperçu de la Live Activity (décompte de 3 minutes, puis bascule sur
+   l'heure de retrait). Personne n'a encore VU le décompte.
+2. **Fusionner la mise à jour Expo** (`maj/expo-57-0-32`, demande de fusion
+   #4) quand la build Android `c9d56be3` a fini : CI verte, build iOS 39
+   compilée. Ensuite, sur le poste : `pnpm install --frozen-lockfile`.
+3. **Corriger les deux défauts de « Mes commandes » trouvés par l'audit** :
+   « Noter » proposé sur une commande annulée ou restituée (le serveur
+   refuse avec un message faux) ; la pastille « Récupérées » montre aussi
+   les annulées. Voir l'audit du 09/11, constats 2 et 3.
+4. **Passer le dépôt GitHub en privé** (décision de Rémi) — audit, constat 1.
+5. **Le flux des commandes Flaix — côté développeur Flaix.** Une commande
+   passée dans Flaix ne crée rien chez BreakEat ; la Live Activity, la note,
+   la fidélité et « Je suis arrivé » en dépendent, et les trois lieux en
+   production sont en Flaix. Quand le flux arrive : y brancher la Live
+   Activity (le décompte est prêt) et la **note du bon de commande** (choix
+   de Rémi : la note porte sur la commande remontée — match, heure, numéro).
    Contexte : `brain/FRONTIERE_FLAIX_OPS.md`.
-3. **Courriels (Brevo)** — à faire par Rémi : créer le compte Brevo, vérifier
-   le domaine `breakeatapp.com` (DNS), puis poser `MAIL_PROVIDER=brevo`,
-   `MAIL_API_KEY` et `MAIL_FROM` sur Railway. Ensuite : vérifier que
-   `/auth/password-reset/available` rend `true`, et **ajouter Brevo à la
-   politique de confidentialité §5** (`documents-legaux/`), qui ne cite aucun
-   prestataire d'envoi aujourd'hui.
-4. **Données de production** — à faire par Rémi dans l'admin : renommer
-   l'événement « test » ; au Vélodrome, deux matchs ont nom et adversaire
-   inversés (« UEFA » d'un côté, « Marseille vs … » de l'autre) ;
-   l'Aréna et les Spartiates n'ont aucun match programmé.
-5. **Revue Apple 1.1.0** — compte de revue au nom de Rémi (identifiants dans
-   App Store Connect, **jamais dans le dépôt**, mot de passe distinct de toute
-   boîte personnelle). Notes de revue : présenter Flaix comme un logiciel de
-   **la même société**, pas « un partenaire » ; préciser que l'app vend des
-   **biens physiques** retirés sur place (règle 3.1.3(e) — pas d'achat intégré).
-6. **Android sur le Play Store** — le code est prêt (09/11) : la clé Play est
-   protégée par le `.gitignore`, le fichier Firebase passe par une variable
-   EAS. Reste, **à faire par Rémi dans les consoles** :
-   - **Google Play** : créer le compte de service (Play Console → Accès à
-     l'API), lui donner les droits de publication, télécharger sa clé JSON
-     et la poser dans `apps/mobile/google-play-service-account.json` (jamais
-     commitée) ;
-   - **Firebase** : créer l'app Android `com.shapper.breakeat` dans le projet
-     Google `482274786646`, télécharger `google-services.json`, le déposer
-     comme variable EAS de type fichier `GOOGLE_SERVICES_JSON`, puis poser la
-     clé FCM V1 dans EAS (`eas credentials` → Android → notifications) ;
-   - ✅ **Connexion Google** (09/11) : les deux clients OAuth « Android »
-     existent dans le projet « BREAKEAT connexion » — « BreakEat Android —
-     production » (SHA-1 de signature Play `C6:53:…:79:7C`) et « BreakEat
-     Android — import » (clé d'importation `B4:0E:…:32:4A`), paquet
-     `com.shapper.breakeat`. Reste à vérifier que le keystore EAS a bien le
-     SHA-1 `B4:0E:…:32:4A`, sinon Play refusera le premier envoi ;
-   - ✅ **Canaux Play** (09/11) : `beta` → test **interne** (il partait en
-     test OUVERT, public) ; `production` → **production en brouillon**
-     (`releaseStatus: draft`) — rien n'est publié sans un clic dans la Play
-     Console ;
-   - **Clé d'importation** : Play attend `B4:0E:…:32:4A` (celle de l'éditeur
-     précédent, introuvable) ; EAS signe avec `F8:C8:…:D0:08` (créée par
-     BreakEat le 21/08/2026). Réinitialisation de la clé d'importation à
-     demander dans la Play Console avec le certificat `.pem` de la clé EAS,
-     puis modifier le client OAuth « BreakEat Android — import » pour y mettre
-     le SHA-1 `F8:C8…`.
-7. **Rattrapage des paquets Expo** — fait sur la branche
-   `maj/expo-57-0-32` (09/11), PAS fusionné : l'export web échoue sur le poste
-   (cause environnement probable, pas prouvée). À valider par la CI Linux et
-   une build EAS, puis fusionner.
-8. **Favoris entre appareils** — aujourd'hui sur le téléphone seulement (clé
-   `break_eat_favoris`). À poser le jour où un client en a deux ; il faudra un
-   compte, alors que parcourir les lieux n'en demande pas.
+6. **Courriels (Brevo)** — à faire par Rémi : compte Brevo, DNS de
+   `breakeatapp.com`, `MAIL_PROVIDER=brevo` / `MAIL_API_KEY` / `MAIL_FROM`
+   sur Railway. Puis vérifier `/auth/password-reset/available` = `true`, et
+   ajouter Brevo à la politique de confidentialité §5 (`documents-legaux/`).
+7. **Données de production** — à faire par Rémi dans l'admin : renommer
+   l'événement « test » ; deux matchs du Vélodrome ont nom et adversaire
+   inversés ; l'Aréna et les Spartiates n'ont aucun match programmé.
+8. **Revue Apple 1.1.0** — compte de revue au nom de Rémi (identifiants dans
+   App Store Connect, jamais dans le dépôt). Notes : Flaix est un logiciel
+   de **la même société** ; l'app vend des **biens physiques** (3.1.3(e)).
+9. **Android sur le Play Store** :
+   - **Clé d'importation** : Play attendait `B4:0E:…:32:4A` (éditeur
+     précédent, introuvable) ; EAS signe avec
+     `F8:C8:BD:86:29:3F:1C:1E:9F:AB:04:F0:E7:B3:3A:DB:33:77:D0:08` (créée par
+     BreakEat le 21/08/2026). **Réinitialisation demandée par Rémi le 09/11**
+     avec le certificat de la clé EAS ; attendre l'e-mail de Google (~48 h).
+     Le client OAuth « BreakEat Android — import » a été passé sur `F8:C8…` ;
+   - ✅ deux clients OAuth Android (signature Play `C6:53…`, importation) ;
+   - ✅ canaux : `beta` → test **interne**, `production` → production en
+     **brouillon** ;
+   - **Firebase** : app Android `com.shapper.breakeat` dans le projet
+     `482274786646`, `google-services.json` en variable EAS de type fichier
+     `GOOGLE_SERVICES_JSON`, clé FCM V1 dans EAS ;
+   - **Compte de service Google Play** (pour `eas submit`) : clé JSON dans
+     `apps/mobile/google-play-service-account.json`, ignorée par git. Le
+     PREMIER envoi se fait de toute façon à la main dans la Play Console.
+10. **Favoris entre appareils** — sur le téléphone seulement aujourd'hui.
+11. Petits points de l'audit : cœur écrasé pendant le premier chargement des
+    favoris ; actions GitHub en Node 20 à monter ; compilation de l'admin
+    à surveiller sur la CI.
 
 ### Pièges du moment
 
+- **Lire la CI après CHAQUE poussée.** Elle a été rouge trois jours sans que
+  personne ne la regarde. Sans connexion GitHub, l'API publique répond
+  (60 lectures par heure).
+- **Un test de date se construit à l'heure LOCALE** (`new Date(a, m, j, h)`)
+  et se vérifie en `TZ=UTC` : la CI tourne en UTC, le poste à Paris.
+- **Traduire un message d'erreur = chercher qui l'attend**, y compris dans
+  `backend/test/integration/` (base réelle, lancés par la CI seulement).
+- **Le poste de développement n'est pas la référence pour l'export web** :
+  OneDrive et le magasin pnpm local (`UNKNOWN: stat`, `unable to open
+  database file`) y font échouer des choses qui passent sur la CI Linux.
 - **Une route Nest littérale se déclare AVANT `:id`** (`a-venir` avant
-  `:eventId`), sinon le `ParseUUIDPipe` répond 400.
+  `:eventId`).
 - **`eas submit` se lance à la main** après chaque build iOS
   (`eas submit --platform ios --profile beta --id <build>`).
-- **Machine de dev à 6 Go de RAM** : lancer `tsc`, `eslint` et `jest`
-  séparément ; les lancer ensemble via turbo fait tomber le processus.
-- **Sous OneDrive, jest annonce parfois « N suites échouées, 0 test
-  échoué »** : relancer avant de chercher.
+- **Machine à 6 Go de RAM** : `tsc`, `eslint` et `jest` séparément.
 - **La fiche d'un événement lit `venue.flaixEnabled`** : sur un lieu Flaix,
-  ses réglages Break Eat sont masqués exprès. Ne pas les « réparer ».
-- **`liens-commande-flaix.tsx` existe en double** (admin et back-office) :
-  la copie admin a en plus la prop `portee` (`'saison'` par défaut, donc même
-  comportement). Une correction de validation vaut pour les deux.
+  ses réglages Break Eat sont masqués exprès.
+- **`liens-commande-flaix.tsx` existe en double** (admin et back-office) ; la
+  copie admin a en plus la prop `portee`.
+- **`@bacons/apple-targets` utilise des paquets qu'il ne déclare pas**
+  (`@expo/plist`, `@expo/image-utils`) : ils sont déclarés pour lui dans
+  `pnpm-workspace.yaml` (`packageExtensions`). Après toute mise à jour Expo,
+  `npx expo config --type prebuild` doit réussir.
 
 ---
 

@@ -525,6 +525,8 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.6.1 | 2026-11-09 | Un événement se renomme |
 | 1.6.2 | 2026-11-09 | Les notifications rangées par date |
 | 1.7.0 | 2026-11-09 | Un décompte dans la Live Activity, et un aperçu pour la voir |
+| 1.7.1 | 2026-11-09 | Build 38, la mise à jour Expo sur une branche, Android préparé |
+| 1.7.2 | 2026-11-09 | La CI remise au vert, Android débloqué côté clé, et un audit |
 
 ---
 

@@ -4,6 +4,35 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-11-09] Audit, documents, Android débloqué côté clé
+
+### Livré
+
+Audit des 16 commits du 03 au 09/11 (constats dans
+`brain/audits/AUDIT_2026-11-09_dernieres-modifications.md`). Fichier Word des
+phases et de la traçabilité des bugs, régénérable. Canaux Play corrigés.
+Certificat de la clé EAS remis à Google pour réinitialiser la clé
+d'importation. Mise à jour Expo vérifiée par la CI et la build iOS 39.
+
+### Décisions
+
+- **Le fichier Word est GÉNÉRÉ, jamais écrit à la main** : il reprend les
+  titres de `ROADMAP.md`, du manuel et du `CHANGELOG.md`. Un document recopié
+  diverge au premier correctif ; celui-ci se refait en une commande.
+- **La clé d'importation se remplace, elle ne se retrouve pas** : la clé
+  `B4:0E…` appartenait à l'éditeur précédent. La clé de signature (`C6:53…`)
+  reste chez Google : rien ne change pour les utilisateurs.
+- **Une mise à jour de dépendances a sa propre build**, sur une branche,
+  validée par la CI puis par EAS avant fusion — jamais dans la même build
+  qu'une fonctionnalité.
+
+### Constats d'audit non corrigés (en attente de Rémi)
+
+« Noter » sur commande annulée ; pastille « Récupérées » ; dépôt public ;
+favoris au premier chargement ; actions GitHub en Node 20.
+
+---
+
 ## [2026-11-09] La CI était rouge depuis le 06/11, et je ne l'avais pas lue
 
 ### Erreurs commises, à ne pas reproduire
