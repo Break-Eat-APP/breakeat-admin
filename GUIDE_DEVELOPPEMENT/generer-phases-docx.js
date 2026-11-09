@@ -567,7 +567,33 @@ const doc = new Document({
   ],
 });
 
-Packer.toBuffer(doc).then((tampon) => {
-  fs.writeFileSync(SORTIE, tampon);
-  console.log(`Écrit : ${path.relative(RACINE, SORTIE)} (${Math.round(tampon.length / 1024)} Ko)`);
-});
+/**
+ * Retire de l'archive les entrées « dossier » (`word/`, `_rels/`…).
+ *
+ * Word les accepte en local, mais les a déjà refusées à l'ouverture via un
+ * service de co-édition en ligne (OneDrive, SharePoint) — et ce dépôt vit dans
+ * OneDrive. On repasse donc par JSZip, que `docx` embarque déjà.
+ */
+async function sansDossiers(tampon) {
+  let JSZip;
+  try {
+    JSZip = require(require.resolve('jszip', { paths: [path.dirname(require.resolve('docx'))] }));
+  } catch {
+    return tampon; // sans JSZip, le fichier reste valable pour Word en local
+  }
+  // On RECONSTRUIT l'archive avec les seuls fichiers : `zip.remove('word/')`
+  // retirerait aussi tout ce que le dossier contient.
+  const source = await JSZip.loadAsync(tampon);
+  const propre = new JSZip();
+  for (const [nom, entree] of Object.entries(source.files)) {
+    if (!entree.dir) propre.file(nom, await entree.async('nodebuffer'), { createFolders: false });
+  }
+  return propre.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });
+}
+
+Packer.toBuffer(doc)
+  .then(sansDossiers)
+  .then((tampon) => {
+    fs.writeFileSync(SORTIE, tampon);
+    console.log(`Écrit : ${path.relative(RACINE, SORTIE)} (${Math.round(tampon.length / 1024)} Ko)`);
+  });
