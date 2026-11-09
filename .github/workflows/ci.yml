@@ -279,9 +279,29 @@ jobs:
       # instabilite n'est donc pas une regression : c'est la premiere fois
       # qu'on le voit s'executer.
       - name: Build all packages
-        run: pnpm turbo build --concurrency=2
+        # `tee` garde la sortie dans un fichier, `pipefail` garde le code de
+        # sortie de turbo (sans lui, celui de `tee` — toujours 0 — masquerait
+        # l'echec).
+        run: |
+          set -o pipefail
+          pnpm turbo build --concurrency=2 2>&1 | tee build.log
         env:
           NODE_ENV: production
           # Next compile en memoire ; la valeur par defaut de Node ne suffit
           # pas pour l'admin, qui porte le plus d'ecrans.
           NODE_OPTIONS: --max-old-space-size=4096
+
+      # L'ECHEC SE LIT SANS SE CONNECTER.
+      #
+      # Ce job echoue par intermittence depuis le 03/11 (une fois sur deux sur
+      # le MEME commit), et son journal n'est lisible que connecte a GitHub.
+      # Les ANNOTATIONS, elles, sont publiques (API check-runs) : on y recopie
+      # les lignes qui disent pourquoi. Sans effet quand tout passe.
+      - name: Publier la cause d'un echec
+        if: failure()
+        run: |
+          grep -iE "error|failed|cannot|ENOENT|ETIMEDOUT|ECONNRESET|fetch|killed|heap|SIGKILL|exited" build.log \
+            | grep -v "^\s*$" | tail -20 \
+            | while IFS= read -r ligne; do echo "::error title=Build::${ligne:0:600}"; done
+          echo "--- 40 dernieres lignes ---"
+          tail -40 build.log
