@@ -40,7 +40,7 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 | **CI GitHub** | ✅ **verte** sur `main` (7 jobs : Build, Tests, Tests d'intégration, Export web, TypeScript, Lint) — elle était ROUGE du 06/11 au 09/11 sans que personne ne la lise | `https://github.com/Break-Eat-APP/breakeat-admin/actions`, ou l'API `commits/<sha>/check-runs` (dépôt public) |
 | **Serveur (Railway)** | En ligne, sert `acf6187` (le code serveur le plus récent) | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit`, à comparer à `git log -1 origin/main` |
 | **Consoles (Vercel)** | Admin, back-office et opérateur, publiés depuis `main` | Voir « Déploiement des frontends » plus bas |
-| **iOS** | **Build 38** (`258bd14`) sur TestFlight : notifications par date, décompte et aperçu de la Live Activity. **Build 39** (mise à jour Expo, branche `maj/expo-57-0-32`) compilée et envoyée | App Store Connect → TestFlight |
+| **iOS** | **Build 38** (`258bd14`) sur TestFlight : notifications par date, décompte et aperçu de la Live Activity. **Build 39** (mise à jour Expo 57.0.32, fusionnée dans `main` : `b15a626`) envoyée | App Store Connect → TestFlight |
 | **Android** | Compile. **Aucun envoi possible sur Google Play** avant que Google confirme la nouvelle clé d'importation (demandée le 09/11) | Play Console → Intégrité de l'application |
 | **Connexion** | E-mail + mot de passe, Apple, Google (iOS vérifié ; Android : clients OAuth créés, pas encore essayé) | — |
 | **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels n'est pas configuré | `GET /api/v1/auth/password-reset/available` → `false` |
@@ -65,9 +65,10 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
    et Google, notifications par date, puis Profil → Outils super admin →
    Aperçu de la Live Activity (décompte de 3 minutes, puis bascule sur
    l'heure de retrait). Personne n'a encore VU le décompte.
-2. **Fusionner la mise à jour Expo** (`maj/expo-57-0-32`, demande de fusion
-   #4) quand la build Android `c9d56be3` a fini : CI verte, build iOS 39
-   compilée. Ensuite, sur le poste : `pnpm install --frozen-lockfile`.
+2. ✅ **Mise à jour Expo 57.0.32 fusionnée** (`b15a626`, demande de fusion
+   #4) après CI verte, build iOS 39 et build Android `c9d56be3`. Sur un
+   poste : `pnpm install --frozen-lockfile`. L'export web peut échouer sur le
+   poste OneDrive (environnement) : la CI fait foi.
 3. **Corriger les deux défauts de « Mes commandes » trouvés par l'audit** :
    « Noter » proposé sur une commande annulée ou restituée (le serveur
    refuse avec un message faux) ; la pastille « Récupérées » montre aussi

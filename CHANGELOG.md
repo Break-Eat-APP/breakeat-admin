@@ -32,7 +32,8 @@ du keystore et de ses mots de passe ont été supprimées du poste.
 **La mise à jour Expo 57.0.32** (branche `maj/expo-57-0-32`, demande de
 fusion #4) : CI verte — l'**export web passe sous Linux**, l'échec sur le
 poste venait donc de la machine — et **build iOS 39 compilée**, envoyée sur
-TestFlight. Fusion après la build Android de vérification.
+TestFlight ; **build Android `c9d56be3` compilée** elle aussi. Fusionnée dans `main`
+(`b15a626`, demande de fusion #4).
 
 **Audit des modifications du 03 au 09/11**
 (`brain/audits/AUDIT_2026-11-09_dernieres-modifications.md`) : dépôt GitHub
