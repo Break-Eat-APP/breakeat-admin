@@ -1,0 +1,102 @@
+# MISE À JOUR À DISTANCE (EAS Update) — lancée à la main depuis GitHub.
+#
+# POURQUOI ICI ET PAS SUR LE POSTE
+#   Préparer le paquet iOS ou Android demande 2 à 3 Go de mémoire. Le poste de
+#   développement en a 6, dont 0,6 libres un soir de travail : `eas update` y
+#   tombait en « out of memory » (09/11/2026). Les machines de GitHub en ont 16.
+#
+# CE QUI PART
+#   Le JavaScript de l'app (écrans, design, textes). JAMAIS un changement natif
+#   (icône, écran d'ouverture, permission, module natif, Live Activity) : ceux-là
+#   demandent une build, et une version montée dans app.config.js.
+#
+# LES RÉGLAGES SONT CEUX DE LA BUILD, LUS DANS eas.json
+#   La mise à jour embarque l'adresse du serveur et les identifiants Google. Ils
+#   sont lus dans le profil `beta` d'eas.json — celui des builds envoyées sur
+#   l'App Store — et jamais retapés : une mise à jour qui pointerait vers un
+#   autre serveur casserait l'app de tous ceux qui la reçoivent.
+#
+# PRÉREQUIS (une fois) : le secret EXPO_TOKEN dans le dépôt
+#   expo.dev → Account settings → Access tokens → Create token ;
+#   GitHub → Settings → Secrets and variables → Actions → New repository secret.
+name: Mise a jour a distance
+
+on:
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "Ce que contient la mise a jour (visible dans Expo)"
+        required: true
+      plateforme:
+        description: "Plateforme"
+        required: true
+        default: all
+        type: choice
+        options: [all, ios, android]
+
+# Une seule publication à la fois : deux lancements rapprochés se suivent.
+concurrency:
+  group: mise-a-jour-a-distance
+  cancel-in-progress: false
+
+env:
+  PNPM_VERSION: '11.3.0'
+  NODE_VERSION: '22'
+
+jobs:
+  publier:
+    name: Publier sur le canal production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Installer les dependances
+        run: pnpm install --frozen-lockfile
+
+      - name: Verifier le jeton Expo
+        run: |
+          if [ -z "${EXPO_TOKEN}" ]; then
+            echo "::error::Le secret EXPO_TOKEN n'est pas pose dans le depot (voir l'en-tete de ce fichier)."
+            exit 1
+          fi
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      # Les réglages du profil `beta` d'eas.json, recopiés tels quels dans
+      # l'environnement des étapes suivantes. Aucun n'est un secret : un
+      # identifiant client OAuth et une adresse d'API sont embarqués dans l'app.
+      - name: Reprendre les reglages de la build
+        working-directory: apps/mobile
+        run: |
+          node -e "
+            const env = require('./eas.json').build.beta.env || {};
+            const fs = require('fs');
+            for (const [k, v] of Object.entries(env)) fs.appendFileSync(process.env.GITHUB_ENV, k + '=' + v + '\n');
+            console.log('Reglages repris :', Object.keys(env).join(', '));
+          "
+
+      - name: Publier
+        working-directory: apps/mobile
+        run: |
+          npx eas-cli@latest update \
+            --channel production \
+            --environment production \
+            --platform "$PLATEFORME" \
+            --message "$MESSAGE" \
+            --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          NODE_OPTIONS: --max-old-space-size=6144
+          # Par l'environnement, jamais recopiés dans la commande : un guillemet
+          # ou un « $(...) » dans le message serait sinon EXÉCUTÉ par le shell.
+          MESSAGE: ${{ inputs.message }}
+          PLATEFORME: ${{ inputs.plateforme }}

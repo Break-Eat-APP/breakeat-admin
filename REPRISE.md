@@ -117,8 +117,11 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 - **La découverte des lieux est en cache 15 s** (`CACHE_LIEUX_MS`, `0` l'éteint) : un lien Flaix
   corrigé ou un club suspendu se voit dans l'app après au plus 15 s. La commande, elle,
   n'est jamais en cache. Audit : `brain/audits/AUDIT_2026-11-09_chirurgical-charge-flaix.md`.
-- **Mises à jour à distance (EAS Update)** depuis la build 41 : `eas update --channel
-  production` pour un changement JavaScript. **Tout changement natif** (icône, écran
+- **Mises à jour à distance (EAS Update)** depuis la build 41 : **se publient depuis GitHub**
+  (Actions → « Mise a jour a distance » → Run workflow), PAS depuis le poste : la préparation
+  du paquet iOS demande 2 à 3 Go, le poste n'en a que 0,6 de libre (« out of memory » le 09/11).
+  Prérequis : le secret `EXPO_TOKEN` dans le dépôt. Les réglages (serveur, Google) sont repris
+  du profil `beta` d'`eas.json`, jamais retapés. **Tout changement natif** (icône, écran
   d'ouverture, permission, module natif, Live Activity) → **monter `version`** dans
   `app.config.js` avant la build, sinon la mise à jour partirait vers des builds qui n'ont
   pas le code natif attendu.
