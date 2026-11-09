@@ -30,7 +30,7 @@ import {
 import { NoterCommande } from '@components/noter-commande';
 import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
-import { THEME, shadowCard, HEAD, FONT } from '@lib/theme';
+import { THEME, shadowCard, HEAD } from '@lib/theme';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { endTrackingForFinishedOrders } from '@lib/live-activity-tracking';
@@ -88,6 +88,16 @@ interface StatusUi {
  * ticket dessine a la main a l'air dessine a la main.
  */
 const ENCOCHE = 18;
+/**
+ * Les encoches de la DÉCHIRURE, plus grandes que celle du haut (demande du
+ * 09/11 : « plus imposantes »). Ce sont elles qui font lire « ticket » : à
+ * 18 px elles passaient pour un défaut du bord.
+ */
+const ENCOCHE_COTE = 30;
+/** Le violet du reçu : distinct de l'orange des gestes, et du gris du reste. */
+const VIOLET = '#6D28D9';
+const VIOLET_FOND = '#F3EEFF';
+const VIOLET_BORD = '#DDD0FB';
 
 const STATUS_UI: Record<string, StatusUi> = {
   PAID: { phase: 'received', label: 'Commande reçue', color: JAUNE_TEXTE, tint: JAUNE_FOND, icon: 'receipt-outline' },
@@ -144,6 +154,19 @@ const isLive = (status: string): boolean => {
  * personne ne s'en apercoit puisque personne ne les lit.
  */
 const STEPS: Phase[] = ['received', 'preparing', 'ready'];
+
+/**
+ * RÉCUPÉRÉE, et pas seulement « terminée ».
+ *
+ * Une commande annulée ou restituée est terminée aussi, mais le client ne l'a
+ * pas eue entre les mains. Deux conséquences, qui avaient été manquées :
+ *  · seule une commande RÉCUPÉRÉE se note — le serveur refuse les autres
+ *    (`noterCommande`), et le client lisait alors « pas encore récupérée »
+ *    sous une commande annulée ;
+ *  · la pastille « Récupérées » ne montre qu'elles. Les annulées restent
+ *    visibles sous « Toutes », dans la section « Terminées ».
+ */
+const estRecuperee = (status: string): boolean => status === 'PICKED_UP' || status === 'COMPLETED';
 
 export function OrderHistoryScreen() {
   // Espace sous le contenu : la barre flottante ne doit rien recouvrir.
@@ -238,7 +261,11 @@ export function OrderHistoryScreen() {
 
   const sections = useMemo(() => {
     const enCours = orders.filter((o) => isLive(o.status));
-    const terminees = orders.filter((o) => !isLive(o.status));
+    // « Récupérées » ne garde que ce que le client a eu en main ; « Toutes »
+    // montre aussi les annulées et les restituées.
+    const terminees = orders.filter(
+      (o) => !isLive(o.status) && (filtre !== 'terminees' || estRecuperee(o.status)),
+    );
     const garder = (quoi: 'encours' | 'terminees') => filtre === 'toutes' || filtre === quoi;
     return [
       ...(garder('encours') && enCours.length > 0
@@ -410,7 +437,7 @@ export function OrderHistoryScreen() {
           <Text style={styles.emptyText}>
             {filtre === 'encours'
               ? 'Aucune commande en cours.'
-              : 'Aucune commande terminée.'}
+              : 'Aucune commande récupérée.'}
           </Text>
         </View>
       ) : (
@@ -546,7 +573,7 @@ function OrderCard({
     ? order.pickupPlanUrl
       ? 'plan'
       : null
-    : order.note == null
+    : order.note == null && estRecuperee(order.status)
       ? 'noter'
       : null;
 
@@ -673,6 +700,8 @@ function OrderCard({
               </Pressable>
             ) : null}
 
+            {principale === 'plan' ? <View style={styles.separateurActions} /> : null}
+
             {principale === 'noter' ? (
               <Pressable
                 style={({ pressed }) => [styles.action, pressed && styles.pressed]}
@@ -684,14 +713,20 @@ function OrderCard({
               </Pressable>
             ) : null}
 
+            {principale === 'noter' ? <View style={styles.separateurActions} /> : null}
+
+            {/* LE REÇU EN VIOLET (demande du 09/11) : un document, pas un geste —
+                il se distingue de l'orange de « Y aller » et de « Noter ». */}
             <Pressable
-              style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.action, styles.actionRecu, pressed && styles.pressed]}
               onPress={() => void ouvrirRecu(order.id, setRecuEnCours)}
               disabled={recuEnCours}
               hitSlop={4}
             >
-              <Ionicons name="receipt-outline" size={15} color={THEME.inkSoft} />
-              <Text style={styles.actionTexte}>{recuEnCours ? 'Ouverture…' : 'Reçu'}</Text>
+              <Ionicons name="receipt-outline" size={15} color={VIOLET} />
+              <Text style={[styles.actionTexte, styles.actionTexteRecu]}>
+                {recuEnCours ? 'Ouverture…' : 'Reçu'}
+              </Text>
             </Pressable>
           </View>
 
@@ -888,13 +923,13 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   encocheCote: {
-    width: ENCOCHE,
-    height: ENCOCHE,
-    borderRadius: ENCOCHE / 2,
+    width: ENCOCHE_COTE,
+    height: ENCOCHE_COTE,
+    borderRadius: ENCOCHE_COTE / 2,
     backgroundColor: THEME.bgSubtle,
   },
-  encocheGauche: { marginLeft: -ENCOCHE / 2 },
-  encocheDroite: { marginRight: -ENCOCHE / 2 },
+  encocheGauche: { marginLeft: -ENCOCHE_COTE / 2 },
+  encocheDroite: { marginRight: -ENCOCHE_COTE / 2 },
 
   dechirure: { flexDirection: 'row', alignItems: 'center' },
   // `borderStyle: 'dashed'` sur une bordure d'UN SEUL cote est ignore par
@@ -925,13 +960,16 @@ const styles = StyleSheet.create({
   barreSegment: { flex: 1, height: 3, borderRadius: 2, backgroundColor: THEME.border },
   barreSegmentFait: { backgroundColor: THEME.orange },
 
+  // En ORANGE comme le numéro (demande du 09/11) : l'étiquette et la valeur se
+  // lisent d'un seul bloc, et « Numéro de commande » ne passe plus pour une
+  // mention secondaire.
   numeroLabel: {
-    color: THEME.grey,
-    fontSize: 11,
-    fontFamily: FONT.medium,
-    letterSpacing: 0.5,
+    color: THEME.orange,
+    fontSize: 12.5,
+    fontFamily: HEAD.bold,
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
-    marginTop: -4,
+    marginTop: -2,
   },
   /**
    * 40 POINTS, ET EN ORANGE MEME UNE FOIS RECUPEREE.
@@ -949,7 +987,22 @@ const styles = StyleSheet.create({
     marginTop: -2,
   },
 
-  actions: { flexDirection: 'row', gap: 8 },
+  actions: { flexDirection: 'row', alignItems: 'stretch', gap: 10 },
+  /**
+   * LE POINTILLÉ ENTRE DEUX ACTIONS — la même perforation que la déchirure,
+   * debout. Quatre bordures dont trois transparentes : Android ignore
+   * `dashed` sur une bordure d'un seul côté et rendrait un trait plein.
+   */
+  separateurActions: {
+    width: 0,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    borderLeftColor: THEME.border,
+    borderStyle: 'dashed',
+    marginVertical: 2,
+  },
+  actionRecu: { backgroundColor: VIOLET_FOND, borderColor: VIOLET_BORD },
+  actionTexteRecu: { color: VIOLET },
   action: {
     flex: 1,
     flexDirection: 'row',
