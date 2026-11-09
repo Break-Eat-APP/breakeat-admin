@@ -40,8 +40,8 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 | **CI GitHub** | ✅ **verte** sur `main` (7 jobs : Build, Tests, Tests d'intégration, Export web, TypeScript, Lint) — elle était ROUGE du 06/11 au 09/11 sans que personne ne la lise | `https://github.com/Break-Eat-APP/breakeat-admin/actions`, ou l'API `commits/<sha>/check-runs` (dépôt public) |
 | **Serveur (Railway)** | En ligne, sert `acf6187` (le code serveur le plus récent) | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit`, à comparer à `git log -1 origin/main` |
 | **Consoles (Vercel)** | Admin, back-office et opérateur, publiés depuis `main` | Voir « Déploiement des frontends » plus bas |
-| **iOS** | **Build 40** (`1ac1db5`) envoyée sur TestFlight le 09/11 : ticket d'après la maquette, icône vectorielle `#FD4000`, « Noter » / « Récupérées » corrigés, mise à jour Expo 57.0.32, notifications par date, décompte et aperçu de la Live Activity | App Store Connect → TestFlight |
-| **Android** | Compile. **Aucun envoi possible sur Google Play** avant que Google confirme la nouvelle clé d'importation (demandée le 09/11) | Play Console → Intégrité de l'application |
+| **iOS** | **Build 41** (`89c1029`) envoyée sur TestFlight le 09/11 — la PREMIÈRE avec les mises à jour à distance : c'est elle à choisir pour la vérification Apple. Contient tout ce qu'avait la 40 | App Store Connect → TestFlight |
+| **Android** | **Build 41 compilée** (mise à jour Expo 57.0.32 + mises à jour à distance). **Aucun envoi possible sur Google Play** avant que Google confirme la nouvelle clé d'importation (demandée le 09/11) | Play Console → Intégrité de l'application |
 | **Connexion** | E-mail + mot de passe, Apple, Google (iOS vérifié ; Android : clients OAuth créés, pas encore essayé) | — |
 | **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels n'est pas configuré | `GET /api/v1/auth/password-reset/available` → `false` |
 
@@ -62,7 +62,7 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 
 ### Ce qui reste — dans l'ordre
 
-1. **Essayer la build 40 sur iPhone** : ouverture, connexion Apple
+1. **Essayer la build 41 sur iPhone** : ouverture, connexion Apple
    et Google, notifications par date, puis Profil → Outils super admin →
    Aperçu de la Live Activity (décompte de 3 minutes, puis bascule sur
    l'heure de retrait). Personne n'a encore VU le décompte.
