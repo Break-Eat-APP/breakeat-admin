@@ -4,6 +4,27 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-11-09] Le ticket d'après la maquette, l'icône vectorielle
+
+### Livré
+
+Ticket de « Mes commandes » redessiné d'après la maquette de Rémi ; « Noter »
+et « Récupérées » corrigés (audit, constats 2 et 3) ; icône redessinée en
+vectoriel, aplat `#FD4000`.
+
+### Décisions
+
+- **Le numéro reste orange**, sur une bulle blanche dans l'en-tête : la
+  maquette le mettait en blanc, mais la demande écrite était « orange, plus
+  visible ».
+- **Pas de photo de stade** dans l'en-tête (Rémi : « restons simple ») : un
+  champ `venuePhotoUrl` avait été ajouté côté serveur, il a été retiré avant
+  tout commit.
+- **L'icône part désormais d'un dessin vectoriel** (`logo/`), plus jamais
+  d'un export d'image.
+
+---
+
 ## [2026-11-09] Audit, documents, Android débloqué côté clé
 
 ### Livré

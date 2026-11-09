@@ -87,17 +87,21 @@ interface StatusUi {
  * mais distinctes se verraient, et c'est exactement ce qui fait qu'un
  * ticket dessine a la main a l'air dessine a la main.
  */
-const ENCOCHE = 18;
 /**
  * Les encoches de la DÉCHIRURE, plus grandes que celle du haut (demande du
  * 09/11 : « plus imposantes »). Ce sont elles qui font lire « ticket » : à
  * 18 px elles passaient pour un défaut du bord.
  */
-const ENCOCHE_COTE = 30;
+const ENCOCHE_COTE = 34;
+/** Les encoches en demi-cercle du haut et du bas, au centre (maquette du 09/11). */
+const ENCOCHE_CENTRE = 56;
+/**
+ * LE FOND DE PAGE EST ORANGE (maquette du 09/11). Les encoches en prennent la
+ * couleur : ce sont des trous dans le ticket, on doit voir le fond à travers.
+ */
+const FOND_PAGE = THEME.orange;
 /** Le violet du reçu : distinct de l'orange des gestes, et du gris du reste. */
 const VIOLET = '#6D28D9';
-const VIOLET_FOND = '#F3EEFF';
-const VIOLET_BORD = '#DDD0FB';
 
 const STATUS_UI: Record<string, StatusUi> = {
   PAID: { phase: 'received', label: 'Commande reçue', color: JAUNE_TEXTE, tint: JAUNE_FOND, icon: 'receipt-outline' },
@@ -416,7 +420,7 @@ export function OrderHistoryScreen() {
 
       {loading && orders.length === 0 ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={THEME.orange} />
+          <ActivityIndicator size="large" color="#fff" />
         </View>
       ) : error && orders.length === 0 ? (
         <View style={styles.centered}>
@@ -447,7 +451,7 @@ export function OrderHistoryScreen() {
           contentContainerStyle={[styles.list, { paddingBottom: espaceBas }]}
           stickySectionHeadersEnabled={false}
           refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={THEME.orange} />
+            <RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor="#fff" />
           }
           // Un titre SEULEMENT s'il y a les deux : sans commande en cours, la
           // liste n'est qu'un historique, et « Terminées » n'y apprend rien.
@@ -585,156 +589,150 @@ function OrderCard({
       accessibilityLabel={`Commande ${formatOrderNumber(order)} — ${cfg.label}. Toucher pour suivre.`}
     >
       {/*
-        DEUX VUES IMBRIQUEES, ET CE N'EST PAS DECORATIF.
+        LE TICKET, D'APRÈS LA MAQUETTE DE RÉMI (09/11).
 
-        Les encoches du ticket sont des disques POSES A CHEVAL sur le bord : il
-        faut `overflow: hidden` pour n'en garder que la moitie visible. Or sur
-        iOS, une vue qui rogne son contenu ne dessine plus son ombre. L'ombre
-        reste donc dehors, le rognage dedans.
+        Deux vues imbriquées, et ce n'est pas décoratif : les encoches sont des
+        disques POSÉS À CHEVAL sur le bord, rognés par `overflow: hidden`. Or
+        sur iOS une vue qui rogne ne dessine plus son ombre — l'ombre reste
+        donc sur la vue extérieure, le rognage sur l'intérieure.
       */}
       <View style={styles.ticket}>
-        {/* L'encoche du haut — celle qui fait lire « ticket » avant meme
-            d'avoir lu un mot. De la couleur du FOND de page, pas du blanc :
-            c'est un trou, pas une pastille. */}
-        <View style={styles.encocheHaut} />
+        {/* L'EN-TÊTE : la buvette, et le numéro qu'on dira au comptoir. */}
+        <View style={styles.entete}>
+          <Text style={styles.enteteNom} numberOfLines={1}>
+            {order.supplierName ?? 'Commande'}
+          </Text>
+          {/*
+            LE NUMÉRO, EN ORANGE SUR UNE BULLE BLANCHE.
 
-        <View style={styles.ticketHaut}>
-          <View style={styles.ligneEtat}>
+            La maquette le met sous le nom, en blanc. Mais c'est le seul
+            chiffre que le client dira à voix haute, dans le bruit, et il a été
+            demandé « plus visible, en orange » : de l'orange sur l'orange de
+            l'en-tête ne se lirait pas. La bulle blanche garde la place de la
+            maquette ET la couleur demandée.
+          */}
+          <View style={styles.numeroBulle}>
+            <Text style={styles.numeroPrefixe}>N°</Text>
+            <Text style={styles.numeroValeur} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {numeroDeCommandeNu(order)}
+            </Text>
+          </View>
+        </View>
+
+        {/* L'ÉTAT ET LE PRIX, À CHEVAL sur la jonction de l'en-tête et du
+            corps — c'est ce qui donne au ticket son relief. */}
+        <View style={styles.chevauchement}>
+          {/* Fond BLANC sous la teinte : la teinte de l'état est transparente,
+              et posée telle quelle sur l'en-tête orange elle disparaissait. */}
+          <View style={styles.statusSocle}>
             <View style={[styles.statusPill, { backgroundColor: cfg.tint }]}>
-              <Ionicons name={cfg.icon} size={14} color={cfg.color} />
+              <Ionicons name={cfg.icon} size={15} color={cfg.color} />
               <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
             </View>
-            {/* Le chevron dit que la carte s'ouvre. Pose au bout de la ligne du
-                prix, la ou l'oeil termine sa course — pas au milieu de nulle
-                part. */}
-            <View style={styles.prixBloc}>
-              <Text style={styles.price}>{formatPrice(order.totalCents)}</Text>
-              <Ionicons name="chevron-forward" size={16} color={THEME.grey} />
-            </View>
           </View>
+          <View style={styles.prixBulle}>
+            <Text style={styles.prix}>{formatPrice(order.totalCents)}</Text>
+          </View>
+        </View>
 
-          {/*
-            LA PROGRESSION, EN TROIS TRAITS DE TROIS PIXELS.
-
-            Elle remplace trois etapes legendees qui prenaient une ligne
-            entiere et repetaient ce que la pastille dit deja. Ici on voit
-            l'avancement SANS LIRE, et on touche la carte pour le detail —
-            le principe meme d'une Live Activity.
-
-            Absente une fois la commande recuperee : trois traits pleins
-            n'apprennent plus rien, et faisaient ressembler une commande finie
-            a une commande en cours.
-          */}
+        <View style={styles.corps}>
+          {/* La progression, en trois traits : seulement en cours. Une
+              commande finie n'a plus rien à faire avancer. */}
           {live ? (
             <View style={styles.barre}>
               {STEPS.map((phase, i) => (
-                <View
-                  key={phase}
-                  style={[styles.barreSegment, stepIndex >= i && styles.barreSegmentFait]}
-                />
+                <View key={phase} style={[styles.barreSegment, stepIndex >= i && styles.barreSegmentFait]} />
               ))}
             </View>
           ) : null}
 
-          {/* Produit manquant — haut dans la carte, parce que c'est la
-              nouvelle qui change ce que le client doit faire. */}
+          {/* Produit manquant — haut dans le corps : c'est la nouvelle qui
+              change ce que le client doit faire. */}
           {live ? (
-            <MissingItemsBanner
-              lignes={order.items}
-              comptoir={order.supplierName}
-              style={styles.manquant}
-            />
+            <MissingItemsBanner lignes={order.items} comptoir={order.supplierName} style={styles.manquant} />
           ) : null}
 
-          <Text style={styles.supplierText} numberOfLines={1}>
-            {order.supplierName ?? 'Commande'}
-          </Text>
+          {/* RETRAIT | DATE, comme sur la maquette. */}
+          <View style={styles.colonnes}>
+            <View style={styles.colonne}>
+              <Ionicons name="time-outline" size={24} color={live ? cfg.color : THEME.ink} />
+              <View style={styles.colonneTexte}>
+                <Text style={styles.colonneLibelle}>Retrait</Text>
+                <Text
+                  style={[
+                    order.slot ? styles.colonneValeur : styles.colonneValeurTexte,
+                    live && { color: cfg.color },
+                  ]}
+                  numberOfLines={1}
+                >
+                  {heureDeRetrait(order)}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.colonneSeparateur} />
+            <View style={styles.colonne}>
+              <Ionicons name="calendar-outline" size={24} color={THEME.ink} />
+              <View style={styles.colonneTexte}>
+                <Text style={styles.colonneLibelle}>Date</Text>
+                <Text style={styles.colonneValeurDate} numberOfLines={1}>
+                  {dateCourte(order.createdAt)}
+                </Text>
+              </View>
+            </View>
+          </View>
 
-          {/*
-            LE NUMERO — le plus gros caractere de la carte, et en orange
-            MEME UNE FOIS RECUPEREE.
-
-            C'est le seul chiffre que le client aura a dire a voix haute, au
-            comptoir, dans le bruit. L'etiquette le nomme en toutes lettres :
-            pose nu sous un nom de buvette, « 1045 » se confond avec une
-            reference interne.
-
-            Cadre pour QUATRE chiffres : le compteur repart a 1 chaque jour et
-            par lieu, mais un gros match depasse mille commandes.
-          */}
-          <Text style={styles.numeroLabel}>Numéro de commande</Text>
-          <Text style={styles.numeroValeur} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
-            {numeroDeCommandeNu(order)}
-          </Text>
+          {/* Remboursement — jamais masqué par l'état : il arrive le plus
+              souvent APRÈS que tout est terminé. */}
+          <RemboursementBanner paymentStatus={order.paymentStatus} style={styles.manquant} />
         </View>
 
-        {/* LA DECHIRURE : deux encoches et un pointille. */}
+        {/* LA DÉCHIRURE : deux grandes encoches et un pointillé. */}
         <View style={styles.dechirure}>
           <View style={[styles.encocheCote, styles.encocheGauche]} />
           <View style={styles.pointille} />
           <View style={[styles.encocheCote, styles.encocheDroite]} />
         </View>
 
-        <View style={styles.ticketBas}>
-          <View style={styles.retrait}>
-            <Ionicons name="time-outline" size={15} color={live ? cfg.color : THEME.inkSoft} />
-            <Text style={[styles.timeStrong, live && { color: cfg.color }]}>{pickupLabel(order)}</Text>
-            <Text style={styles.timeSoft}>
-              {formatDate(order.createdAt)} · {formatTime(order.createdAt)}
-            </Text>
-          </View>
-
-          {/* Remboursement — JAMAIS masque par l'etat de la commande : il
-              arrive le plus souvent APRES que tout est termine. */}
-          <RemboursementBanner paymentStatus={order.paymentStatus} style={styles.manquant} />
-
-          <View style={styles.actions}>
-            {principale === 'plan' ? (
-              <Pressable
-                style={({ pressed }) => [styles.action, styles.actionPleine, pressed && styles.pressed]}
-                onPress={() => onPlan(order)}
-                hitSlop={4}
-              >
-                <Ionicons name="map-outline" size={15} color="#fff" />
-                <Text style={[styles.actionTexte, styles.actionTextePlein]}>Y aller</Text>
-              </Pressable>
-            ) : null}
-
-            {principale === 'plan' ? <View style={styles.separateurActions} /> : null}
-
-            {principale === 'noter' ? (
-              <Pressable
-                style={({ pressed }) => [styles.action, pressed && styles.pressed]}
-                onPress={() => onNoter(order)}
-                hitSlop={4}
-              >
-                <Ionicons name="star-outline" size={15} color={THEME.orange} />
-                <Text style={[styles.actionTexte, { color: THEME.orange }]}>Noter</Text>
-              </Pressable>
-            ) : null}
-
-            {principale === 'noter' ? <View style={styles.separateurActions} /> : null}
-
-            {/* LE REÇU EN VIOLET (demande du 09/11) : un document, pas un geste —
-                il se distingue de l'orange de « Y aller » et de « Noter ». */}
+        <View style={styles.actions}>
+          {principale === 'plan' ? (
             <Pressable
-              style={({ pressed }) => [styles.action, styles.actionRecu, pressed && styles.pressed]}
-              onPress={() => void ouvrirRecu(order.id, setRecuEnCours)}
-              disabled={recuEnCours}
+              style={({ pressed }) => [styles.action, styles.actionAller, pressed && styles.pressed]}
+              onPress={() => onPlan(order)}
               hitSlop={4}
             >
-              <Ionicons name="receipt-outline" size={15} color={VIOLET} />
-              <Text style={[styles.actionTexte, styles.actionTexteRecu]}>
-                {recuEnCours ? 'Ouverture…' : 'Reçu'}
-              </Text>
+              <Ionicons name="map-outline" size={18} color="#fff" />
+              <Text style={[styles.actionTexte, styles.actionTexteBlanc]}>Y aller</Text>
             </Pressable>
-          </View>
+          ) : null}
+
+          {/* LE REÇU, VIOLET PLEIN : un document, pas un geste — il se
+              distingue de l'orange de « Y aller » et de « Noter ». */}
+          <Pressable
+            style={({ pressed }) => [styles.action, styles.actionRecu, pressed && styles.pressed]}
+            onPress={() => void ouvrirRecu(order.id, setRecuEnCours)}
+            disabled={recuEnCours}
+            hitSlop={4}
+          >
+            <Ionicons name="receipt-outline" size={18} color="#fff" />
+            <Text style={[styles.actionTexte, styles.actionTexteBlanc]}>
+              {recuEnCours ? 'Ouverture…' : 'Voir le reçu'}
+            </Text>
+          </Pressable>
+
+          {principale === 'noter' ? (
+            <Pressable
+              style={({ pressed }) => [styles.action, styles.actionNoter, pressed && styles.pressed]}
+              onPress={() => onNoter(order)}
+              hitSlop={4}
+            >
+              <Ionicons name="star-outline" size={18} color={THEME.orange} />
+              <Text style={[styles.actionTexte, { color: THEME.orange }]}>Noter ma commande</Text>
+            </Pressable>
+          ) : null}
 
           {/*
-            « JE SUIS ARRIVE » reste SOUS les deux boutons, et c'est l'ordre du
-            parcours : on rejoint le stand, PUIS on signale qu'on y est. Le
-            mettre au-dessus demanderait au client de confirmer une arrivee
-            avant de savoir ou aller.
+            « JE SUIS ARRIVÉ » reste SOUS les autres boutons, et c'est l'ordre
+            du parcours : on rejoint le stand, PUIS on signale qu'on y est.
           */}
           {live
             ? arrived
@@ -752,30 +750,22 @@ function OrderCard({
                   accessibilityRole="button"
                   accessibilityLabel="Clique ici pour nous avertir lorsque tu es devant le point de retrait"
                 >
-                  {/* Deux lignes FORCEES, de longueur voisine (36 et 32 signes).
-                      Laissee libre, la coupure tombait ou le hasard de la
-                      largeur la mettait : une ligne pleine, un mot orphelin. */}
-                  <Text
-                    style={styles.arrivedBtnText}
-                    numberOfLines={2}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.85}
-                  >
+                  <Text style={styles.arrivedBtnText} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85}>
                     {'Clique ici pour nous avertir lorsque\ntu es devant le point de retrait'}
                   </Text>
                 </Pressable>
               )
             : null}
 
-          {/* Deja notee : on montre les etoiles choisies. Faire disparaitre la
-              question laisserait croire qu'elle n'a pas ete enregistree. */}
+          {/* Déjà notée : on redonne les étoiles choisies. Faire disparaître la
+              question laisserait croire qu'elle n'a pas été enregistrée. */}
           {!live && order.note != null ? (
             <View style={styles.noteDonnee}>
               {[1, 2, 3, 4, 5].map((n) => (
                 <Ionicons
                   key={n}
                   name={n <= (order.note ?? 0) ? 'star' : 'star-outline'}
-                  size={14}
+                  size={15}
                   color={THEME.orange}
                 />
               ))}
@@ -783,21 +773,34 @@ function OrderCard({
             </View>
           ) : null}
         </View>
+
+        {/* Les encoches du haut et du bas, au centre : ce qui fait lire
+            « ticket » avant même d'avoir lu un mot. De la couleur du FOND de
+            page : ce sont des trous, pas des pastilles. */}
+        <View style={styles.encocheHaut} />
+        <View style={styles.encocheBas} />
       </View>
     </Pressable>
   );
 }
 
-/** Libellé du retrait : créneau si présent (label du club, sinon plage horaire). */
-function pickupLabel(order: Order): string {
+/**
+ * L'heure de retrait, seule — la date a sa propre colonne.
+ *
+ * Le libellé du club quand il en a donné un (« Mi-temps »), sinon l'heure de
+ * début du créneau. Une commande « dès que possible » n'a pas d'heure : on le
+ * dit, plutôt que de laisser une case vide.
+ */
+function heureDeRetrait(order: Order): string {
   const slot = order.slot;
-  if (!slot) return 'Retrait';
-  if (slot.label) return `Retrait ${slot.label}`;
-  return `Retrait ${formatTime(slot.startAt)} – ${formatTime(slot.endAt)}`;
+  if (!slot) return 'Dès que prête';
+  if (slot.label) return slot.label;
+  return formatTime(slot.startAt);
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+/** « 10 oct. 2026 » : la forme courte de la maquette, qui tient dans sa colonne. */
+function dateCourte(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 const styles = StyleSheet.create({
@@ -814,20 +817,20 @@ const styles = StyleSheet.create({
    * pixel. C'est le fond legerement teinte de toutes les interfaces a
    * tickets — et la raison pour laquelle la maquette d'origine en avait un.
    */
-  root: { flex: 1, backgroundColor: THEME.bgSubtle },
+  root: { flex: 1, backgroundColor: FOND_PAGE },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 16, paddingBottom: 8 },
-  screenTitle: { color: THEME.ink, fontSize: 22, fontFamily: HEAD.bold },
+  screenTitle: { color: '#fff', fontSize: 22, fontFamily: HEAD.bold },
 
   liveBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: THEME.orangeTint, paddingHorizontal: 9, paddingVertical: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.22)', paddingHorizontal: 9, paddingVertical: 4,
     borderRadius: THEME.radius.pill,
   },
-  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: THEME.orange },
-  liveText: { color: THEME.orange, fontSize: 11, fontFamily: HEAD.bold },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#fff' },
+  liveText: { color: '#fff', fontSize: 11, fontFamily: HEAD.bold },
 
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 14 },
-  emptyText: { color: THEME.grey, fontSize: 14, textAlign: 'center', fontFamily: HEAD.medium },
+  emptyText: { color: '#fff', fontSize: 14, textAlign: 'center', fontFamily: HEAD.medium },
   bandeauPaiement: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -837,17 +840,17 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: THEME.orangeTint,
+    backgroundColor: THEME.surface,
   },
   bandeauTexte: { color: THEME.orangeDark, fontSize: 13.5, fontWeight: '700', flex: 1 },
-  errorText: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center', fontFamily: HEAD.medium },
+  errorText: { color: '#fff', fontSize: 14, textAlign: 'center', fontFamily: HEAD.medium },
   cta: {
-    backgroundColor: THEME.orange, paddingHorizontal: 28, paddingVertical: 13,
+    backgroundColor: THEME.surface, paddingHorizontal: 28, paddingVertical: 13,
     borderRadius: THEME.radius.control,
   },
-  ctaText: { color: '#fff', fontFamily: HEAD.bold, fontSize: 15 },
+  ctaText: { color: THEME.orange, fontFamily: HEAD.bold, fontSize: 15 },
 
-  list: { padding: 16, gap: 14 },
+  list: { padding: 16, paddingTop: 22, gap: 26 },
 
   filtres: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
   /**
@@ -862,14 +865,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 7,
     borderRadius: THEME.radius.pill,
-    borderWidth: 1,
-    borderColor: 'transparent',
+    backgroundColor: 'rgba(255, 255, 255, 0.18)',
   },
-  pastilleActive: { backgroundColor: THEME.surface, borderColor: THEME.border },
-  pastilleTexte: { color: THEME.grey, fontSize: 13, fontFamily: HEAD.semibold },
+  pastilleActive: { backgroundColor: THEME.surface },
+  pastilleTexte: { color: '#fff', fontSize: 13, fontFamily: HEAD.semibold },
   pastilleTexteActif: { color: THEME.ink },
   sectionTitre: {
-    color: THEME.inkSoft,
+    color: 'rgba(255, 255, 255, 0.9)',
     fontSize: 12.5,
     fontFamily: HEAD.bold,
     letterSpacing: 0.6,
@@ -893,135 +895,153 @@ const styles = StyleSheet.create({
    */
   carte: {
     backgroundColor: THEME.surface,
-    borderRadius: 22,
+    borderRadius: 26,
   },
   ticket: {
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: THEME.border,
+    borderRadius: 26,
+    // Le liseré blanc de la maquette : sans lui, l'en-tête orange se fondait
+    // dans le fond de page orange.
+    borderWidth: 2,
+    borderColor: '#fff',
     // Indispensable : c'est lui qui coupe les encoches en deux.
     overflow: 'hidden',
     backgroundColor: THEME.surface,
   },
 
   /**
-   * LES ENCOCHES — de la couleur du FOND DE PAGE, jamais du blanc.
-   *
-   * Ce sont des TROUS dans le ticket. Peintes en blanc elles disparaitraient
-   * sur la carte, peintes en gris elles ressembleraient a des pastilles. La
-   * moitie qui depasse est rognee par `overflow: hidden` du parent.
+   * LES ENCOCHES — de la couleur du FOND DE PAGE (orange), jamais du blanc.
+   * Ce sont des TROUS dans le ticket ; la moitié qui dépasse est rognée.
    */
   encocheHaut: {
     position: 'absolute',
-    top: -ENCOCHE / 2,
+    top: -ENCOCHE_CENTRE / 2,
     left: '50%',
-    marginLeft: -ENCOCHE / 2,
-    width: ENCOCHE,
-    height: ENCOCHE,
-    borderRadius: ENCOCHE / 2,
-    backgroundColor: THEME.bgSubtle,
-    zIndex: 2,
+    marginLeft: -ENCOCHE_CENTRE / 2,
+    width: ENCOCHE_CENTRE,
+    height: ENCOCHE_CENTRE,
+    borderRadius: ENCOCHE_CENTRE / 2,
+    backgroundColor: FOND_PAGE,
+  },
+  encocheBas: {
+    position: 'absolute',
+    bottom: -ENCOCHE_CENTRE / 2,
+    left: '50%',
+    marginLeft: -ENCOCHE_CENTRE / 2,
+    width: ENCOCHE_CENTRE,
+    height: ENCOCHE_CENTRE,
+    borderRadius: ENCOCHE_CENTRE / 2,
+    backgroundColor: FOND_PAGE,
   },
   encocheCote: {
     width: ENCOCHE_COTE,
     height: ENCOCHE_COTE,
     borderRadius: ENCOCHE_COTE / 2,
-    backgroundColor: THEME.bgSubtle,
+    backgroundColor: FOND_PAGE,
   },
   encocheGauche: { marginLeft: -ENCOCHE_COTE / 2 },
   encocheDroite: { marginRight: -ENCOCHE_COTE / 2 },
 
-  dechirure: { flexDirection: 'row', alignItems: 'center' },
-  // `borderStyle: 'dashed'` sur une bordure d'UN SEUL cote est ignore par
-  // Android : il rend un trait plein. On passe donc par une vue a quatre
-  // bordures dont trois sont transparentes.
+  dechirure: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  // `borderStyle: 'dashed'` sur une bordure d'UN SEUL côté est ignoré par
+  // Android : il rend un trait plein. D'où une vue à quatre bordures dont
+  // trois transparentes.
   pointille: {
     flex: 1,
-    borderWidth: 1,
+    marginHorizontal: 8,
+    borderWidth: 1.5,
     borderColor: 'transparent',
-    borderTopColor: THEME.border,
+    borderTopColor: '#D6CFC9',
     borderStyle: 'dashed',
   },
 
-  ticketHaut: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 13, gap: 10 },
-  ticketBas: { paddingHorizontal: 16, paddingTop: 13, paddingBottom: 16, gap: 10 },
-
-  ligneEtat: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  prixBloc: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-
   /**
-   * TROIS TRAITS DE TROIS PIXELS, et pas trois etapes legendees.
-   *
-   * Les libelles repetaient ce que la pastille dit juste au-dessus, et
-   * prenaient une ligne entiere. Ici l'avancement se voit sans lire ; le
-   * detail est a un doigt, puisque la carte entiere ouvre le suivi.
+   * L'EN-TÊTE ORANGE FONCÉ. Plus sombre que le fond de page : sans cela, le
+   * haut du ticket se confondrait avec l'écran.
    */
-  barre: { flexDirection: 'row', gap: 4, marginTop: -2 },
+  entete: {
+    backgroundColor: THEME.orangeDark,
+    paddingHorizontal: 20,
+    paddingTop: 30,
+    paddingBottom: 34,
+    gap: 10,
+  },
+  enteteNom: { color: '#fff', fontSize: 26, lineHeight: 31, fontFamily: HEAD.bold, letterSpacing: -0.4 },
+  numeroBulle: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  numeroPrefixe: { color: THEME.orange, fontSize: 18, fontFamily: HEAD.bold },
+  /** Le plus gros caractère de la carte : on le dira au comptoir, dans le bruit. */
+  numeroValeur: {
+    color: THEME.orange,
+    fontSize: 36,
+    lineHeight: 42,
+    fontFamily: HEAD.bold,
+    fontVariant: ['tabular-nums'],
+  },
+
+  chevauchement: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingHorizontal: 16,
+    marginTop: -22,
+  },
+  statusSocle: { backgroundColor: '#fff', borderRadius: THEME.radius.pill },
+  prixBulle: {
+    backgroundColor: '#fff',
+    borderRadius: THEME.radius.pill,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  prix: { color: THEME.ink, fontSize: 22, fontFamily: HEAD.bold, fontVariant: ['tabular-nums'] },
+
+  corps: { paddingHorizontal: 20, paddingTop: 16, gap: 12 },
+
+  barre: { flexDirection: 'row', gap: 4 },
   barreSegment: { flex: 1, height: 3, borderRadius: 2, backgroundColor: THEME.border },
   barreSegmentFait: { backgroundColor: THEME.orange },
 
-  // En ORANGE comme le numéro (demande du 09/11) : l'étiquette et la valeur se
-  // lisent d'un seul bloc, et « Numéro de commande » ne passe plus pour une
-  // mention secondaire.
-  numeroLabel: {
-    color: THEME.orange,
-    fontSize: 12.5,
-    fontFamily: HEAD.bold,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    marginTop: -2,
-  },
-  /**
-   * 40 POINTS, ET EN ORANGE MEME UNE FOIS RECUPEREE.
-   *
-   * Chiffres de largeur fixe : un numero se lit et se dicte, et un « 11 » plus
-   * etroit qu'un « 44 » se lit moins vite d'un coup d'oeil. `adjustsFontSizeToFit`
-   * est le filet du jour ou un lieu depassera cinq chiffres.
-   */
-  numeroValeur: {
-    color: THEME.orange,
-    fontSize: 40,
-    lineHeight: 46,
-    fontFamily: HEAD.bold,
-    fontVariant: ['tabular-nums'],
-    marginTop: -2,
-  },
+  colonnes: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
+  colonne: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  colonneTexte: { flexShrink: 1 },
+  colonneSeparateur: { width: 1, alignSelf: 'stretch', backgroundColor: THEME.border, marginHorizontal: 12 },
+  colonneLibelle: { color: THEME.inkSoft, fontSize: 13.5, fontFamily: HEAD.semibold },
+  colonneValeur: { color: THEME.ink, fontSize: 22, fontFamily: HEAD.bold, fontVariant: ['tabular-nums'] },
+  // « Dès que prête » : une phrase, pas une heure — à la taille de la date,
+  // sinon elle ne tient pas dans sa colonne.
+  colonneValeurTexte: { color: THEME.ink, fontSize: 15, fontFamily: HEAD.bold },
+  colonneValeurDate: { color: THEME.ink, fontSize: 15, fontFamily: HEAD.semibold },
 
-  actions: { flexDirection: 'row', alignItems: 'stretch', gap: 10 },
-  /**
-   * LE POINTILLÉ ENTRE DEUX ACTIONS — la même perforation que la déchirure,
-   * debout. Quatre bordures dont trois transparentes : Android ignore
-   * `dashed` sur une bordure d'un seul côté et rendrait un trait plein.
-   */
-  separateurActions: {
-    width: 0,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    borderLeftColor: THEME.border,
-    borderStyle: 'dashed',
-    marginVertical: 2,
-  },
-  actionRecu: { backgroundColor: VIOLET_FOND, borderColor: VIOLET_BORD },
-  actionTexteRecu: { color: VIOLET },
+  actions: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 30, gap: 10 },
   action: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 11,
+    gap: 8,
+    paddingVertical: 14,
     borderRadius: THEME.radius.pill,
-    borderWidth: 1,
-    borderColor: THEME.border,
   },
-  // Pleine et orange : c'est le geste qui deplace le client. Un seul par
-  // carte — deux boutons pleins ne hierarchisent plus rien.
-  actionPleine: { backgroundColor: THEME.orange, borderColor: THEME.orange },
-  actionTexte: { color: THEME.inkSoft, fontSize: 13.5, fontFamily: HEAD.bold },
-  actionTextePlein: { color: '#fff' },
+  // Pleine et orange : le geste qui déplace le client. Un seul par carte.
+  actionAller: { backgroundColor: THEME.orange },
+  actionRecu: { backgroundColor: VIOLET },
+  actionNoter: { backgroundColor: THEME.orangeTint },
+  actionTexte: { fontSize: 15, fontFamily: HEAD.bold },
+  actionTexteBlanc: { color: '#fff' },
 
   pressed: { opacity: 0.85 },
-  price: { color: THEME.ink, fontSize: 15, fontFamily: HEAD.bold, fontVariant: ['tabular-nums'] },
 
   statusPill: {
     flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
@@ -1032,21 +1052,7 @@ const styles = StyleSheet.create({
 
   manquant: { marginTop: 10 },
 
-  retrait: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    flexWrap: 'wrap',
-    backgroundColor: THEME.bgSubtle,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  timeStrong: { color: THEME.ink, fontSize: 13, fontFamily: HEAD.semibold },
-  timeSoft: { color: THEME.inkSoft, fontSize: 12, fontFamily: HEAD.medium },
-  dateLine: { color: THEME.grey, fontSize: 11.5, fontFamily: HEAD.medium },
 
-  supplierText: { color: THEME.ink, fontSize: 16.5, fontFamily: HEAD.bold, letterSpacing: -0.2 },
   arrivedBtn: {
     alignItems: 'center', justifyContent: 'center',
     backgroundColor: THEME.orange, borderRadius: THEME.radius.pill,

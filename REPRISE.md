@@ -58,6 +58,7 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 | 09/11 | **Décompte dans la Live Activity** + **aperçu** super admin | CHANGELOG 1.7.0 |
 | 09/11 | Build 38 ; clé Google Play protégée ; fichier Firebase branché | CHANGELOG 1.7.1 |
 | 09/11 | **CI remise au vert** ; canaux Play remis dans le bon sens ; clé d'importation Android : réinitialisation demandée ; mise à jour Expo vérifiée (CI + build 39) ; audit ; fichier Word des phases | CHANGELOG 1.7.2 |
+| 09/11 | **Ticket d'après la maquette**, « Noter » et « Récupérées » corrigés, **icône vectorielle `#FD4000`** — dans la prochaine build | CHANGELOG 1.7.3 |
 
 ### Ce qui reste — dans l'ordre
 
@@ -69,10 +70,9 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
    #4) après CI verte, build iOS 39 et build Android `c9d56be3`. Sur un
    poste : `pnpm install --frozen-lockfile`. L'export web peut échouer sur le
    poste OneDrive (environnement) : la CI fait foi.
-3. **Corriger les deux défauts de « Mes commandes » trouvés par l'audit** :
-   « Noter » proposé sur une commande annulée ou restituée (le serveur
-   refuse avec un message faux) ; la pastille « Récupérées » montre aussi
-   les annulées. Voir l'audit du 09/11, constats 2 et 3.
+3. ✅ **Défauts de « Mes commandes » corrigés** (audit, constats 2 et 3), et
+   **ticket redessiné d'après la maquette de Rémi**, **icône vectorielle**
+   (`#FD4000`) — tout cela attend la **prochaine build iOS** (CHANGELOG 1.7.3).
 4. **Passer le dépôt GitHub en privé** (décision de Rémi) — audit, constat 1.
 5. **Le flux des commandes Flaix — côté développeur Flaix.** Une commande
    passée dans Flaix ne crée rien chez BreakEat ; la Live Activity, la note,

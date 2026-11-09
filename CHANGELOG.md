@@ -5,6 +5,37 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.3] — 2026-11-09 — Le ticket d'après la maquette, et une icône enfin nette
+
+**« Mes commandes » reprend la maquette de Rémi.** Fond de page orange ; le
+ticket a un en-tête orange foncé (la buvette en blanc, le **numéro en orange
+sur une bulle blanche** — la maquette le met en blanc, mais il avait été
+demandé « plus visible, en orange », et de l'orange sur l'en-tête ne se
+lirait pas) ; l'état et le prix **à cheval** sur la jonction ; deux colonnes
+**Retrait | Date** ; un pointillé entre de **grandes encoches** (34 px) ;
+des encoches en demi-cercle **en haut et en bas** ; les boutons empilés
+**« Voir le reçu »** violet plein et **« Noter ma commande »** orange clair.
+Pas de photo de stade ni d'icône de gobelet : Rémi a préféré rester simple.
+
+**Deux défauts de l'audit corrigés** : « Noter » ne s'affiche plus que sur
+une commande RÉCUPÉRÉE (le serveur refusait les annulées avec un message
+faux) ; la pastille « Récupérées » ne montre plus les annulées.
+
+**L'icône redessinée en vectoriel** : l'ancienne, tirée d'une image, avait
+2 540 teintes d'orange (14 pixels seulement en `#FD4000`) et des bords
+irréguliers. La nouvelle est tracée depuis le masque de 1254 px du logo
+officiel : aplat **exactement `#FD4000`**, bords nets, cadrage identique au
+pixel. Les sources vectorielles sont dans `logo/`.
+
+Vérifié à l'écran (export web, faux serveur, cinq commandes). Visible sur
+téléphone à la prochaine build.
+
+`~ apps/mobile/src/screens/order-history.screen.tsx`
+`~ apps/mobile/assets/logo-mark-orange.png`
+`+ logo/marque-breakeat-vectorielle.svg` `+ logo/icone-1024-vectorielle.svg`
+
+---
+
 ## [1.7.2] — 2026-11-09 — La CI remise au vert, Android débloqué côté clé, et un audit
 
 **La CI était rouge depuis le 06/11** et personne ne la lisait — moi le
