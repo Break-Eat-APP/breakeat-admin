@@ -64,6 +64,9 @@ const CUSTOMER_SLOT_SELECT = {
  */
 const COMPTOIR_ROLES: OrgRole[] = [OrgRole.ORG_ADMIN, OrgRole.MANAGER, OrgRole.OPERATOR];
 
+/** Le nombre de commandes que « Mes commandes » rend au client — les plus récentes. */
+export const MES_COMMANDES_MAX = 50;
+
 @UseGuards(JwtAuthGuard)
 @Controller('orders')
 export class OrdersController {
@@ -86,6 +89,13 @@ export class OrdersController {
     const orders = await this.prisma.order.findMany({
       where: { userId: user.sub },
       orderBy: { createdAt: 'desc' },
+      // BORNÉ (audit du 09/11). Sans limite, la route rendait TOUT l'historique,
+      // lignes comprises — et la pastille de suivi la rappelle toutes les dix
+      // secondes pendant une commande en cours. Un habitué de deux saisons
+      // téléchargeait des centaines de commandes pour en suivre une. Les
+      // cinquante plus récentes couvrent l'écran « Mes commandes » et, surtout,
+      // toute commande encore en cours.
+      take: MES_COMMANDES_MAX,
       // `slot` : l'app affiche le créneau de retrait à côté du statut, et il doit
       // refléter une éventuelle réassignation (cf. PATCH /orders/:id/slot).
       include: {

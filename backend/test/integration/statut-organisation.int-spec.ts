@@ -8,7 +8,15 @@
  *
  * Base réelle : ce sont de vraies requêtes Prisma, avec le filtre tel qu'il est
  * écrit dans le code de recherche.
+ *
+ * LE CACHE DE LA DÉCOUVERTE EST ÉTEINT ICI (`CACHE_LIEUX_MS=0`), et c'est
+ * voulu : ce fichier relit la liste juste après avoir suspendu le club, pour
+ * vérifier la RÈGLE de filtrage. En production, la liste garde sa lecture
+ * quelques secondes (`cache-court.ts`) : un club suspendu disparaît de la
+ * découverte au plus tard après ce délai — mais la COMMANDE, elle, n'est jamais
+ * mise en cache, et elle est refusée tout de suite (testé plus bas).
  */
+process.env.CACHE_LIEUX_MS = '0';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { VenueStatus } from '@prisma/client';
 import { PublicVenuesController } from '../../src/modules/venues/public-venues.controller';

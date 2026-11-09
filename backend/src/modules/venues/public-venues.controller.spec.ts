@@ -421,6 +421,53 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
     );
   });
 
+  /**
+   * LE CACHE NE FAIT JAMAIS PASSER UNE IDENTITÉ D'UN CLIENT À L'AUTRE.
+   *
+   * La lecture des lieux est gardée quelques secondes et partagée par tous
+   * (`cache-court.ts`) ; le lien Flaix, lui, porte le nom et l'adresse du
+   * client. Si la personnalisation écrivait dans la lecture partagée au lieu
+   * d'une copie, le client suivant recevrait le lien du précédent — l'identité
+   * d'un inconnu, au coup d'envoi, à des milliers d'exemplaires.
+   */
+  it('cache chaud : chaque client reçoit SON identité, un anonyme aucune', async () => {
+    const debut = new Date(Date.now() - 60 * 60_000);
+    (prisma.venue.findMany as jest.Mock).mockResolvedValue([
+      {
+        ...LIEU_FLAIX,
+        events: [
+          EV({
+            startAt: debut,
+            endAt: new Date(Date.now() + 60 * 60_000),
+            flaixOrderUrl:
+              'https://commande.flaix.bo.synertic.net/o/x?firstname=[#firstname]&mail=[#mail]',
+          }),
+        ],
+      },
+    ]);
+    (prisma.groupMember.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.user.findUnique as jest.Mock).mockImplementation(({ where }: { where: { id: string } }) =>
+      Promise.resolve(
+        where.id === 'alice'
+          ? { firstName: 'Alice', lastName: 'A', email: 'alice@exemple.fr', phone: null, displayName: 'Alice' }
+          : { firstName: 'Bruno', lastName: 'B', email: 'bruno@exemple.fr', phone: null, displayName: 'Bruno' },
+      ),
+    );
+
+    // UN SEUL contrôleur : le cache est partagé entre les trois appels.
+    const controleur = makeController();
+    const [a] = await controleur.search({ sub: 'alice' } as never, 'stade');
+    const [b] = await controleur.search({ sub: 'bruno' } as never, 'stade');
+    const [anonyme] = await controleur.search(undefined, 'stade');
+
+    expect(a.flaixOrderUrl).toContain('firstname=Alice');
+    expect(b.flaixOrderUrl).toContain('firstname=Bruno');
+    expect(b.flaixOrderUrl).not.toContain('Alice');
+    expect(anonyme.flaixOrderUrl).toBe('https://commande.flaix.bo.synertic.net/o/x');
+    // Et la base n'a été lue qu'UNE fois pour les trois : c'est le but.
+    expect(prisma.venue.findMany).toHaveBeenCalledTimes(1);
+  });
+
   it('un visiteur ANONYME obtient l’adresse nue, sans etiquette', async () => {
     const debut = new Date(Date.now() - 60 * 60_000);
     (prisma.venue.findMany as jest.Mock).mockResolvedValue([

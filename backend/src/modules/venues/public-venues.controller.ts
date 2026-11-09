@@ -19,6 +19,7 @@ import {
   fenetreDeCommande,
 } from '../../common/helpers/fenetre-commande';
 import { saisonDuLieu } from '../../common/helpers/saison-du-lieu';
+import { CacheCourt, dureeCacheLieux } from '../../common/helpers/cache-court';
 import { modeDeCommande } from '../../common/helpers/mode-de-commande';
 import { personnaliserLien, porteDesEtiquettes } from '../../common/helpers/personnaliser-lien';
 
@@ -151,6 +152,26 @@ const SELECTION_LIEU = {
 @UseGuards(OptionalJwtAuthGuard)
 @Controller('public/venues')
 export class PublicVenuesController {
+  /**
+   * LES LECTURES COMMUNES À TOUS, GARDÉES QUELQUES SECONDES (`cache-court.ts`).
+   *
+   * Mesuré au banc de charge : la découverte plafonnait à ~45 requêtes par
+   * seconde et par instance, chacune relisant en base les mêmes lieux et les
+   * mêmes matchs. Au coup d'envoi, mille supporters qui ouvrent la même fiche
+   * ne déclenchent plus qu'UNE lecture.
+   *
+   * Seul le BRUT est gardé — lieux et comptages, identiques pour tous. Tout ce
+   * qui dépend du client (groupes, identité glissée dans le lien Flaix,
+   * distance, ouverture de la commande à la minute près) est recalculé à
+   * chaque requête, sur une COPIE de la lecture.
+   */
+  private readonly cacheLieux = new CacheCourt<
+    Awaited<ReturnType<PublicVenuesController['lireEnBase']>>
+  >(dureeCacheLieux());
+  private readonly cacheComptes = new CacheCourt<
+    [{ venueId: string }[], { venueId: string }[]]
+  >(dureeCacheLieux());
+
   /** Rayon par défaut au-delà duquel un lieu géolocalisé est écarté. */
   private static readonly DEFAULT_RADIUS_KM = 10;
 
@@ -233,7 +254,18 @@ export class PublicVenuesController {
    * Sans elle, il faudrait écrire à la main le type de ce que Prisma renvoie —
    * une trentaine de champs imbriqués, qu'un jour on oublierait de suivre.
    */
-  private lire(where: Prisma.VenueWhereInput) {
+  /**
+   * La lecture des lieux, par le cache. Une COPIE profonde à chaque appel : la
+   * lecture en cache est partagée par toutes les requêtes, et la projection
+   * travaille dessus client par client — une modification, même involontaire,
+   * ne doit jamais passer d'un client à l'autre.
+   */
+  private async lire(where: Prisma.VenueWhereInput) {
+    const lus = await this.cacheLieux.obtenir(JSON.stringify(where), () => this.lireEnBase(where));
+    return structuredClone(lus);
+  }
+
+  private lireEnBase(where: Prisma.VenueWhereInput) {
     return this.prisma.venue.findMany({
       where,
       orderBy: { name: 'asc' },
@@ -295,7 +327,10 @@ export class PublicVenuesController {
      * six mois doit rester masqué.
      */
     const ids = venues.map((v) => v.id);
-    const [aDesEvenements, aDuAccessible] = await Promise.all([
+    // Sans accès privé (anonyme, ou client sans groupe — presque tout le
+    // monde), les deux comptages sont les mêmes pour tous : on les garde.
+    const compter = () =>
+      Promise.all([
       this.prisma.event.groupBy({
         by: ['venueId'],
         where: { venueId: { in: ids } },
@@ -313,6 +348,10 @@ export class PublicVenuesController {
         _count: { _all: true },
       }),
     ]);
+    const [aDesEvenements, aDuAccessible] =
+      accessibleEventIds.size === 0
+        ? await this.cacheComptes.obtenir(ids.join(','), compter)
+        : await compter();
     const porteurs = new Set(aDesEvenements.map((g) => g.venueId));
     const ouverts = new Set(aDuAccessible.map((g) => g.venueId));
 

@@ -181,7 +181,9 @@ describe('Limitation de débit', () => {
 describe('le plafond par IP', () => {
   it('vaut 30 000 par défaut — un grand stade passe, un script non', () => {
     expect(limiteIp(undefined)).toBe(LIMITE_IP_DEFAUT);
-    expect(LIMITE_IP_DEFAUT).toBe(30_000);
+    // Relevé de 30 000 à 60 000 le 09/11 : trois à quatre requêtes par
+    // ouverture d'app, dix mille téléphones derrière l'adresse d'un stade.
+    expect(LIMITE_IP_DEFAUT).toBe(60_000);
   });
 
   it('se règle par variable d’environnement', () => {

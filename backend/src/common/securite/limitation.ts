@@ -94,10 +94,10 @@ export function concerneUneAuthentification(req: RequeteLue): boolean {
 /**
  * Le plafond du coupe-circuit, par minute et par adresse IP.
  *
- * Trente mille : un grand stade au coup d'envoi — quelques milliers de
- * téléphones qui chargent leur écran en même temps — reste très en dessous,
- * tandis qu'une machine qui tire cinq cents requêtes par seconde le franchit
- * en une minute. Ce n'est pas une protection fine, et ça ne prétend plus
+ * Soixante mille (relevé le 09/11, voir plus bas) : un grand stade au coup
+ * d'envoi — quelques milliers de téléphones qui ouvrent l'app en même temps —
+ * reste en dessous, tandis qu'une machine qui tire mille requêtes par seconde
+ * le franchit en une minute. Ce n'est pas une protection fine, et ça ne prétend plus
  * l'être.
  *
  * RÉGLABLE SANS REDÉPLOYER, par `LIMITE_IP_PAR_MINUTE`. Un soir de match, on
@@ -106,7 +106,7 @@ export function concerneUneAuthentification(req: RequeteLue): boolean {
  * l'ardoise. Une valeur illisible ou absurde retombe sur le défaut plutôt que
  * d'ouvrir en grand ou de tout fermer.
  */
-export const LIMITE_IP_DEFAUT = 30_000;
+export const LIMITE_IP_DEFAUT = 60_000;
 
 export function limiteIp(brut = process.env.LIMITE_IP_PAR_MINUTE): number {
   const n = Number(brut);
@@ -114,10 +114,17 @@ export function limiteIp(brut = process.env.LIMITE_IP_PAR_MINUTE): number {
 }
 
 /**
- * CE QUE VAUT LA MESURE : 30 000 EST LA BONNE TAILLE, AVEC LE DOUBLE DE MARGE.
+ * CE QUE VAUT LA MESURE — RECOMPTÉE LE 09/11, ET LE PLAFOND DOUBLÉ.
  *
- * L'audit demandait les appels réels par parcours, et l'effet du NAT des
- * stades. Comptés dans l'application mobile :
+ * Le décompte qui suit annonçait « 1 requête à l'ouverture » et justifiait
+ * 30 000 « avec le double de marge ». Il était devenu faux : depuis la
+ * pastille de suivi, la cloche et « À ne pas manquer », un client connecté
+ * fait TROIS requêtes en ouvrant l'app (lieux, notifications, commandes), et
+ * QUATRE s'il a des favoris. Dix mille supporters derrière l'adresse du stade
+ * qui ouvrent l'app dans la même minute font 30 000 à 40 000 requêtes : au
+ * niveau de l'ancien plafond, au coup d'envoi. D'où 60 000.
+ *
+ * Décompte d'origine, gardé pour l'histoire (avant le 09/11) :
  *
  *   · ouvrir l'app froid           1 requête  (`apiSearchVenues`)
  *   · toucher un lieu              2          (fiche + profil)

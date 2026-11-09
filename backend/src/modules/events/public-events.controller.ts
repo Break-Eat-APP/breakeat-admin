@@ -28,6 +28,7 @@ import {
   type EvenementANePasManquer,
   type LieuEtSesEvenements,
 } from '../../common/helpers/a-ne-pas-manquer';
+import { CacheCourt, dureeCacheLieux } from '../../common/helpers/cache-court';
 
 /**
  * Combien de lieux favoris on accepte d'interroger d'un coup.
@@ -40,6 +41,18 @@ const MAX_LIEUX_INTERROGES = 20;
 
 /** Prisma leve sur un UUID mal forme : on filtre avant de l'interroger. */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Un événement tel que « À ne pas manquer » le lit — exactement la sélection faite plus bas. */
+type EvenementLu = {
+  id: string;
+  name: string;
+  startAt: Date;
+  opponentName: string | null;
+  opponentLogoUrl: string | null;
+  posterUrl: string | null;
+  venueId: string;
+  venue: { name: string };
+};
 
 /**
  * PublicEventsController — read-only endpoints for mobile customers.
@@ -61,6 +74,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 @UseGuards(OptionalJwtAuthGuard)
 @Controller('public/events')
 export class PublicEventsController {
+  /** « À ne pas manquer », lu une fois pour tous ceux qui suivent les mêmes lieux. */
+  private readonly cacheAVenir = new CacheCourt<EvenementLu[]>(dureeCacheLieux());
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly groupsService: GroupsService,
@@ -138,7 +154,11 @@ export class PublicEventsController {
       }
     }
 
-    const evenements = await this.prisma.event.findMany({
+    // Sans accès privé — anonyme, ou client sans groupe : presque tout le
+    // monde —, la lecture est la même pour tous ceux qui suivent ces lieux :
+    // gardée quelques secondes (`cache-court.ts`). Avec un accès privé, elle
+    // est propre au client et relue à chaque fois.
+    const lireEvenements = () => this.prisma.event.findMany({
       where: {
         venueId: { in: ids },
         // À VENIR au sens du calendrier : un match commencé n'y figure plus,
@@ -170,6 +190,13 @@ export class PublicEventsController {
         venue: { select: { name: true } },
       },
     });
+    // La clé ne dépend pas de l'ordre des favoris : deux clients qui suivent
+    // les mêmes lieux partagent la même lecture. L'ordre, lui, est rétabli
+    // juste en dessous, client par client.
+    const evenements =
+      prives.size === 0
+        ? await this.cacheAVenir.obtenir([...ids].sort().join(','), lireEvenements)
+        : await lireEvenements();
 
     // Regroupés DANS L'ORDRE DES FAVORIS reçus, et non dans celui de la base :
     // à nombre d'événements égal, c'est la liste du client qui décide.
