@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nest
 import { LiveActivityStatus, OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { ApnsService } from './apns.service';
+import { dateDePeremption } from './peremption';
 
 /**
  * État affiché par la Live Activity.
@@ -103,8 +104,6 @@ const TERMINAL_ORDER_STATUSES: OrderStatus[] = [
 
 /** Combien de temps l'activité reste visible après la fin (Apple plafonne à 4 h). */
 const DISMISS_AFTER_MS = 60 * 1000;
-/** Au-delà, iOS grise l'activité comme potentiellement périmée. */
-const STALE_AFTER_MS = 60 * 60 * 1000;
 
 /**
  * LiveActivityService — cycle de vie des Live Activities iOS.
@@ -350,7 +349,9 @@ export class LiveActivityService {
         contentState as unknown as Record<string, unknown>,
         {
           dismissalDate: isFinal ? new Date(now + DISMISS_AFTER_MS) : undefined,
-          staleDate: isFinal ? undefined : new Date(now + STALE_AFTER_MS),
+          // À la fin du décompte quand il y en a un, sinon dans une heure —
+          // voir `peremption.ts`.
+          staleDate: isFinal ? undefined : dateDePeremption(contentState, now),
           alert: isFinal ? undefined : alerte,
         },
       );

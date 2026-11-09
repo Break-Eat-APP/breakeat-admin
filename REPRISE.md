@@ -47,42 +47,48 @@ _Dernière mise à jour : 2026-11-09 — lire d'abord « ÉTAT AU 09/11/2026 » 
 | 06/11 | **Fiche d'un événement sur un lieu Flaix** : lien Flaix, adversaire, blason et affiche éditables depuis la fiche ; aucune configuration Break Eat proposée (créneaux, buvettes, produits…) ; erreur de dates en français | CHANGELOG 1.6.0 |
 | 09/11 | **Renommer un événement** depuis sa fiche (grisé si terminé ou annulé) | CHANGELOG 1.6.1 |
 | 09/11 | **Notifications rangées par date** (Aujourd'hui / Hier / Cette semaine / Plus ancien) — dans la prochaine build iOS | CHANGELOG 1.6.2 |
+| 09/11 | **Décompte dans la Live Activity** + **aperçu** pour le super admin (Profil → Outils super admin) — Swift NON compilé, dans la prochaine build iOS | CHANGELOG 1.7.0 |
 
 ### Ce qui reste — dans l'ordre
 
-0. **Le chantier structurant : faire remonter les commandes de Flaix par
-   API** (décidé le 09/11). Une commande passée dans Flaix ne crée rien chez
-   BreakEat ; or la Live Activity, la note d'une commande, la fidélité et
-   « Je suis arrivé » partent d'une commande enregistrée chez nous. Les
-   trois lieux en production sont en Flaix : ces fonctions y sont éteintes.
-   Conditionne aussi : le **décompte** dans la Live Activity (faisable en
-   natif, attend ce flux) et le choix **note générale ou note du bon de
-   commande** (Rémi : la note par buvette n'est pas utile, Flaix tient les
-   buvettes). Décisions préalables : `brain/FRONTIERE_FLAIX_OPS.md`.
-   Nouvelle build iOS à lancer pour livrer les notifications par date.
-1. **Courriels (Brevo)** — à faire par Rémi : créer le compte Brevo, vérifier
+1. **Build iOS 38** — porte les notifications par date, le décompte de la
+   Live Activity et son aperçu. C'est aussi la PREMIÈRE compilation du Swift
+   modifié le 09/11 : si elle échoue, regarder d'abord
+   `BreakEatLiveActivity.swift` (`Decompte`, `cibleVisible`) et
+   `LiveActivityModule.swift`. Puis, sur l'iPhone de Rémi : Profil → Outils
+   super admin → Aperçu de la Live Activity.
+2. **Le flux des commandes Flaix — côté développeur Flaix** (Rémi, 09/11 :
+   « mon dev gère ça de son côté »). Une commande passée dans Flaix ne crée
+   rien chez BreakEat ; or la Live Activity, la note, la fidélité et « Je suis
+   arrivé » partent d'une commande enregistrée chez nous — les trois lieux en
+   production sont en Flaix, ces fonctions y sont éteintes. Quand le flux
+   arrive : y brancher la Live Activity (le décompte est déjà prêt) et la
+   **note du bon de commande** (choix de Rémi : la note porte sur la commande
+   remontée — match, heure, numéro —, pas sur un lieu ni sur une buvette).
+   Contexte : `brain/FRONTIERE_FLAIX_OPS.md`.
+3. **Courriels (Brevo)** — à faire par Rémi : créer le compte Brevo, vérifier
    le domaine `breakeatapp.com` (DNS), puis poser `MAIL_PROVIDER=brevo`,
    `MAIL_API_KEY` et `MAIL_FROM` sur Railway. Ensuite : vérifier que
    `/auth/password-reset/available` rend `true`, et **ajouter Brevo à la
    politique de confidentialité §5** (`documents-legaux/`), qui ne cite aucun
    prestataire d'envoi aujourd'hui.
-2. **Données de production** — à faire par Rémi dans l'admin : renommer
+4. **Données de production** — à faire par Rémi dans l'admin : renommer
    l'événement « test » ; au Vélodrome, deux matchs ont nom et adversaire
    inversés (« UEFA » d'un côté, « Marseille vs … » de l'autre) ;
    l'Aréna et les Spartiates n'ont aucun match programmé.
-3. **Revue Apple 1.1.0** — compte de revue au nom de Rémi (identifiants dans
+5. **Revue Apple 1.1.0** — compte de revue au nom de Rémi (identifiants dans
    App Store Connect, **jamais dans le dépôt**, mot de passe distinct de toute
    boîte personnelle). Notes de revue : présenter Flaix comme un logiciel de
    **la même société**, pas « un partenaire » ; préciser que l'app vend des
    **biens physiques** retirés sur place (règle 3.1.3(e) — pas d'achat intégré).
-4. **Android sur le Play Store** — `google-play-service-account.json` pour
+6. **Android sur le Play Store** — `google-play-service-account.json` pour
    `eas submit`, Firebase (`google-services.json` + clé FCM V1 dans EAS),
    deux clients OAuth Android (paquet `com.shapper.breakeat`, un par SHA-1 :
    clé d'envoi et clé Play), et vérifier que le keystore EAS est bien la clé
    d'envoi déclarée.
-5. **Rattrapage des paquets Expo** — onze paquets en retard de correctifs
+7. **Rattrapage des paquets Expo** — onze paquets en retard de correctifs
    (`expo` 57.0.16 contre 57.0.31). Session dédiée, pas un soir de build.
-6. **Favoris entre appareils** — aujourd'hui sur le téléphone seulement (clé
+8. **Favoris entre appareils** — aujourd'hui sur le téléphone seulement (clé
    `break_eat_favoris`). À poser le jour où un client en a deux ; il faudra un
    compte, alors que parcourir les lieux n'en demande pas.
 

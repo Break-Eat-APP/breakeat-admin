@@ -65,7 +65,15 @@ public class LiveActivityModule: Module {
       }
 
       let attributes = BreakEatOrderAttributes(orderId: orderId)
-      let content = ActivityContent(state: state.toContentState(), staleDate: nil)
+      let contentState = state.toContentState()
+      // Périmée PILE à la fin du décompte, comme le serveur le fait à chaque
+      // mise à jour (`peremption.ts`) : sinon, tant que le serveur n'a rien
+      // poussé, le chrono resterait figé à « 0:00 ».
+      var staleDate: Date? = nil
+      if let cible = contentState.countdownTarget, cible > Date() {
+        staleDate = cible
+      }
+      let content = ActivityContent(state: contentState, staleDate: staleDate)
 
       do {
         let activity = try Activity.request(

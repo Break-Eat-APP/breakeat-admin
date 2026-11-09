@@ -7,6 +7,7 @@ import {
   type LiveActivityState,
 } from '../../modules/live-activity';
 import { apiRegisterLiveActivity, apiUnregisterLiveActivity } from '@lib/api/mobile-api';
+import { estUnApercu } from '@lib/apercu-live-activity';
 
 /**
  * Orchestration du suivi de commande sur écran verrouillé.
@@ -33,6 +34,9 @@ let tokenSubscription: (() => void) | null = null;
 export function initLiveActivityTokenSync(): void {
   if (tokenSubscription) return;
   tokenSubscription = onPushToken(({ activityId, orderId, pushToken }) => {
+    // L'aperçu du super admin n'a pas de commande côté serveur : enregistrer
+    // son jeton y produirait une erreur, et rien à pousser.
+    if (estUnApercu(orderId)) return;
     void apiRegisterLiveActivity({ orderId, activityId, pushToken }).catch((e: unknown) => {
       // Sans token côté serveur, l'activité restera figée sur son état initial.
       console.warn('Enregistrement du token de Live Activity échoué:', e);

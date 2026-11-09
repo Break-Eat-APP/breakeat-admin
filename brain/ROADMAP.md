@@ -524,6 +524,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.6.0 | 2026-11-06 | Le ticket, « À ne pas manquer », et la fiche d'un match Flaix |
 | 1.6.1 | 2026-11-09 | Un événement se renomme |
 | 1.6.2 | 2026-11-09 | Les notifications rangées par date |
+| 1.7.0 | 2026-11-09 | Un décompte dans la Live Activity, et un aperçu pour la voir |
 
 ---
 
@@ -533,7 +534,8 @@ Voir `../REPRISE.md`, section **« ÉTAT AU 09/11/2026 — LIRE D'ABORD »** —
 à jour, contrairement à cette section qui fige un état.
 
 Le chantier structurant, décidé le 09/11/2026 : **faire remonter les commandes
-de Flaix vers BreakEat par API.** Une commande passée dans Flaix ne crée rien
+de Flaix vers BreakEat par API** — porté par le développeur Flaix ; côté BreakEat,
+la Live Activity et la note du bon de commande s'y brancheront. Une commande passée dans Flaix ne crée rien
 chez BreakEat ; or la Live Activity (et son décompte), la note d'une commande,
 la fidélité et « Je suis arrivé » partent tous d'une commande enregistrée
 chez nous. Les trois lieux en production sont en Flaix : tant que ce flux

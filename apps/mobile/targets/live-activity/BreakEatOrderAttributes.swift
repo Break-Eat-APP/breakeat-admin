@@ -70,19 +70,36 @@ extension BreakEatOrderAttributes.ContentState {
   /// « 1× Bière, 1× Frites ».
   var missingSummary: String { (missingItems ?? []).joined(separator: ", ") }
 
+  /// Lit une date ISO 8601, avec ou sans millisecondes (le serveur en met,
+  /// une charge utile écrite à la main n'en a pas forcément).
+  static func parseDate(_ value: String?) -> Date? {
+    guard let value else { return nil }
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return iso.date(from: value) ?? ISO8601DateFormatter().date(from: value)
+  }
+
+  /// L'heure que vise le DÉCOMPTE, ou nil s'il n'y en a pas.
+  ///
+  /// ⚠️ Même règle que `cibleDuDecompte` côté serveur
+  /// (`backend/src/modules/live-activity/peremption.ts`) : le serveur y place
+  /// la date de péremption, et c'est elle qui fait basculer l'affichage quand
+  /// le chrono arrive à zéro. Deux règles différentes laisseraient un chrono
+  /// figé à « 0:00 ».
+  ///
+  /// L'estimation prime sur le créneau. Pas de décompte une fois prête,
+  /// terminée, ou avec un produit manquant : le client n'attend plus une
+  /// heure, il a quelque chose à faire.
+  var countdownTarget: Date? {
+    guard status == "CREATED" || status == "PREPARING" || status == "DELAYED" else { return nil }
+    guard !hasMissingItems else { return nil }
+    return Self.parseDate(estimatedReadyAt) ?? Self.parseDate(slotStartAt)
+  }
+
   /// Heure de retrait à afficher : l'estimation prime (recalculée par Flaix),
   /// sinon le début du créneau. Nil quand aucune information n'est disponible.
   var pickupTimeLabel: String? {
-    let iso = ISO8601DateFormatter()
-    iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    let fallback = ISO8601DateFormatter()
-
-    func parse(_ value: String?) -> Date? {
-      guard let value else { return nil }
-      return iso.date(from: value) ?? fallback.date(from: value)
-    }
-
-    guard let date = parse(estimatedReadyAt) ?? parse(slotStartAt) else { return nil }
+    guard let date = Self.parseDate(estimatedReadyAt) ?? Self.parseDate(slotStartAt) else { return nil }
 
     let formatter = DateFormatter()
     formatter.locale = Locale(identifier: "fr_FR")

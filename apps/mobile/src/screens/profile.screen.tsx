@@ -13,6 +13,8 @@ import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { showAlert, confirmAction } from '@lib/alert';
 import { DemandeCoordonnees } from '@components/demande-coordonnees';
 import { apiMonProfil, type MonProfil } from '@lib/api/mobile-api';
+import { estSuperAdmin } from '@lib/role-jeton';
+import { arreterApercuLiveActivity, lancerApercuLiveActivity } from '@lib/apercu-live-activity';
 import {
   demanderNotifs,
   lireEtatNotifs,
@@ -55,6 +57,30 @@ export function ProfileScreen() {
   useEffect(() => {
     void chargerProfil();
   }, [chargerProfil]);
+
+  /**
+   * L'aperçu de la Live Activity : iPhone et super admin seulement.
+   *
+   * Le rôle est lu dans le jeton de connexion (`role-jeton.ts`) : c'est un
+   * choix d'AFFICHAGE, pas une autorisation — l'aperçu n'écrit rien et ne
+   * parle pas au serveur.
+   */
+  const outilsSuperAdmin = Platform.OS === 'ios' && estSuperAdmin(token);
+
+  const lancerApercu = async () => {
+    const ok = await lancerApercuLiveActivity();
+    if (ok) {
+      showAlert(
+        'Aperçu lancé',
+        'Verrouille le téléphone ou passe sur l’écran d’accueil : le décompte part de 3 minutes. À zéro, il laisse la place à l’heure de retrait.',
+      );
+    } else {
+      showAlert(
+        'Aperçu impossible',
+        'Les activités en direct sont peut-être désactivées : Réglages → BreakEat → Activités en direct.',
+      );
+    }
+  };
 
   const handleLogout = () => {
     confirmAction(
@@ -153,6 +179,23 @@ export function ProfileScreen() {
           onPress={() => navigation.navigate('InformationsLegales')}
         />
       </View>
+
+        {outilsSuperAdmin ? (
+          <View style={[styles.menu, shadowCard]}>
+            <Text style={styles.outilsTitre}>Outils super admin</Text>
+            <MenuItem
+              label="Aperçu de la Live Activity"
+              icon="timer-outline"
+              onPress={() => void lancerApercu()}
+            />
+            <View style={styles.divider} />
+            <MenuItem
+              label="Retirer l’aperçu"
+              icon="close-circle-outline"
+              onPress={() => void arreterApercuLiveActivity()}
+            />
+          </View>
+        ) : null}
 
         {token && (
           <>
@@ -468,5 +511,15 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: THEME.border, marginLeft: 18 },
 
   logout: { alignItems: 'center', paddingVertical: 18, marginTop: 8 },
+  outilsTitre: {
+    color: THEME.grey,
+    fontSize: 11.5,
+    fontFamily: FONT.semibold,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 4,
+  },
   logoutText: { color: THEME.orange, fontSize: 15, fontFamily: FONT.semibold },
 });

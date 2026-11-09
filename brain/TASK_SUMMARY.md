@@ -4,6 +4,33 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-11-09] Le décompte de la Live Activity, et son aperçu
+
+### Livré
+
+Décompte jusqu'au retrait dans la Live Activity (écran verrouillé, pastille,
+vue développée), péremption à la fin du décompte, marque en un mot, aperçu
+pour le super admin (CHANGELOG 1.7.0).
+
+### Décisions de Rémi (09/11)
+
+- **Notes** : ce sera la **note du bon de commande** remonté de Flaix (match,
+  heure, numéro), pas une note générale par lieu.
+- **Flaix** : le flux des commandes Flaix est l'affaire du développeur Flaix.
+  Ici, on se concentre sur la Live Activity BreakEat.
+
+### Ce qui n'est pas vérifié
+
+Le Swift (widget et module) n'a pas été compilé : pas de chaîne Swift sous
+Windows. La build EAS le compilera ; l'aperçu permettra ensuite de le voir.
+
+### Tests
+
+Péremption : 11 tests (serveur). Rôle du jeton : 4 tests. 120 tests mobiles,
+67 tests du module live-activity.
+
+---
+
 ## [2026-11-09] Notifications par date, et trois décisions
 
 ### Livré

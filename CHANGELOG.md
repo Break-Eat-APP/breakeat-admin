@@ -5,6 +5,53 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.0] — 2026-11-09 — Un décompte dans la Live Activity, et un aperçu pour la voir
+
+**Le décompte.** Tant que la commande est attendue (reçue, en préparation,
+en retard annoncé), la Live Activity affiche le temps restant avant le
+retrait — à droite sur l'écran verrouillé (« avant retrait »), dans la
+pastille du haut de l'écran, et dans la vue développée (« restant »). C'est
+**iOS qui fait tourner le chrono**, seconde par seconde, sans qu'aucune mise à
+jour ne soit envoyée.
+
+- **La cible** : l'heure estimée quand elle existe, sinon le début du créneau.
+  Pas de décompte une fois prête, terminée, ou avec un produit manquant.
+  Une commande « dès que possible » (créneau immédiat) n'a pas d'heure, donc
+  pas de décompte.
+- **À zéro**, le chrono ne reste pas figé sur « 0:00 » : le serveur place la
+  date de péremption de l'activité PILE à la fin du décompte
+  (`live-activity/peremption.ts`, au lieu d'« une heure » pour tout le
+  monde), iOS redessine l'activité, et le widget affiche l'heure de retrait.
+  Le module natif fait de même au démarrage. La même règle est écrite deux
+  fois — `cibleDuDecompte` (serveur) et `countdownTarget` (Swift) — et
+  chacune renvoie à l'autre.
+- **« BREAK EAT » devient « BREAKEAT »** sur l'écran verrouillé.
+
+**L'aperçu, réservé au super admin.** Une Live Activity ne démarre que pour
+une commande BreakEat ; les trois lieux en production passent par Flaix. Il
+n'y avait donc aucun moyen de la voir sans lieu de test et vrai paiement.
+Profil → « Outils super admin » (iPhone seulement) → « Aperçu de la Live
+Activity » : une commande inventée (N° 1045, Buvette Sud, retrait dans
+3 minutes). Elle n'écrit rien et ne parle pas au serveur ; son jeton push
+n'est pas transmis (préfixe `apercu-`). Le rôle est lu dans le jeton de
+connexion (`role-jeton.ts`) — un choix d'affichage, pas une autorisation.
+
+⚠️ **Le Swift n'a pas été compilé** : aucune chaîne Swift sur la machine de
+développement. La prochaine build EAS est la première vérification.
+
+Serveur : 11 tests sur la péremption, 67 sur le module. App : 4 tests sur la
+lecture du rôle, 120 tests mobiles ; types et lint verts.
+
+`+ backend/src/modules/live-activity/peremption.ts` (+ spec)
+`~ backend/src/modules/live-activity/live-activity.service.ts`
+`~ apps/mobile/targets/live-activity/BreakEatOrderAttributes.swift`
+`~ apps/mobile/targets/live-activity/BreakEatLiveActivity.swift`
+`~ apps/mobile/modules/live-activity/ios/LiveActivityModule.swift`
+`+ apps/mobile/src/lib/role-jeton.ts` (+ test), `+ src/lib/apercu-live-activity.ts`
+`~ apps/mobile/src/lib/live-activity-tracking.ts`, `~ src/screens/profile.screen.tsx`
+
+---
+
 ## [1.6.2] — 2026-11-09 — Les notifications rangées par date
 
 **L'écran Notifications était une liste à plat** : pour savoir si une annonce

@@ -100,6 +100,52 @@ private func orderURL(orderId: String) -> URL? {
   URL(string: "breakeat://order/\(orderId)")
 }
 
+// MARK: - Décompte
+
+/// L'heure que vise le décompte, si on doit l'afficher MAINTENANT.
+///
+/// Trois conditions :
+///  · la commande attend une heure (`countdownTarget`, même règle que le
+///    serveur) ;
+///  · cette heure est dans le futur ;
+///  · l'activité n'est pas PÉRIMÉE. Le serveur place la date de péremption
+///    pile à la fin du décompte : quand elle passe, iOS redessine l'activité
+///    avec `isStale`, et on remplace le chrono par l'heure de retrait. Sans
+///    cela, il resterait figé à « 0:00 » pendant que la commande est encore en
+///    préparation.
+private func cibleVisible(
+  _ state: BreakEatOrderAttributes.ContentState,
+  isStale: Bool
+) -> Date? {
+  guard !isStale, let cible = state.countdownTarget, cible > Date() else { return nil }
+  return cible
+}
+
+/// Le chrono : c'est iOS qui le fait tourner, seconde par seconde, sans
+/// qu'aucune mise à jour ne soit envoyée.
+///
+/// `showsHours: false` : « 75:00 » plutôt que « 1:15:00 » — un retrait se
+/// compte en minutes, et la place est rare dans l'îlot dynamique.
+private struct Decompte: View {
+  let cible: Date
+  let taille: CGFloat
+  let couleur: Color
+
+  /// Une borne basse APRÈS la borne haute ferait planter l'affichage : la
+  /// cible est donc ramenée au moins à « maintenant ».
+  private var intervalle: ClosedRange<Date> {
+    let maintenant = Date()
+    return maintenant...max(maintenant, cible)
+  }
+
+  var body: some View {
+    Text(timerInterval: intervalle, countsDown: true, showsHours: false)
+      .font(.system(size: taille, weight: .bold).monospacedDigit())
+      .foregroundStyle(couleur)
+      .multilineTextAlignment(.trailing)
+  }
+}
+
 // MARK: - Briques d'affichage
 
 /// Bandeau de marque : pastille orange + nom, numéro de commande à droite.
@@ -111,7 +157,7 @@ private struct BrandRow: View {
       Circle()
         .fill(Brand.orange)
         .frame(width: 7, height: 7)
-      Text("BREAK EAT")
+      Text("BREAKEAT")
         .font(.system(size: 11, weight: .heavy))
         .tracking(1.4)
         .foregroundStyle(Brand.orange)
@@ -131,6 +177,7 @@ private struct BrandRow: View {
 /// Ligne principale : icône d'état, libellé, information de retrait, heure.
 private struct HeroRow: View {
   let state: BreakEatOrderAttributes.ContentState
+  let isStale: Bool
 
   private var subtitle: String? {
     if state.isReady, let point = state.pickupPoint { return point }
@@ -171,9 +218,21 @@ private struct HeroRow: View {
 
       Spacer(minLength: 4)
 
-      // Heure de retrait en gros à droite — sauf quand c'est prêt : le bouton
-      // devient alors la seule chose à regarder.
-      if !state.isReady, !state.isFinished, let time = state.pickupTimeLabel {
+      // À droite, en gros : le DÉCOMPTE tant qu'il court, l'heure de retrait
+      // ensuite — rien quand c'est prêt, le bouton devient alors la seule
+      // chose à regarder. L'heure reste lisible dans le sous-titre
+      // (« Retrait prévu à 20:15 ») : le chrono ne la remplace pas, il la
+      // traduit en temps qui reste.
+      if let cible = cibleVisible(state, isStale: isStale) {
+        VStack(alignment: .trailing, spacing: 0) {
+          Decompte(cible: cible, taille: 24, couleur: statusColor(for: state))
+            .frame(width: 78, alignment: .trailing)
+          Text("avant retrait")
+            .font(.system(size: 9, weight: .medium))
+            .tracking(0.6)
+            .foregroundStyle(Brand.inkSoft)
+        }
+      } else if !state.isReady, !state.isFinished, let time = state.pickupTimeLabel {
         VStack(alignment: .trailing, spacing: 0) {
           Text(time)
             .font(.system(size: 17, weight: .bold).monospacedDigit())
@@ -368,6 +427,7 @@ private struct MissingRow: View {
 private struct LockScreenView: View {
   let orderId: String
   let state: BreakEatOrderAttributes.ContentState
+  let isStale: Bool
 
   var body: some View {
     // iOS limite la hauteur d'une Live Activity et ROGNE ce qui dépasse, en
@@ -381,7 +441,7 @@ private struct LockScreenView: View {
         MissingRow(summary: state.missingSummary)
       } else {
         BrandRow(orderNumber: state.orderNumber)
-        HeroRow(state: state)
+        HeroRow(state: state, isStale: isStale)
       }
 
       // Progression — masquée si la commande est annulée (le parcours n'a plus
@@ -413,7 +473,11 @@ private struct LockScreenView: View {
 struct BreakEatLiveActivity: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: BreakEatOrderAttributes.self) { context in
-      LockScreenView(orderId: context.attributes.orderId, state: context.state)
+      LockScreenView(
+        orderId: context.attributes.orderId,
+        state: context.state,
+        isStale: context.isStale
+      )
         // Appui sur la carte (hors bouton) : ouvre le suivi de la commande.
         .widgetURL(orderURL(orderId: context.attributes.orderId))
 
@@ -437,6 +501,15 @@ struct BreakEatLiveActivity: Widget {
                 .font(.system(size: 17, weight: .bold).monospacedDigit())
                 .foregroundStyle(.white)
               Text("commande")
+                .font(.system(size: 10))
+                .foregroundStyle(.white.opacity(0.6))
+            }
+            .padding(.trailing, 4)
+          } else if let cible = cibleVisible(context.state, isStale: context.isStale) {
+            VStack(alignment: .trailing, spacing: 1) {
+              Decompte(cible: cible, taille: 19, couleur: .white)
+                .frame(width: 64, alignment: .trailing)
+              Text("restant")
                 .font(.system(size: 10))
                 .foregroundStyle(.white.opacity(0.6))
             }
@@ -532,6 +605,11 @@ struct BreakEatLiveActivity: Widget {
         } else if context.state.canAnnounceArrival {
           Image(systemName: "figure.wave")
             .foregroundStyle(Brand.green)
+        } else if let cible = cibleVisible(context.state, isStale: context.isStale) {
+          // Largeur FIXÉE : un chrono réserve sinon la place de sa valeur la
+          // plus longue, et la pilule s'étirerait sur tout l'écran.
+          Decompte(cible: cible, taille: 13, couleur: statusColor(for: context.state))
+            .frame(width: 44, alignment: .trailing)
         } else if let time = context.state.pickupTimeLabel, !context.state.isFinished {
           Text(time)
             .font(.system(size: 13, weight: .semibold).monospacedDigit())
