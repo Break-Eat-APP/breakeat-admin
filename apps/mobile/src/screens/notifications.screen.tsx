@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, RefreshControl, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { PageHeader } from '@components/page-header';
@@ -7,6 +7,7 @@ import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { apiNotifications, type NotificationCliente } from '@lib/api/mobile-api';
 import { useNotifStore } from '@store/notif.store';
 import { THEME, HEAD } from '@lib/theme';
+import { grouperParDate, libelleQuand } from '@lib/notifications-par-date';
 
 /**
  * Ce que le club a annoncé.
@@ -24,11 +25,16 @@ export function NotificationsScreen() {
   const markRead = useNotifStore((e) => e.markRead);
   const [liste, setListe] = useState<NotificationCliente[]>([]);
   const [chargement, setChargement] = useState(true);
+  // L'instant de référence du classement. Figé au CHARGEMENT plutôt que relu à
+  // chaque rendu : sans cela, une notification pourrait changer de section
+  // sous le doigt du client pendant qu'il fait défiler, au passage de minuit.
+  const [maintenant, setMaintenant] = useState(() => new Date());
 
   const charger = useCallback(async () => {
     try {
       const { notifications } = await apiNotifications();
       setListe(notifications);
+      setMaintenant(new Date());
     } catch (e: unknown) {
       console.warn('Notifications indisponibles:', e);
     } finally {
@@ -43,13 +49,8 @@ export function NotificationsScreen() {
     markRead();
   }, [charger, markRead]);
 
-  const quand = (iso: string) =>
-    new Date(iso).toLocaleString('fr-FR', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  // Aujourd'hui, Hier, Cette semaine, Plus ancien — voir `notifications-par-date`.
+  const sections = useMemo(() => grouperParDate(liste, maintenant), [liste, maintenant]);
 
   return (
     <SafeAreaView style={styles.root} edges={['top']}>
@@ -65,9 +66,13 @@ export function NotificationsScreen() {
           <Text style={styles.vide}>Aucune notification pour le moment.</Text>
         </View>
       ) : (
-        <FlatList
-          data={liste}
+        <SectionList
+          sections={sections}
           keyExtractor={(n) => n.id}
+          stickySectionHeadersEnabled={false}
+          renderSectionHeader={({ section }) => (
+            <Text style={styles.sectionTitre}>{section.titre}</Text>
+          )}
           contentContainerStyle={[styles.liste, { paddingBottom: espaceBas }]}
           refreshControl={
             <RefreshControl refreshing={false} onRefresh={() => void charger()} tintColor={THEME.orange} />
@@ -81,7 +86,7 @@ export function NotificationsScreen() {
                 <Text style={styles.titre}>{item.title}</Text>
               </View>
               <Text style={styles.corps}>{item.body}</Text>
-              <Text style={styles.date}>{quand(item.createdAt)}</Text>
+              <Text style={styles.date}>{libelleQuand(new Date(item.createdAt), maintenant)}</Text>
             </View>
           )}
         />
@@ -96,6 +101,16 @@ const styles = StyleSheet.create({
   vide: { color: THEME.grey, fontSize: 14, textAlign: 'center', fontFamily: HEAD.medium },
 
   liste: { padding: 16, gap: 12 },
+  // Le même titre de section que « Mes commandes » : deux listes rangées de
+  // la même façon doivent se lire de la même façon.
+  sectionTitre: {
+    color: THEME.inkSoft,
+    fontSize: 12.5,
+    fontFamily: HEAD.bold,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    marginTop: 6,
+  },
   carte: {
     backgroundColor: THEME.surface,
     borderRadius: 18,

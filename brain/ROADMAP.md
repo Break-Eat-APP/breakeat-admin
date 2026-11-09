@@ -447,14 +447,98 @@ cause, et chacun a coûté des heures.
 
 ---
 
+# Phases 24 → 73, puis les versions — index
+
+Les phases 1 à 22 sont décrites plus haut. **La suite n'est pas racontée ici** :
+chaque phase a sa section dans `ENGINEERING_MANUAL.md` (le pourquoi) et son
+entrée dans `CHANGELOG.md` (le quoi). Cet index ne sert qu'à retrouver une
+phase par son numéro ; il est généré à partir des titres du manuel, pour qu'il
+ne puisse pas les contredire.
+
+- **Phase 23 : n'existe pas** (voir le manuel, début de fichier).
+- **Phases 71 à 73** (outbox temps réel, revérification Codex, coupe-circuit
+  de limitation) : dans le CHANGELOG seulement, entrée `[1.2.0]`.
+
+| Phase | Date | Sujet (titre de la section du manuel) |
+|---|---|---|
+| 24-25 | 2026-08-29 | Le plan de la bonne buvette, l'ardoise partagée, et le passage au paiement réel |
+| 26 | 2026-09-01 | La TVA par produit |
+| 27 | 2026-09-02 | Le retour de paiement |
+| 28 | 2026-09-02 | Un seul compte Stripe, celui du club |
+| 29 | 06/09/2026 | La journée où une commande payée n'arrivait nulle part |
+| 30 | 06/09/2026 | Un poste, une buvette |
+| 31 | 06/09/2026 | Le reçu |
+| 32 | 07/09/2026 | La cloche, et l'inscription par Apple |
+| 33 | 16/09/2026 | Le dashboard qui « sautait » au clic |
+| 34 | 17/09/2026 | Archivés, supprimés, démonstration : plus rien ne bloque |
+| 35 | 17/09/2026 | Produits manquants |
+| 36 | 17/09/2026 | L'alerte « produit manquant », lisible |
+| 37 | 18/09/2026 | Suspendre un club suspend vraiment |
+| 38 | 18/09/2026 | Revenir dans l'app après avoir payé |
+| 39 | 18/09/2026 | Payer dans l'app, pour de bon |
+| 40 | 18/09/2026 | Apple Pay : ne pas le proposer tant qu'il ne marche pas |
+| 41 | 18/09/2026 | Les clubs lisent leurs données eux-mêmes |
+| 42 | 18/09/2026 | Trois verrous de sécurité |
+| 43 | 19/09/2026 | Ce qu'un club sait de ses clients |
+| 44 | 19/09/2026 | Dire au client qu'il a été remboursé |
+| 45 | 19/09/2026 | La carte, entre les mains du comptoir |
+| 46 | 19/09/2026 | Le contrat signé, lisible sans le télécharger |
+| 47 | 19/09/2026 | Une barre du bas à cinq places |
+| 48 | 21/09/2026 | L'anneau de suivi, et l'éclair qui change de couleur |
+| 49 | 21/09/2026 | Deux compteurs qui mentaient |
+| 50 | 21/09/2026 | Les rapports Flaix, à un clic |
+| 51 | 21–23/09/2026 | Des chiffres qui ne se recoupent pas |
+| 52 | 23/09/2026 | La cloche, le ✓ et les commandes terminées |
+| 53 | 30/09/2026 | Les cinq défauts de l'audit, corrigés |
+| 54 | 30/09–01/10/2026 | Les neuf défauts P2 de l'audit |
+| 55 | 01/10/2026 | Second passage d'audit : ce que la correction précédente avait ouvert |
+| 56 | 09/10/2026 | Les premiers tests des apps web |
+| 57 | 10–11/10/2026 | Les réglages qui promettaient ce qui n'existe pas |
+| 58 | 11–12/10/2026 | La carte d'un lieu, et la photo qui n'existait pas |
+| 59 | 16/10/2026 | Le relais Flaix : un lien par match, et la date qui choisit |
+| 60 | 17/10/2026 | Le gabarit FlaiX Expert dans les deux consoles |
+| 61 | 17–19/10/2026 | Le logo v2, l'épingle, les favoris |
+| 62 | 19/10/2026 | Ce qu'Apple exige, et les gardes qui manquaient |
+| 63 | 23/10/2026 | Les informations légales, et leur export |
+| 64 | 23/10/2026 | La note d'une commande, et ce que le club en lit |
+| 65 | 24/10/2026 | Choisir ses dates, lire contre le passé |
+| 66 | 25/10/2026 | La panne du 23, et les trois filets |
+| 67 | 25/10/2026 | La CI qui n'avait jamais tourné |
+| 68 | 25–26/10/2026 | Les quatre bloquants de l'audit Codex |
+| 69 | 26/10/2026 | Les neuf P1, et ce que l'audit se trompait |
+| 70 | 26/10/2026 | Les P2 retenus, et l'audit clos |
+| 71-73 | 30/10/2026 | Outbox temps réel, revérification Codex, coupe-circuit — CHANGELOG `[1.2.0]` |
+
+## Depuis le 31/10/2026 : des versions, plus des phases
+
+Le travail se compte désormais en **versions** du CHANGELOG. Les leçons de
+chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
+03/11 », « Ce que les journées du 05 au 09/11 ont laissé ici »).
+
+| Version | Date | Sujet |
+|---|---|---|
+| 1.2.0 | 2026-10-30 | L'outbox, et la revérification Codex (phases 71-73) |
+| 1.3.0 | 2026-10-31 | L'audit V3, et cinq défauts d'argent (puis cinq P2) |
+| 1.4.0 | 2026-11-01 | Le calendrier prend forme, et le nom entre dans l'app |
+| 1.5.0 | 2026-11-03 | Google de bout en bout, et Android qui compile enfin |
+| 1.6.0 | 2026-11-06 | Le ticket, « À ne pas manquer », et la fiche d'un match Flaix |
+| 1.6.1 | 2026-11-09 | Un événement se renomme |
+| 1.6.2 | 2026-11-09 | Les notifications rangées par date |
+
+---
+
 # Ce qui reste
 
-Voir `../REPRISE.md`, section « Reste à faire » — tenue à jour, contrairement à
-cette section qui fige un état.
+Voir `../REPRISE.md`, section **« ÉTAT AU 09/11/2026 — LIRE D'ABORD »** — tenue
+à jour, contrairement à cette section qui fige un état.
 
-Les deux chantiers structurants :
+Le chantier structurant, décidé le 09/11/2026 : **faire remonter les commandes
+de Flaix vers BreakEat par API.** Une commande passée dans Flaix ne crée rien
+chez BreakEat ; or la Live Activity (et son décompte), la note d'une commande,
+la fidélité et « Je suis arrivé » partent tous d'une commande enregistrée
+chez nous. Les trois lieux en production sont en Flaix : tant que ce flux
+n'existe pas, ces fonctions y restent éteintes. Les décisions qui le
+conditionnent sont dans `FRONTIERE_FLAIX_OPS.md`.
 
-1. **Commande miroir Flaix** — sans elle, fidélité, présence et Live Activity
-   restent éteintes sur les lieux Flaix.
-2. **Wizard et demo-setup idempotents** — ils recréent tout à chaque passage.
-
+Autre chantier ouvert : **wizard et demo-setup idempotents** — ils recréent
+tout à chaque passage.

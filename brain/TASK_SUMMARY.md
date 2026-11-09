@@ -4,6 +4,34 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-11-09] Notifications par date, et trois décisions
+
+### Livré
+
+Écran Notifications rangé en Aujourd'hui / Hier / Cette semaine / Plus ancien
+(CHANGELOG 1.6.2). ROADMAP : index des phases 24 → 73 et des versions.
+
+### Décisions de Rémi (09/11)
+
+- **Notifications** : classement par date seulement. Pas de filtres
+  Commandes / Promos.
+- **Live Activity et décompte** : d'accord sur le diagnostic — rien ne démarre
+  sur un lieu Flaix, faute de commande enregistrée chez BreakEat. **À nous de
+  faire remonter les commandes de Flaix par API.** Le décompte (possible en
+  natif, `Text(timerInterval:)`) attend ce flux.
+- **Notes** : la répartition par buvette n'est pas utile, Flaix tient les
+  buvettes. Question ouverte : note GÉNÉRALE (lieu / événement), ou note
+  rattachée au bon de commande remonté de Flaix. Elle se tranche avec le flux
+  Flaix, sans lequel aucune note n'existe sur un lieu Flaix.
+- L'accès du club à « Avis clients » n'a pas été retiré (pas de décision).
+
+### Tests
+
+16 tests du classement (fautes réintroduites : semaine au dimanche → 2
+échecs), 116 tests mobiles, types et lint verts.
+
+---
+
 ## [2026-11-09] Un événement se renomme
 
 ### Livré

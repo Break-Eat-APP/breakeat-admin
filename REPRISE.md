@@ -46,9 +46,20 @@ _Dernière mise à jour : 2026-11-09 — lire d'abord « ÉTAT AU 09/11/2026 » 
 | 06/11 | Courriels signés « BreakEat » (expéditeur, objets, signatures) | CHANGELOG 1.6.0 |
 | 06/11 | **Fiche d'un événement sur un lieu Flaix** : lien Flaix, adversaire, blason et affiche éditables depuis la fiche ; aucune configuration Break Eat proposée (créneaux, buvettes, produits…) ; erreur de dates en français | CHANGELOG 1.6.0 |
 | 09/11 | **Renommer un événement** depuis sa fiche (grisé si terminé ou annulé) | CHANGELOG 1.6.1 |
+| 09/11 | **Notifications rangées par date** (Aujourd'hui / Hier / Cette semaine / Plus ancien) — dans la prochaine build iOS | CHANGELOG 1.6.2 |
 
 ### Ce qui reste — dans l'ordre
 
+0. **Le chantier structurant : faire remonter les commandes de Flaix par
+   API** (décidé le 09/11). Une commande passée dans Flaix ne crée rien chez
+   BreakEat ; or la Live Activity, la note d'une commande, la fidélité et
+   « Je suis arrivé » partent d'une commande enregistrée chez nous. Les
+   trois lieux en production sont en Flaix : ces fonctions y sont éteintes.
+   Conditionne aussi : le **décompte** dans la Live Activity (faisable en
+   natif, attend ce flux) et le choix **note générale ou note du bon de
+   commande** (Rémi : la note par buvette n'est pas utile, Flaix tient les
+   buvettes). Décisions préalables : `brain/FRONTIERE_FLAIX_OPS.md`.
+   Nouvelle build iOS à lancer pour livrer les notifications par date.
 1. **Courriels (Brevo)** — à faire par Rémi : créer le compte Brevo, vérifier
    le domaine `breakeatapp.com` (DNS), puis poser `MAIL_PROVIDER=brevo`,
    `MAIL_API_KEY` et `MAIL_FROM` sur Railway. Ensuite : vérifier que

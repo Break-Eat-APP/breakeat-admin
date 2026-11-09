@@ -5,6 +5,41 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.6.2] — 2026-11-09 — Les notifications rangées par date
+
+**L'écran Notifications était une liste à plat** : pour savoir si une annonce
+datait de ce soir ou du mois dernier, il fallait lire chaque date. Il est
+maintenant rangé en quatre sections — **Aujourd'hui, Hier, Cette semaine, Plus
+ancien** — et une section vide n'est pas affichée.
+
+- **L'heure sous chaque carte ne répète pas la section** : « Il y a 3 min »
+  dans l'heure, puis l'heure seule (« 14:14 ») aujourd'hui et hier, le jour
+  (« lun. 11:23 ») dans la semaine, la date au-delà (« 30 sept., 11:23 »),
+  l'année seulement si elle change.
+- **« Cette semaine » est la semaine du calendrier, lundi compris.** Le lundi,
+  une annonce du samedi passe dans « Plus ancien » : c'est exact.
+- **L'heure locale du téléphone** décide de « aujourd'hui », pas le serveur ;
+  « hier » se calcule en jours du calendrier, pas en 24 heures (le jour du
+  changement d'heure en dure 25).
+- Jours et mois écrits dans le code plutôt que demandés à `Intl` : tous les
+  moteurs JavaScript des téléphones n'embarquent pas le français.
+- Le titre de section reprend celui de « Mes commandes ».
+
+**Écarté par Rémi :** les filtres Toutes / Commandes / Promos. Ils auraient
+demandé d'enregistrer côté serveur les messages de commande, qui ne sont
+aujourd'hui envoyés qu'en notification.
+
+Vérifié à l'écran (export web, faux serveur). 16 tests sur la fonction de
+classement (2 échouent si la semaine commence le dimanche), 116 tests mobiles
+au total. **Demande une nouvelle build iOS.**
+
+`+ apps/mobile/src/lib/notifications-par-date.ts`
+`+ apps/mobile/src/lib/__tests__/notifications-par-date.test.ts`
+`~ apps/mobile/src/screens/notifications.screen.tsx`
+`~ brain/ROADMAP.md` — index des phases 24 → 73 et des versions 1.2 → 1.6
+
+---
+
 ## [1.6.1] — 2026-11-09 — Un événement se renomme
 
 **Le serveur acceptait un nouveau nom, l'admin ne le proposait nulle part.**
