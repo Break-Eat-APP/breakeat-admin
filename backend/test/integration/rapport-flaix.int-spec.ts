@@ -61,7 +61,11 @@ decrire('rapport Flaix d’un événement (base réelle)', () => {
     await s.prisma.event.update({ where: { id: match.id }, data: { status: EventStatus.ENDED } });
 
     // La modification ordinaire refuse un événement terminé…
-    await expect(evenements.update(o.org.id, match.id, sa, { name: 'Autre nom' })).rejects.toThrow(/ENDED/);
+    await expect(evenements.update(o.org.id, match.id, sa, { name: 'Autre nom' })).rejects.toThrow(
+      // Le message est en français depuis le 09/11 : il remonte tel quel dans
+      // l'admin, au club qui vient d'essayer.
+      /terminé/,
+    );
 
     // …le rapport, lui, passe.
     const pose = await evenements.definirRapportFlaix(o.org.id, match.id, sa, RAPPORT);

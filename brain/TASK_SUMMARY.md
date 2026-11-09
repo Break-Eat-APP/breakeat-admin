@@ -4,6 +4,33 @@ This file must be updated after every implementation task.
 
 ---
 
+## [2026-11-09] La CI était rouge depuis le 06/11, et je ne l'avais pas lue
+
+### Erreurs commises, à ne pas reproduire
+
+- **Je n'ai pas lu la CI après mes commits.** Les tests de l'app mobile
+  étaient rouges depuis `e186196` (06/11), les tests d'intégration depuis
+  `70a04b3` (09/11). Découvert seulement en ouvrant la demande de fusion #4.
+  Règle : après chaque poussée, lire le résultat des jobs GitHub, pas
+  seulement les tests locaux.
+- **Un test qui dépendait du fuseau horaire** (`libelle-evenement.test.ts`) :
+  il fabriquait 07:30 UTC et attendait « 08:30 » — vrai à Paris seulement.
+  Vert sur le poste, rouge sur la CI (UTC). La date est désormais construite
+  à l'heure locale. Vérifié en `TZ=UTC`.
+- **Un message d'erreur traduit sans relancer les tests d'intégration** :
+  `rapport-flaix.int-spec.ts` attendait `/ENDED/` dans « Cannot modify an
+  event with status ENDED ». Il attend maintenant `/terminé/`. Ces tests
+  demandent une vraie base : c'est la CI qui les a fait tourner.
+
+### Ce qui reste ouvert
+
+- **La compilation de l'admin** échoue par intermittence sur la CI, y compris
+  sur des commits qui ne touchent que des documents. Piste non prouvée : les
+  polices `next/font/google` téléchargées pendant la compilation. Il faut le
+  journal du job « Build » (accessible connecté à GitHub) avant de corriger.
+
+---
+
 ## [2026-11-09] Build 38, Expo sur une branche, Android préparé
 
 ### Livré

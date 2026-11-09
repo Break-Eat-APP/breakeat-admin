@@ -63,7 +63,10 @@ describe('dateEtHeure', () => {
     // On hésite une demi-seconde entre 8 h du matin et 8 h du soir ; le zéro
     // lève le doute sans y penser. C'est la forme déjà retenue ailleurs pour
     // l'ouverture de la commande.
-    expect(dateEtHeure('2026-11-14T07:30:00.000Z')).toMatch(/\b08:30$/);
+    // Date construite à l'heure LOCALE : « 08:30 » est l'heure que lit le
+    // client sur son téléphone. Écrite en UTC (`…T07:30Z`), elle ne donnait
+    // 08:30 qu'à Paris — vert sur le poste, rouge sur la CI, qui tourne en UTC.
+    expect(dateEtHeure(new Date(2026, 10, 14, 8, 30).toISOString())).toMatch(/\b08:30$/);
   });
 
   it('N’ÉCRIT PAS L’ANNÉE', () => {
