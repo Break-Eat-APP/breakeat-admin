@@ -17,8 +17,12 @@
  *                                    # dépendance du projet, exprès
  *   NODE_PATH="$(npm root -g)" node GUIDE_DEVELOPPEMENT/generer-phases-docx.js
  *
- * Puis, pour que la table des matières soit remplie : ouvrir le fichier dans
- * Word et accepter « mettre à jour les champs » (ou F9 dessus).
+ * À l'ouverture, Word demande s'il faut « mettre à jour les champs » :
+ * répondre OUI, c'est ce qui remplit la table des matières.
+ *
+ * ⚠️ Ne pas piloter Word par script (COM) pour le faire : deux essais le
+ * 09/11 ont laissé une instance Word invisible et bloquée, qui verrouillait
+ * le fichier jusqu'à sa fermeture manuelle dans le Gestionnaire des tâches.
  *
  * À relancer après chaque mise à jour des documents vivants.
  */
@@ -501,6 +505,10 @@ const titre = (taille, avant) => ({
 });
 
 const doc = new Document({
+  // Word propose de mettre à jour les champs à l'ouverture : c'est ce qui
+  // remplit la table des matières, que la bibliothèque ne peut pas calculer
+  // (il faut connaître la pagination, que seul Word connaît).
+  features: { updateFields: true },
   creator: 'BreakEat',
   title: 'BreakEat — Phases de développement et traçabilité',
   styles: {
