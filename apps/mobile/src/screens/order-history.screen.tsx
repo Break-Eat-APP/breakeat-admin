@@ -102,6 +102,10 @@ const ENCOCHE_CENTRE = 56;
  * sont des trous dans le ticket, on doit voir le fond à travers.
  */
 const FOND_PAGE = '#FFE9DF';
+/** Le beige des pointillés de la déchirure. */
+const BEIGE_DECHIRURE = '#D9BF98';
+/** Assez de tirets pour le plus large des téléphones ; le surplus est rogné. */
+const TIRETS = Array.from({ length: 34 }, (_, i) => i);
 /** Le violet du reçu : distinct de l'orange des gestes, et du gris du reste. */
 const VIOLET = '#6D28D9';
 
@@ -689,12 +693,31 @@ function OrderCard({
           {/* Remboursement — jamais masqué par l'état : il arrive le plus
               souvent APRÈS que tout est terminé. */}
           <RemboursementBanner paymentStatus={order.paymentStatus} style={styles.manquant} />
+
+          {/*
+            « VOIR LE DÉTAIL » (demande de Rémi, 10/11). Tout le ticket se
+            touche, mais rien ne le disait : un ticket ressemble à un document,
+            pas à un bouton. Ce n'est qu'une indication — le geste reste celui
+            de la carte entière, pas un second bouton à viser.
+          */}
+          <View style={styles.detail} accessibilityElementsHidden importantForAccessibility="no">
+            <Text style={styles.detailTexte}>Voir le détail de la commande</Text>
+            <Ionicons name="chevron-forward" size={16} color={THEME.orange} />
+          </View>
         </View>
 
-        {/* LA DÉCHIRURE : deux grandes encoches et un pointillé. */}
+        {/* LA DÉCHIRURE : deux grandes encoches et un pointillé BEIGE, le
+            long duquel on « arracherait » le ticket (demande de Rémi, 10/11).
+            Des tirets DESSINÉS un par un plutôt qu'une bordure en tirets :
+            leur couleur, leur longueur et leur écart sont les mêmes sur
+            iOS et sur Android, ce qu'une bordure ne garantit pas. */}
         <View style={styles.dechirure}>
           <View style={[styles.encocheCote, styles.encocheGauche]} />
-          <View style={styles.pointille} />
+          <View style={styles.pointille}>
+            {TIRETS.map((i) => (
+              <View key={i} style={styles.tiret} />
+            ))}
+          </View>
           <View style={[styles.encocheCote, styles.encocheDroite]} />
         </View>
 
@@ -943,17 +966,28 @@ const styles = StyleSheet.create({
   encocheDroite: { marginRight: -ENCOCHE_COTE / 2 },
 
   dechirure: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
-  // `borderStyle: 'dashed'` sur une bordure d'UN SEUL côté est ignoré par
-  // Android : il rend un trait plein. D'où une vue à quatre bordures dont
-  // trois transparentes.
   pointille: {
     flex: 1,
-    marginHorizontal: 8,
-    borderWidth: 1.5,
-    borderColor: 'transparent',
-    borderTopColor: '#D6CFC9',
-    borderStyle: 'dashed',
+    marginHorizontal: 10,
+    height: 3,
+    flexDirection: 'row',
+    alignItems: 'center',
+    // Centrés : le surplus est rogné également des deux côtés, et le
+    // pointillé finit pareil contre chaque encoche.
+    justifyContent: 'center',
+    gap: 5,
+    overflow: 'hidden',
   },
+  tiret: { width: 8, height: 2.5, borderRadius: 2, backgroundColor: BEIGE_DECHIRURE },
+
+  detail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 2,
+    marginTop: -2,
+  },
+  detailTexte: { color: THEME.orange, fontSize: 13.5, fontFamily: HEAD.semibold },
 
   /**
    * L'EN-TÊTE ORANGE VIF (#FD4000, demande de Rémi, 10/11) : sur le fond

@@ -29,7 +29,7 @@ import { ecrireFavoris, lireFavoris } from '@lib/favoris';
 import { dateEtHeure, titreEvenement } from '@lib/libelle-evenement';
 import { VignetteEvenement } from '@components/vignette-evenement';
 import { showAlert } from '@lib/alert';
-import { heureDOuverture, ouvertALaCommande } from '@lib/ouverture-lieu';
+import { ouvertALaCommande, quandLaCommandeOuvre } from '@lib/ouverture-lieu';
 import { visuelDeLieu } from '@lib/visuel-lieu';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
@@ -356,14 +356,14 @@ export function VenueDiscoveryScreen() {
               const visuel = visuelDeLieu(v);
               // « Ouvre à 18:00 » fait revenir le client ; « Bientôt » ne dit
               // rien. On ne perd l'heure que quand la distance la remplace.
-              const ouvreA = heureDOuverture(v);
+              const ouvreA = quandLaCommandeOuvre(v);
               const status =
                 v.distanceKm != null
                   ? `${v.distanceKm.toFixed(1).replace('.', ',')} km`
                   : open
                     ? 'Ouvert'
                     : ouvreA
-                      ? `Ouvre à ${ouvreA}`
+                      ? `Ouvre ${ouvreA}`
                       : 'Bientôt';
               return (
                 <Pressable key={v.id} style={[styles.nearbyCard, shadowCard]} onPress={() => openVenue(v)}>
@@ -489,11 +489,26 @@ export function VenueDiscoveryScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Ouvrir ${v.name}`}
               >
-                <View style={styles.favLogo}>
+                {/*
+                  LE LOGO SANS CADRE (demande de Rémi, 10/11). Le carré blanc
+                  bordé rétrécissait l'écusson et entourait une photo de blanc.
+                  Un logo se pose tel quel, quelle que soit sa forme : la tuile
+                  est blanche, le fond d'un logo s'y fond. Une PHOTO, elle, a
+                  besoin d'une forme — un rond qu'elle remplit entièrement,
+                  comme le logo du bandeau de l'écran du lieu.
+                */}
+                <View
+                  style={[
+                    styles.favLogo,
+                    visuel.type === 'image' && visuel.cadrage === 'contain'
+                      ? styles.favLogoLibre
+                      : styles.favLogoRond,
+                  ]}
+                >
                   {visuel.type === 'image' ? (
                     <Image
                       source={{ uri: visuel.uri }}
-                      style={visuel.cadrage === 'cover' ? styles.fillImg : styles.logoImg}
+                      style={styles.fillImg}
                       resizeMode={visuel.cadrage}
                     />
                   ) : (
@@ -777,10 +792,11 @@ const styles = StyleSheet.create({
   // touche sur un favori hors résultats paraissait n'avoir rien déclenché, et
   // on touchait deux fois.
   favCardOuvre: { opacity: 0.55 },
-  favLogo: {
-    width: 42, height: 42, borderRadius: 10, backgroundColor: '#fff', borderWidth: 1, borderColor: THEME.border,
-    overflow: 'hidden', alignItems: 'center', justifyContent: 'center', padding: 3,
-  },
+  favLogo: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center' },
+  // Le logo, tel quel : ni fond, ni bordure, ni marge.
+  favLogoLibre: {},
+  // La photo (ou l'initiale) : un rond qu'elle remplit.
+  favLogoRond: { borderRadius: 23, overflow: 'hidden', backgroundColor: THEME.orangeTint },
   favLogoFallback: { fontSize: 18, fontFamily: HEAD.bold, color: THEME.orange },
   favName: { flex: 1, color: THEME.ink, fontSize: 12.5, fontFamily: HEAD.semibold, lineHeight: 16 },
 

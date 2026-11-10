@@ -11,6 +11,7 @@ import {
   cheminDeCommande,
   heureDOuverture,
   ouvertALaCommande,
+  quandLaCommandeOuvre,
   type LieuOuvrable,
 } from '../ouverture-lieu';
 
@@ -126,5 +127,31 @@ describe('l’heure d’ouverture annoncée', () => {
     const v = lieu({ flaixEnabled: true, commandeOuvreA: 'pas-une-date' });
 
     expect(heureDOuverture(v)).toBeNull();
+  });
+});
+
+describe('le JOUR de l’ouverture, toujours dit (10/11)', () => {
+  // Dates construites dans le fuseau de l'appareil : le test vaut partout.
+  const local = (j: number, h: number, m = 0) => new Date(2026, 10, j, h, m);
+  const ouvrant = (d: Date) => lieu({ flaixEnabled: true, commandeOuvreA: d.toISOString() });
+
+  it('aujourd’hui', () => {
+    expect(quandLaCommandeOuvre(ouvrant(local(10, 18)), local(10, 9))).toMatch(/^aujourd’hui à 18:00$/);
+  });
+
+  it('demain', () => {
+    expect(quandLaCommandeOuvre(ouvrant(local(11, 8)), local(10, 23, 30))).toMatch(/^demain à 08:00$/);
+  });
+
+  it('plus loin : la date, jamais l’heure seule (le Dôme, mardi pour vendredi)', () => {
+    const texte = quandLaCommandeOuvre(ouvrant(local(13, 8)), local(10, 16));
+    expect(texte).toMatch(/13/);
+    expect(texte).toMatch(/à 08:00$/);
+    expect(texte).not.toMatch(/^aujourd|^demain/);
+  });
+
+  it('se tait quand la commande est ouverte', () => {
+    const v = lieu({ flaixEnabled: true, flaixOrderUrl: LIEN, commandeOuvreA: local(13, 8).toISOString() });
+    expect(quandLaCommandeOuvre(v, local(10, 16))).toBeNull();
   });
 });

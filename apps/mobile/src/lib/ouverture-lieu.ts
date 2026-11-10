@@ -82,3 +82,28 @@ export function heureDOuverture(lieu: LieuOuvrable): string | null {
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
+
+/**
+ * « aujourd'hui à 08:00 », « demain à 08:00 », « ven. 13 nov. à 08:00 ».
+ *
+ * L'HEURE SEULE MENTAIT DÈS QUE CE N'ÉTAIT PAS LE JOUR MÊME (vu par Rémi le
+ * 10/11) : le Dôme annonçait « La commande ouvre à 08:00 » un MARDI pour un
+ * concert le VENDREDI. Le client lisait « ce matin ». Le jour est donc
+ * toujours dit — en mots quand c'est aujourd'hui ou demain, en date sinon.
+ *
+ * `maintenant` est un paramètre pour que le test ne dépende pas de l'horloge.
+ * Les jours se comparent dans le fuseau de l'APPAREIL, comme l'heure affichée.
+ */
+export function quandLaCommandeOuvre(lieu: LieuOuvrable, maintenant: Date = new Date()): string | null {
+  const heure = heureDOuverture(lieu);
+  if (!heure || !lieu.commandeOuvreA) return null;
+  const d = new Date(lieu.commandeOuvreA);
+
+  const jour = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const ecart = Math.round((jour(d) - jour(maintenant)) / 86_400_000);
+
+  if (ecart <= 0) return `aujourd’hui à ${heure}`;
+  if (ecart === 1) return `demain à ${heure}`;
+  const date = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
+  return `${date} à ${heure}`;
+}

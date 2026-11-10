@@ -23,7 +23,7 @@ import {
 } from '@lib/api/mobile-api';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { showAlert } from '@lib/alert';
-import { heureDOuverture, ouvertALaCommande } from '@lib/ouverture-lieu';
+import { ouvertALaCommande, quandLaCommandeOuvre } from '@lib/ouverture-lieu';
 import {
   libelleAttente,
   libelleDateLongue,
@@ -273,7 +273,8 @@ export function SaisonScreen({ route, navigation }: Props) {
    * tête lève le doute sans y penser. Sur un écran qu'on consulte en marchant
    * vers le stade, cette demi-seconde compte.
    */
-  const ouvreA = lieu ? heureDOuverture(lieu) : null;
+  // Avec le JOUR : « demain à 08:00 », « ven. 13 nov. à 08:00 » (10/11).
+  const ouvreA = lieu ? quandLaCommandeOuvre(lieu) : null;
 
   /**
    * CE QUE LE BANDEAU ANNONCE — ET CE QU'IL TAIT.
@@ -288,7 +289,7 @@ export function SaisonScreen({ route, navigation }: Props) {
    */
   const etatCommande = (): { icone: keyof typeof Ionicons.glyphMap; texte: string } | null => {
     if (ouvert) return null;
-    if (ouvreA) return { icone: 'time-outline', texte: `La commande ouvre à ${ouvreA}` };
+    if (ouvreA) return { icone: 'time-outline', texte: `La commande ouvre ${ouvreA}` };
     if (lieu?.prochainEvenement) {
       const quand = libelleAttente(lieu.prochainEvenement.startAt, new Date());
       return {

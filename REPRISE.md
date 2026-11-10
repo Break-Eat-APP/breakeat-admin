@@ -229,9 +229,8 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
   c'est voulu** — sauf un défaut (constaté par Rémi le 10/11, pas corrigé) :
   commande ouverte → rien ; lien Flaix collé mais pas encore ouvert → « La
   commande ouvre à 08:00 » ; pas de lien collé → « Prochain match … » ; rien
-  → « Aucun match programmé ». ⚠️ « La commande ouvre à 08:00 » NE DIT PAS
-  LE JOUR : le Dôme l'affichait le mardi pour un concert le vendredi. Même
-  phrase sur la carte du lieu (`heureDOuverture`, `lib/ouverture-lieu.ts`).
+  → « Aucun match programmé ». ✅ Le jour est dit depuis la 1.7.11
+  (`quandLaCommandeOuvre`) : « aujourd'hui / demain / ven. 13 nov. à 08:00 ».
 - **Test instable `temps-reel-multi-instances` › « SANS canal commun »** : a
   échoué une fois en CI le 10/11 (commit `871d5ff`, documentation seule) puis
   est repassé au vert sur `6d90cfa` sans changement de code. Si ça revient,

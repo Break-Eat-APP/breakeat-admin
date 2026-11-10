@@ -5,6 +5,27 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.11] — 2026-11-10 — App : le jour de l'ouverture, les favoris sans cadre, un ticket qui se lit comme tel
+
+- **« La commande ouvre à 08:00 » dit désormais le JOUR** : « aujourd'hui à
+  08:00 », « demain à 08:00 », « ven. 13 nov. à 08:00 ». L'heure seule
+  mentait dès que ce n'était pas le jour même — le Dôme l'affichait un mardi
+  pour un concert le vendredi. Bandeau de l'écran du lieu et carte du lieu.
+  `quandLaCommandeOuvre` (`lib/ouverture-lieu.ts`), 4 tests.
+- **Tes lieux favoris** : le logo du club se pose **tel quel**, sans carré
+  blanc ni bordure, quelle que soit sa forme. Une photo de lieu (sans logo)
+  remplit un rond, comme le logo du bandeau de l'écran du lieu. 46 px au lieu
+  de 42.
+- **Mes commandes** : « Voir le détail de la commande › » en bas de chaque
+  ticket — tout le ticket se touchait, rien ne le disait. Et la déchirure
+  entre le retrait et « Voir le reçu » devient un **pointillé beige**, des
+  tirets dessinés un par un (identiques sur iOS et Android).
+
+`~ apps/mobile/src/lib/ouverture-lieu.ts` `~ apps/mobile/src/screens/saison.screen.tsx`
+`~ apps/mobile/src/screens/venue-discovery.screen.tsx` `~ apps/mobile/src/screens/order-history.screen.tsx`
+
+---
+
 ## [1.7.10] — 2026-11-10 — Le tableau de bord ouvre les chiffres d'un match, pas ses réglages
 
 Un clic sur une ligne de « Performance par événement » ouvrait la fiche de
