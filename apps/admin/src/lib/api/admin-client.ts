@@ -46,6 +46,29 @@ export function getOrgId(): string {
   return localStorage.getItem('admin_org_id') ?? '';
 }
 
+/** Un lieu de la plateforme, tel que le sélecteur du super admin le liste. */
+export interface LieuPlateforme {
+  id: string;
+  name: string;
+  status: string;
+}
+
+/**
+ * TOUS LES LIEUX — réservé au super admin (le serveur refuse les autres).
+ *
+ * Décision de Rémi (10/11/2026) : avec son adresse super admin, il entre dans
+ * le tableau de bord de N'IMPORTE QUEL lieu, sans le compte d'un membre.
+ */
+export async function apiTousLesLieux(): Promise<LieuPlateforme[]> {
+  return req<LieuPlateforme[]>('GET', '/backoffice/organizations');
+}
+
+/** Change le lieu de travail ; la page est rechargée par l'appelant. */
+export function choisirLieu(lieu: { id: string; name: string }): void {
+  localStorage.setItem('admin_org_id', lieu.id);
+  localStorage.setItem('admin_org_name', lieu.name);
+}
+
 export function getOrgName(): string {
   if (typeof window === 'undefined') return '';
   return localStorage.getItem('admin_org_name') ?? '';

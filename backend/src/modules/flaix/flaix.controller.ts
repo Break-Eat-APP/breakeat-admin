@@ -11,6 +11,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { PrismaService } from '../../database/prisma.service';
+import { GlobalRole } from '../../common/enums/role.enum';
 import { FlaixService } from './flaix.service';
 
 /**
@@ -68,6 +69,14 @@ export class FlaixController {
       select: { organizationId: true },
     });
     if (!event) throw new NotFoundException(`Event ${eventId} not found`);
+
+    // Le super admin entre partout (décision de Rémi, 10/11) — lu en base, comme
+    // `requireOrgAccess` : un rôle retiré prend effet tout de suite.
+    const appelant = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { globalRole: true },
+    });
+    if (appelant?.globalRole === GlobalRole.SUPER_ADMIN) return;
 
     const membership = await this.prisma.organizationMember.findUnique({
       where: { userId_organizationId: { userId, organizationId: event.organizationId } },

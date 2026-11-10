@@ -239,6 +239,17 @@ export class OrdersController {
     });
     if (!event) throw new NotFoundException('Event not found');
 
+
+    // Le super admin entre partout (décision de Rémi, 10/11) — lu en base, comme
+    // `requireOrgAccess` : un rôle retiré prend effet tout de suite.
+    const appelant = await this.prisma.user.findUnique({
+      where: { id: user.sub },
+      select: { globalRole: true },
+    });
+    if (appelant?.globalRole === GlobalRole.SUPER_ADMIN) {
+      return this.ordersService.findDashboardByEvent(eventId, supplierId ?? undefined);
+    }
+
     // Check membership and get the operator's pinned supplierId in one query
     const membership = await this.prisma.organizationMember.findUnique({
       where: { userId_organizationId: { userId: user.sub, organizationId: event.organizationId } },
@@ -435,6 +446,14 @@ export class OrdersController {
   }
 
   private async assertOrgMember(organizationId: string, userId: string): Promise<void> {
+    // Le super admin entre partout (décision de Rémi, 10/11) — lu en base, comme
+    // `requireOrgAccess` : un rôle retiré prend effet tout de suite.
+    const appelant = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { globalRole: true },
+    });
+    if (appelant?.globalRole === GlobalRole.SUPER_ADMIN) return;
+
     const membership = await this.prisma.organizationMember.findUnique({
       where: { userId_organizationId: { userId, organizationId } },
     });

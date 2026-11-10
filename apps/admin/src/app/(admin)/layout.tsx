@@ -10,6 +10,9 @@ import {
   getStoredUser,
   clearSession,
   apiMeWithMemberships,
+  apiTousLesLieux,
+  choisirLieu,
+  type LieuPlateforme,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 import { NAV_GROUPS } from '@/lib/nav';
@@ -25,6 +28,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   // commande. Sans ce bandeau, le club constaterait un silence sans le
   // comprendre — et chercherait la panne du mauvais côté.
   const [suspendue, setSuspendue] = useState(false);
+  /**
+   * LE SUPER ADMIN PASSE D'UN LIEU À L'AUTRE (décision de Rémi, 10/11).
+   * `null` : pas super admin, pas de sélecteur. Le serveur laisse le super
+   * admin entrer partout — le sélecteur ne fait que choisir le lieu.
+   */
+  const [lieux, setLieux] = useState<LieuPlateforme[] | null>(null);
 
   useEffect(() => {
     const token = getToken();
@@ -38,6 +47,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setReady(true);
 
     const orgId = getOrgId();
+    if (user?.globalRole === 'SUPER_ADMIN') {
+      apiTousLesLieux()
+        .then((tous) => {
+          const tries = [...tous].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+          setLieux(tries);
+          // Aucun lieu choisi : on ouvre le premier, plutôt qu'un tableau de
+          // bord vide. Son nom est affiché en tête, et se change d'un clic.
+          if (!orgId && tries[0]) {
+            choisirLieu(tries[0]);
+            window.location.reload();
+          }
+        })
+        .catch(() => setLieux([]));
+    }
     if (!orgId) return;
     apiMeWithMemberships()
       .then((moi) => {
@@ -160,7 +183,48 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           « où suis-je ? » sans qu'on ait à se le demander — et évite les
           gestes faits dans le mauvais club.
         */}
-        {orgName && (
+        {lieux && lieux.length > 0 ? (
+          <div style={{ padding: '14px 14px 2px' }}>
+            <div style={{ background: BRAND.orangeTint, borderRadius: 14, padding: '12px 14px' }}>
+              <label
+                htmlFor="lieu-de-travail"
+                style={{ display: 'block', fontSize: 11.5, color: BRAND.orange, fontWeight: 700, marginBottom: 6 }}
+              >
+                Lieu (super admin)
+              </label>
+              <select
+                id="lieu-de-travail"
+                value={getOrgId()}
+                onChange={(e) => {
+                  const lieu = lieux.find((l) => l.id === e.target.value);
+                  if (!lieu) return;
+                  choisirLieu(lieu);
+                  // Rechargement complet : chaque écran relit SES données
+                  // pour le nouveau lieu, rien ne reste de l'ancien.
+                  window.location.assign('/dashboard');
+                }}
+                style={{
+                  width: '100%',
+                  padding: '8px 10px',
+                  borderRadius: 10,
+                  border: `1px solid ${BRAND.border}`,
+                  background: '#fff',
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  color: BRAND.ink,
+                  fontFamily: 'inherit',
+                }}
+              >
+                {lieux.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                    {l.status !== 'ACTIVE' ? ' (suspendu)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ) : orgName && (
           <div style={{ padding: '14px 14px 2px' }}>
             <div style={{ background: BRAND.orangeTint, borderRadius: 14, padding: '12px 14px' }}>
               <div
