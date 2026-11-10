@@ -123,6 +123,31 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
    connaît pas. Correctif possible sans Flaix (≈ 1 jour) : remonter les
    favoris au serveur et cibler « a commandé OU a mis en favori ». Pas
    lancé : attendre le feu vert de Rémi.
+   **LE PLAN DE DÉVELOPPEMENT DES API FLAIX ↔ BREAKEAT** (validé par Rémi le
+   10/11, **à lancer APRÈS son point avec son développeur** — rien avant) :
+   0. **Le point avec le développeur Flaix**, cahier des charges en main
+      (`brain/FLAIX_FLUX_EVENEMENTS_CAHIER_DES_CHARGES.md`, sections B et E
+      surtout). En ressortir : ce que Flaix livre (B, E1, l'étiquette
+      `[#breakeatId]`), ses dates, une adresse de préproduction, et les clés
+      de test **par canal sûr**. Trancher : le responsable de lieu travaille-
+      t-il dans Flaix seulement (alors D devient inutile) ?
+   1. **BreakEat, sans attendre Flaix (≈ 1 j)** : favoris remontés au
+      serveur, campagnes ciblant « a commandé OU favori ». Débloque les
+      campagnes des lieux Flaix pour les supporters.
+   2. **BreakEat reçoit E1 (1 à 2 j, dès que Flaix l'envoie)** : les commandes
+      Flaix créent leur trace chez BreakEat → « Mes commandes », « ta commande
+      est prête », Live Activity, note, fidélité, et campagnes vers ceux qui
+      ont commandé. Ajouter l'étiquette `[#breakeatId]` aux liens de commande.
+   3. **BreakEat lit le flux B (1 à 2 j)** : les matchs arrivent tout seuls,
+      fin de la double saisie et de l'option A provisoire.
+   4. **BreakEat ouvre E2 puis E3 (4 à 6 j)** : chiffres de l'app lus par Flaix
+      (comptage de « Commander » à ajouter), puis campagnes et apparence
+      pilotées depuis Flaix, avec une limite de notifications par lieu.
+   5. **D (passerelle)** : seulement si le responsable garde aussi le tableau
+      de bord BreakEat.
+   Règles : une clé par sens, limitée aux lieux autorisés ; des NOMBRES
+   seulement vers Flaix (aucune liste de clients sans contrat de traitement
+   des données) ; une panne d'un côté n'arrête jamais l'autre.
 6. **Courriels (Brevo)** — à faire par Rémi : compte Brevo, DNS de
    `breakeatapp.com`, `MAIL_PROVIDER=brevo` / `MAIL_API_KEY` / `MAIL_FROM`
    sur Railway. Puis vérifier `/auth/password-reset/available` = `true`, et
@@ -200,6 +225,13 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 - **`liens-commande-flaix.tsx` n'existe plus que dans l'admin** (la copie du
   back-office est supprimée le 10/11 : toute la programmation se fait dans le
   tableau de bord du lieu).
+- **La pastille du bandeau orange (écran Saison) change selon le lieu, et
+  c'est voulu** — sauf un défaut (constaté par Rémi le 10/11, pas corrigé) :
+  commande ouverte → rien ; lien Flaix collé mais pas encore ouvert → « La
+  commande ouvre à 08:00 » ; pas de lien collé → « Prochain match … » ; rien
+  → « Aucun match programmé ». ⚠️ « La commande ouvre à 08:00 » NE DIT PAS
+  LE JOUR : le Dôme l'affichait le mardi pour un concert le vendredi. Même
+  phrase sur la carte du lieu (`heureDOuverture`, `lib/ouverture-lieu.ts`).
 - **Test instable `temps-reel-multi-instances` › « SANS canal commun »** : a
   échoué une fois en CI le 10/11 (commit `871d5ff`, documentation seule) puis
   est repassé au vert sur `6d90cfa` sans changement de code. Si ça revient,
