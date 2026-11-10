@@ -441,7 +441,9 @@ function isActive(ev: OrgEventStat, now: number): boolean {
 function EventRow({ ev, active }: { ev: OrgEventStat; active: boolean }) {
   const st = STATUS_STYLE[ev.status] ?? { bg: BRAND.bgSubtle, color: BRAND.inkSoft };
   return (
-    <Link href={`/events/${ev.id}`} style={{ textDecoration: 'none' }}>
+    // Vers les CHIFFRES de l'événement, pas sa configuration : c'est ce que
+    // promet une ligne de « Performance par événement ».
+    <Link href={`/events/${ev.id}#statistiques`} style={{ textDecoration: 'none' }}>
       <div
         style={{
           background: BRAND.surface,

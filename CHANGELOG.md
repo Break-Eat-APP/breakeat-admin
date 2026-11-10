@@ -5,6 +5,21 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.10] — 2026-11-10 — Le tableau de bord ouvre les chiffres d'un match, pas ses réglages
+
+Un clic sur une ligne de « Performance par événement » ouvrait la fiche de
+l'événement EN HAUT : nom, dates, lien Flaix — la configuration. Les chiffres
+étaient tout en bas. Le lien porte désormais `#statistiques` et la fiche
+défile jusqu'aux chiffres une fois chargée : « Statistiques de l'événement »
+sur un lieu Break Eat, **« Rapport Flaix »** sur un lieu Flaix (ses commandes
+ne passent pas par Break Eat, ses vrais chiffres sont chez Flaix). Depuis
+« Événements », la fiche s'ouvre toujours en haut, sur les réglages. Vérifié
+en local : clic sur un match terminé → la fiche s'arrête sur « Rapport Flaix ».
+
+`~ apps/admin/src/app/(admin)/dashboard/page.tsx` `~ apps/admin/src/app/(admin)/events/[id]/page.tsx`
+
+---
+
 ## [1.7.9] — 2026-11-10 — Les polices des tableaux de bord servies par le projet
 
 La compilation de l'admin échouait par intermittence — trois fois le 10/11,

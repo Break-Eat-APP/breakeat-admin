@@ -51,13 +51,15 @@ const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
 
 // ─── Components ───────────────────────────────────────────────────────────────
 
-function Card({ title, children, action }: {
+function Card({ title, children, action, id }: {
   title: string;
   children: React.ReactNode;
   action?: React.ReactNode;
+  /** Ancre : le tableau de bord ouvre la fiche directement sur les chiffres. */
+  id?: string;
 }) {
   return (
-    <div style={{ background: BRAND.surface, borderRadius: 12, padding: 24, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}`, marginBottom: 24 }}>
+    <div id={id} style={{ scrollMarginTop: 16, background: BRAND.surface, borderRadius: 12, padding: 24, boxShadow: BRAND.shadowCard, border: `1px solid ${BRAND.border}`, marginBottom: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <h2 style={{ ...BRAND.sectionTitle, margin: 0 }}>{title}</h2>
         {action}
@@ -206,6 +208,26 @@ export default function EventDetailPage() {
   }, [orgId, eventId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  /**
+   * ARRIVÉ DU TABLEAU DE BORD : ON MONTRE LES CHIFFRES, PAS LA CONFIGURATION
+   * (remarque de Rémi, 10/11). Un clic sur « Performance par événement »
+   * ouvrait la fiche en haut — les réglages — et les statistiques restaient
+   * sous la ligne de flottaison. Le lien porte `#statistiques` ; la fiche se
+   * charge en deux temps, donc on défile une fois l'événement ET le lieu
+   * connus (le lieu dit si les chiffres sont chez nous ou chez Flaix).
+   */
+  const [ancreFaite, setAncreFaite] = useState(false);
+  useEffect(() => {
+    if (ancreFaite || loading || !event) return;
+    // Sans lieu rattaché, rien à attendre ; avec, on attend de le connaître.
+    if (event.venueId && !venue) return;
+    if (typeof window === 'undefined' || window.location.hash !== '#statistiques') return;
+    setAncreFaite(true);
+    requestAnimationFrame(() => {
+      document.getElementById('statistiques')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [ancreFaite, loading, event, venue]);
 
   useEffect(() => {
     let cancelled = false;
@@ -772,7 +794,7 @@ export default function EventDetailPage() {
         croire à une panne. Le rapport Flaix, juste en dessous, porte les vrais.
       */}
       {!estFlaix && (
-      <Card title="Statistiques de l'événement">
+      <Card title="Statistiques de l'événement" id="statistiques">
         {statsLoading ? (
           <p style={{ color: BRAND.grey, fontSize: 14, margin: 0 }}>Chargement des statistiques…</p>
         ) : statsDenied ? (
@@ -881,7 +903,7 @@ export default function EventDetailPage() {
         préparation (remarque de Rémi, 10/11). Avant la fin : une ligne qui
         dit quand revenir. Un lien déjà collé reste toujours visible.
       */}
-      <Card title="Rapport Flaix">
+      <Card title="Rapport Flaix" id={estFlaix ? 'statistiques' : undefined}>
         {event.flaixReportUrl ||
         event.status === 'ENDED' ||
         new Date(event.endAt).getTime() <= Date.now() ? (

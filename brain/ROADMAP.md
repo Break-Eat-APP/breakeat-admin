@@ -534,6 +534,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.7 | 2026-11-10 | Tableau de bord : une liste, une fiche, et le super admin partout |
 | 1.7.8 | 2026-11-10 | App : « Mes commandes » lisible, et le reçu s'enregistre en PDF |
 | 1.7.9 | 2026-11-10 | Les polices des tableaux de bord servies par le projet |
+| 1.7.10 | 2026-11-10 | Le tableau de bord ouvre les chiffres d'un match, pas ses réglages |
 
 ---
 
