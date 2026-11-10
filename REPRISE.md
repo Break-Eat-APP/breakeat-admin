@@ -84,6 +84,12 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
    **Le calendrier Flaix lu par BreakEat** (fin de la double saisie) : le
    cahier des charges à transmettre au développeur Flaix est prêt —
    `brain/FLAIX_FLUX_EVENEMENTS_CAHIER_DES_CHARGES.md` (recommandé : le flux B).
+   **La passerelle d'accès Flaix — ⏸️ EN ATTENTE, NE RIEN DÉVELOPPER** (consigne
+   de Rémi, 10/11) : ouvrir Flaix depuis le tableau de bord sans se reconnecter.
+   Spécifiée en section D du même cahier des charges (D1 lien signé à usage
+   unique, D2 chiffres Flaix affichés dans BreakEat). On attend : le feu vert
+   de Rémi, son choix D1 seul ou D1 puis D2, et la route + une clé de test
+   côté Flaix (par canal sûr). Côté BreakEat, rien n'est commencé.
 6. **Courriels (Brevo)** — à faire par Rémi : compte Brevo, DNS de
    `breakeatapp.com`, `MAIL_PROVIDER=brevo` / `MAIL_API_KEY` / `MAIL_FROM`
    sur Railway. Puis vérifier `/auth/password-reset/available` = `true`, et
@@ -158,8 +164,14 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 - **Machine à 6 Go de RAM** : `tsc`, `eslint` et `jest` séparément.
 - **La fiche d'un événement lit `venue.flaixEnabled`** : sur un lieu Flaix,
   ses réglages Break Eat sont masqués exprès.
-- **`liens-commande-flaix.tsx` existe en double** (admin et back-office) ; la
-  copie admin a en plus la prop `portee`.
+- **`liens-commande-flaix.tsx` n'existe plus que dans l'admin** (la copie du
+  back-office est supprimée le 10/11 : toute la programmation se fait dans le
+  tableau de bord du lieu).
+- **Test instable `temps-reel-multi-instances` › « SANS canal commun »** : a
+  échoué une fois en CI le 10/11 (commit `871d5ff`, documentation seule) puis
+  est repassé au vert sur `6d90cfa` sans changement de code. Si ça revient,
+  regarder les ports fixes 45021/45022 et les `close()` non attendus dans
+  `afterEach`.
 - **`@bacons/apple-targets` utilise des paquets qu'il ne déclare pas**
   (`@expo/plist`, `@expo/image-utils`) : ils sont déclarés pour lui dans
   `pnpm-workspace.yaml` (`packageExtensions`). Après toute mise à jour Expo,
@@ -369,6 +381,7 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Remboursements** | ✅ **Bouclés le 01/10 (phase 55).** `charge.refunded` est traité : la commande passe en `REFUNDED` ou `PARTIALLY_REFUNDED`, recalculé depuis TOUTES ses lignes de paiement (une addition partagée en compte une par convive). 7 tests unitaires + 7 sur base réelle. L'ardoise, elle, rembourse depuis le 30/09 | À éprouver sur la cible : un remboursement réel en mode test Stripe. La mécanique, elle, est en place et testée |
 | **Parrainage** | Partage de lien et QR en place (phase 44) | Trancher l'économie : points de fidélité, remise portée par le club, ou rien. La récompense sortirait de ta poche — les produits appartiennent aux buvettes |
 | **Notifications** | Cloche corrigée (phase 52), build 21 envoyé | À ÉPROUVER en vrai : envoyer une campagne, app en arrière-plan, puis relire les journaux Railway (`Push token enregistré…`, `Expo push: N envoyés…`) |
+| **Passerelle d'accès Flaix** | ⏸️ **Gelée le 10/11 par Rémi** — spécifiée seulement (cahier des charges Flaix, section D) | Feu vert de Rémi, choix D1 seul ou D1 puis D2, route et clé de test côté Flaix. Rien à coder d'ici là |
 | **Liens Flaix** | Saisis depuis la liste des événements (toute la saison d'un coup) **ou** depuis la fiche d'un match, même terminé (06/11) | Les coller à la main, un par match, tant que Flaix ne les pousse pas |
 | **Envoi EAS** | L'envoi automatique restait en file depuis les builds 19-21 | Toujours `eas submit --platform ios --profile beta --id <build>` à la main — c'est ainsi que la build 37 est partie le 06/11 |
 | **Build iOS 37** (1.1.0) | Sur TestFlight depuis le 06/11 | À essayer sur un vrai téléphone : tickets de « Mes commandes », « À ne pas manquer » avec des favoris, connexion Google |
