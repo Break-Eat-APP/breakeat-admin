@@ -90,6 +90,27 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
    unique, D2 chiffres Flaix affichés dans BreakEat). On attend : le feu vert
    de Rémi, son choix D1 seul ou D1 puis D2, et la route + une clé de test
    côté Flaix (par canal sûr). Côté BreakEat, rien n'est commencé.
+   **Le lien calendrier Flaix (option A) — ⏸️ EN ATTENTE du point de Rémi avec
+   son développeur (10/11)**. Le souhait : un seul lien Flaix par lieu, qui
+   ouvre la page Flaix rassemblant tous ses événements, pour ne plus rien
+   retaper. Décidé : A maintenant, **B à demander aussi** au développeur Flaix,
+   **C (iCal) en option** (« Ajouter les matchs à mon agenda » pour les
+   supporters). Accepté par Rémi : le calendrier BreakEat est remplacé par
+   celui de Flaix ; logos et affiches se font dans Flaix ; « À ne pas
+   manquer » se remplit à la main (des matchs datés sans lien Flaix
+   remontent bien, même en continu).
+   ⛔ **NE PAS basculer un lieu Flaix en « Ouvert en continu » aujourd'hui** :
+   l'écran Saison (`apps/mobile/src/screens/saison.screen.tsx`) n'a PAS de
+   bouton « Commander » sans match daté — `saisonDuLieu` écarte le contenant
+   permanent, `selection` reste nul, l'écran dit « Ce lieu prend les
+   commandes en continu » et le client est bloqué. Même impasse pour tout
+   lieu en continu (restaurant), Flaix ou non.
+   Deux petits travaux proposés, **à ne lancer qu'après le feu vert** :
+   1) l'écran Saison d'un lieu en continu montre un bouton « Commander » qui
+   ouvre son lien (le calendrier Flaix) — indispensable pour l'option A ;
+   2) une case « Message d'information » sur le lieu (ex. « La commande ouvre
+   2 h avant chaque match »), affichée sur sa carte dans l'app — `ordersOpenAt`
+   ne vaut que pour les matchs datés.
 6. **Courriels (Brevo)** — à faire par Rémi : compte Brevo, DNS de
    `breakeatapp.com`, `MAIL_PROVIDER=brevo` / `MAIL_API_KEY` / `MAIL_FROM`
    sur Railway. Puis vérifier `/auth/password-reset/available` = `true`, et
@@ -381,6 +402,7 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Remboursements** | ✅ **Bouclés le 01/10 (phase 55).** `charge.refunded` est traité : la commande passe en `REFUNDED` ou `PARTIALLY_REFUNDED`, recalculé depuis TOUTES ses lignes de paiement (une addition partagée en compte une par convive). 7 tests unitaires + 7 sur base réelle. L'ardoise, elle, rembourse depuis le 30/09 | À éprouver sur la cible : un remboursement réel en mode test Stripe. La mécanique, elle, est en place et testée |
 | **Parrainage** | Partage de lien et QR en place (phase 44) | Trancher l'économie : points de fidélité, remise portée par le club, ou rien. La récompense sortirait de ta poche — les produits appartiennent aux buvettes |
 | **Notifications** | Cloche corrigée (phase 52), build 21 envoyé | À ÉPROUVER en vrai : envoyer une campagne, app en arrière-plan, puis relire les journaux Railway (`Push token enregistré…`, `Expo push: N envoyés…`) |
+| **Lien calendrier Flaix (option A)** | ⏸️ En attente du point de Rémi avec son développeur (10/11). A maintenant, B aussi, C en option | ⛔ Écran Saison sans bouton « Commander » pour un lieu en continu : à corriger AVANT de basculer un lieu. Plus la case « Message d'information ». Détail dans « Ce qui reste », point 5 |
 | **Passerelle d'accès Flaix** | ⏸️ **Gelée le 10/11 par Rémi** — spécifiée seulement (cahier des charges Flaix, section D) | Feu vert de Rémi, choix D1 seul ou D1 puis D2, route et clé de test côté Flaix. Rien à coder d'ici là |
 | **Liens Flaix** | Saisis depuis la liste des événements (toute la saison d'un coup) **ou** depuis la fiche d'un match, même terminé (06/11) | Les coller à la main, un par match, tant que Flaix ne les pousse pas |
 | **Envoi EAS** | L'envoi automatique restait en file depuis les builds 19-21 | Toujours `eas submit --platform ios --profile beta --id <build>` à la main — c'est ainsi que la build 37 est partie le 06/11 |
