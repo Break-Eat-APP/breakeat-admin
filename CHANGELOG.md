@@ -5,6 +5,28 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.9] — 2026-11-10 — Les polices des tableaux de bord servies par le projet
+
+La compilation de l'admin échouait par intermittence — trois fois le 10/11,
+sur des changements qui ne la touchaient pas — sur « An error occurred in
+`next/font`. Cannot read properties of null (reading '1') » : `next/font/google`
+téléchargeait Inter, Jost et Raleway chez Google à CHAQUE compilation, et
+Google répondait parfois mal aux machines de GitHub. Le déploiement en ligne
+dépendait du même téléchargement.
+
+Les polices sont désormais dans le projet (`apps/*/src/app/fonts/`) et
+chargées par `next/font/local` : polices **variables** (un fichier par
+famille, graisses 100 à 900), sous-ensemble latin comme avant, mêmes
+variables CSS (`--font-sans`, `--font-display`, `--font-jost`). Source
+`@fontsource-variable/*@5.3.0`, licence SIL OFL 1.1 jointe. Vérifié : les
+trois apps compilent ; l'admin servie en local charge Inter et Raleway depuis
+ses propres fichiers, **zéro requête vers Google**.
+
+`~ apps/admin/src/app/layout.tsx` `~ apps/backoffice/src/app/layout.tsx` `~ apps/operator/src/app/layout.tsx`
+`+ apps/{admin,backoffice,operator}/src/app/fonts/` (woff2, licences, LISEZ-MOI.md)
+
+---
+
 ## [1.7.8] — 2026-11-10 — App : « Mes commandes » lisible, et le reçu s'enregistre en PDF
 
 Retours de Rémi sur l'app (changements JavaScript seuls : ils partent par

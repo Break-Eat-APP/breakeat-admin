@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, Jost, Raleway } from 'next/font/google';
+import localFont from 'next/font/local';
 import { QueryProvider } from '@/providers/query-provider';
 import './globals.css';
 
@@ -12,17 +12,22 @@ import './globals.css';
  *
  * Le logo "B éclair" reste l'artwork officiel (SVG), non géré ici.
  */
-const inter = Inter({
-  subsets: ['latin'],
+// Servie par l'app (fonts/LISEZ-MOI.md) : plus aucun téléchargement chez
+// Google à la compilation. Police VARIABLE : toutes les graisses.
+const inter = localFont({
+  src: './fonts/inter-latin-wght-normal.woff2',
   variable: '--font-sans',
   display: 'swap',
+  weight: '100 900',
 });
 
-const jost = Jost({
-  subsets: ['latin'],
+// Servie par l'app (fonts/LISEZ-MOI.md) : plus aucun téléchargement chez
+// Google à la compilation. Police VARIABLE : toutes les graisses.
+const jost = localFont({
+  src: './fonts/jost-latin-wght-normal.woff2',
   variable: '--font-jost',
   display: 'swap',
-  weight: ['300', '400', '500', '600'],
+  weight: '100 900',
 });
 
 /**
@@ -32,11 +37,13 @@ const jost = Jost({
  * disperser : l'oeil reconnait la structure a sa forme avant de la lire. Inter
  * garde tout le reste, ou sa neutralite sert la densite de donnees.
  */
-const raleway = Raleway({
-  subsets: ['latin'],
+// Servie par l'app (fonts/LISEZ-MOI.md) : plus aucun téléchargement chez
+// Google à la compilation. Police VARIABLE : toutes les graisses.
+const raleway = localFont({
+  src: './fonts/raleway-latin-wght-normal.woff2',
   variable: '--font-display',
   display: 'swap',
-  weight: ['600', '700', '800'],
+  weight: '100 900',
 });
 
 export const metadata: Metadata = {
