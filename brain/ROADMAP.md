@@ -536,6 +536,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.9 | 2026-11-10 | Les polices des tableaux de bord servies par le projet |
 | 1.7.10 | 2026-11-10 | Le tableau de bord ouvre les chiffres d'un match, pas ses réglages |
 | 1.7.11 | 2026-11-10 | App : le jour de l'ouverture, les favoris sans cadre, un ticket qui se lit comme tel |
+| 1.7.12 | 2026-11-10 | App 1.1.1 : une icône qui respire (build 43) |
 
 ---
 

@@ -5,6 +5,23 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.12] — 2026-11-10 — App 1.1.1 : une icône qui respire
+
+L'icône paraissait floue sur l'iPhone (build 42). Le fichier était net : le B
+occupait 83 % de la largeur et frôlait les coins arrondis, et l'effet
+« verre » qu'iOS 26 ajoute aux icônes adoucissait ses bords. Le B occupe
+désormais **66 %**, centré sur fond blanc (validé par Rémi sur comparaison).
+L'icône a son propre fichier (`assets/icone-app.png`) ; la marque de l'écran
+d'ouverture et de l'app ne change pas. Android : premier plan à 44 %, car le
+système n'en montre que le tiers central.
+
+Changement natif → **version 1.1.1** (règle de `runtimeVersion`) et build 43.
+Les mises à jour à distance visent désormais la 1.1.1.
+
+`~ apps/mobile/app.config.js` `+ apps/mobile/assets/icone-app.png` `+ apps/mobile/assets/icone-android-premier-plan.png`
+
+---
+
 ## [1.7.11] — 2026-11-10 — App : le jour de l'ouverture, les favoris sans cadre, un ticket qui se lit comme tel
 
 - **« La commande ouvre à 08:00 » dit désormais le JOUR** : « aujourd'hui à
