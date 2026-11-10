@@ -1,9 +1,18 @@
-# Cahier des charges — le calendrier Flaix lisible par BreakEat
+# Cahier des charges Flaix ↔ BreakEat — le calendrier des matchs, et la passerelle d'accès
 
 **À transmettre au développeur Flaix.** Rédigé le 10/11/2026, à partir de la
-discussion du 09/11 (options A, B, C). Rien n'est encore développé : ni côté
-Flaix, ni côté BreakEat. Ce document fixe le format, pour que les deux côtés
-puissent avancer chacun de leur côté.
+discussion du 09/11 (options A, B, C), complété le même jour par la
+**passerelle d'accès** (D). Rien n'est encore développé : ni côté Flaix, ni
+côté BreakEat. Ce document fixe le format, pour que les deux côtés puissent
+avancer chacun de leur côté.
+
+**Deux besoins distincts :**
+
+1. **Le calendrier** (A, B, C) — que BreakEat lise les matchs saisis dans
+   Flaix, pour ne plus les saisir deux fois.
+2. **La passerelle d'accès** (D) — qu'un responsable de lieu ouvre ses
+   rapports et son espace Flaix **depuis le tableau de bord BreakEat, sans se
+   reconnecter à Flaix**.
 
 ---
 
@@ -58,7 +67,9 @@ qu'elle sait utiliser.
 
 ## 3. Ce qui est demandé à Flaix
 
-Ordre de priorité : **B d'abord**, A est déjà là (à vérifier), C ensuite.
+Ordre de priorité pour le calendrier : **B d'abord**, A est déjà là (à
+vérifier), C ensuite. La **passerelle d'accès (D)** est indépendante : elle
+peut avancer en parallèle, D1 avant D2.
 
 ### A — le lien principal (existe déjà) : trois vérifications
 
@@ -151,6 +162,99 @@ annulé, `LAST-MODIFIED` = `modifieLe`. L'heure d'ouverture de la commande
 peut aller dans un champ `X-FLAIX-OUVERTURE-COMMANDE`. Généralement une
 demi-journée de travail une fois B fait.
 
+### D — la passerelle d'accès au tableau de bord Flaix
+
+**Le besoin.** Aujourd'hui, le tableau de bord BreakEat d'un lieu propose un
+simple lien vers `ops.flaixlabs.com/login` : le responsable doit taper ses
+identifiants Flaix à chaque fois, et le lien de rapport de chaque match est
+collé à la main après le match. On veut un bouton **« Ouvrir Flaix »** (et
+**« Voir le rapport »** sur chaque match) qui l'emmène **directement dans son
+espace Flaix, déjà connecté**, sur le bon lieu.
+
+**Ce que BreakEat ne fera jamais** : stocker un mot de passe Flaix, ou
+connecter quelqu'un à Flaix sans que Flaix l'accepte. C'est Flaix qui décide
+qui entre ; BreakEat ne fait que **demander** l'accès pour un responsable
+qu'il a lui-même vérifié.
+
+Deux niveaux, **D1 d'abord** (le plus simple), D2 ensuite si on veut aller
+plus loin.
+
+#### D1 — le lien d'accès signé (recommandé pour commencer)
+
+Le serveur BreakEat demande à Flaix un **lien à usage unique**, valable
+quelques secondes, pour un lieu donné. Le navigateur du responsable l'ouvre ;
+Flaix ouvre la session et redirige vers la page demandée.
+
+```
+1. Le responsable clique « Ouvrir Flaix » dans le tableau de bord BreakEat.
+2. Le SERVEUR BreakEat vérifie qu'il est responsable (ou manager) de CE lieu.
+3. Le serveur BreakEat appelle Flaix (serveur à serveur) :
+
+   POST https://<domaine-flaix>/api/acces/lien
+   Authorization: Bearer <clé BreakEat, propre à BreakEat>
+   {
+     "lieu": "velodrome",              // l'identifiant du lieu côté Flaix
+     "destination": "rapport",         // "accueil" | "rapport" | "commandes"
+     "evenement": "m-123",             // facultatif : le match visé
+     "demandePar": "responsable@club.fr"  // pour le journal de Flaix
+   }
+
+4. Flaix répond :
+   { "url": "https://ops.flaixlabs.com/acces/9f3c…", "expireLe": "2026-11-22T21:05:30Z" }
+
+5. Le navigateur du responsable ouvre cette adresse (nouvel onglet).
+   Flaix vérifie le jeton, ouvre la session, et redirige vers la page demandée.
+```
+
+**Ce qui est demandé à Flaix :**
+
+| Élément | Exigence |
+|---|---|
+| La route `POST /api/acces/lien` | Appelée **uniquement de serveur à serveur**, avec une clé API réservée à BreakEat |
+| Le jeton dans l'adresse | **Usage unique**, **expire en 60 secondes au plus**, imprévisible (au moins 128 bits aléatoires) |
+| La portée | Le jeton n'ouvre que **le lieu demandé** — jamais un autre lieu, même du même club |
+| Les droits | Ceux que Flaix juge bons pour un responsable de lieu (lecture des rapports au minimum) |
+| La clé API | **Révocable** et **remplaçable** sans coupure (deux clés valides pendant le changement) |
+| Le journal | Flaix garde une trace de chaque accès : lieu, `demandePar`, date, adresse IP |
+| Erreurs | `401` clé invalide · `403` lieu non autorisé pour BreakEat · `404` lieu inconnu · réponse en JSON avec un message lisible |
+
+**À ne pas faire :** afficher la page Flaix **dans un cadre** du tableau de
+bord BreakEat. Safari et les navigateurs récents bloquent les cookies d'un
+site affiché dans le cadre d'un autre : la session ne tiendrait pas. Le lien
+s'ouvre dans un **nouvel onglet**.
+
+**Estimation côté Flaix :** de l'ordre de **1 à 2 jours** (une route, une
+table de jetons, une page d'entrée qui ouvre la session).
+
+#### D2 — les données Flaix affichées dans BreakEat (plus tard)
+
+Au lieu d'emmener le responsable chez Flaix, BreakEat **affiche lui-même**
+les chiffres dans son tableau de bord. Même clé API, routes en lecture :
+
+```
+GET https://<domaine-flaix>/api/lieux/<lieu>/ventes?du=2026-11-01&au=2026-11-30
+GET https://<domaine-flaix>/api/lieux/<lieu>/evenements/<id>/rapport
+```
+
+Champs utiles par match : chiffre d'affaires TTC, nombre de commandes, panier
+moyen, ventes par buvette, produits les plus vendus, ruptures. Montants en
+**centimes** (entiers), dates **avec fuseau**.
+
+C'est la vraie intégration — le responsable ne quitte plus BreakEat — mais
+plus de travail des deux côtés. Elle prépare aussi la **remontée des
+commandes Flaix** dans l'app (« Mes commandes », le suivi sur l'écran
+verrouillé, la note de la commande), qui attend un flux de ce type.
+
+#### La sécurité, en résumé
+
+- La clé API ne transite **jamais** par le navigateur ni par l'app : seuls les
+  deux serveurs la connaissent.
+- La clé s'échange par un **canal sûr** (gestionnaire de mots de passe
+  partagé, ou message chiffré) — **jamais par e-mail en clair**.
+- BreakEat vérifie le droit du responsable sur le lieu ; Flaix vérifie que le
+  lieu est bien autorisé pour BreakEat. **Deux contrôles, pas un.**
+- Un jeton intercepté ne sert à rien : il a déjà servi, ou il a expiré.
+
 ---
 
 ## 4. Ce que BreakEat fera de son côté (quand le flux existe)
@@ -171,11 +275,27 @@ Pour information du développeur Flaix — rien à faire de son côté.
   une panne de Flaix ne vide pas l'app.
 - Estimation : **1 à 2 jours** une fois une adresse de flux réelle disponible.
 
+**Pour la passerelle (D1)** :
+
+- Le serveur BreakEat porte la clé Flaix dans ses variables d'environnement
+  (jamais dans le code, jamais dans l'app).
+- Une route `POST /organizations/:id/flaix/acces` : vérifie que l'appelant est
+  responsable ou manager du lieu (ou super admin), appelle Flaix, renvoie
+  l'adresse à ouvrir.
+- Dans le tableau de bord : « Ouvrir Flaix » dans **Pilotage**, et « Voir le
+  rapport » sur chaque match — qui remplace le lien de rapport collé à la
+  main après chaque match.
+- Estimation : **une demi-journée à une journée** une fois la route Flaix
+  disponible en préproduction.
+
 ## 5. Ce qu'il faut renvoyer à BreakEat
 
 1. Une **adresse réelle** du flux B pour un lieu (même en préproduction).
 2. Le **domaine** de la page de commande et celui du **paiement**.
 3. La date à laquelle le flux sera disponible.
+4. **Pour la passerelle** : l'adresse de la route `POST /api/acces/lien` en
+   préproduction, une **clé API de test** (par canal sûr), les valeurs
+   acceptées pour `destination`, et l'identifiant Flaix de chaque lieu.
 
 ## 6. Décisions encore ouvertes côté BreakEat
 
@@ -185,3 +305,5 @@ Pour information du développeur Flaix — rien à faire de son côté.
   serait toujours disponible, et c'est la page Flaix qui dirait « commandes pas
   encore ouvertes ». Inutile une fois B en place, puisque `ouvertureCommande`
   arrive avec chaque match.
+- Passerelle : **D1 seul**, ou D1 puis D2 — et, pour D2, quels chiffres
+  afficher dans le tableau de bord du lieu.
