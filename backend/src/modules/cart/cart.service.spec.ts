@@ -635,7 +635,9 @@ describe('CartService', () => {
 
       await service.choisirCreneau(CART_ID, USER_ID, 'slot-1');
 
-      expect(tx.$queryRaw).toHaveBeenCalled(); // le verrou est pris
+      expect(tx.cart.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: { updatedAt: expect.any(Date) } }),
+      ); // le verrou est pris
       expect(tx.cart.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ selectedSlotId: 'slot-1' }),
@@ -662,7 +664,10 @@ describe('CartService', () => {
       await expect(service.choisirCreneau(CART_ID, USER_ID, null)).rejects.toBeInstanceOf(
         BadRequestException,
       );
-      expect(tx.cart.update).not.toHaveBeenCalled();
+      // Seul le verrou a écrit : le créneau, lui, n'a pas bougé.
+      expect(tx.cart.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ selectedSlotId: null }) }),
+      );
     });
 
     it('rend la place prise par un paiement SIMULTANÉ, vue seulement sous verrou', async () => {

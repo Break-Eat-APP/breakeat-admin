@@ -1125,7 +1125,11 @@ export class CartService {
      * verrouille la même ligne), puis on décide sur l'état réel.
      */
     await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM carts WHERE id = ${cartId} FOR UPDATE`;
+      // Le verrou : une écriture sur la ligne, qui attend celle du paiement.
+      // (Pas de `SELECT … FOR UPDATE` brut : l'identifiant est un `uuid` en
+      // base, et la comparaison au texte envoyé échouait.) La lecture qui
+      // suit, en READ COMMITTED, voit alors l'état validé le plus récent.
+      await tx.cart.update({ where: { id: cartId }, data: { updatedAt: new Date() } });
       const actuel = await tx.cart.findUniqueOrThrow({
         where: { id: cartId },
         select: { status: true, selectedSlotId: true, slotReservedAt: true },
