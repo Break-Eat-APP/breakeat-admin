@@ -101,6 +101,12 @@ export default function EventDetailPage() {
   const [renommage, setRenommage] = useState(false);
   const [nouveauNom, setNouveauNom] = useState('');
   const [renommageEnCours, setRenommageEnCours] = useState(false);
+  // Date et horaires — modifiables sur la fiche (demande de Rémi, 10/11).
+  const [debutSaisi, setDebutSaisi] = useState<string | null>(null);
+  const [finSaisie, setFinSaisie] = useState<string | null>(null);
+  const [datesEnCours, setDatesEnCours] = useState(false);
+  const [datesErreur, setDatesErreur] = useState('');
+  const [datesOk, setDatesOk] = useState(false);
   const [renommageErreur, setRenommageErreur] = useState('');
 
   const [newStatus, setNewStatus] = useState('');
@@ -411,6 +417,50 @@ export default function EventDetailPage() {
    * serveur reste possible (match terminé entre-temps), et son message, déjà
    * en français, s'affiche alors sous le champ.
    */
+  /**
+   * CHANGER LA DATE OU L'HEURE D'UN MATCH.
+   *
+   * Le serveur le permettait ; aucun écran ne le proposait. Un match reporté
+   * obligeait à le supprimer et le recréer — en perdant son lien Flaix, son
+   * adversaire et son blason.
+   *
+   * La saisie est en heure LOCALE du navigateur (celle que le club lit), et
+   * part en heure UNIVERSELLE : aucune ambiguïté sur le fuseau du serveur.
+   */
+  async function handleDates(e: React.FormEvent) {
+    e.preventDefault();
+    if (!event) return;
+    const debut = debutSaisi ?? versSaisieLocale(event.startAt);
+    const fin = finSaisie ?? versSaisieLocale(event.endAt);
+    setDatesErreur('');
+    setDatesOk(false);
+    if (!debut || !fin) {
+      setDatesErreur('Renseigne le début et la fin.');
+      return;
+    }
+    if (new Date(fin) <= new Date(debut)) {
+      setDatesErreur(
+        'La fin doit être après le début — pour un match qui finit après minuit, mets la date du lendemain.',
+      );
+      return;
+    }
+    setDatesEnCours(true);
+    try {
+      const maj = await apiUpdateEvent(orgId, event.id, {
+        startAt: new Date(debut).toISOString(),
+        endAt: new Date(fin).toISOString(),
+      });
+      setEvent((ev) => (ev ? { ...ev, startAt: maj.startAt, endAt: maj.endAt } : ev));
+      setDebutSaisi(null);
+      setFinSaisie(null);
+      setDatesOk(true);
+    } catch (err) {
+      setDatesErreur(err instanceof Error ? err.message : 'Enregistrement impossible.');
+    } finally {
+      setDatesEnCours(false);
+    }
+  }
+
   async function handleRenommer(e: React.FormEvent) {
     e.preventDefault();
     if (!event) return;
@@ -589,6 +639,74 @@ export default function EventDetailPage() {
           <code style={{ background: BRAND.bgSubtle, padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>{event.id}</code>
         </div>
       </div>
+
+      {/*
+        DATE ET HORAIRES — en premier : c'est ce qu'on vient corriger le plus
+        souvent (match reporté, horaire confirmé tard par la ligue).
+      */}
+      <Card title="Date et horaires">
+        {event.status === 'ENDED' || event.status === 'CANCELLED' ? (
+          <p style={{ margin: 0, fontSize: 13.5, color: BRAND.grey }}>
+            Un événement terminé ou annulé ne se modifie plus.
+          </p>
+        ) : (
+          <form onSubmit={handleDates}>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, fontWeight: 600, color: BRAND.inkSoft }}>
+                Début
+                <input
+                  type="datetime-local"
+                  value={debutSaisi ?? versSaisieLocale(event.startAt)}
+                  onChange={(e) => {
+                    setDebutSaisi(e.target.value);
+                    setDatesOk(false);
+                  }}
+                  required
+                  style={champDate}
+                />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12.5, fontWeight: 600, color: BRAND.inkSoft }}>
+                Fin
+                <input
+                  type="datetime-local"
+                  value={finSaisie ?? versSaisieLocale(event.endAt)}
+                  onChange={(e) => {
+                    setFinSaisie(e.target.value);
+                    setDatesOk(false);
+                  }}
+                  required
+                  style={champDate}
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={datesEnCours || (debutSaisi === null && finSaisie === null)}
+                style={{
+                  background: BRAND.orange,
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 999,
+                  padding: '10px 20px',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  opacity: datesEnCours || (debutSaisi === null && finSaisie === null) ? 0.45 : 1,
+                }}
+              >
+                {datesEnCours ? 'Enregistrement…' : 'Enregistrer'}
+              </button>
+            </div>
+            {datesErreur ? (
+              <div role="alert" style={{ color: '#dc2626', fontSize: 13, marginTop: 8 }}>{datesErreur}</div>
+            ) : datesOk ? (
+              <div style={{ color: '#16a34a', fontSize: 13, marginTop: 8 }}>
+                Enregistré. L&apos;application affiche déjà le nouvel horaire.
+              </div>
+            ) : null}
+          </form>
+        )}
+      </Card>
 
       {estFlaix ? (
         <>
@@ -1485,6 +1603,23 @@ export default function EventDetailPage() {
     </div>
   );
 }
+
+/** Une date ISO -> la valeur d'un champ `datetime-local`, en heure LOCALE. */
+function versSaisieLocale(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const deux = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${deux(d.getMonth() + 1)}-${deux(d.getDate())}T${deux(d.getHours())}:${deux(d.getMinutes())}`;
+}
+
+const champDate: React.CSSProperties = {
+  padding: '9px 12px',
+  borderRadius: 9,
+  border: `1px solid ${BRAND.border}`,
+  fontSize: 14,
+  fontFamily: 'inherit',
+  color: BRAND.ink,
+};
 
 function Shell({ children }: { children: React.ReactNode }) {
   return <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font, color: BRAND.grey }}>{children}</div>;

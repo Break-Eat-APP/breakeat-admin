@@ -161,7 +161,13 @@ ${msg}`);
 
     setCreating(true);
     try {
-      await apiCreateEvent(orgId, form);
+      // L'heure saisie est LOCALE (celle du club) ; elle part en heure
+      // universelle pour ne dépendre d'aucun fuseau côté serveur.
+      await apiCreateEvent(orgId, {
+        ...form,
+        startAt: new Date(form.startAt).toISOString(),
+        endAt: new Date(form.endAt).toISOString(),
+      });
       setShowForm(false);
       setForm(EMPTY_FORM);
       await loadEvents();
@@ -204,74 +210,136 @@ ${msg}`);
     );
 
   /**
-   * L'EN-TÊTE D'UN MATCH — nom, date, statut, Archiver, Supprimer, fiche.
-   *
-   * Plus de lien autour de toute la carte : les champs de saisie vivent
-   * dessous, et un champ dans un lien ouvrirait la fiche au premier clic.
-   * Le NOM et la flèche mènent à la fiche.
+   * UNE LIGNE DE LA LISTE — on clique, on arrive sur la fiche où tout se
+   * modifie (demande de Rémi, 10/11 : « une liste, je clique dessus pour le
+   * modifier »). La ligne MONTRE l'essentiel sans rien laisser ouvert : la
+   * date et l'heure, l'adversaire, et si le lien Flaix est posé.
    */
-  const enTeteMatch = (ev: AdminEvent) => {
+  const ligneMatch = (ev: AdminEvent) => {
     const st = STATUS_STYLE[ev.status] ?? { bg: BRAND.bgSubtle, color: BRAND.inkSoft };
+    const fini = !estAVenir(ev);
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ fontWeight: 700, fontSize: 15.5, color: BRAND.ink, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <Link href={`/events/${ev.id}`} style={{ color: BRAND.ink, textDecoration: 'none' }}>
-              {ev.name}
-            </Link>
-            {ev.visibility === 'PRIVATE' && (
-              <span style={{ background: BRAND.orangeTint, color: BRAND.orange, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700 }}>
-                🔒 Privé
-              </span>
+      <Link key={ev.id} href={`/events/${ev.id}`} style={{ textDecoration: 'none' }}>
+        <div
+          style={{
+            ...carteStyle,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 14,
+            flexWrap: 'wrap',
+            cursor: 'pointer',
+            opacity: fini ? 0.8 : 1,
+          }}
+        >
+          {/* Le blason de l'adversaire, ou ses initiales — comme dans l'app. */}
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              background: '#fff',
+              border: `1px solid ${BRAND.border}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              overflow: 'hidden',
+              flex: '0 0 auto',
+              fontSize: 12,
+              fontWeight: 700,
+              color: BRAND.grey,
+            }}
+          >
+            {ev.opponentLogoUrl ? (
+              <img src={ev.opponentLogoUrl} alt="" style={{ width: 34, height: 34, objectFit: 'contain' }} />
+            ) : (
+              (ev.opponentName ?? '')
+                .split(/\s+/)
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((m) => m[0]?.toUpperCase())
+                .join('') || '—'
             )}
-            {ev.flaixReportUrl ? (
-              <span style={{ background: BRAND.bgSubtle, color: BRAND.inkSoft, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700 }}>
-                📊 Rapport Flaix
-              </span>
-            ) : null}
           </div>
-          <div style={{ fontSize: 12.5, color: BRAND.grey, marginTop: 2 }}>
-            {new Date(ev.startAt).toLocaleString('fr-FR', {
-              weekday: 'short',
-              day: 'numeric',
-              month: 'short',
-              year: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
+
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontWeight: 700, fontSize: 15.5, color: BRAND.ink, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {ev.name}
+              {ev.visibility === 'PRIVATE' && (
+                <span style={{ background: BRAND.orangeTint, color: BRAND.orange, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700 }}>
+                  🔒 Privé
+                </span>
+              )}
+              {ev.flaixReportUrl ? (
+                <span style={{ background: BRAND.bgSubtle, color: BRAND.inkSoft, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700 }}>
+                  📊 Rapport Flaix
+                </span>
+              ) : null}
+            </div>
+            <div style={{ fontSize: 12.5, color: BRAND.grey, marginTop: 2 }}>
+              {new Date(ev.startAt).toLocaleString('fr-FR', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+              {ev.opponentName ? ` · contre ${ev.opponentName}` : ''}
+            </div>
           </div>
-        </div>
-        <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: '3px 12px', fontSize: 12, fontWeight: 600 }}>
-          {STATUS_LABEL[ev.status] ?? ev.status}
-        </span>
-        {ev.status !== 'ENDED' && ev.status !== 'CANCELLED' && (
+
+          {/* Le lien Flaix : posé ou manquant, visible sans ouvrir la fiche. */}
+          {estFlaix && !fini ? (
+            <span
+              style={{
+                background: ev.flaixOrderUrl ? '#dcfce7' : '#fef3c7',
+                color: ev.flaixOrderUrl ? '#166534' : '#92400e',
+                borderRadius: 999,
+                padding: '3px 11px',
+                fontSize: 12,
+                fontWeight: 700,
+              }}
+            >
+              {ev.flaixOrderUrl ? 'Lien Flaix ✓' : 'Lien Flaix à coller'}
+            </span>
+          ) : null}
+
+          <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: '3px 12px', fontSize: 12, fontWeight: 600 }}>
+            {STATUS_LABEL[ev.status] ?? ev.status}
+          </span>
+          {ev.status !== 'ENDED' && ev.status !== 'CANCELLED' && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void handleArchive(ev.id, ev.name);
+              }}
+              disabled={busyId === ev.id}
+              title="Archiver — conserve toutes les donnees"
+              style={ghostBtn}
+            >
+              Archiver
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => void handleArchive(ev.id, ev.name)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void handleDelete(ev.id, ev.name);
+            }}
             disabled={busyId === ev.id}
-            title="Archiver — conserve toutes les donnees"
-            style={ghostBtn}
+            title="Supprimer definitivement"
+            style={dangerBtn}
           >
-            Archiver
+            Supprimer
           </button>
-        )}
-        <button
-          type="button"
-          onClick={() => void handleDelete(ev.id, ev.name)}
-          disabled={busyId === ev.id}
-          title="Supprimer definitivement"
-          style={dangerBtn}
-        >
-          Supprimer
-        </button>
-        <Link
-          href={`/events/${ev.id}`}
-          title="Ouvrir la fiche du match"
-          style={{ color: BRAND.inkSoft, fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
-        >
-          Fiche ›
-        </Link>
-      </div>
+          <span style={{ color: BRAND.inkSoft, fontSize: 13.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+            Modifier ›
+          </span>
+        </div>
+      </Link>
     );
   };
 
@@ -452,20 +520,16 @@ ${msg}`);
       )}
 
       {/*
-        UNE CARTE PAR MATCH (décision de Rémi, 10/11/2026).
+        UNE LISTE, ET ON CLIQUE POUR MODIFIER (demande de Rémi, 10/11/2026).
 
-        La page montrait chaque match DEUX fois : la liste des événements en
-        haut, puis « Liens de commande Flaix » en bas, avec le lien,
-        l'adversaire et le blason. Il fallait rapprocher les deux à l'œil — et
-        un lien collé sur le mauvais match passait inaperçu.
+        Il y a eu deux essais avant : la liste PLUS une section de liens en
+        dessous (chaque match deux fois), puis des cartes toutes ouvertes en
+        saisie (trop chargé). La fiche du match porte désormais tout ce qui se
+        modifie — date et heure, lien Flaix, adversaire, blason, affiche —
+        et la liste ne fait que montrer et mener à elle.
 
-        Désormais, un match à venir = une carte : son en-tête (nom, date,
-        statut, Archiver, Supprimer, fiche) et, dessous, ses champs. Un seul
-        bouton enregistre la saison entière. Les matchs passés ou annulés sont
-        listés à part, sans champs : ils n'ont plus de commande à prendre.
-
-        Un lieu OUVERT EN CONTINU garde l'ancien découpage : il n'a qu'un lien,
-        celui de son contenant, qui n'est pas un match.
+        Un lieu OUVERT EN CONTINU garde son lien unique sur cette page : son
+        contenant n'est pas un match, il n'a pas de fiche à ouvrir.
       */}
       {loading ? (
         <div style={{ color: BRAND.grey, fontSize: 14 }}>Chargement…</div>
@@ -489,9 +553,7 @@ ${msg}`);
         <>
           {evenementsVisibles.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
-              {evenementsVisibles.map((ev) => (
-                <div key={ev.id} style={carteStyle}>{enTeteMatch(ev)}</div>
-              ))}
+              {evenementsVisibles.map((ev) => ligneMatch(ev))}
             </div>
           ) : null}
           <section
@@ -523,14 +585,9 @@ ${msg}`);
               Aucun match à venir. Crée le prochain avec « + Nouvel événement ».
             </div>
           ) : (
-            <LiensCommandeFlaix
-              orgId={orgId}
-              events={events}
-              modeContinu={false}
-              enTete={(ev) => enTeteMatch(ev)}
-              avecLien={estFlaix}
-              onSaved={appliquerMaj}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {aVenir.map((ev) => ligneMatch(ev))}
+            </div>
           )}
 
           {passes.length > 0 ? (
@@ -539,9 +596,7 @@ ${msg}`);
                 Matchs passés ou annulés ({passes.length})
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {passes.map((ev) => (
-                  <div key={ev.id} style={{ ...carteStyle, opacity: 0.85 }}>{enTeteMatch(ev)}</div>
-                ))}
+                {passes.map((ev) => ligneMatch(ev))}
               </div>
             </div>
           ) : null}

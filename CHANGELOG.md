@@ -5,6 +5,27 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.7] — 2026-11-10 — Tableau de bord : une liste, une fiche, et le super admin partout
+
+- **Événements = une liste** : chaque match sur une ligne (blason, date et
+  heure, adversaire, « Lien Flaix ✓ » ou « à coller », statut). On clique,
+  on arrive sur la fiche où **tout se modifie**. Les matchs passés ou annulés
+  sont listés à part.
+- **Fiche du match : « Date et horaires »** en tête — un match reporté se
+  corrige sans le recréer. Les dates partent en heure universelle (création
+  comprise), sans dépendre du fuseau du serveur.
+- **Super admin** : un sélecteur « Lieu (super admin) » donne accès à tous
+  les lieux ; les trois contrôles serveur qui exigeaient encore d'être membre
+  le laissent passer. Un compte sans accès au lieu ouvert voit pourquoi au
+  lieu de « Access denied ».
+- Bouton **« Renommer l'événement »** en orange plein.
+
+`~ apps/admin/src/app/(admin)/events/page.tsx` `~ …/events/[id]/page.tsx` `~ …/layout.tsx`
+`~ apps/admin/src/components/liens-commande-flaix.tsx` `~ apps/admin/src/lib/api/admin-client.ts`
+`~ backend/src/modules/orders/orders.controller.ts` `~ backend/src/modules/flaix/flaix.controller.ts`
+
+---
+
 ## [1.7.6] — 2026-11-10 — Le super admin crée, le tableau de bord du lieu programme
 
 **Décision de Rémi** : éviter de tout saisir deux fois, une fois dans le
