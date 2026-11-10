@@ -287,43 +287,107 @@ inutiles : **B, E1, E2 et E3 suffisent.**
 #### E1 — Les commandes Flaix remontent dans BreakEat (à construire par Flaix)
 
 C'est le point le plus important de tout ce document. Aujourd'hui, **une
-commande passée dans Flaix ne crée rien chez BreakEat**. Conséquences : le
-client ne voit pas sa commande dans « Mes commandes », n'est pas prévenu
-quand elle est prête, ne peut pas la noter, ne gagne pas de points ; et **une
-notification envoyée par le club n'atteint personne**, parce que BreakEat
-cible « les clients qui ont commandé » et n'en connaît aucun.
+commande passée dans Flaix ne crée rien chez BreakEat**. Tout ce que l'app
+sait déjà faire avec une commande en dépend :
 
-À chaque commande créée, et à chaque changement d'état, Flaix appelle
-BreakEat :
+| Ce que le client voit dans l'app | Ce que BreakEat doit recevoir |
+|---|---|
+| « Mes commandes » : le ticket, la buvette, « Commande n° 142 », le prix, la date | la commande, sa buvette, son numéro, son total, sa date |
+| La barre « reçue → en préparation → prête » | chaque changement d'état, **en temps réel** |
+| La **Live Activity** (écran verrouillé, Dynamic Island) et son décompte | l'état, et l'**heure estimée** à laquelle elle sera prête |
+| « Ta commande est prête » (notification) | l'état `READY`, dans les secondes qui suivent |
+| L'heure de retrait sur le ticket | le créneau choisi, ou « dès que prête » |
+| Le **reçu** avec la TVA taux par taux | chaque ligne : produit, quantité, prix TTC, **taux de TVA** |
+| Le bandeau « produit manquant » | les lignes qui manquent, et combien |
+| Le bandeau de remboursement | le montant remboursé |
+| « Noter ma commande », les points de fidélité | l'état `COLLECTED` (récupérée) |
+| Les campagnes vers « ceux qui ont commandé » | **qui** a commandé : l'identifiant BreakEat du client |
+
+**Ce qui existe déjà et qu'on garde.** BreakEat reçoit DÉJÀ des événements
+signés de Flaix pour la Live Activity (`FLAIX_CONTRACT.md`) : même signature
+HMAC-SHA256, même anti-rejeu (5 minutes), même idempotence par `eventId`,
+mêmes noms d'événements (`ORDER_STATUS_CHANGED`, `ORDER_READY`,
+`ORDER_DELAYED`, `ORDER_CANCELLED`, `ORDER_COLLECTED`, `PICKUP_SLOT_CHANGED`,
+`PICKUP_POINT_CHANGED`). Seule limite : ils désignent une commande
+**BreakEat** (`orderId`), qui n'existe pas quand on commande chez Flaix.
+D'où deux ajouts seulement :
+
+1. **Un événement `ORDER_CREATED`** qui porte toute la commande — la première
+   fois que BreakEat en entend parler ;
+2. **`flaixOrderId`** à la place de `orderId` dans tous les événements : la
+   référence Flaix, stable. BreakEat fait la correspondance.
 
 ```
-POST https://<api-breakeat>/api/v1/partenaires/flaix/commandes
-X-Signature: <HMAC-SHA256 du corps, avec un secret partagé>
+POST https://<api-breakeat>/api/v1/webhooks/flaix
+X-Flaix-Signature: <HMAC-SHA256 du corps brut, secret partagé>
 {
-  "id": "c-98765",                       // identifiant Flaix, stable
-  "lieu": "velodrome",                   // identifiant Flaix du lieu
-  "evenement": "m-123",                  // le match (même id que dans B)
-  "numero": "142",                       // le numéro que voit le client
+  "eventId": "evt-5521",                 // unique : clé d'idempotence
+  "event": "ORDER_CREATED",
+  "timestamp": "2026-11-22T20:12:04Z",   // anti-rejeu
+  "flaixOrderId": "c-98765",             // stable, jamais réutilisé
+  "lieu": "velodrome",                   // id Flaix du lieu
+  "evenement": "m-123",                  // id du match (le même que dans B)
   "client": {
-    "breakeatId": "…",                   // si le lien de commande l'a porté
-    "email": "client@exemple.fr"         // à défaut, pour le rapprochement
+    "breakeatId": "4b1e…",               // rendu par l'étiquette [#breakeatId]
+    "email": "client@exemple.fr"         // de secours, pour le rapprochement
   },
-  "montantCentimes": 1850,
-  "statut": "payee",                     // payee | en_preparation | prete | recuperee | remboursee | annulee
-  "retrait": { "buvette": "Tribune Nord", "creneau": "2026-11-22T21:45:00+01:00" },
-  "modifieLe": "2026-11-22T20:12:04Z"
+  "numero": "142",                       // ce que le client dit au comptoir
+  "buvette": { "id": "b-nord", "nom": "Tribune Nord" },
+  "retrait": {
+    "creneau": "2026-11-22T21:45:00+01:00",   // null = « dès que prête »
+    "point": "Comptoir 3"
+  },
+  "lignes": [
+    { "produit": "Hot-dog", "quantite": 2, "totalCentimes": 1200, "tvaPourDixMille": 1000 },
+    { "produit": "Coca 50 cl", "quantite": 1, "totalCentimes": 450, "tvaPourDixMille": 550 }
+  ],
+  "totalCentimes": 1650,
+  "payeeLe": "2026-11-22T20:12:01+01:00",
+  "status": "CREATED",
+  "estimatedReadyAt": "2026-11-22T20:25:00+01:00",
+  "lienRecu": null                       // facultatif : le reçu officiel Flaix
 }
 ```
 
+Puis, à chaque étape, un événement court :
+
+```
+{ "eventId": "evt-5530", "event": "ORDER_READY", "timestamp": "…",
+  "flaixOrderId": "c-98765", "status": "READY", "estimatedReadyAt": null }
+```
+
+Deux événements de plus, pour ce que l'app affiche déjà :
+
+- **`ORDER_ITEMS_MISSING`** — `{ "lignes": [{ "produit": "Hot-dog", "manquant": 1 }] }` :
+  le bandeau « produit manquant » ;
+- **`ORDER_REFUNDED`** — `{ "rembourseCentimes": 600, "total": false }` :
+  le bandeau de remboursement (`total: true` = remboursée entièrement).
+
+**Les exigences :**
+
 - **Le client est reconnu** grâce à une nouvelle étiquette dans le lien de
   commande, `[#breakeatId]`, que BreakEat remplit déjà pour `[#firstname]`,
-  `[#mail]`, etc. Flaix la garde avec la commande et la renvoie ici.
-- **Signé** (HMAC-SHA256 avec un secret partagé), **rejoué sans
-  doublon** (BreakEat reconnaît une commande par son `id` et ignore un état
-  plus ancien que `modifieLe`). BreakEat sait déjà recevoir un appel de Flaix
-  signé de cette façon (la Live Activity).
-- Réponse `200` dès réception ; en cas d'échec, Flaix **réessaie** (par
-  exemple 1 min, 5 min, 30 min).
+  `[#mail]`, etc. Flaix la garde avec la commande et la renvoie ici. Sans
+  elle, la commande ne peut être rattachée à personne : ni « Mes commandes »,
+  ni Live Activity.
+- **Temps réel** : `ORDER_READY` part **dans les secondes** qui suivent le
+  geste du comptoir — c'est lui qui fait sonner le téléphone.
+- **Dans l'ordre, sans doublon** : un événement plus ancien qu'un autre déjà
+  reçu est ignoré ; un événement rejoué (même `eventId`) aussi.
+- **Réessais** en cas d'échec (par exemple 10 s, 1 min, 5 min, 30 min) : une
+  coupure de quelques minutes ne doit perdre aucune commande.
+- **Une adresse de relecture** : `GET /api/commandes/<flaixOrderId>` côté
+  Flaix (même clé que D), pour que BreakEat rattrape une commande dont il a
+  manqué un événement.
+- **Le taux de TVA par ligne** est indispensable : sans lui, le reçu n'est
+  plus un justificatif. Si Flaix émet déjà son propre reçu, `lienRecu` permet
+  à l'app de l'afficher à la place du sien.
+
+**Dans l'autre sens (BreakEat → Flaix), un seul signal :** « **Je suis
+arrivé** ». Le client le touche quand il est devant le comptoir ; aujourd'hui
+il n'arrive qu'à BreakEat. Pour que le comptoir Flaix le voie :
+`POST https://<domaine-flaix>/api/commandes/<flaixOrderId>/arrivee` (même clé
+que D), sans corps. À Flaix de dire s'il sait l'afficher au comptoir.
 
 #### E2 — Les chiffres de l'app, lus par Flaix (à construire par BreakEat)
 
@@ -424,8 +488,12 @@ Pour information du développeur Flaix — rien à faire de son côté.
    préproduction, une **clé API de test** (par canal sûr), les valeurs
    acceptées pour `destination`, et l'identifiant Flaix de chaque lieu.
 5. **Pour E** : si Flaix peut envoyer E1 (et quand), s'il accepte
-   l'étiquette `[#breakeatId]` dans le lien de commande, et ce que son
-   tableau de bord afficherait de E2 et E3.
+   l'étiquette `[#breakeatId]` dans le lien de commande, s'il fournit le
+   **taux de TVA par ligne**, s'il émet son propre reçu (`lienRecu`), s'il
+   peut afficher « Je suis arrivé » au comptoir, et ce que son tableau de
+   bord afficherait de E2 et E3.
+6. **Un lieu de test** côté Flaix (préproduction), avec un match et des
+   produits, pour passer de vraies commandes de bout en bout.
 
 ## 6. Décisions encore ouvertes côté BreakEat
 
