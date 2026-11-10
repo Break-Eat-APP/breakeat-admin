@@ -2,17 +2,22 @@
 
 **À transmettre au développeur Flaix.** Rédigé le 10/11/2026, à partir de la
 discussion du 09/11 (options A, B, C), complété le même jour par la
-**passerelle d'accès** (D). Rien n'est encore développé : ni côté Flaix, ni
+**passerelle d'accès** (D) et par **ce que BreakEat ouvre à Flaix** (E). Rien
+n'est encore développé : ni côté Flaix, ni
 côté BreakEat. Ce document fixe le format, pour que les deux côtés puissent
 avancer chacun de leur côté.
 
-**Deux besoins distincts :**
+**Trois besoins distincts :**
 
 1. **Le calendrier** (A, B, C) — que BreakEat lise les matchs saisis dans
    Flaix, pour ne plus les saisir deux fois.
 2. **La passerelle d'accès** (D) — qu'un responsable de lieu ouvre ses
    rapports et son espace Flaix **depuis le tableau de bord BreakEat, sans se
    reconnecter à Flaix**.
+3. **Tout piloter depuis Flaix** (E) — que le responsable de lieu n'ait plus
+   à se connecter à BreakEat : les commandes Flaix remontent dans l'app, et
+   les chiffres et les campagnes de l'app sont visibles et pilotables depuis
+   le tableau de bord Flaix.
 
 ---
 
@@ -257,6 +262,128 @@ verrouillé, la note de la commande), qui attend un flux de ce type.
 
 ---
 
+### E — Tout piloter depuis Flaix : ce que chaque côté ouvre à l'autre
+
+**Le besoin (Rémi, 10/11).** Le tableau de bord Flaix est riche ; c'est lui
+que le responsable de lieu doit utiliser. Il ne devrait plus avoir à se
+connecter à BreakEat. Pour cela, **une seule API ne suffit pas** : il en faut
+**deux, une dans chaque sens**, et chacune est construite par celui qui
+détient les données.
+
+#### La carte complète
+
+| Besoin | Sens | Qui construit | Section |
+|---|---|---|---|
+| Les matchs, saisis une seule fois | Flaix → BreakEat | Flaix | B |
+| **Les commandes Flaix dans l'app** (« Mes commandes », « ta commande est prête », Live Activity, note, fidélité) | Flaix → BreakEat | Flaix | **E1** |
+| Les chiffres de vente dans le tableau de bord BreakEat | Flaix → BreakEat | Flaix | D2 |
+| Ouvrir Flaix sans se reconnecter | BreakEat → Flaix | Flaix | D1 |
+| **Les chiffres de l'app dans le tableau de bord Flaix** (fréquentation, audience, campagnes, avis) | BreakEat → Flaix | BreakEat | **E2** |
+| **Lancer une notification depuis Flaix**, régler l'apparence du lieu dans l'app | Flaix → BreakEat (écriture) | BreakEat | **E3** |
+
+Si le responsable ne travaille plus que dans Flaix, D1 et D2 deviennent
+inutiles : **B, E1, E2 et E3 suffisent.**
+
+#### E1 — Les commandes Flaix remontent dans BreakEat (à construire par Flaix)
+
+C'est le point le plus important de tout ce document. Aujourd'hui, **une
+commande passée dans Flaix ne crée rien chez BreakEat**. Conséquences : le
+client ne voit pas sa commande dans « Mes commandes », n'est pas prévenu
+quand elle est prête, ne peut pas la noter, ne gagne pas de points ; et **une
+notification envoyée par le club n'atteint personne**, parce que BreakEat
+cible « les clients qui ont commandé » et n'en connaît aucun.
+
+À chaque commande créée, et à chaque changement d'état, Flaix appelle
+BreakEat :
+
+```
+POST https://<api-breakeat>/api/v1/partenaires/flaix/commandes
+X-Signature: <HMAC-SHA256 du corps, avec un secret partagé>
+{
+  "id": "c-98765",                       // identifiant Flaix, stable
+  "lieu": "velodrome",                   // identifiant Flaix du lieu
+  "evenement": "m-123",                  // le match (même id que dans B)
+  "numero": "142",                       // le numéro que voit le client
+  "client": {
+    "breakeatId": "…",                   // si le lien de commande l'a porté
+    "email": "client@exemple.fr"         // à défaut, pour le rapprochement
+  },
+  "montantCentimes": 1850,
+  "statut": "payee",                     // payee | en_preparation | prete | recuperee | remboursee | annulee
+  "retrait": { "buvette": "Tribune Nord", "creneau": "2026-11-22T21:45:00+01:00" },
+  "modifieLe": "2026-11-22T20:12:04Z"
+}
+```
+
+- **Le client est reconnu** grâce à une nouvelle étiquette dans le lien de
+  commande, `[#breakeatId]`, que BreakEat remplit déjà pour `[#firstname]`,
+  `[#mail]`, etc. Flaix la garde avec la commande et la renvoie ici.
+- **Signé** (HMAC-SHA256 avec un secret partagé), **rejoué sans
+  doublon** (BreakEat reconnaît une commande par son `id` et ignore un état
+  plus ancien que `modifieLe`). BreakEat sait déjà recevoir un appel de Flaix
+  signé de cette façon (la Live Activity).
+- Réponse `200` dès réception ; en cas d'échec, Flaix **réessaie** (par
+  exemple 1 min, 5 min, 30 min).
+
+#### E2 — Les chiffres de l'app, lus par Flaix (à construire par BreakEat)
+
+```
+GET https://<api-breakeat>/api/v1/partenaires/flaix/lieux/<lieu>/statistiques?du=2026-11-01&au=2026-11-30
+Authorization: Bearer <clé Flaix, propre à Flaix>
+```
+
+Ce que BreakEat est le seul à savoir, **uniquement en nombres** (aucun nom,
+aucun e-mail) :
+
+| Bloc | Contenu | Côté BreakEat |
+|---|---|---|
+| Fréquentation | ouvertures de l'app, visiteurs uniques, vues du lieu, vues de chaque match | déjà mesuré |
+| Parcours | vues du lieu → appuis sur « Commander » (Flaix complète avec les paiements) | le comptage de « Commander » est à ajouter |
+| Audience | personnes qui ont le lieu en favori, personnes qui acceptent les notifications | les favoris sont aujourd'hui gardés sur le téléphone : à remonter au serveur |
+| Notifications | envoyées, reçues, par campagne | en partie mesuré |
+| Avis | note moyenne, nombre de notes, signalements | les notes existent ; elles suivront E1 pour les commandes Flaix |
+
+Le même découpage **par match** est possible (`…/evenements/<id>/statistiques`).
+
+#### E3 — Piloter l'app depuis Flaix (à construire par BreakEat)
+
+Même clé, routes en écriture :
+
+```
+POST   …/lieux/<lieu>/campagnes        { titre, message, envoiLe, cible: "tous" | "evenement", evenement? }
+GET    …/lieux/<lieu>/campagnes        la liste, avec leur état et leurs chiffres
+DELETE …/lieux/<lieu>/campagnes/<id>   annuler une campagne pas encore partie
+PATCH  …/lieux/<lieu>/apparence        { photo?, logo?, messageInformation? }
+```
+
+- « tous » veut dire : les clients qui ont **commandé** dans ce lieu (grâce à
+  E1) **ou** qui l'ont mis en **favori**. Jamais tous les téléphones de
+  l'app.
+- Une **limite** par lieu (par exemple trois notifications par jour) : trop de
+  notifications et les clients les coupent, et Apple peut le reprocher à
+  l'app.
+
+#### Les règles communes à E
+
+- **Deux clés différentes**, une par sens (la clé que Flaix utilise pour
+  appeler BreakEat n'est pas celle que BreakEat utilise pour appeler Flaix).
+  Chacune est **limitée aux lieux autorisés**, révocable, remplaçable sans
+  coupure, et échangée **par canal sûr — jamais par e-mail en clair**.
+- **Données personnelles** : E2 ne renvoie que des **nombres**. Envoyer à
+  Flaix la liste nominative des clients demanderait un contrat de traitement
+  des données entre les deux sociétés, une mise à jour de la politique de
+  confidentialité, et l'accord des clients pour le marketing. **Pas prévu.**
+- Une panne d'un côté **n'arrête jamais l'autre** : BreakEat garde ses
+  derniers chiffres, Flaix réessaie ses envois.
+
+**Estimation côté BreakEat** : de l'ordre de **4 à 6 jours** pour E2 + E3,
+favoris au serveur et comptage de « Commander » compris, plus **1 à 2 jours**
+pour recevoir E1 (« Mes commandes », notifications, note et fidélité sur les
+commandes Flaix). **Côté Flaix** : E1, et l'affichage de E2 et E3 dans son
+tableau de bord — à estimer par son développeur.
+
+---
+
 ## 4. Ce que BreakEat fera de son côté (quand le flux existe)
 
 Pour information du développeur Flaix — rien à faire de son côté.
@@ -296,6 +423,9 @@ Pour information du développeur Flaix — rien à faire de son côté.
 4. **Pour la passerelle** : l'adresse de la route `POST /api/acces/lien` en
    préproduction, une **clé API de test** (par canal sûr), les valeurs
    acceptées pour `destination`, et l'identifiant Flaix de chaque lieu.
+5. **Pour E** : si Flaix peut envoyer E1 (et quand), s'il accepte
+   l'étiquette `[#breakeatId]` dans le lien de commande, et ce que son
+   tableau de bord afficherait de E2 et E3.
 
 ## 6. Décisions encore ouvertes côté BreakEat
 
@@ -307,3 +437,5 @@ Pour information du développeur Flaix — rien à faire de son côté.
   arrive avec chaque match.
 - Passerelle : **D1 seul**, ou D1 puis D2 — et, pour D2, quels chiffres
   afficher dans le tableau de bord du lieu.
+- **Où travaille le responsable de lieu** : dans Flaix (alors B + E1 + E2 +
+  E3, et D devient inutile), ou dans les deux.

@@ -111,6 +111,18 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
    2) une case « Message d'information » sur le lieu (ex. « La commande ouvre
    2 h avant chaque match »), affichée sur sa carte dans l'app — `ordersOpenAt`
    ne vaut que pour les matchs datés.
+   **Tout piloter depuis Flaix (section E du cahier des charges, 10/11) — ⏸️ on
+   y revient ensemble.** Rémi veut que le responsable de lieu travaille dans
+   Flaix seulement. Il faut DEUX API, une par sens : Flaix construit E1 (ses
+   commandes remontent chez BreakEat), BreakEat construit E2 (chiffres de
+   l'app lus par Flaix) et E3 (campagnes et apparence pilotées depuis Flaix).
+   ⚠️ **Aujourd'hui, une campagne lancée par un lieu Flaix n'atteint
+   personne** : `scheduled-push.service.ts` (`destinataires`) cible les
+   clients qui ont une `Order` dans le club, et les commandes Flaix n'en
+   créent pas ; les favoris vivent sur le téléphone, le serveur ne les
+   connaît pas. Correctif possible sans Flaix (≈ 1 jour) : remonter les
+   favoris au serveur et cibler « a commandé OU a mis en favori ». Pas
+   lancé : attendre le feu vert de Rémi.
 6. **Courriels (Brevo)** — à faire par Rémi : compte Brevo, DNS de
    `breakeatapp.com`, `MAIL_PROVIDER=brevo` / `MAIL_API_KEY` / `MAIL_FROM`
    sur Railway. Puis vérifier `/auth/password-reset/available` = `true`, et
@@ -403,6 +415,7 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Parrainage** | Partage de lien et QR en place (phase 44) | Trancher l'économie : points de fidélité, remise portée par le club, ou rien. La récompense sortirait de ta poche — les produits appartiennent aux buvettes |
 | **Notifications** | Cloche corrigée (phase 52), build 21 envoyé | À ÉPROUVER en vrai : envoyer une campagne, app en arrière-plan, puis relire les journaux Railway (`Push token enregistré…`, `Expo push: N envoyés…`) |
 | **Lien calendrier Flaix (option A)** | ⏸️ En attente du point de Rémi avec son développeur (10/11). A maintenant, B aussi, C en option | ⛔ Écran Saison sans bouton « Commander » pour un lieu en continu : à corriger AVANT de basculer un lieu. Plus la case « Message d'information ». Détail dans « Ce qui reste », point 5 |
+| **Campagnes des lieux Flaix** | ⚠️ N'atteignent personne (aucune `Order` BreakEat sur un lieu Flaix, favoris gardés sur le téléphone) | Favoris au serveur + cible « a commandé OU favori » (≈ 1 jour), puis E1 côté Flaix. En attente du feu vert de Rémi |
 | **Passerelle d'accès Flaix** | ⏸️ **Gelée le 10/11 par Rémi** — spécifiée seulement (cahier des charges Flaix, section D) | Feu vert de Rémi, choix D1 seul ou D1 puis D2, route et clé de test côté Flaix. Rien à coder d'ici là |
 | **Liens Flaix** | Saisis depuis la liste des événements (toute la saison d'un coup) **ou** depuis la fiche d'un match, même terminé (06/11) | Les coller à la main, un par match, tant que Flaix ne les pousse pas |
 | **Envoi EAS** | L'envoi automatique restait en file depuis les builds 19-21 | Toujours `eas submit --platform ios --profile beta --id <build>` à la main — c'est ainsi que la build 37 est partie le 06/11 |
