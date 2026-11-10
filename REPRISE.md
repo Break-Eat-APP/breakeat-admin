@@ -81,6 +81,9 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
    Activity (le décompte est prêt) et la **note du bon de commande** (choix
    de Rémi : la note porte sur la commande remontée — match, heure, numéro).
    Contexte : `brain/FRONTIERE_FLAIX_OPS.md`.
+   **Le calendrier Flaix lu par BreakEat** (fin de la double saisie) : le
+   cahier des charges à transmettre au développeur Flaix est prêt —
+   `brain/FLAIX_FLUX_EVENEMENTS_CAHIER_DES_CHARGES.md` (recommandé : le flux B).
 6. **Courriels (Brevo)** — à faire par Rémi : compte Brevo, DNS de
    `breakeatapp.com`, `MAIL_PROVIDER=brevo` / `MAIL_API_KEY` / `MAIL_FROM`
    sur Railway. Puis vérifier `/auth/password-reset/available` = `true`, et
@@ -114,6 +117,11 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 
 ### Pièges du moment
 
+- **Panier : le créneau ne change plus après le début du paiement**, et deux
+  « Payer » simultanés ne retiennent qu'une fois (audit Codex du 10/11,
+  `brain/audits/AUDIT_2026-11-10_codex-multi-lieux-charge.md`). Capacité non
+  certifiée : pilote sur un lieu, banc de préproduction avant d'annoncer
+  des milliers de commandes BreakEat.
 - **La découverte des lieux est en cache 15 s** (`CACHE_LIEUX_MS`, `0` l'éteint) : un lien Flaix
   corrigé ou un club suspendu se voit dans l'app après au plus 15 s. La commande, elle,
   n'est jamais en cache. Audit : `brain/audits/AUDIT_2026-11-09_chirurgical-charge-flaix.md`.

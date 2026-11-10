@@ -215,6 +215,22 @@ decrire('le stock retenu avant le paiement (base réelle)', () => {
     expect((await etagere(o.product.id)).retenu).toBe(2);
   });
 
+  /**
+   * DEUX « PAYER » SIMULTANÉS DU MÊME PANIER (audit Codex du 10/11). Les deux
+   * requêtes lisaient le panier sans retenue au même instant, et retenaient
+   * toutes les deux : l'étagère perdait le panier deux fois. La marque posée
+   * sous condition, en premier, fait attendre la seconde puis la fait passer.
+   */
+  it('cinq paiements SIMULTANÉS du même panier ne retiennent qu’une fois', async () => {
+    const { o, prets } = await decor(10, 1, 2);
+
+    await Promise.allSettled(
+      Array.from({ length: 5 }, () => paniers.checkout(prets[0].panier.id, prets[0].client.id)),
+    );
+
+    expect((await etagere(o.product.id)).retenu).toBe(2);
+  });
+
   // ─── Rendre ────────────────────────────────────────────────────
 
   /**

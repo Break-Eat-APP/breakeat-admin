@@ -112,7 +112,7 @@ describe('CartService', () => {
           // Les cas testes ici partent d’un panier SANS creneau : le service
           // n’est jamais sollicite, un mock vide suffit a l’injection.
           provide: SlotsService,
-          useValue: { assignOrderToSlot: jest.fn() },
+          useValue: { assignOrderToSlot: jest.fn(), libererUnePlace: jest.fn() },
         },
         {
           provide: PrismaService,
@@ -598,7 +598,34 @@ describe('CartService', () => {
   // ─── checkout ────────────────────────────────────────────────
 
   describe('choisirCreneau — le creneau doit ARRIVER au serveur', () => {
+    /**
+     * Le changement se fait SOUS VERROU, sur le panier RELU sous verrou
+     * (audit Codex du 10/11) : `etatSousVerrou` est ce que la base contient
+     * au moment où le verrou est obtenu — il peut différer du panier lu
+     * avant.
+     */
+    function sousVerrou(etatSousVerrou: Record<string, unknown> = {}) {
+      const tx = {
+        $queryRaw: jest.fn().mockResolvedValue([]),
+        cart: {
+          findUniqueOrThrow: jest.fn().mockResolvedValue({
+            status: CartStatus.OPEN,
+            selectedSlotId: null,
+            slotReservedAt: null,
+            ...etatSousVerrou,
+          }),
+          update: jest.fn(),
+        },
+        slot: { updateMany: jest.fn().mockResolvedValue({ count: 0 }) },
+      };
+      (prisma.$transaction as jest.Mock).mockImplementation(
+        async (cb: (c: unknown) => unknown) => cb(tx),
+      );
+      return tx;
+    }
+
     it('enregistre un créneau du bon événement', async () => {
+      const tx = sousVerrou();
       (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
       (prisma.slot.findUnique as jest.Mock).mockResolvedValue({
         eventId: EVENT_ID,
@@ -608,10 +635,49 @@ describe('CartService', () => {
 
       await service.choisirCreneau(CART_ID, USER_ID, 'slot-1');
 
-      expect(prisma.cart.update).toHaveBeenCalledWith(
+      expect(tx.$queryRaw).toHaveBeenCalled(); // le verrou est pris
+      expect(tx.cart.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ selectedSlotId: 'slot-1' }),
         }),
+      );
+    });
+
+    it('REFUSE un panier en cours de paiement — l’horaire payé ne bouge plus', async () => {
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(
+        mockCart({ status: CartStatus.CHECKOUT_PENDING }),
+      );
+
+      await expect(service.choisirCreneau(CART_ID, USER_ID, 'slot-1')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(prisma.cart.update).not.toHaveBeenCalled();
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('REFUSE aussi quand le paiement a démarré ENTRE la lecture et le verrou', async () => {
+      const tx = sousVerrou({ status: CartStatus.CHECKOUT_PENDING });
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+
+      await expect(service.choisirCreneau(CART_ID, USER_ID, null)).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(tx.cart.update).not.toHaveBeenCalled();
+    });
+
+    it('rend la place prise par un paiement SIMULTANÉ, vue seulement sous verrou', async () => {
+      // Lu avant : aucune place. Sous verrou : le paiement vient de la prendre.
+      // Décider sur la première lecture effacerait la marque sans rendre la
+      // place — perdue pour la soirée.
+      const tx = sousVerrou({ selectedSlotId: 'slot-ancien', slotReservedAt: new Date() });
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+
+      await service.choisirCreneau(CART_ID, USER_ID, null);
+
+      // Rendue DANS la transaction du verrou.
+      expect(module.get(SlotsService).libererUnePlace).toHaveBeenCalledWith('slot-ancien', tx);
+      expect(tx.cart.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ slotReservedAt: null }) }),
       );
     });
 
@@ -645,11 +711,12 @@ describe('CartService', () => {
     });
 
     it('accepte null — le client renonce à une heure précise', async () => {
+      const tx = sousVerrou();
       (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
 
       await service.choisirCreneau(CART_ID, USER_ID, null);
 
-      expect(prisma.cart.update).toHaveBeenCalledWith(
+      expect(tx.cart.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ selectedSlotId: null }),
         }),

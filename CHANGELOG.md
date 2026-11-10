@@ -5,6 +5,38 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.5] — 2026-11-10 — Les deux courses du panier relevées par Codex (serveur seulement)
+
+Audit de Codex (`brain/audits/AUDIT_2026-11-10_codex-multi-lieux-charge.md`,
+avec la réponse de Claude en fin de document). Verdict partagé : la capacité
+n'est pas certifiée tant qu'un banc de préproduction ne la mesure pas. Deux
+défauts de code confirmés, corrigés :
+
+- **Le créneau ne change plus pendant le paiement.** `choisirCreneau`
+  n'exigeait pas un panier `OPEN` : un client pouvait payer pour « 17h45 »
+  puis basculer sur « 18h30 », dont la place n'était jamais prise. Il exige
+  désormais `OPEN`, et décide sous verrou de ligne sur le panier relu.
+- **Deux « Payer » simultanés ne retiennent plus deux fois.** Le stock et la
+  place du créneau étaient décidés sur le panier lu au début de la requête.
+  La marque (`stockReservedAt`, `slotReservedAt`) est maintenant posée en
+  premier, sous condition, dans la transaction de la retenue.
+
+Aucun changement dans l'app : rien à envoyer aux téléphones. Ne concerne pas
+les lieux Flaix (pas de panier BreakEat). Serveur 1 083 tests ; 3 tests en
+base réelle ajoutés.
+
+**Mis de côté pour le développeur Flaix** :
+`brain/FLAIX_FLUX_EVENEMENTS_CAHIER_DES_CHARGES.md` — options A / B / C, ce
+que chacune fait perdre, le format du flux champ par champ.
+
+`~ backend/src/modules/cart/cart.service.ts` (+ spec)
+`~ backend/test/integration/creneau-reserve.int-spec.ts`
+`~ backend/test/integration/stock-retenu.int-spec.ts`
+`+ brain/audits/AUDIT_2026-11-10_codex-multi-lieux-charge.md`
+`+ brain/FLAIX_FLUX_EVENEMENTS_CAHIER_DES_CHARGES.md`
+
+---
+
 ## [1.7.4] — 2026-11-09 — Mises à jour à distance, et l'audit charge / lien Flaix
 
 **Les mises à jour à distance (EAS Update)** — décision de Rémi : un écran,

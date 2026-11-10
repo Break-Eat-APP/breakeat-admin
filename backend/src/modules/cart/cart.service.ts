@@ -675,6 +675,14 @@ export class CartService {
      *
      * `stockReservedAt` empêche d'en retenir davantage quand le client
      * revient sur l'écran de paiement.
+     *
+     * LA MARQUE EST POSÉE EN PREMIER, ET SOUS CONDITION (audit Codex du
+     * 10/11). `cart` a été lu au début de la requête : deux « Payer »
+     * simultanés le voyaient tous les deux sans retenue, et retenaient tous
+     * les deux — l'étagère perdait deux fois le panier. Désormais la
+     * première transaction pose la marque (et verrouille la ligne) ; la
+     * seconde attend, ne trouve plus de panier sans marque, et ne retient
+     * rien. Si la retenue échoue, la transaction annule la marque avec elle.
      */
     if (!cart.stockReservedAt) {
       const lignes = view.items.map((it) => ({
@@ -684,13 +692,14 @@ export class CartService {
       const nomsParProduit = new Map(view.items.map((it) => [it.productId, it.productName]));
       try {
         await this.prisma.$transaction(async (tx) => {
+          const marque = await tx.cart.updateMany({
+            where: { id: cart.id, stockReservedAt: null },
+            data: { stockReservedAt: new Date() },
+          });
+          if (marque.count === 0) return; // un paiement simultané l'a déjà retenu
           await retenirLeStock(tx, cart.pickupPointId, lignes, (id) =>
             nomsParProduit.get(id),
           );
-          await tx.cart.update({
-            where: { id: cart.id },
-            data: { stockReservedAt: new Date() },
-          });
         });
       } catch (e: unknown) {
         // ON REND LES POINTS AVANT DE REFUSER : ils viennent d'être réservés
@@ -722,16 +731,22 @@ export class CartService {
      * revient sur l'écran de paiement repasse par ici, et la clé
      * d'idempotence Stripe lui rend la même session. Sans ce garde, chaque
      * retour consommerait une place de plus.
+     *
+     * Même marque conditionnelle que le stock juste au-dessus : sans elle,
+     * deux « Payer » simultanés prenaient DEUX places pour un seul client.
+     * La condition porte aussi sur le créneau : si le client vient d'en
+     * changer, on ne marque pas l'ancien.
      */
     if (cart.selectedSlotId && !cart.slotReservedAt) {
       const creneau = cart.selectedSlotId;
       try {
         await this.prisma.$transaction(async (tx) => {
-          await this.slotsService.reserverUnePlace(creneau, tx);
-          await tx.cart.update({
-            where: { id: cart.id },
+          const marque = await tx.cart.updateMany({
+            where: { id: cart.id, selectedSlotId: creneau, slotReservedAt: null },
             data: { slotReservedAt: new Date() },
           });
+          if (marque.count === 0) return; // déjà prise par un paiement simultané
+          await this.slotsService.reserverUnePlace(creneau, tx);
         });
       } catch (e: unknown) {
         // ON REND TOUT CE QU'ON VIENT DE PRENDRE. Les points et le stock ont
@@ -1076,6 +1091,15 @@ export class CartService {
   async choisirCreneau(cartId: string, userId: string, slotId: string | null) {
     const cart = await this.requireOwnership(cartId, userId);
 
+    /**
+     * UN PANIER EN COURS DE PAIEMENT NE CHANGE PLUS DE CRÉNEAU (audit Codex
+     * du 10/11). Les articles l'exigeaient déjà (`requireEditable`), pas
+     * l'horaire : un client pouvait payer pour « 17h45 » puis basculer le
+     * panier sur « 18h30 » pendant que Stripe encaissait. La commande partait
+     * sur un créneau dont la place n'avait jamais été prise.
+     */
+    this.requireEditable(cart.status);
+
     if (slotId) {
       // Le créneau doit être OUVERT : c'est un CHOIX du client, pas un
       // rattachement décidé au comptoir.
@@ -1093,21 +1117,36 @@ export class CartService {
      * On ne rend rien quand il repose le MÊME créneau : ce n'est pas un
      * changement, et rendre puis reprendre ouvrirait une fenêtre où
      * quelqu'un d'autre peut le prendre.
+     *
+     * SOUS VERROU, ET RELU SOUS VERROU. Le panier lu plus haut peut dater
+     * d'avant qu'un paiement simultané ait pris la place : décider sur lui
+     * ferait effacer `slotReservedAt` sans rendre la place — perdue pour la
+     * soirée. Le verrou attend la fin de la réservation du paiement (qui
+     * verrouille la même ligne), puis on décide sur l'état réel.
      */
-    if (cart.slotReservedAt && cart.selectedSlotId && cart.selectedSlotId !== slotId) {
-      await this.slotsService.libererUnePlace(cart.selectedSlotId);
-    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM carts WHERE id = ${cartId} FOR UPDATE`;
+      const actuel = await tx.cart.findUniqueOrThrow({
+        where: { id: cartId },
+        select: { status: true, selectedSlotId: true, slotReservedAt: true },
+      });
+      this.requireEditable(actuel.status);
 
-    await this.prisma.cart.update({
-      where: { id: cartId },
-      data: {
-        selectedSlotId: slotId,
-        // La nouvelle place sera prise au paiement. Garder la date ferait
-        // croire qu'elle l'est déjà, et la commande partirait sans l'avoir
-        // comptée : un créneau accepterait alors plus de monde que sa
-        // capacité.
-        ...(cart.selectedSlotId !== slotId && { slotReservedAt: null }),
-      },
+      if (actuel.slotReservedAt && actuel.selectedSlotId && actuel.selectedSlotId !== slotId) {
+        await this.slotsService.libererUnePlace(actuel.selectedSlotId, tx);
+      }
+
+      await tx.cart.update({
+        where: { id: cartId },
+        data: {
+          selectedSlotId: slotId,
+          // La nouvelle place sera prise au paiement. Garder la date ferait
+          // croire qu'elle l'est déjà, et la commande partirait sans l'avoir
+          // comptée : un créneau accepterait alors plus de monde que sa
+          // capacité.
+          ...(actuel.selectedSlotId !== slotId && { slotReservedAt: null }),
+        },
+      });
     });
     return { cartId, selectedSlotId: slotId };
   }

@@ -219,6 +219,39 @@ decrire('la place du créneau, prise avant le paiement (base réelle)', () => {
     expect(await charge(creneau.id)).toBe(1);
   });
 
+  /**
+   * DEUX « PAYER » SIMULTANÉS DU MÊME PANIER (audit Codex du 10/11). Lu au
+   * début de la requête, le panier n'avait de place ni pour l'une ni pour
+   * l'autre : un seul client en prenait deux.
+   */
+  it('cinq paiements SIMULTANÉS du même panier ne prennent qu’une place', async () => {
+    const { creneau, paniersPrets } = await decor(5, 1);
+    const { client, panier } = paniersPrets[0];
+
+    await Promise.allSettled(Array.from({ length: 5 }, () => paniers.checkout(panier.id, client.id)));
+
+    expect(await charge(creneau.id)).toBe(1);
+  });
+
+  /**
+   * UN PANIER EN COURS DE PAIEMENT NE CHANGE PLUS D'HORAIRE. Sinon la
+   * commande payée pour un créneau partait sur un autre, dont la place
+   * n'avait jamais été prise.
+   */
+  it('REFUSE de changer le créneau d’un panier en cours de paiement', async () => {
+    const { creneau, paniersPrets } = await decor(5, 1);
+    const { client, panier } = paniersPrets[0];
+    await s.prisma.cart.update({
+      where: { id: panier.id },
+      data: { status: CartStatus.CHECKOUT_PENDING },
+    });
+
+    await expect(paniers.choisirCreneau(panier.id, client.id, null)).rejects.toThrow();
+
+    const apres = await s.prisma.cart.findUniqueOrThrow({ where: { id: panier.id } });
+    expect(apres.selectedSlotId).toBe(creneau.id);
+  });
+
   // ─── Rendre la place ───────────────────────────────────────────
 
   /**
