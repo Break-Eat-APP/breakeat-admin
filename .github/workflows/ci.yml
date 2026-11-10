@@ -186,7 +186,11 @@ jobs:
 
       - name: Suite d'integration
         working-directory: backend
-        run: pnpm test:integration
+        # `tee` + `pipefail`, comme la Build : la sortie est gardée pour que
+        # l'étape suivante publie les tests en échec, sans se connecter.
+        run: |
+          set -o pipefail
+          pnpm test:integration 2>&1 | tee integration.log
         env:
           # Sans cette variable, la suite s'IGNORE au lieu d'echouer : elle ne
           # touche jamais une base qu'on ne lui a pas designee. La ligne
@@ -195,6 +199,18 @@ jobs:
           # Sans elle, la suite temps reel s'IGNORE au lieu d'echouer : on ne
           # fait jamais echouer quelqu'un qui n'a pas monte l'infrastructure.
           REDIS_URL_TEST: redis://localhost:6379
+
+      # L'ÉCHEC SE LIT SANS SE CONNECTER : le nom du test, puis la première
+      # ligne de l'attendu et du reçu. Sans effet quand tout passe.
+      - name: Publier les tests en echec
+        if: failure()
+        working-directory: backend
+        run: |
+          grep -E "●|Expected|Received|Error:|error:|Exception" integration.log \
+            | grep -v "^\s*$" | head -10 \
+            | while IFS= read -r ligne; do echo "::error title=Integration::${ligne:0:600}"; done
+          echo "--- 80 dernieres lignes ---"
+          tail -80 integration.log
 
   export-web:
     name: Export web de l'app client

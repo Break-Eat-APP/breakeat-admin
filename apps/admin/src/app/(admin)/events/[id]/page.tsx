@@ -750,13 +750,35 @@ export default function EventDetailPage() {
 
       {/* Le rapport Flaix : juste sous les chiffres, c'est le même geste — lire
           comment s'est passé le match. */}
+      {/*
+        LE RAPPORT N'EXISTE QU'APRÈS LE MATCH. Un champ vide offert avant le
+        coup d'envoi laissait croire qu'il manquait quelque chose à la
+        préparation (remarque de Rémi, 10/11). Avant la fin : une ligne qui
+        dit quand revenir. Un lien déjà collé reste toujours visible.
+      */}
       <Card title="Rapport Flaix">
-        <RapportFlaix
-          orgId={orgId}
-          eventId={event.id}
-          lien={event.flaixReportUrl ?? null}
-          onChange={(lien) => setEvent((e) => (e ? { ...e, flaixReportUrl: lien } : e))}
-        />
+        {event.flaixReportUrl ||
+        event.status === 'ENDED' ||
+        new Date(event.endAt).getTime() <= Date.now() ? (
+          <RapportFlaix
+            orgId={orgId}
+            eventId={event.id}
+            lien={event.flaixReportUrl ?? null}
+            onChange={(lien) => setEvent((e) => (e ? { ...e, flaixReportUrl: lien } : e))}
+          />
+        ) : (
+          <p style={{ margin: 0, fontSize: 13.5, color: BRAND.grey, lineHeight: 1.55 }}>
+            Rien à faire avant le match : Flaix produit son rapport une fois l&apos;événement
+            terminé. Reviens ici après le{' '}
+            {new Date(event.endAt).toLocaleString('fr-FR', {
+              day: 'numeric',
+              month: 'long',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}{' '}
+            pour coller son adresse.
+          </p>
+        )}
       </Card>
 
       {/* Status change */}

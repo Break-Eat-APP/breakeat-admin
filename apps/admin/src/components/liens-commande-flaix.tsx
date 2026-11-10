@@ -193,6 +193,39 @@ export function LiensCommandeFlaix({
     }
   };
 
+  /**
+   * UN LIEU « EN CONTINU » QUI A DES MATCHS DATÉS, C'EST PRESQUE TOUJOURS UNE
+   * ERREUR DE RÉGLAGE (constaté le 10/11 sur un stade). En continu, les
+   * champs par match — lien, adversaire, blason, affiche — n'existent pas, et
+   * le club cherche en vain où les remplir. On le dit, et on dit où changer.
+   */
+  const matchsDates = events.filter((e) => !e.isPermanentContainer);
+  const avertissementRythme =
+    modeContinu && matchsDates.length > 0 ? (
+      <div
+        style={{
+          margin: '0 0 14px',
+          padding: '12px 14px',
+          borderRadius: 10,
+          background: 'rgba(245,158,11,0.10)',
+          border: '1px solid #fbbf24',
+          fontSize: 13.5,
+          color: '#92400e',
+          lineHeight: 1.55,
+        }}
+      >
+        <strong>Ce lieu est réglé « Ouvert en continu »</strong> : un seul lien de commande, le
+        même tous les jours, et <strong>aucun champ par match</strong> (lien, adversaire, blason,
+        affiche). Pour un stade ou une salle, règle-le sur <strong>« Par événement »</strong> :
+        fiche du club → Lieu → Rythme d&apos;exploitation. Les champs de chaque match
+        apparaîtront ici.
+      </div>
+    ) : null;
+
+  if (modeContinu && portee === 'evenement' && matchsDates.length > 0) {
+    return avertissementRythme;
+  }
+
   if (aVenir.length === 0) {
     return (
       <p style={{ margin: 0, fontSize: 13.5, color: BRAND.grey, lineHeight: 1.55 }}>
@@ -210,6 +243,7 @@ export function LiensCommandeFlaix({
 
   return (
     <div>
+      {avertissementRythme}
       {enSaison ? (
       <p style={{ margin: '0 0 10px', fontSize: 13.5, color: BRAND.inkSoft, lineHeight: 1.55 }}>
         {modeContinu ? (
