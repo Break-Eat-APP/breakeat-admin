@@ -29,6 +29,8 @@ export function LiensCommandeFlaix({
   modeContinu,
   onSaved,
   portee = 'saison',
+  enTete,
+  avecLien = true,
 }: {
   orgId: string;
   /**
@@ -58,6 +60,20 @@ export function LiensCommandeFlaix({
   modeContinu: boolean;
   events: AdminEvent[];
   onSaved: (maj: LigneMatchFlaix[]) => void;
+  /**
+   * UNE CARTE PAR MATCH (décision de Rémi, 10/11). Fourni par la liste des
+   * événements : l'en-tête du match (nom, date, statut, Archiver, Supprimer,
+   * accès à la fiche) se pose EN HAUT de sa ligne de saisie. Avant, chaque
+   * match apparaissait deux fois sur la page — la liste en haut, les liens en
+   * bas — et un lien collé sur le mauvais match ne se voyait pas.
+   */
+  enTete?: (e: AdminEvent) => React.ReactNode;
+  /**
+   * Le champ du lien Flaix. Un lieu qui commande par Break Eat n'en a pas
+   * l'usage : il garde l'adversaire, le blason et l'affiche, qui remplissent
+   * le calendrier de l'app.
+   */
+  avecLien?: boolean;
 }) {
   // Les matchs à venir ou en cours, du plus proche au plus lointain. Un match
   // terminé n'a plus de commande à prendre : l'afficher noierait les autres.
@@ -136,7 +152,11 @@ export function LiensCommandeFlaix({
   // du match. On n'empêche rien, on montre (voir `alertes-liens.ts`).
   const alertes = useMemo(
     () =>
-      alertesDeSaisie(
+      // Sans champ de lien, aucune alerte de lien : elles parleraient d'un
+      // champ que l'écran ne montre pas.
+      !avecLien
+        ? []
+        : alertesDeSaisie(
         aVenir.map((e) => ({
           id: e.id,
           name: e.name,
@@ -146,7 +166,7 @@ export function LiensCommandeFlaix({
           status: e.status,
         })),
       ),
-    [aVenir, saisies],
+    [aVenir, saisies, avecLien],
   );
   const signales = new Set(alertes.flatMap((a) => a.ids));
 
@@ -227,6 +247,8 @@ export function LiensCommandeFlaix({
   }
 
   if (aVenir.length === 0) {
+    // Dans la liste fusionnée, c'est la page qui dit qu'il n'y a rien.
+    if (enTete) return avertissementRythme;
     return (
       <p style={{ margin: 0, fontSize: 13.5, color: BRAND.grey, lineHeight: 1.55 }}>
         {modeContinu
@@ -244,7 +266,22 @@ export function LiensCommandeFlaix({
   return (
     <div>
       {avertissementRythme}
-      {enSaison ? (
+      {enSaison && enTete ? (
+        <p style={{ margin: '0 0 12px', fontSize: 13.5, color: BRAND.inkSoft, lineHeight: 1.55 }}>
+          {avecLien ? (
+            <>
+              Pour chaque match : le <strong>lien de commande Flaix</strong> (c&apos;est la date qui
+              décide lequel s&apos;ouvre), puis <strong>l&apos;adversaire et son blason</strong>, et
+              une affiche pour un concert. Le lien ouvre la commande ; le reste est optionnel.
+            </>
+          ) : (
+            <>
+              Pour chaque match : <strong>l&apos;adversaire et son blason</strong>, et une affiche
+              pour un concert. Ils remplissent le calendrier de la saison dans l&apos;app.
+            </>
+          )}
+        </p>
+      ) : enSaison ? (
       <p style={{ margin: '0 0 10px', fontSize: 13.5, color: BRAND.inkSoft, lineHeight: 1.55 }}>
         {modeContinu ? (
           <>
@@ -268,6 +305,7 @@ export function LiensCommandeFlaix({
         )}
       </p>
       ) : null}
+      {avecLien ? (
       <p style={{ margin: '0 0 14px', fontSize: 12.5, color: BRAND.grey, lineHeight: 1.6 }}>
         Tu peux garder tes étiquettes d&apos;identité, comme dans ton ancien back-office :{' '}
         <code style={codeStyle}>[#firstname]</code> <code style={codeStyle}>[#lastname]</code>{' '}
@@ -276,6 +314,7 @@ export function LiensCommandeFlaix({
         coordonnées du client avant d&apos;ouvrir la page — il n&apos;a pas à se reconnecter.
         Un client non connecté reçoit l&apos;adresse sans ces informations.
       </p>
+      ) : null}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {aVenir.map((e) => {
@@ -302,6 +341,9 @@ export function LiensCommandeFlaix({
                 borderColor: signales.has(e.id) ? '#fbbf24' : BRAND.border,
               }}
             >
+              {enTete ? (
+                <div style={{ flexBasis: '100%', minWidth: 0 }}>{enTete(e)}</div>
+              ) : (
               <div style={{ minWidth: 190, flex: '0 0 auto' }}>
                 <div style={{ fontSize: 14, fontWeight: 600, color: BRAND.ink }}>
                   {e.isPermanentContainer ? 'Ouvert en continu' : e.name}
@@ -318,6 +360,14 @@ export function LiensCommandeFlaix({
                       })}
                 </div>
               </div>
+              )}
+              {avecLien ? (
+              <>
+              {enTete ? (
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: BRAND.inkSoft, flex: '0 0 auto' }}>
+                  Lien Flaix
+                </span>
+              ) : null}
               <input
                 type="url"
                 value={v}
@@ -342,6 +392,8 @@ export function LiensCommandeFlaix({
               ) : (
                 <Link2 size={17} color={BRAND.grey} />
               )}
+              </>
+              ) : null}
 
               {/*
                 L'ADVERSAIRE — sur la même ligne que le lien, et pas ailleurs.
@@ -601,7 +653,13 @@ export function LiensCommandeFlaix({
           fontFamily: 'inherit',
         }}
       >
-        {envoi ? 'Enregistrement…' : enSaison ? 'Enregistrer les liens' : 'Enregistrer'}
+        {envoi
+          ? 'Enregistrement…'
+          : enTete
+            ? 'Enregistrer les changements'
+            : enSaison
+              ? 'Enregistrer les liens'
+              : 'Enregistrer'}
       </button>
     </div>
   );

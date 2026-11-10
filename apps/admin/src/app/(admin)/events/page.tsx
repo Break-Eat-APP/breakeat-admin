@@ -10,6 +10,7 @@ import {
   apiCreateEvent,
   apiGetVenues,
   type AdminEvent,
+  type LigneMatchFlaix,
   type Venue,
   getOrgId,
 } from '@/lib/api/admin-client';
@@ -178,6 +179,101 @@ ${msg}`);
       </div>
     );
   }
+
+  const lieu = venues[0];
+  const modeContinu = lieu?.operatingMode === 'PERMANENT';
+  const estFlaix = lieu?.flaixEnabled === true;
+  // Même partage que la saisie des liens : à venir = pas encore fini et pas
+  // annulé. Le reste n'a plus de commande à prendre.
+  const estAVenir = (ev: AdminEvent) =>
+    new Date(ev.endAt).getTime() > Date.now() && ev.status !== 'CANCELLED';
+  const aVenir = evenementsVisibles.filter(estAVenir);
+  const passes = evenementsVisibles.filter((ev) => !estAVenir(ev));
+
+  /** Ce que le serveur vient d'écrire, reporté sur la liste sans la recharger. */
+  const appliquerMaj = (maj: LigneMatchFlaix[]) =>
+    setEvents((cur) =>
+      cur.map((e) => {
+        const m = maj.find((x) => x.id === e.id);
+        // `{ ...e, ...m }` et non une liste de champs : le serveur ne rend QUE
+        // ce qu'il a écrit, et une clé absente ne doit pas écraser localement
+        // ce qui est toujours en base — corriger un blason effacerait sinon
+        // le lien à l'écran.
+        return m ? { ...e, ...m } : e;
+      }),
+    );
+
+  /**
+   * L'EN-TÊTE D'UN MATCH — nom, date, statut, Archiver, Supprimer, fiche.
+   *
+   * Plus de lien autour de toute la carte : les champs de saisie vivent
+   * dessous, et un champ dans un lien ouvrirait la fiche au premier clic.
+   * Le NOM et la flèche mènent à la fiche.
+   */
+  const enTeteMatch = (ev: AdminEvent) => {
+    const st = STATUS_STYLE[ev.status] ?? { bg: BRAND.bgSubtle, color: BRAND.inkSoft };
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontWeight: 700, fontSize: 15.5, color: BRAND.ink, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Link href={`/events/${ev.id}`} style={{ color: BRAND.ink, textDecoration: 'none' }}>
+              {ev.name}
+            </Link>
+            {ev.visibility === 'PRIVATE' && (
+              <span style={{ background: BRAND.orangeTint, color: BRAND.orange, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700 }}>
+                🔒 Privé
+              </span>
+            )}
+            {ev.flaixReportUrl ? (
+              <span style={{ background: BRAND.bgSubtle, color: BRAND.inkSoft, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700 }}>
+                📊 Rapport Flaix
+              </span>
+            ) : null}
+          </div>
+          <div style={{ fontSize: 12.5, color: BRAND.grey, marginTop: 2 }}>
+            {new Date(ev.startAt).toLocaleString('fr-FR', {
+              weekday: 'short',
+              day: 'numeric',
+              month: 'short',
+              year: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          </div>
+        </div>
+        <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: '3px 12px', fontSize: 12, fontWeight: 600 }}>
+          {STATUS_LABEL[ev.status] ?? ev.status}
+        </span>
+        {ev.status !== 'ENDED' && ev.status !== 'CANCELLED' && (
+          <button
+            type="button"
+            onClick={() => void handleArchive(ev.id, ev.name)}
+            disabled={busyId === ev.id}
+            title="Archiver — conserve toutes les donnees"
+            style={ghostBtn}
+          >
+            Archiver
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => void handleDelete(ev.id, ev.name)}
+          disabled={busyId === ev.id}
+          title="Supprimer definitivement"
+          style={dangerBtn}
+        >
+          Supprimer
+        </button>
+        <Link
+          href={`/events/${ev.id}`}
+          title="Ouvrir la fiche du match"
+          style={{ color: BRAND.inkSoft, fontSize: 13, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}
+        >
+          Fiche ›
+        </Link>
+      </div>
+    );
+  };
 
   return (
     <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font }}>
@@ -355,10 +451,25 @@ ${msg}`);
         </div>
       )}
 
-      {/* List */}
+      {/*
+        UNE CARTE PAR MATCH (décision de Rémi, 10/11/2026).
+
+        La page montrait chaque match DEUX fois : la liste des événements en
+        haut, puis « Liens de commande Flaix » en bas, avec le lien,
+        l'adversaire et le blason. Il fallait rapprocher les deux à l'œil — et
+        un lien collé sur le mauvais match passait inaperçu.
+
+        Désormais, un match à venir = une carte : son en-tête (nom, date,
+        statut, Archiver, Supprimer, fiche) et, dessous, ses champs. Un seul
+        bouton enregistre la saison entière. Les matchs passés ou annulés sont
+        listés à part, sans champs : ils n'ont plus de commande à prendre.
+
+        Un lieu OUVERT EN CONTINU garde l'ancien découpage : il n'a qu'un lien,
+        celui de son contenant, qui n'est pas un match.
+      */}
       {loading ? (
         <div style={{ color: BRAND.grey, fontSize: 14 }}>Chargement…</div>
-      ) : evenementsVisibles.length === 0 ? (
+      ) : evenementsVisibles.length === 0 && !modeContinu ? (
         <div
           style={{
             background: BRAND.bg,
@@ -374,153 +485,79 @@ ${msg}`);
           <div style={{ fontWeight: 600 }}>Aucun événement</div>
           <div style={{ fontSize: 13, marginTop: 4 }}>Créez votre premier événement ci-dessus.</div>
         </div>
+      ) : modeContinu ? (
+        <>
+          {evenementsVisibles.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
+              {evenementsVisibles.map((ev) => (
+                <div key={ev.id} style={carteStyle}>{enTeteMatch(ev)}</div>
+              ))}
+            </div>
+          ) : null}
+          <section
+            style={{
+              background: '#fff',
+              border: `1px solid ${BRAND.border}`,
+              borderRadius: 12,
+              padding: 20,
+            }}
+          >
+            <h2 style={{ fontSize: 17, fontWeight: 700, color: BRAND.ink, margin: '0 0 4px' }}>
+              Lien de commande Flaix
+            </h2>
+            <p style={{ fontSize: 12.5, color: BRAND.grey, margin: '0 0 14px' }}>
+              Un seul lien, valable tous les jours.
+            </p>
+            <LiensCommandeFlaix
+              orgId={orgId}
+              events={events}
+              modeContinu
+              onSaved={appliquerMaj}
+            />
+          </section>
+        </>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {evenementsVisibles.map((ev) => {
-            const st = STATUS_STYLE[ev.status] ?? { bg: BRAND.bgSubtle, color: BRAND.inkSoft };
-            return (
-              <Link
-                key={ev.id}
-                href={`/events/${ev.id}`}
-                style={{ textDecoration: 'none' }}
-              >
-                <div
-                  style={{
-                    background: BRAND.bg,
-                    borderRadius: 10,
-                    padding: '16px 20px',
-                    boxShadow: '0 1px 3px rgba(28,25,23,0.06)',
-                    border: `1px solid ${BRAND.border}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 16,
-                    cursor: 'pointer',
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15, color: BRAND.ink, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {ev.name}
-                      {ev.visibility === 'PRIVATE' && (
-                        <span
-                          style={{
-                            background: BRAND.orangeTint,
-                            color: BRAND.orange,
-                            borderRadius: 999,
-                            padding: '2px 9px',
-                            fontSize: 11,
-                            fontWeight: 700,
-                          }}
-                        >
-                          🔒 Privé
-                        </span>
-                      )}
-                      {/* Une étiquette, pas un lien : toute la ligne mène déjà à
-                          la fiche, et un lien dans un lien n'est pas du HTML
-                          valide. Le bouton du rapport est sur la fiche. */}
-                      {ev.flaixReportUrl ? (
-                        <span
-                          style={{
-                            background: BRAND.bgSubtle,
-                            color: BRAND.inkSoft,
-                            borderRadius: 999,
-                            padding: '2px 9px',
-                            fontSize: 11,
-                            fontWeight: 700,
-                          }}
-                        >
-                          📊 Rapport Flaix
-                        </span>
-                      ) : null}
-                    </div>
-                    <div style={{ fontSize: 12, color: BRAND.grey, marginTop: 2 }}>
-                      {new Date(ev.startAt).toLocaleDateString('fr-FR')}
-                      {' → '}
-                      {new Date(ev.endAt).toLocaleDateString('fr-FR')}
-                    </div>
-                  </div>
-                  <span
-                    style={{
-                      background: st.bg,
-                      color: st.color,
-                      borderRadius: 999,
-                      padding: '3px 12px',
-                      fontSize: 12,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {STATUS_LABEL[ev.status] ?? ev.status}
-                  </span>
-                  {ev.status !== 'ENDED' && ev.status !== 'CANCELLED' && (
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleArchive(ev.id, ev.name); }}
-                      disabled={busyId === ev.id}
-                      title="Archiver — conserve toutes les donnees"
-                      style={ghostBtn}
-                    >
-                      Archiver
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); void handleDelete(ev.id, ev.name); }}
-                    disabled={busyId === ev.id}
-                    title="Supprimer definitivement"
-                    style={dangerBtn}
-                  >
-                    Supprimer
-                  </button>
-                  <span style={{ color: BRAND.grey, fontSize: 18 }}>›</span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      )}
+        <>
+          {aVenir.length === 0 ? (
+            <div style={{ ...carteStyle, color: BRAND.grey, fontSize: 14 }}>
+              Aucun match à venir. Crée le prochain avec « + Nouvel événement ».
+            </div>
+          ) : (
+            <LiensCommandeFlaix
+              orgId={orgId}
+              events={events}
+              modeContinu={false}
+              enTete={(ev) => enTeteMatch(ev)}
+              avecLien={estFlaix}
+              onSaved={appliquerMaj}
+            />
+          )}
 
-      {/* ── Les liens de commande Flaix, toute la saison d'un coup ──
-          Placés APRÈS la liste, et non dans la fiche de chaque match : c'est
-          justement d'ouvrir dix fiches qu'on veut dispenser le club. */}
-      <section
-        style={{
-          marginTop: 28,
-          background: '#fff',
-          border: `1px solid ${BRAND.border}`,
-          borderRadius: 12,
-          padding: 20,
-        }}
-      >
-        <h2 style={{ fontSize: 17, fontWeight: 700, color: BRAND.ink, margin: '0 0 4px' }}>
-          Liens de commande Flaix
-        </h2>
-        <p style={{ fontSize: 12.5, color: BRAND.grey, margin: '0 0 14px' }}>
-          Un lien par match, collé une fois. C&apos;est la date qui décide lequel s&apos;ouvre.
-        </p>
-        <LiensCommandeFlaix
-          orgId={orgId}
-          events={events}
-          // Le rythme du LIEU décide de ce qui s'affiche : un lieu ouvert en
-          // continu n'a qu'un lien, un lieu par événement n'a que des matchs.
-          // Les mélanger ferait coller un lien sur une ligne morte.
-          modeContinu={venues[0]?.operatingMode === 'PERMANENT'}
-          onSaved={(maj) =>
-            setEvents((cur) =>
-              cur.map((e) => {
-                const m = maj.find((x) => x.id === e.id);
-                // `{ ...e, ...m }` et non une liste de champs : le serveur ne
-                // rend QUE ce qu'il a écrit, et une clé absente ne doit pas
-                // écraser localement ce qui est toujours en base. Écrire
-                // `flaixOrderUrl: m.flaixOrderUrl` effacerait le lien à
-                // l'écran dès qu'on ne corrige qu'un blason.
-                return m ? { ...e, ...m } : e;
-              }),
-            )
-          }
-        />
-      </section>
+          {passes.length > 0 ? (
+            <div style={{ marginTop: 32 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 700, color: BRAND.inkSoft, margin: '0 0 10px' }}>
+                Matchs passés ou annulés ({passes.length})
+              </h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {passes.map((ev) => (
+                  <div key={ev.id} style={{ ...carteStyle, opacity: 0.85 }}>{enTeteMatch(ev)}</div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
+
+const carteStyle: React.CSSProperties = {
+  background: BRAND.bg,
+  borderRadius: 10,
+  padding: '14px 18px',
+  boxShadow: '0 1px 3px rgba(28,25,23,0.06)',
+  border: `1px solid ${BRAND.border}`,
+};
 
 const ghostBtn: React.CSSProperties = {
   background: '#fff', border: `1px solid ${BRAND.border}`, color: BRAND.inkSoft,
