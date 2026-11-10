@@ -5,6 +5,35 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.6] — 2026-11-10 — Le super admin crée, le tableau de bord du lieu programme
+
+**Décision de Rémi** : éviter de tout saisir deux fois, une fois dans le
+super admin et une fois dans le tableau de bord du responsable.
+
+- **Back-office → Organisations → « + Nouveau lieu »** : un seul écran pour
+  ce qui se décide à la signature — nom, adresse, GPS (optionnel), rythme,
+  commande par Flaix ou non, **e-mail et mot de passe du responsable**. Le
+  club, le lieu et l'accès sont créés d'un coup (reprise sans doublon si une
+  étape échoue). Les identifiants sont affichés une fois, à copier.
+- **La fiche d'un club** ne porte plus « Profil & marque » ni « Lieu du
+  club » (doublons de « Mon lieu » et « Apparence ») : un résumé du lieu et
+  **« Programmer ce lieu → »**, qui ouvre le tableau de bord sur ce lieu
+  (`/ouvrir?club=…` côté tableau de bord ; n'accorde rien, le serveur vérifie
+  chaque appel). Ajout : **« Nouveau mot de passe »** par membre.
+- **« Liens de commande » retiré du back-office** : ils se collent dans le
+  tableau de bord du lieu, et nulle part ailleurs.
+- Tableau de bord : un lieu « Ouvert en continu » qui a des matchs datés
+  l'annonce (les champs par match n'existent pas dans ce mode) ; le
+  **rapport Flaix** n'est demandé qu'après la fin du match.
+
+`~ apps/backoffice/src/app/(backoffice)/organizations/page.tsx` `~ …/organizations/[id]/page.tsx`
+`+ apps/backoffice/src/lib/acces-lieu.ts` `~ apps/backoffice/src/lib/api/backoffice-client.ts`
+`- apps/backoffice/src/app/(backoffice)/liens-flaix/page.tsx` `- …/components/liens-commande-flaix.tsx` `- …/lib/alertes-liens.ts` (+ spec)
+`+ apps/admin/src/app/ouvrir/page.tsx` `~ apps/admin/src/app/login/page.tsx`
+`~ apps/admin/src/components/liens-commande-flaix.tsx` `~ apps/admin/src/app/(admin)/events/[id]/page.tsx`
+
+---
+
 ## [1.7.5] — 2026-11-10 — Les deux courses du panier relevées par Codex (serveur seulement)
 
 Audit de Codex (`brain/audits/AUDIT_2026-11-10_codex-multi-lieux-charge.md`,

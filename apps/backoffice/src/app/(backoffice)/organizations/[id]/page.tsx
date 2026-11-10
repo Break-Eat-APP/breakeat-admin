@@ -1,28 +1,25 @@
 'use client';
 
-import { use, useState, useEffect, useCallback } from 'react';
+import { use, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { parseCoordsString, parseSingleCoord, fmtCoord } from '@/lib/coords';
 import { BRAND } from '@break-eat/brand';
 import {
   apiGetOrganization,
-  apiUpdateOrganization,
   apiActivateOrganization,
   apiDeactivateOrganization,
   apiGetVenues,
-  apiCreateVenue,
-  apiUpdateVenue,
   apiInviteMember,
   apiRemoveMember,
+  apiResetMemberPassword,
   apiResetOrgData,
   type ResetOrgDataResult,
   VENUE_MODE_OPTIONS,
   type OrgDetail,
   type Venue,
-  type VenueOperatingMode,
 } from '@/lib/api/backoffice-client';
 import { StatusBadge } from '@/components/status-badge';
+import { lienTableauDeBord, motDePasseProvisoire, TABLEAU_DE_BORD_URL } from '@/lib/acces-lieu';
 
 export default function OrganizationDetailPage({
   params,
@@ -37,46 +34,10 @@ export default function OrganizationDetailPage({
     queryFn: () => apiGetOrganization(id),
   });
 
-  // Editable fields, hydrated once data arrives.
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [description, setDescription] = useState('');
-  const [primaryColor, setPrimaryColor] = useState('');
-  const [logoUrl, setLogoUrl] = useState('');
-  const [saveError, setSaveError] = useState('');
-  const [savedAt, setSavedAt] = useState(0);
-
-  useEffect(() => {
-    if (data) {
-      setName(data.name);
-      setSlug(data.slug);
-      setDescription(data.description ?? '');
-      setPrimaryColor(data.primaryColor ?? '');
-      setLogoUrl(data.logoUrl ?? '');
-    }
-  }, [data]);
-
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['backoffice', 'organizations', id] });
     qc.invalidateQueries({ queryKey: ['backoffice', 'organizations'] });
   };
-
-  const saveMut = useMutation({
-    mutationFn: () =>
-      apiUpdateOrganization(id, {
-        name: name.trim(),
-        slug: slug.trim(),
-        description: description.trim(),
-        primaryColor: primaryColor.trim() || null,
-        logoUrl: logoUrl.trim() || null,
-      }),
-    onSuccess: () => {
-      setSaveError('');
-      setSavedAt(Date.now());
-      invalidate();
-    },
-    onError: (e) => setSaveError(e instanceof Error ? e.message : 'Échec de l’enregistrement'),
-  });
 
   const activateMut = useMutation({
     mutationFn: () => apiActivateOrganization(id),
@@ -120,6 +81,21 @@ export default function OrganizationDetailPage({
     },
   });
 
+  /**
+   * UN NOUVEAU MOT DE PASSE pour un membre — le recours d'un responsable qui a
+   * perdu le sien. Généré ici, affiché une fois, comme à la création.
+   */
+  const resetPwdMut = useMutation({
+    mutationFn: (m: { id: string }) => {
+      const motDePasse = motDePasseProvisoire();
+      return apiResetMemberPassword(id, m.id, motDePasse).then((r) => ({ ...r, motDePasse }));
+    },
+    onSuccess: (r) => {
+      setAccessNotice('');
+      setAccessCreated({ email: r.email, password: r.motDePasse });
+    },
+  });
+
   /** Retrait d'un accès. Le compte survit — seul le rattachement au club tombe. */
   const removeMut = useMutation({
     mutationFn: (memberId: string) => apiRemoveMember(id, memberId),
@@ -132,104 +108,6 @@ export default function OrganizationDetailPage({
     queryFn: () => apiGetVenues(id),
   });
   const venue = venuesQuery.data?.[0] ?? null;
-  const [vName, setVName] = useState('');
-  const [vAddress, setVAddress] = useState('');
-  const [vLat, setVLat] = useState('');
-  const [vLng, setVLng] = useState('');
-  const [vTerms, setVTerms] = useState('');
-  const [vFlaixOn, setVFlaixOn] = useState(false);
-  const [vFlaixId, setVFlaixId] = useState('');
-  const [vPhotoUrl, setVPhotoUrl] = useState('');
-  const [vPlanUrl, setVPlanUrl] = useState('');
-  const [vMode, setVMode] = useState<VenueOperatingMode>('EVENT_BASED');
-  const [vLoyaltyOn, setVLoyaltyOn] = useState(false);
-  const [vPointsPerEuro, setVPointsPerEuro] = useState('1');
-  const [vPointValue, setVPointValue] = useState('1');
-  const [vCoordsRaw, setVCoordsRaw] = useState('');
-  const [vCoordsError, setVCoordsError] = useState('');
-  const [venueError, setVenueError] = useState('');
-  const [venueSavedAt, setVenueSavedAt] = useState(0);
-
-  const handleCoordsRaw = useCallback((value: string) => {
-    setVCoordsRaw(value);
-    if (!value.trim()) { setVCoordsError(''); return; }
-    const parsed = parseCoordsString(value);
-    if (parsed) {
-      setVLat(fmtCoord(parsed.lat));
-      setVLng(fmtCoord(parsed.lng));
-      setVCoordsError('');
-    } else {
-      setVCoordsError('Format non reconnu. Essayez « 43° 17\' 45.6" N, 5° 24\' 17.2" E » ou « 43.296, 5.404 »');
-    }
-  }, []);
-
-  useEffect(() => {
-    if (venue) {
-      setVName(venue.name);
-      setVAddress(venue.address);
-      setVLat(venue.latitude != null ? String(venue.latitude) : '');
-      setVLng(venue.longitude != null ? String(venue.longitude) : '');
-      setVTerms(venue.searchTerms ?? '');
-      setVFlaixOn(!!venue.flaixEnabled);
-      setVFlaixId(venue.flaixVenueId ?? '');
-      setVPhotoUrl(venue.photoUrl ?? '');
-      setVPlanUrl(venue.buvettePlanUrl ?? '');
-      setVMode(venue.operatingMode ?? 'EVENT_BASED');
-      setVLoyaltyOn(!!venue.loyaltyEnabled);
-      setVPointsPerEuro(String(venue.loyaltyPointsPerEuro ?? 1));
-      setVPointValue(String(venue.loyaltyPointValueCents ?? 1));
-    }
-  }, [venue]);
-
-  const saveVenueMut = useMutation({
-    mutationFn: () => {
-      // Parseur tolérant, comme le champ de collage : `Number()` refusait le
-      // DMS, alors que le champ juste au-dessus l'accepte. Deux comportements
-      // contradictoires sur le même écran.
-      const lat = vLat.trim() ? parseSingleCoord(vLat) : null;
-      const lng = vLng.trim() ? parseSingleCoord(vLng) : null;
-      if ((vLat.trim() && lat === null) || (vLng.trim() && lng === null)) {
-        return Promise.reject(
-          new Error(
-            'Coordonnées non reconnues. Collez la paire depuis Google Maps dans le champ prévu.',
-          ),
-        );
-      }
-      if ((lat !== null && Math.abs(lat) > 90) || (lng !== null && Math.abs(lng) > 180)) {
-        return Promise.reject(
-          new Error(
-            'Hors limites : la latitude va de -90 à 90, la longitude de -180 à 180. ' +
-              'Les deux valeurs sont peut-être inversées.',
-          ),
-        );
-      }
-      const payload = {
-        name: vName.trim(),
-        address: vAddress.trim(),
-        latitude: lat,
-        longitude: lng,
-        searchTerms: vTerms.trim() || null,
-        photoUrl: vPhotoUrl.trim() || null,
-        buvettePlanUrl: vPlanUrl.trim() || null,
-        operatingMode: vMode,
-        flaixEnabled: vFlaixOn,
-        flaixVenueId: vFlaixId.trim() || null,
-        loyaltyEnabled: vLoyaltyOn,
-        // Bornes basses à 1 : un taux à zéro rendrait le programme inopérant
-        // sans que le club comprenne pourquoi. Mieux vaut le désactiver.
-        loyaltyPointsPerEuro: Math.max(1, Number(vPointsPerEuro) || 1),
-        loyaltyPointValueCents: Math.max(1, Number(vPointValue) || 1),
-      };
-      return venue ? apiUpdateVenue(id, venue.id, payload) : apiCreateVenue(id, payload);
-    },
-    onSuccess: () => {
-      setVenueError('');
-      setVenueSavedAt(Date.now());
-      qc.invalidateQueries({ queryKey: ['backoffice', 'venues', id] });
-    },
-    onError: (e) => setVenueError(e instanceof Error ? e.message : 'Échec de l’enregistrement'),
-  });
-
   return (
     <div style={{ padding: '32px 40px', maxWidth: 900 }}>
       <Link
@@ -282,281 +160,46 @@ export default function OrganizationDetailPage({
             <Stat label="Groupes" value={data._count.groups} />
           </div>
 
-          {/* Edit form */}
+          {/*
+            LE LIEU SE PROGRAMME DANS SON TABLEAU DE BORD (décision de Rémi, 10/11).
+
+            Il y avait ici deux formulaires — « Profil & marque » et « Lieu du
+            club » — qui doublaient « Mon lieu » et « Apparence » du tableau de
+            bord. Deux écrans pour un même lieu, c'était deux saisies, et tôt
+            ou tard deux réglages contradictoires. Le back-office crée ; le
+            tableau de bord programme.
+          */}
           <section style={card}>
-            <h2 style={cardTitle}>Profil & marque</h2>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                saveMut.mutate();
-              }}
-              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
-            >
-              <Field label="Nom">
-                <input value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} required />
-              </Field>
-              <Field label="Slug">
-                <input
-                  value={slug}
-                  onChange={(e) => setSlug(e.target.value.toLowerCase())}
-                  pattern="[a-z0-9\-]+"
-                  style={inputStyle}
-                  required
-                />
-              </Field>
-              <Field label="Logo du club (URL de l'image)">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <input
-                    value={logoUrl}
-                    onChange={(e) => setLogoUrl(e.target.value)}
-                    placeholder="https://exemple.com/logo-club.png"
-                    style={{ ...inputStyle, flex: 1 }}
-                  />
-                  {logoUrl.trim() && (
-                    <img
-                      src={logoUrl.trim()}
-                      alt="Aperçu logo"
-                      style={{ width: 48, height: 48, objectFit: 'contain', borderRadius: 8, border: `1px solid ${BRAND.border}`, background: '#f8f8f8', flexShrink: 0 }}
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                    />
-                  )}
+            <h2 style={cardTitle}>Le lieu</h2>
+            {venue ? (
+              <div style={{ fontSize: 14, color: BRAND.ink, lineHeight: 1.8, marginBottom: 16 }}>
+                <div><strong>{venue.name}</strong></div>
+                <div style={{ color: BRAND.inkSoft }}>{venue.address}</div>
+                <div style={{ color: BRAND.inkSoft }}>
+                  {VENUE_MODE_OPTIONS.find((o) => o.value === (venue.operatingMode ?? 'EVENT_BASED'))?.label}
+                  {' · '}
+                  {venue.flaixEnabled ? 'Commande par Flaix' : 'Commande par Break Eat'}
+                  {venue.latitude == null || venue.longitude == null ? ' · pas encore sur la carte (GPS manquant)' : ''}
                 </div>
-              </Field>
-              <Field label="Couleur principale (hex, ex : #FD4000)">
-                <input
-                  value={primaryColor}
-                  onChange={(e) => setPrimaryColor(e.target.value)}
-                  placeholder="#FD4000"
-                  style={inputStyle}
-                />
-              </Field>
-              <Field label="Description">
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  style={{ ...inputStyle, resize: 'vertical' }}
-                />
-              </Field>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <button type="submit" disabled={saveMut.isPending} style={primaryBtn}>
-                  {saveMut.isPending ? 'Enregistrement…' : 'Enregistrer'}
-                </button>
-                {savedAt > 0 && !saveMut.isPending && !saveError && (
-                  <span style={{ fontSize: 13, color: '#059669' }}>Enregistré ✓</span>
-                )}
-                {saveError && <span style={{ fontSize: 13, color: '#dc2626' }}>{saveError}</span>}
               </div>
-            </form>
-          </section>
-
-          {/* Lieu du club */}
-          <section style={{ ...card, marginTop: 20 }}>
-            <h2 style={cardTitle}>Lieu du club {venue ? '' : '— non configuré'}</h2>
-            <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 16px', lineHeight: 1.5 }}>
-              Ce lieu apparaît dans l’app cliente (onglet « Lieux »). Renseigne les coordonnées
-              pour le tri par proximité, les mots-clés pour la recherche, et active Flaix si la
-              commande passe par Flaix.
+            ) : (
+              <p style={{ fontSize: 14, color: BRAND.grey, margin: '0 0 16px' }}>
+                Aucun lieu configuré pour ce club.
+              </p>
+            )}
+            <p style={{ fontSize: 13, color: BRAND.grey, margin: '0 0 16px', lineHeight: 1.55, maxWidth: 640 }}>
+              Événements, liens de commande Flaix, adversaires, photo, plan des buvettes, fidélité,
+              apparence : tout se programme dans le tableau de bord du lieu — le même que celui
+              du responsable.
             </p>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                saveVenueMut.mutate();
-              }}
-              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+            <a
+              href={lienTableauDeBord({ id: data.id, name: data.name })}
+              target="_blank"
+              rel="noreferrer"
+              style={{ ...primaryBtn, display: 'inline-block', textDecoration: 'none' }}
             >
-              <Field label="Nom du lieu">
-                <input value={vName} onChange={(e) => setVName(e.target.value)} placeholder="Patinoire des Spartiates" style={inputStyle} required />
-              </Field>
-              <Field label="Adresse">
-                <input value={vAddress} onChange={(e) => setVAddress(e.target.value)} placeholder="Le Palais omnisports, Marseille" style={inputStyle} required />
-              </Field>
-              {/* Rythme d'exploitation — le réglage qui décide s'il faudra
-                  créer des événements, ou plus jamais y penser. */}
-              <Field label="Rythme d’exploitation">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {VENUE_MODE_OPTIONS.map((opt) => (
-                    <label
-                      key={opt.value}
-                      style={{
-                        display: 'flex',
-                        gap: 10,
-                        alignItems: 'flex-start',
-                        padding: '12px 14px',
-                        borderRadius: 10,
-                        border: `1.5px solid ${vMode === opt.value ? BRAND.orange : BRAND.border}`,
-                        background: vMode === opt.value ? BRAND.orangeTint : '#fff',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="operatingMode"
-                        checked={vMode === opt.value}
-                        onChange={() => setVMode(opt.value)}
-                        style={{ marginTop: 3, accentColor: BRAND.orange }}
-                      />
-                      <span>
-                        <span style={{ fontWeight: 600, fontSize: 14, color: BRAND.ink }}>
-                          {opt.label}
-                        </span>
-                        <span
-                          style={{
-                            display: 'block',
-                            fontSize: 12.5,
-                            color: BRAND.grey,
-                            lineHeight: 1.5,
-                            marginTop: 2,
-                          }}
-                        >
-                          {opt.hint}
-                        </span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </Field>
-
-              <Field label="Mots-clés de recherche">
-                <input value={vTerms} onChange={(e) => setVTerms(e.target.value)} placeholder="marseille, spartiates, patinoire" style={inputStyle} />
-              </Field>
-              {/* Champ de collage GPS — accepte DMS ou décimal, remplit lat/lng auto */}
-              <Field label="Coordonnées GPS — coller ici depuis Google Maps ou n'importe quelle source">
-                <input
-                  value={vCoordsRaw}
-                  onChange={(e) => handleCoordsRaw(e.target.value)}
-                  placeholder='ex. 43° 17′ 45.6" N, 5° 24′ 17.2" E   ou   43.296, 5.404'
-                  style={inputStyle}
-                />
-                {vCoordsError && <span style={{ fontSize: 12, color: '#dc2626', marginTop: 2 }}>{vCoordsError}</span>}
-                {vLat && vLng && !vCoordsError && <span style={{ fontSize: 12, color: '#059669', marginTop: 2 }}>→ Lat {vLat} · Lng {vLng}</span>}
-              </Field>
-
-              {/* Latitude et longitude en LECTURE SEULE.
-                  Il y avait deux saisies pour la même donnée, et une seule
-                  acceptait le DMS : taper 43° 16' 6.60" N ici échouait, alors
-                  que le champ de collage juste au-dessus le comprenait. Deux
-                  chemins pour une donnée, dont un cassé — mieux vaut un seul.
-                  Ces valeurs affichent ce qui sera enregistré. */}
-              {(vLat || vLng) && (
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: 24,
-                    background: BRAND.bgSubtle,
-                    border: `1px solid ${BRAND.border}`,
-                    borderRadius: 10,
-                    padding: '10px 14px',
-                    fontSize: 13,
-                  }}
-                >
-                  <span style={{ color: BRAND.grey }}>
-                    Latitude <strong style={{ color: BRAND.ink }}>{vLat || '—'}</strong>
-                  </span>
-                  <span style={{ color: BRAND.grey }}>
-                    Longitude <strong style={{ color: BRAND.ink }}>{vLng || '—'}</strong>
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => { setVLat(''); setVLng(''); setVCoordsRaw(''); setVCoordsError(''); }}
-                    style={{
-                      marginLeft: 'auto', background: 'none', border: 'none', padding: 0,
-                      color: '#dc2626', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
-                    }}
-                  >
-                    Effacer
-                  </button>
-                </div>
-              )}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: BRAND.ink }}>
-                <input type="checkbox" checked={vFlaixOn} onChange={(e) => setVFlaixOn(e.target.checked)} />
-                Flaix activé — la commande passe par Flaix (le club n’utilise pas le dashboard Break Eat)
-              </label>
-              {vFlaixOn && (
-                <Field label="Identifiant Flaix du lieu">
-                  <input value={vFlaixId} onChange={(e) => setVFlaixId(e.target.value)} placeholder="flx_..." style={inputStyle} />
-                </Field>
-              )}
-
-              <Field label="Photo du lieu (URL de l’image)">
-                <input
-                  value={vPhotoUrl}
-                  onChange={(e) => setVPhotoUrl(e.target.value)}
-                  placeholder="https://…/mon-stade.jpg"
-                  style={inputStyle}
-                />
-                <span style={{ fontSize: 12, color: BRAND.grey, marginTop: 2 }}>
-                  La photo que les clients voient en haut de la carte du lieu, dans l’app. Sans
-                  elle, l’app retombe sur le logo du club — qui se reconnaît moins vite.
-                </span>
-              </Field>
-
-              <Field label="Plan des buvettes (URL de l’image)">
-                <input
-                  value={vPlanUrl}
-                  onChange={(e) => setVPlanUrl(e.target.value)}
-                  placeholder="https://…/plan-buvettes.png"
-                  style={inputStyle}
-                />
-                <span style={{ fontSize: 12, color: BRAND.grey, marginTop: 2 }}>
-                  Affiché dans l’app sur la carte du lieu et après la commande. Indépendant de
-                  Flaix : il vient du lieu, pas du catalogue.
-                </span>
-              </Field>
-
-              {/* Fidélité — réglée sur le lieu, soldes portés par le club */}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: BRAND.ink }}>
-                <input
-                  type="checkbox"
-                  checked={vLoyaltyOn}
-                  onChange={(e) => setVLoyaltyOn(e.target.checked)}
-                />
-                Programme de fidélité activé
-              </label>
-              <span style={{ fontSize: 12, color: BRAND.grey, marginTop: -8, lineHeight: 1.5 }}>
-                Les points appartiennent au <strong>club</strong>, pas à Break Eat : un client
-                cumule séparément chez chaque club, et les garde d’un événement à l’autre.
-              </span>
-
-              {vLoyaltyOn && (
-                <div style={{ display: 'flex', gap: 16 }}>
-                  <Field label="Points gagnés par euro dépensé">
-                    <input
-                      type="number"
-                      min={1}
-                      value={vPointsPerEuro}
-                      onChange={(e) => setVPointsPerEuro(e.target.value)}
-                      style={inputStyle}
-                    />
-                    <span style={{ fontSize: 12, color: BRAND.grey, marginTop: 2 }}>
-                      Ex. 1 → une commande de 20 € rapporte 20 points.
-                    </span>
-                  </Field>
-                  <Field label="Valeur d’un point (centimes)">
-                    <input
-                      type="number"
-                      min={1}
-                      value={vPointValue}
-                      onChange={(e) => setVPointValue(e.target.value)}
-                      style={inputStyle}
-                    />
-                    <span style={{ fontSize: 12, color: BRAND.grey, marginTop: 2 }}>
-                      Ex. 1 → 100 points = 1 € de réduction.
-                    </span>
-                  </Field>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <button type="submit" disabled={saveVenueMut.isPending} style={primaryBtn}>
-                  {saveVenueMut.isPending ? 'Enregistrement…' : venue ? 'Enregistrer le lieu' : 'Créer le lieu'}
-                </button>
-                {venueSavedAt > 0 && !saveVenueMut.isPending && !venueError && (
-                  <span style={{ fontSize: 13, color: '#059669' }}>Enregistré ✓</span>
-                )}
-                {venueError && <span style={{ fontSize: 13, color: '#dc2626' }}>{venueError}</span>}
-              </div>
-            </form>
+              Programmer ce lieu →
+            </a>
           </section>
 
           {/* Accès responsable — délivré uniquement ici */}
@@ -573,7 +216,7 @@ export default function OrganizationDetailPage({
                 e.preventDefault();
                 const email = accessEmail.trim().toLowerCase();
                 if (!email) return;
-                inviteMut.mutate({ email, password: accessPassword.trim() || generateTemporaryPassword() });
+                inviteMut.mutate({ email, password: accessPassword.trim() || motDePasseProvisoire() });
               }}
             >
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
@@ -635,7 +278,7 @@ export default function OrganizationDetailPage({
                   }}
                 >
                   <div style={{ fontWeight: 700, marginBottom: 8 }}>Accès créé — à transmettre</div>
-                  <div>Dashboard : <code>{MANAGER_DASHBOARD_URL}</code></div>
+                  <div>Dashboard : <code>{TABLEAU_DE_BORD_URL}</code></div>
                   <div>Identifiant : <code>{accessCreated.email}</code></div>
                   <div>Mot de passe : <code>{accessCreated.password}</code></div>
                   <div style={{ marginTop: 10, fontSize: 12.5, lineHeight: 1.5 }}>
@@ -690,6 +333,22 @@ export default function OrganizationDetailPage({
                       <span style={{ fontSize: 12, fontWeight: 600, color: BRAND.inkSoft }}>
                         {m.orgRole}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Donner un nouveau mot de passe à ${m.user.email} ?\n\nL’ancien ne fonctionnera plus.`,
+                            )
+                          ) {
+                            resetPwdMut.mutate({ id: m.id });
+                          }
+                        }}
+                        disabled={resetPwdMut.isPending}
+                        style={{ ...primaryBtn, background: '#fff', color: BRAND.ink, border: `1px solid ${BRAND.border}`, padding: '5px 12px', fontSize: 12.5 }}
+                      >
+                        Nouveau mot de passe
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -825,21 +484,6 @@ function ResetDataSection({ orgId, orgName }: { orgId: string; orgName: string }
       </div>
     </section>
   );
-}
-
-/** Adresse à communiquer au responsable avec ses identifiants. */
-const MANAGER_DASHBOARD_URL =
-  process.env.NEXT_PUBLIC_MANAGER_URL ?? 'https://breakeat-admin-admin.vercel.app';
-
-/**
- * Mot de passe provisoire dictable : alphabet sans caractères ambigus
- * (0/O, 1/l/I) et assez long pour résister à une tentative.
- */
-function generateTemporaryPassword(): string {
-  const alphabet = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const bytes = new Uint32Array(14);
-  crypto.getRandomValues(bytes);
-  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join('');
 }
 
 // ─── Presentational helpers ──────────────────────────────────────────────────

@@ -9,7 +9,6 @@ import {
   Users,
   UserCircle,
   Bell,
-  Link2,
   Star,
   type LucideIcon,
 } from 'lucide-react';
@@ -42,7 +41,6 @@ const NAV: Groupe[] = [
     titre: 'Clubs',
     entrees: [
       { href: '/organizations', icon: Building2, label: 'Organisations' },
-      { href: '/liens-flaix', icon: Link2, label: 'Liens de commande' },
       { href: '/avis', icon: Star, label: 'Avis clients' },
     ],
   },

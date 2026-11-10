@@ -12,8 +12,12 @@ import {
   apiActivateOrganization,
   apiDeactivateOrganization,
   apiDeleteOrganization,
+  apiInviteMember,
+  VENUE_MODE_OPTIONS,
   type OrgListItem,
+  type VenueOperatingMode,
 } from '@/lib/api/backoffice-client';
+import { lienTableauDeBord, motDePasseProvisoire, TABLEAU_DE_BORD_URL } from '@/lib/acces-lieu';
 import { StatusBadge } from '@/components/status-badge';
 
 function slugify(s: string): string {
@@ -35,111 +39,136 @@ export default function OrganizationsPage() {
   const [showForm, setShowForm] = useState(false);
 
   /**
-   * Organisation déjà créée par une tentative précédente restée inachevée.
+   * CE QUI A DÉJÀ ÉTÉ CRÉÉ par une tentative restée inachevée.
    *
-   * La création se fait en deux écritures (organisation, puis lieu) qu'aucune
-   * transaction ne réunit — l'API n'expose pas de création groupée. Si la
-   * seconde échoue, la première a bel et bien eu lieu : relancer sans mémoire
-   * produirait un doublon. Cette référence fait reprendre là où ça s'est
-   * arrêté, et se vide dès que le formulaire est réinitialisé.
+   * La création se fait en trois écritures (club, lieu, accès) qu'aucune
+   * transaction ne réunit. Si la deuxième ou la troisième échoue, les
+   * précédentes ont bel et bien eu lieu : relancer sans mémoire produirait un
+   * doublon. On reprend là où ça s'est arrêté ; tout se vide quand le
+   * formulaire est réinitialisé.
    */
-  const orgCreeRef = useRef<string | null>(null);
+  const orgCreeRef = useRef<{ id: string; name: string } | null>(null);
+  const lieuCreeRef = useRef(false);
 
-  // Org fields
-  const [name, setName] = useState('');
-  const [slug, setSlug] = useState('');
-  const [slugTouched, setSlugTouched] = useState(false);
+  /*
+    UN SEUL ÉCRAN, CE QUI SE DÉCIDE À LA SIGNATURE (décision de Rémi, 10/11).
 
-  // Venue fields
-  const [vName, setVName] = useState('');
-  const [vAddress, setVAddress] = useState('');
-  const [vLat, setVLat] = useState('');
-  const [vLng, setVLng] = useState('');
-  const [vCoordsRaw, setVCoordsRaw] = useState('');
-  const [vCoordsError, setVCoordsError] = useState('');
-  const [vTerms, setVTerms] = useState('');
-  const [vFlaixOn, setVFlaixOn] = useState(false);
-  const [vFlaixId, setVFlaixId] = useState('');
-
-  const handleCoordsRaw = useCallback((value: string) => {
-    setVCoordsRaw(value);
-    if (!value.trim()) { setVCoordsError(''); return; }
-    const parsed = parseCoordsString(value);
-    if (parsed) {
-      setVLat(fmtCoord(parsed.lat));
-      setVLng(fmtCoord(parsed.lng));
-      setVCoordsError('');
-    } else {
-      setVCoordsError('Format non reconnu. Essayez « 43° 17\' 45.6" N, 5° 24\' 17.2" E » ou « 43.296, 5.404 »');
-    }
-  }, []);
+    Le reste — photo, plan, mots-clés, fidélité, fuseau, événements, liens
+    Flaix, adversaires — se règle dans le tableau de bord du lieu, par le
+    responsable ou par le super admin via « Programmer ce lieu ». Le saisir
+    ici aussi, c'était deux formulaires pour un même lieu.
+  */
+  const [nom, setNom] = useState('');
+  const [adresse, setAdresse] = useState('');
+  const [gpsBrut, setGpsBrut] = useState('');
+  const [lat, setLat] = useState('');
+  const [lng, setLng] = useState('');
+  const [gpsErreur, setGpsErreur] = useState('');
+  const [rythme, setRythme] = useState<VenueOperatingMode>('EVENT_BASED');
+  const [flaix, setFlaix] = useState(true);
+  const [email, setEmail] = useState('');
+  const [motDePasse, setMotDePasse] = useState(() => motDePasseProvisoire());
 
   const [formError, setFormError] = useState('');
-  const [step, setStep] = useState<'idle' | 'org' | 'venue'>('idle');
+  const [step, setStep] = useState<'idle' | 'org' | 'venue' | 'acces'>('idle');
+  /** Ce qu'on remet au responsable — affiché UNE fois : le mot de passe est ensuite haché. */
+  const [cree, setCree] = useState<{
+    org: { id: string; name: string };
+    email: string;
+    motDePasse: string | null;
+  } | null>(null);
+
+  const handleGps = useCallback((value: string) => {
+    setGpsBrut(value);
+    if (!value.trim()) {
+      setGpsErreur('');
+      setLat('');
+      setLng('');
+      return;
+    }
+    const parsed = parseCoordsString(value);
+    if (parsed) {
+      setLat(fmtCoord(parsed.lat));
+      setLng(fmtCoord(parsed.lng));
+      setGpsErreur('');
+    } else {
+      setGpsErreur('Format non reconnu. Essaie « 43.296, 5.404 » ou « 43° 17′ 45.6″ N, 5° 24′ 17.2″ E ».');
+    }
+  }, []);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['backoffice', 'organizations'] });
 
   const resetForm = () => {
-    setName(''); setSlug(''); setSlugTouched(false);
-    setVName(''); setVAddress(''); setVLat(''); setVLng('');
-    setVCoordsRaw(''); setVCoordsError('');
-    setVTerms(''); setVFlaixOn(false); setVFlaixId('');
-    setFormError(''); setStep('idle');
-    // La reprise ne vaut que pour la creation en cours.
+    setNom('');
+    setAdresse('');
+    setGpsBrut('');
+    setLat('');
+    setLng('');
+    setGpsErreur('');
+    setRythme('EVENT_BASED');
+    setFlaix(true);
+    setEmail('');
+    setMotDePasse(motDePasseProvisoire());
+    setFormError('');
+    setStep('idle');
     orgCreeRef.current = null;
+    lieuCreeRef.current = false;
   };
 
   const createMut = useMutation({
     mutationFn: async () => {
-      // Tout valider AVANT la moindre écriture.
-      //
-      // La validation des coordonnées se faisait après la création de
-      // l'organisation : une virgule mal placée créait le club, faisait échouer
-      // le lieu, et la tentative suivante se heurtait à « ce slug existe déjà ».
-      // On changeait alors le slug — et une SECONDE organisation naissait.
-      // C'est l'origine des doublons.
-      const lat = vLat.trim() ? parseSingleCoord(vLat) : null;
-      const lng = vLng.trim() ? parseSingleCoord(vLng) : null;
-      if ((vLat.trim() && lat === null) || (vLng.trim() && lng === null)) {
-        throw new Error(
-          'Coordonnées non reconnues. Formats acceptés : 43.296 · 43,296 · 43°17\'45.6"N.',
-        );
+      // Tout valider AVANT la moindre écriture : une erreur de saisie ne doit
+      // jamais laisser un club à moitié créé.
+      if (gpsBrut.trim() && (!lat || !lng)) {
+        throw new Error('Coordonnées GPS non reconnues — corrige-les ou vide le champ.');
       }
-      if ((lat !== null && Math.abs(lat) > 90) || (lng !== null && Math.abs(lng) > 180)) {
-        throw new Error(
-          'Hors limites : la latitude va de -90 à 90, la longitude de -180 à 180. ' +
-            'Les deux valeurs sont peut-être inversées.',
-        );
+      const latitude = lat ? parseSingleCoord(lat) : null;
+      const longitude = lng ? parseSingleCoord(lng) : null;
+      if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+        throw new Error('L’adresse e-mail du responsable n’est pas valide.');
+      }
+      if (motDePasse.trim().length < 8) {
+        throw new Error('Le mot de passe doit faire au moins 8 caractères.');
       }
 
-      // Reprise après échec partiel : si l'organisation a déjà été créée lors
-      // d'une tentative précédente, on la réutilise au lieu d'en fabriquer une
-      // seconde. Sans cela, la seule issue était de changer le slug — donc de
-      // laisser derrière soi un club orphelin, sans lieu.
-      let orgId = orgCreeRef.current;
-      if (!orgId) {
+      let org = orgCreeRef.current;
+      if (!org) {
         setStep('org');
-        const org = await apiCreateOrganization({ name: name.trim(), slug: slug.trim() });
-        orgId = org.id;
-        orgCreeRef.current = org.id;
+        const o = await apiCreateOrganization({ name: nom.trim(), slug: slugify(nom) });
+        org = { id: o.id, name: o.name };
+        orgCreeRef.current = org;
       }
 
-      if (vName.trim()) {
+      if (!lieuCreeRef.current) {
         setStep('venue');
-        await apiCreateVenue(orgId, {
-          name: vName.trim(),
-          address: vAddress.trim(),
-          latitude: lat,
-          longitude: lng,
-          searchTerms: vTerms.trim() || null,
-          flaixEnabled: vFlaixOn,
-          flaixVenueId: vFlaixId.trim() || null,
+        await apiCreateVenue(org.id, {
+          name: nom.trim(),
+          address: adresse.trim(),
+          latitude,
+          longitude,
+          operatingMode: rythme,
+          flaixEnabled: flaix,
         });
+        lieuCreeRef.current = true;
       }
 
-      return { id: orgId };
+      setStep('acces');
+      const membre = await apiInviteMember(org.id, {
+        email: email.trim(),
+        role: 'ORG_ADMIN',
+        temporaryPassword: motDePasse.trim(),
+      });
+      // Le mot de passe ne vaut que pour un compte NEUF : un compte existant
+      // garde le sien, et l'afficher enverrait le responsable se connecter
+      // avec un mot de passe qui ne marche pas.
+      return {
+        org,
+        email: membre.user.email,
+        motDePasse: membre.accountCreated ? motDePasse.trim() : null,
+      };
     },
-    onSuccess: () => {
+    onSuccess: (resultat) => {
+      setCree(resultat);
       resetForm();
       setShowForm(false);
       invalidate();
@@ -162,9 +191,7 @@ export default function OrganizationsPage() {
    * La suppression d'un club : on recopie son nom, et le serveur peut refuser.
    *
    * Le refus n'est pas une panne — « ce club porte 42 commandes, faites une
-   * remise à zéro d'abord » dit exactement quoi faire. L'avaler et afficher
-   * « erreur » obligerait à chercher dans les journaux du serveur ce que la
-   * réponse contenait déjà.
+   * remise à zéro d'abord » dit exactement quoi faire.
    */
   const deleteMut = useMutation({
     mutationFn: ({ id, confirmation }: { id: string; confirmation: string }) =>
@@ -173,11 +200,6 @@ export default function OrganizationsPage() {
     onError: (e: unknown) =>
       window.alert(e instanceof Error ? e.message : 'Suppression impossible.'),
   });
-
-  const handleNameChange = (v: string) => {
-    setName(v);
-    if (!slugTouched) setSlug(slugify(v));
-  };
 
   const pending = createMut.isPending;
 
@@ -193,106 +215,202 @@ export default function OrganizationsPage() {
             margin: 0,
             letterSpacing: -0.6,
           }}>Organisations</h1>
-          <p style={{ fontSize: 14.5, color: BRAND.grey, margin: '7px 0 0', lineHeight: 1.5 }}>Chaque club et son lieu : identité, encaissement, accès du responsable.</p>
+          <p style={{ fontSize: 14.5, color: BRAND.grey, margin: '7px 0 0', lineHeight: 1.5 }}>
+            Crée un lieu et l’accès de son responsable. Tout le reste se programme dans le
+            tableau de bord du lieu.
+          </p>
         </div>
         <button
-          onClick={() => { setShowForm((s) => !s); if (showForm) resetForm(); }}
+          onClick={() => {
+            setShowForm((s) => !s);
+            if (showForm) resetForm();
+            setCree(null);
+          }}
           style={primaryBtn}
         >
-          {showForm ? 'Annuler' : '+ Créer un club'}
+          {showForm ? 'Annuler' : '+ Nouveau lieu'}
         </button>
       </header>
 
-      {/* ── Formulaire de création ────────────────────────────────────────── */}
+      {/* ── Ce qu'on remet au responsable ─────────────────────────────────── */}
+      {cree && (
+        <div style={{ background: '#ecfdf5', border: '1px solid #6ee7b7', borderRadius: 14, padding: 20, marginBottom: 28 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#065f46', marginBottom: 10 }}>
+            « {cree.org.name} » est créé.
+          </div>
+          <div style={{ fontSize: 14, color: BRAND.ink, lineHeight: 1.8 }}>
+            <div>Tableau de bord : <code>{TABLEAU_DE_BORD_URL}</code></div>
+            <div>E-mail : <code>{cree.email}</code></div>
+            {cree.motDePasse ? (
+              <div>Mot de passe : <code>{cree.motDePasse}</code></div>
+            ) : (
+              <div style={{ color: BRAND.inkSoft }}>
+                Cette adresse avait déjà un compte Break Eat : elle garde son mot de passe et
+                accède maintenant à ce lieu.
+              </div>
+            )}
+          </div>
+          <p style={{ fontSize: 12.5, color: BRAND.grey, margin: '10px 0 14px' }}>
+            Le mot de passe ne sera plus affiché : copie-le maintenant. Tu pourras en générer un
+            nouveau depuis la fiche du lieu.
+          </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              style={secondaryBtn}
+              onClick={() =>
+                void navigator.clipboard?.writeText(
+                  `Tableau de bord : ${TABLEAU_DE_BORD_URL}\nE-mail : ${cree.email}` +
+                    (cree.motDePasse ? `\nMot de passe : ${cree.motDePasse}` : ''),
+                )
+              }
+            >
+              Copier les identifiants
+            </button>
+            <a
+              href={lienTableauDeBord(cree.org)}
+              target="_blank"
+              rel="noreferrer"
+              style={{ ...primaryBtn, textDecoration: 'none' }}
+            >
+              Programmer ce lieu →
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* ── Nouveau lieu ──────────────────────────────────────────────────── */}
       {showForm && (
         <form
-          onSubmit={(e) => { e.preventDefault(); createMut.mutate(); }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            createMut.mutate();
+          }}
           style={{ background: BRAND.bgSubtle, border: `1px solid ${BRAND.border}`, borderRadius: 14, padding: 24, marginBottom: 28 }}
         >
-          {/* Section org */}
-          <SectionTitle>Informations du club</SectionTitle>
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 8 }}>
-            <Field label="Nom du club" style={{ flex: 2, minWidth: 200 }}>
-              <input
-                value={name}
-                onChange={(e) => handleNameChange(e.target.value)}
-                placeholder="Les Spartiates de Marseille"
-                required
-                style={inputStyle}
-              />
-            </Field>
-            <Field label="Slug (URL interne)" style={{ flex: 1, minWidth: 160 }}>
-              <input
-                value={slug}
-                onChange={(e) => { setSlug(e.target.value.toLowerCase()); setSlugTouched(true); }}
-                placeholder="spartiates-marseille"
-                pattern="[a-z0-9\-]+"
-                required
-                style={inputStyle}
-              />
-            </Field>
-          </div>
-
-          {/* Divider */}
-          <div style={{ borderTop: `1px solid ${BRAND.border}`, margin: '20px 0 16px' }} />
-
-          {/* Section lieu */}
-          <SectionTitle>
-            Lieu du club{' '}
-            <span style={{ fontWeight: 400, color: BRAND.grey, fontSize: 13 }}>(optionnel — visible dans l'app)</span>
-          </SectionTitle>
-
+          <SectionTitle>Le lieu</SectionTitle>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 12 }}>
             <Field label="Nom du lieu" style={{ flex: 2, minWidth: 200 }}>
-              <input value={vName} onChange={(e) => setVName(e.target.value)} placeholder="Palais omnisports de Marseille" style={inputStyle} />
+              <input value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Orange Vélodrome" required style={inputStyle} />
             </Field>
             <Field label="Adresse" style={{ flex: 3, minWidth: 240 }}>
-              <input value={vAddress} onChange={(e) => setVAddress(e.target.value)} placeholder="1 place Bernard Tapie, Marseille" style={inputStyle} />
+              <input value={adresse} onChange={(e) => setAdresse(e.target.value)} placeholder="3 boulevard Michelet, 13008 Marseille" required style={inputStyle} />
             </Field>
           </div>
 
-          <div style={{ marginBottom: 12 }}>
-            <Field label="Coordonnées GPS — coller ici depuis Google Maps ou n'importe quelle source">
+          <div style={{ marginBottom: 14 }}>
+            <Field label="Coordonnées GPS (optionnel) — colle-les depuis Google Maps, pour placer le lieu sur la carte">
               <input
-                value={vCoordsRaw}
-                onChange={(e) => handleCoordsRaw(e.target.value)}
-                placeholder='ex. 43° 17′ 45.6" N, 5° 24′ 17.2" E   ou   43.296, 5.404'
+                value={gpsBrut}
+                onChange={(e) => handleGps(e.target.value)}
+                placeholder="ex. 43.2698, 5.3959"
                 style={inputStyle}
               />
-              {vCoordsError && <span style={{ fontSize: 12, color: '#dc2626', marginTop: 2, display: 'block' }}>{vCoordsError}</span>}
-              {vLat && vLng && !vCoordsError && <span style={{ fontSize: 12, color: '#059669', marginTop: 2, display: 'block' }}>→ Lat {vLat} · Lng {vLng}</span>}
+              {gpsErreur && <span style={{ fontSize: 12, color: '#dc2626', marginTop: 2, display: 'block' }}>{gpsErreur}</span>}
+              {lat && lng && !gpsErreur && (
+                <span style={{ fontSize: 12, color: '#059669', marginTop: 2, display: 'block' }}>→ Lat {lat} · Lng {lng}</span>
+              )}
             </Field>
           </div>
 
-          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 12 }}>
-            <Field label="Mots-clés de recherche" style={{ flex: 3, minWidth: 240 }}>
-              <input value={vTerms} onChange={(e) => setVTerms(e.target.value)} placeholder="marseille, spartiates, patinoire, hockey" style={inputStyle} />
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 6 }}>
+            <Field label="Rythme" style={{ flex: 1, minWidth: 260 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {VENUE_MODE_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.value}
+                    style={{
+                      display: 'flex',
+                      gap: 10,
+                      alignItems: 'flex-start',
+                      padding: '10px 12px',
+                      borderRadius: 10,
+                      cursor: 'pointer',
+                      background: '#fff',
+                      border: `1.5px solid ${rythme === opt.value ? BRAND.orange : BRAND.border}`,
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="rythme"
+                      checked={rythme === opt.value}
+                      onChange={() => setRythme(opt.value)}
+                      style={{ marginTop: 3 }}
+                    />
+                    <span>
+                      <span style={{ fontSize: 14, fontWeight: 600, color: BRAND.ink }}>{opt.label}</span>
+                      <span style={{ display: 'block', fontSize: 12.5, color: BRAND.grey, marginTop: 2 }}>{opt.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </Field>
-            <Field label="Latitude (décimal)" style={{ flex: 1, minWidth: 120 }}>
-              <input value={vLat} onChange={(e) => setVLat(e.target.value)} placeholder="43.296482" style={inputStyle} />
-            </Field>
-            <Field label="Longitude (décimal)" style={{ flex: 1, minWidth: 120 }}>
-              <input value={vLng} onChange={(e) => setVLng(e.target.value)} placeholder="5.404222" style={inputStyle} />
+            <Field label="Commande" style={{ flex: 1, minWidth: 260 }}>
+              <label
+                style={{
+                  display: 'flex',
+                  gap: 10,
+                  alignItems: 'flex-start',
+                  padding: '10px 12px',
+                  borderRadius: 10,
+                  background: '#fff',
+                  border: `1.5px solid ${BRAND.border}`,
+                  cursor: 'pointer',
+                }}
+              >
+                <input type="checkbox" checked={flaix} onChange={(e) => setFlaix(e.target.checked)} style={{ marginTop: 3 }} />
+                <span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: BRAND.ink }}>La commande passe par Flaix</span>
+                  <span style={{ display: 'block', fontSize: 12.5, color: BRAND.grey, marginTop: 2 }}>
+                    Le lieu colle ses liens de commande Flaix dans son tableau de bord. Décoché : la
+                    commande et le paiement passent par Break Eat.
+                  </span>
+                </span>
+              </label>
             </Field>
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, color: BRAND.ink, marginBottom: vFlaixOn ? 12 : 0 }}>
-            <input type="checkbox" checked={vFlaixOn} onChange={(e) => setVFlaixOn(e.target.checked)} />
-            Flaix activé — la commande passe par Flaix
-          </label>
+          <div style={{ borderTop: `1px solid ${BRAND.border}`, margin: '20px 0 16px' }} />
 
-          {vFlaixOn && (
-            <Field label="Identifiant Flaix du lieu" style={{ maxWidth: 320, marginTop: 12 }}>
-              <input value={vFlaixId} onChange={(e) => setVFlaixId(e.target.value)} placeholder="flx_..." style={inputStyle} />
+          <SectionTitle>L’accès du responsable</SectionTitle>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <Field label="E-mail" style={{ flex: 2, minWidth: 220 }}>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="responsable@club.fr"
+                required
+                autoComplete="off"
+                style={inputStyle}
+              />
             </Field>
-          )}
+            <Field label="Mot de passe provisoire" style={{ flex: 2, minWidth: 220 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  value={motDePasse}
+                  onChange={(e) => setMotDePasse(e.target.value)}
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  style={{ ...inputStyle, fontFamily: 'ui-monospace, Menlo, Consolas, monospace' }}
+                />
+                <button type="button" onClick={() => setMotDePasse(motDePasseProvisoire())} style={secondaryBtn} title="En générer un autre">
+                  ↻
+                </button>
+              </div>
+            </Field>
+          </div>
 
-          {/* Footer */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 20 }}>
             <button type="submit" disabled={pending} style={primaryBtn}>
               {pending
-                ? step === 'venue' ? 'Création du lieu…' : 'Création du club…'
-                : vName.trim() ? 'Créer le club + le lieu' : 'Créer le club'}
+                ? step === 'acces'
+                  ? 'Création de l’accès…'
+                  : step === 'venue'
+                    ? 'Création du lieu…'
+                    : 'Création…'
+                : 'Créer le lieu et son accès'}
             </button>
             {formError && <span style={{ fontSize: 13, color: '#dc2626' }}>{formError}</span>}
           </div>
@@ -424,6 +542,12 @@ const primaryBtn: React.CSSProperties = {
   cursor: 'pointer',
   fontFamily: 'inherit',
   whiteSpace: 'nowrap',
+};
+
+const secondaryBtn: React.CSSProperties = {
+  background: '#fff', color: BRAND.ink, border: `1.5px solid ${BRAND.border}`,
+  borderRadius: 10, padding: '10px 14px', fontWeight: 600, fontSize: 14,
+  cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
 };
 
 const deleteBtnSmall: React.CSSProperties = {

@@ -506,6 +506,21 @@ export async function apiInviteMember(
  * client à l'application, elle perd seulement ce club. Supprimer un compte
  * effacerait aussi son historique de commandes.
  */
+/**
+ * POST /organizations/:id/members/:memberId/reset-password — le mot de passe
+ * est généré par le navigateur, pour être affiché une fois. Même route que le
+ * tableau de bord.
+ */
+export async function apiResetMemberPassword(
+  orgId: string,
+  memberId: string,
+  newPassword: string,
+): Promise<{ email: string }> {
+  return req<{ email: string }>('POST', `/organizations/${orgId}/members/${memberId}/reset-password`, {
+    newPassword,
+  });
+}
+
 export async function apiRemoveMember(orgId: string, memberId: string): Promise<void> {
   return req<void>('DELETE', `/organizations/${orgId}/members/${memberId}`);
 }

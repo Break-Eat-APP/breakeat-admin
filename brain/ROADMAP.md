@@ -530,6 +530,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.3 | 2026-11-09 | Le ticket d'après la maquette, et une icône enfin nette |
 | 1.7.4 | 2026-11-09 | Mises à jour à distance, et l'audit charge / lien Flaix |
 | 1.7.5 | 2026-11-10 | Les deux courses du panier relevées par Codex |
+| 1.7.6 | 2026-11-10 | Le super admin crée, le tableau de bord du lieu programme |
 
 ---
 

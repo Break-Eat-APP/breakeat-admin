@@ -117,6 +117,12 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 
 ### Pièges du moment
 
+- **Créer un lieu = back-office → Organisations → « + Nouveau lieu »** (lieu + accès du
+  responsable en un écran). **Toute la programmation** (événements, liens Flaix, adversaires,
+  photo, fidélité…) se fait dans le **tableau de bord du lieu** ; le super admin y entre par
+  « Programmer ce lieu → ». La page « Liens de commande » du back-office n'existe plus.
+- **Un stade se règle « Par événement »** : en « Ouvert en continu », les champs par match
+  (lien, adversaire, blason, affiche) n'existent pas.
 - **Panier : le créneau ne change plus après le début du paiement**, et deux
   « Payer » simultanés ne retiennent qu'une fois (audit Codex du 10/11,
   `brain/audits/AUDIT_2026-11-10_codex-multi-lieux-charge.md`). Capacité non

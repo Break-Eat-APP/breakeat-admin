@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Bell,
   Building2,
-  Link2,
   UserCircle,
   Users,
 } from 'lucide-react';
@@ -107,15 +106,8 @@ export default function OverviewPage() {
           href="/organizations"
           icone={Building2}
           titre="Organisations"
-          description="Créer un club, régler son lieu, son encaissement, et donner l'accès à son responsable."
+          description="Créer un lieu et l'accès de son responsable. La programmation se fait dans le tableau de bord du lieu."
           etat={`${nbClubs} club${nbClubs > 1 ? 's' : ''} · ${nbEvenements} événement${nbEvenements > 1 ? 's' : ''}`}
-        />
-        <CarteLien
-          href="/liens-flaix"
-          icone={Link2}
-          titre="Liens de commande"
-          description="Coller les adresses Flaix d'une saison entière. C'est la date qui décide laquelle s'ouvre."
-          etat="Un lien par match"
         />
       </Grille>
 

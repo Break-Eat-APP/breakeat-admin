@@ -48,6 +48,28 @@ export default function LoginPage() {
       const me = await apiMeWithMemberships();
       const firstMembership = me.memberships[0];
 
+      // Arrivé par « Ouvrir son tableau de bord » du back-office (`/ouvrir`) :
+      // on reprend CE lieu, si ce compte y a droit — sinon on l'oublie.
+      let demande: { club: string; nom: string } | null = null;
+      try {
+        demande = JSON.parse(localStorage.getItem('admin_club_demande') ?? 'null');
+        localStorage.removeItem('admin_club_demande');
+      } catch {
+        demande = null;
+      }
+      const membreDuLieu = demande
+        ? me.memberships.find((m) => m.organizationId === demande?.club)
+        : undefined;
+      if (demande && (me.globalRole === 'SUPER_ADMIN' || membreDuLieu)) {
+        localStorage.setItem('admin_org_id', demande.club);
+        localStorage.setItem(
+          'admin_org_name',
+          membreDuLieu?.organization.name ?? demande.nom,
+        );
+        router.replace('/dashboard');
+        return;
+      }
+
       if (!firstMembership) {
         // SUPER_ADMIN with no org, or user without membership
         if (me.globalRole === 'SUPER_ADMIN') {
