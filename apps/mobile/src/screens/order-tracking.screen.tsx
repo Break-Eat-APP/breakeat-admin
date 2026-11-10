@@ -83,11 +83,13 @@ const STATUS_MAP: Record<string, StatusConfig> = {
     description: 'Votre commande est prête ! Rendez-vous au point de retrait.',
     isFinal: false,
   },
+  // EN VERT (demande de Rémi, 10/11) : c'est la bonne nouvelle de la commande,
+  // et en gris elle se lisait comme un état éteint.
   PICKED_UP: {
     label: 'Récupérée',
     icon: 'checkmark-done-outline',
-    color: THEME.grey,
-    bg: THEME.surface,
+    color: '#16a34a',
+    bg: '#ecfdf5',
     description: 'Commande récupérée. Bon appétit !',
     isFinal: true,
   },
@@ -436,25 +438,27 @@ const styles = StyleSheet.create({
    * l'un sur l'autre ne hierarchisent plus rien. Ici c'est la TAILLE du
    * chiffre qui fait le travail, pas la couleur du cadre.
    */
+  // EN ORANGE (demande de Rémi, 10/11) : le cadre blanc et le chiffre noir
+  // ne se distinguaient pas du reste de l'écran.
   numeroCarte: {
     alignItems: 'center',
-    backgroundColor: THEME.surface,
+    backgroundColor: '#FFF1EA',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: THEME.border,
+    borderWidth: 1.5,
+    borderColor: '#FFC9B3',
     paddingVertical: 18,
     paddingHorizontal: 20,
     gap: 4,
   },
   numeroLabel: {
-    color: THEME.grey,
+    color: THEME.orangeDark,
     fontSize: 12.5,
     fontFamily: FONT.medium,
     letterSpacing: 0.3,
     textTransform: 'uppercase',
   },
   numeroValeur: {
-    color: THEME.ink,
+    color: THEME.orange,
     fontSize: 44,
     lineHeight: 50,
     fontFamily: HEAD.bold,

@@ -532,6 +532,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.5 | 2026-11-10 | Les deux courses du panier relevées par Codex |
 | 1.7.6 | 2026-11-10 | Le super admin crée, le tableau de bord du lieu programme |
 | 1.7.7 | 2026-11-10 | Tableau de bord : une liste, une fiche, et le super admin partout |
+| 1.7.8 | 2026-11-10 | App : « Mes commandes » lisible, et le reçu s'enregistre en PDF |
 
 ---
 

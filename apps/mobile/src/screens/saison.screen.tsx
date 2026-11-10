@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -326,6 +327,22 @@ export function SaisonScreen({ route, navigation }: Props) {
           >
             <Ionicons name="chevron-back" size={24} color="#fff" />
           </Pressable>
+          {/*
+            LE LOGO DU CLUB, À CÔTÉ DU NOM (demande de Rémi, 10/11). Dans un
+            rond BLANC : un écusson posé à même l'orange perdait ses couleurs.
+            Le logo d'abord ; la photo du lieu à défaut ; rien sinon — un rond
+            vide serait une tache sans raison.
+          */}
+          {lieu?.imageUrl || lieu?.photoUrl ? (
+            <View style={styles.logoRond}>
+              <Image
+                source={{ uri: (lieu.imageUrl ?? lieu.photoUrl) as string }}
+                style={lieu.imageUrl ? styles.logoImage : styles.logoPhoto}
+                resizeMode={lieu.imageUrl ? 'contain' : 'cover'}
+                accessibilityIgnoresInvertColors
+              />
+            </View>
+          ) : null}
           <Text style={styles.titre} numberOfLines={1}>
             {lieu?.name ?? venueName}
           </Text>
@@ -579,7 +596,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderBottomLeftRadius: 26,
   },
-  bandRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  bandRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  logoRond: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginRight: 4,
+  },
+  /** Un écusson se centre sans être rogné ; une photo remplit le rond. */
+  logoImage: { width: 30, height: 30 },
+  logoPhoto: { width: 38, height: 38 },
   retour: { padding: 4, borderRadius: 8 },
   /**
    * `minWidth: 0` N'EST PAS DÉCORATIF.

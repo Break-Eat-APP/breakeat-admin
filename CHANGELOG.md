@@ -5,6 +5,30 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.8] — 2026-11-10 — App : « Mes commandes » lisible, et le reçu s'enregistre en PDF
+
+Retours de Rémi sur l'app (changements JavaScript seuls : ils partent par
+mise à jour à distance, sans nouvelle build).
+
+- **Mes commandes** : fond **orange pâle** (`#FFE9DF`), en-tête du ticket en
+  **orange vif** `#FD4000` — orange sur orange ne se lisait pas. Titres et
+  textes passés en foncé.
+- **Filtres « Toutes / En cours / Récupérées »** dès qu'il y a une commande
+  (ils n'apparaissaient qu'avec les deux groupes à la fois).
+- Sur le ticket : **« Commande n° 12 »** au lieu de « N° 12 », qui passait
+  pour le numéro de la buvette.
+- **Suivi d'une commande** : le numéro de commande en orange sur fond
+  orangé ; **« Récupérée » en vert**.
+- **Reçu** : ouvert dans **Safari / Chrome** et plus dans le navigateur
+  intégré, qui ignore l'impression — « Enregistrer en PDF / Imprimer »
+  fonctionne.
+- **Écran d'un lieu** : le **logo du club** (ou la photo du lieu) dans un rond
+  blanc, à gauche du nom, dans le bandeau orange.
+
+`~ apps/mobile/src/screens/order-history.screen.tsx` `~ …/order-tracking.screen.tsx` `~ …/saison.screen.tsx`
+
+---
+
 ## [1.7.7] — 2026-11-10 — Tableau de bord : une liste, une fiche, et le super admin partout
 
 - **Événements = une liste** : chaque match sur une ligne (blason, date et

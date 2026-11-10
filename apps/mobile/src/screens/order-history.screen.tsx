@@ -4,6 +4,7 @@ import {
   Animated,
   AppState,
   DeviceEventEmitter,
+  Linking,
   SectionList,
   Platform,
   Pressable,
@@ -38,7 +39,6 @@ import { EVT_COMMANDES_A_RECHARGER } from '@lib/hooks/use-deep-links';
 import { useCartStore } from '@store/cart.store';
 import { useSuiviStore } from '@store/suivi.store';
 import { JAUNE_FOND, JAUNE_TEXTE } from '@lib/suivi-commande';
-import * as WebBrowser from 'expo-web-browser';
 import { MissingItemsBanner } from '@components/missing-items-banner';
 import { RemboursementBanner } from '@components/remboursement-banner';
 
@@ -96,10 +96,12 @@ const ENCOCHE_COTE = 34;
 /** Les encoches en demi-cercle du haut et du bas, au centre (maquette du 09/11). */
 const ENCOCHE_CENTRE = 56;
 /**
- * LE FOND DE PAGE EST ORANGE (maquette du 09/11). Les encoches en prennent la
- * couleur : ce sont des trous dans le ticket, on doit voir le fond à travers.
+ * LE FOND DE PAGE EST ORANGE PÂLE (demande de Rémi, 10/11). Il était orange
+ * vif comme l'en-tête du ticket, et orange sur orange ne se lisait pas.
+ * OPAQUE, pas une transparence : les encoches en prennent la couleur — ce
+ * sont des trous dans le ticket, on doit voir le fond à travers.
  */
-const FOND_PAGE = THEME.orange;
+const FOND_PAGE = '#FFE9DF';
 /** Le violet du reçu : distinct de l'orange des gestes, et du gris du reste. */
 const VIOLET = '#6D28D9';
 
@@ -246,8 +248,6 @@ export function OrderHistoryScreen() {
   // Suivi live : on ne sonde que s'il reste une commande en cours (économie
   // batterie/réseau — une liste 100 % terminée est figée).
   const hasLive = orders.some((o) => isLive(o.status));
-  // Son pendant, pour les pastilles : elles n'ont de sens qu'avec les deux.
-  const hasTerminees = orders.some((o) => !isLive(o.status));
 
   /**
    * LES PASTILLES ET LES SECTIONS FONT DEUX TRAVAUX DIFFERENTS.
@@ -376,15 +376,14 @@ export function OrderHistoryScreen() {
       </View>
 
       {/*
-        LES PASTILLES NE S'AFFICHENT QUE S'IL Y A LES DEUX GROUPES.
+        LES PASTILLES, DÈS QU'IL Y A UNE COMMANDE (demande de Rémi, 10/11).
 
-        Sur une liste entierement en cours, « Terminees » ne rendrait rien et
-        « Toutes » ne retirerait rien : trois boutons dont deux inutiles et un
-        sans effet. La meme regle que celle des titres de section, et pour la
-        meme raison — un controle qui ne change rien apprend au client a ne
-        plus y toucher.
+        Elles n'apparaissaient qu'avec les deux groupes à la fois : un client
+        qui n'avait que des commandes récupérées ne voyait jamais le filtre,
+        et le croyait absent. Un filtre qui ne rend rien le dit (« Aucune
+        commande en cours. »), ce qui vaut mieux qu'un filtre introuvable.
       */}
-      {hasLive && hasTerminees ? (
+      {orders.length > 0 ? (
         <View style={styles.filtres}>
           {FILTRES.map((f) => {
             const actif = filtre === f.cle;
@@ -420,7 +419,7 @@ export function OrderHistoryScreen() {
 
       {loading && orders.length === 0 ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#fff" />
+          <ActivityIndicator size="large" color={THEME.orange} />
         </View>
       ) : error && orders.length === 0 ? (
         <View style={styles.centered}>
@@ -451,7 +450,7 @@ export function OrderHistoryScreen() {
           contentContainerStyle={[styles.list, { paddingBottom: espaceBas }]}
           stickySectionHeadersEnabled={false}
           refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor="#fff" />
+            <RefreshControl refreshing={loading} onRefresh={() => void load()} tintColor={THEME.orange} />
           }
           // Un titre SEULEMENT s'il y a les deux : sans commande en cours, la
           // liste n'est qu'un historique, et « Terminées » n'y apprend rien.
@@ -526,6 +525,12 @@ function LiveBadge() {
  *
  * Le lien est signé et vaut quinze minutes : on le demande donc au moment du
  * clic, jamais à l'avance.
+ *
+ * DANS SAFARI (ou Chrome), PAS DANS LE NAVIGATEUR INTÉGRÉ (constaté le 10/11 :
+ * « Enregistrer en PDF / Imprimer » ne faisait rien). La fenêtre intégrée
+ * d'iOS ignore `window.print()` ; le navigateur du téléphone ouvre la feuille
+ * d'impression, d'où l'on enregistre le PDF. Changement JavaScript seul : il
+ * part par mise à jour à distance, sans module natif.
  */
 async function ouvrirRecu(orderId: string, setOccupe: (v: boolean) => void) {
   setOccupe(true);
@@ -535,7 +540,7 @@ async function ouvrirRecu(orderId: string, setOccupe: (v: boolean) => void) {
       const g = globalThis as { open?: (u: string, c?: string) => unknown };
       g.open?.(url, '_blank');
     } else {
-      await WebBrowser.openBrowserAsync(url);
+      await Linking.openURL(url);
     }
   } catch (e: unknown) {
     console.warn('Reçu indisponible:', e);
@@ -612,7 +617,7 @@ function OrderCard({
             maquette ET la couleur demandée.
           */}
           <View style={styles.numeroBulle}>
-            <Text style={styles.numeroPrefixe}>N°</Text>
+            <Text style={styles.numeroPrefixe}>Commande n°</Text>
             <Text style={styles.numeroValeur} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
               {numeroDeCommandeNu(order)}
             </Text>
@@ -819,18 +824,18 @@ const styles = StyleSheet.create({
    */
   root: { flex: 1, backgroundColor: FOND_PAGE },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 16, paddingBottom: 8 },
-  screenTitle: { color: '#fff', fontSize: 22, fontFamily: HEAD.bold },
+  screenTitle: { color: THEME.ink, fontSize: 22, fontFamily: HEAD.bold },
 
   liveBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.22)', paddingHorizontal: 9, paddingVertical: 4,
+    backgroundColor: THEME.orange, paddingHorizontal: 9, paddingVertical: 4,
     borderRadius: THEME.radius.pill,
   },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#fff' },
   liveText: { color: '#fff', fontSize: 11, fontFamily: HEAD.bold },
 
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 14 },
-  emptyText: { color: '#fff', fontSize: 14, textAlign: 'center', fontFamily: HEAD.medium },
+  emptyText: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center', fontFamily: HEAD.medium },
   bandeauPaiement: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -843,35 +848,31 @@ const styles = StyleSheet.create({
     backgroundColor: THEME.surface,
   },
   bandeauTexte: { color: THEME.orangeDark, fontSize: 13.5, fontWeight: '700', flex: 1 },
-  errorText: { color: '#fff', fontSize: 14, textAlign: 'center', fontFamily: HEAD.medium },
+  errorText: { color: THEME.inkSoft, fontSize: 14, textAlign: 'center', fontFamily: HEAD.medium },
   cta: {
-    backgroundColor: THEME.surface, paddingHorizontal: 28, paddingVertical: 13,
+    backgroundColor: THEME.orange, paddingHorizontal: 28, paddingVertical: 13,
     borderRadius: THEME.radius.control,
   },
-  ctaText: { color: THEME.orange, fontFamily: HEAD.bold, fontSize: 15 },
+  ctaText: { color: '#fff', fontFamily: HEAD.bold, fontSize: 15 },
 
   list: { padding: 16, paddingTop: 22, gap: 26 },
 
   filtres: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
   /**
-   * L'ACTIVE EST BLANCHE, LES AUTRES SONT TRANSPARENTES.
-   *
-   * Le fond de l'ecran est teinte depuis que la carte est un ticket : une
-   * pastille blanche s'y detache sans avoir besoin d'orange. Reserver
-   * l'orange au bouton « Y aller » garde une seule couleur pleine par ecran —
-   * sinon plus rien ne ressort.
+   * L'ACTIVE EST ORANGE PLEIN, LES AUTRES BLANCHES — sur le fond pâle, le
+   * blanc se détache, et l'orange dit sans hésiter lequel est choisi.
    */
   pastille: {
-    paddingHorizontal: 15,
-    paddingVertical: 7,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: THEME.radius.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    backgroundColor: THEME.surface,
   },
-  pastilleActive: { backgroundColor: THEME.surface },
-  pastilleTexte: { color: '#fff', fontSize: 13, fontFamily: HEAD.semibold },
-  pastilleTexteActif: { color: THEME.ink },
+  pastilleActive: { backgroundColor: THEME.orange },
+  pastilleTexte: { color: THEME.ink, fontSize: 13.5, fontFamily: HEAD.semibold },
+  pastilleTexteActif: { color: '#fff' },
   sectionTitre: {
-    color: 'rgba(255, 255, 255, 0.9)',
+    color: THEME.inkSoft,
     fontSize: 12.5,
     fontFamily: HEAD.bold,
     letterSpacing: 0.6,
@@ -955,11 +956,11 @@ const styles = StyleSheet.create({
   },
 
   /**
-   * L'EN-TÊTE ORANGE FONCÉ. Plus sombre que le fond de page : sans cela, le
-   * haut du ticket se confondrait avec l'écran.
+   * L'EN-TÊTE ORANGE VIF (#FD4000, demande de Rémi, 10/11) : sur le fond
+   * pâle, c'est lui qui fait lire « ticket » d'un coup d'œil.
    */
   entete: {
-    backgroundColor: THEME.orangeDark,
+    backgroundColor: THEME.orange,
     paddingHorizontal: 20,
     paddingTop: 30,
     paddingBottom: 34,
@@ -976,7 +977,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
-  numeroPrefixe: { color: THEME.orange, fontSize: 18, fontFamily: HEAD.bold },
+  numeroPrefixe: { color: THEME.orange, fontSize: 15, fontFamily: HEAD.bold },
   /** Le plus gros caractère de la carte : on le dira au comptoir, dans le bruit. */
   numeroValeur: {
     color: THEME.orange,
