@@ -562,15 +562,22 @@ export default function EventDetailPage() {
                 disabled={fige}
                 title={fige ? 'Un événement terminé ou annulé ne se renomme plus.' : 'Renommer l’événement'}
                 onClick={() => { setNouveauNom(event.name); setRenommageErreur(''); setRenommage(true); }}
+                // ORANGE PLEIN, et plus un contour gris : à côté d'un titre de
+                // 30 px, le bouton discret passait pour une étiquette (remarque
+                // de Rémi, 10/11). Le nom est ce que lit le supporter — sa
+                // correction doit se trouver du premier coup d'œil.
                 style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  background: 'transparent', border: `1px solid ${BRAND.border}`, borderRadius: 999,
-                  padding: '5px 12px', fontSize: 12.5, fontWeight: 600,
-                  color: fige ? BRAND.grey : BRAND.inkSoft,
-                  cursor: fige ? 'not-allowed' : 'pointer', opacity: fige ? 0.6 : 1,
+                  display: 'inline-flex', alignItems: 'center', gap: 7,
+                  background: fige ? BRAND.bgSubtle : BRAND.orange,
+                  border: 'none', borderRadius: 999,
+                  padding: '8px 16px', fontSize: 14, fontWeight: 700,
+                  color: fige ? BRAND.grey : '#fff',
+                  boxShadow: fige ? 'none' : '0 2px 8px rgba(253,64,0,0.25)',
+                  cursor: fige ? 'not-allowed' : 'pointer', opacity: fige ? 0.7 : 1,
+                  fontFamily: 'inherit',
                 }}
               >
-                <Pencil size={13} /> Renommer
+                <Pencil size={15} /> Renommer l&apos;événement
               </button>
             );
           })()}
