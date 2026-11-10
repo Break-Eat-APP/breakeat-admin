@@ -4,6 +4,8 @@ import {
   ActivityIndicator,
   Animated,
   AppState,
+  Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -20,6 +22,10 @@ import {
   type Order,
 } from '@lib/api/mobile-api';
 import { PageHeader } from '@components/page-header';
+import Constants from 'expo-constants';
+import { ADRESSE_SUPPORT, lienSignalement } from '@lib/support';
+import { useAuthStore } from '@store/auth.store';
+import { showAlert } from '@lib/alert';
 import { Ionicons } from '@expo/vector-icons';
 import { MissingItemsBanner, ROUGE_MANQUANT } from '@components/missing-items-banner';
 import { RemboursementBanner } from '@components/remboursement-banner';
@@ -243,6 +249,32 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
     isFinal: false,
   };
 
+  const signalerProbleme = async () => {
+    const lien = lienSignalement(
+      {
+        numero: `n° ${numeroDeCommandeNu(order)}`,
+        reference: order.publicOrderNumber,
+        buvette: order.supplierName ?? null,
+        passeeLe: order.createdAt,
+      },
+      {
+        compte: useAuthStore.getState().user?.email ?? null,
+        appareil: `${Platform.OS} ${Platform.Version}`,
+        version: Constants.expoConfig?.version ?? 'version inconnue',
+      },
+    );
+    try {
+      if (!(await Linking.canOpenURL(lien))) throw new Error('aucune messagerie');
+      await Linking.openURL(lien);
+    } catch {
+      showAlert(
+        'Aucune messagerie configurée',
+        `Écris-nous à ${ADRESSE_SUPPORT} en précisant la commande n° ${numeroDeCommandeNu(order)}.`,
+      );
+      navigation.navigate('Aide');
+    }
+  };
+
   const currentStepIndex = STEPS.indexOf(ETAPE_DE_L_ETAT[order.status] ?? order.status);
 
   return (
@@ -365,6 +397,25 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
             <Text style={styles.totalValue}>{formatPrice(order.totalCents)}</Text>
           </View>
         </View>
+
+        {/*
+          SIGNALER UN PROBLÈME (demande de Rémi, 10/11).
+
+          Un e-mail PRÉ-REMPLI avec la commande — numéro, référence, buvette,
+          heure — plutôt que la page d'aide générale : le client n'a plus qu'à
+          décrire ce qui ne va pas, et le support n'a rien à redemander. Sans
+          messagerie configurée, l'adresse s'affiche et la page « Aide &
+          contact » s'ouvre.
+        */}
+        <Pressable
+          style={({ pressed }) => [styles.signaler, pressed && { opacity: 0.7 }]}
+          onPress={() => void signalerProbleme()}
+          accessibilityRole="button"
+        >
+          <Ionicons name="alert-circle-outline" size={20} color={THEME.orangeDark} />
+          <Text style={styles.signalerTexte}>Signaler un problème avec ma commande</Text>
+          <Ionicons name="chevron-forward" size={18} color={THEME.grey} />
+        </Pressable>
 
         {/* Polling info */}
         {!statusCfg.isFinal && (
@@ -534,6 +585,18 @@ const styles = StyleSheet.create({
   totalLabel: { color: THEME.ink, fontSize: 14, fontWeight: '700', flex: 1 },
   totalValue: { color: THEME.orange, fontSize: 16, fontWeight: '800' },
 
+  signaler: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: THEME.surface,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  signalerTexte: { flex: 1, color: THEME.ink, fontSize: 14.5, fontFamily: FONT.medium },
   pollInfo: {
     color: THEME.inkSoft,
     fontSize: 11,

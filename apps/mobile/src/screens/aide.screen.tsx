@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Constants from 'expo-constants';
+import { ADRESSE_SUPPORT } from '@lib/support';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
@@ -21,7 +22,6 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Aide'>;
  * Le client croit avoir écrit, personne ne reçoit rien, et il attend une
  * réponse qui ne viendra jamais.
  */
-const ADRESSE_SUPPORT = 'contact@breakeatapp.com';
 
 /**
  * Les motifs, et pourquoi ils existent.

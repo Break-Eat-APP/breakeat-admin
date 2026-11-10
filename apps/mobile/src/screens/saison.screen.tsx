@@ -646,11 +646,13 @@ const styles = StyleSheet.create({
   moisTitre: {
     // En NOIR, et non en gris : c'est un repère de navigation dans une liste
     // qu'on fait défiler, pas une légende.
+    // PLUS GROS (demande de Rémi, 10/11) : à 12,5 px, le mois se perdait
+    // au-dessus des blasons.
     color: THEME.ink,
-    fontSize: 12.5,
-    fontFamily: HEAD.semibold,
+    fontSize: 18,
+    fontFamily: HEAD.bold,
     marginLeft: 18,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   ruban: { paddingHorizontal: 16, gap: 10 },
 
