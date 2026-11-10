@@ -34,6 +34,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
    * admin entrer partout — le sélecteur ne fait que choisir le lieu.
    */
   const [lieux, setLieux] = useState<LieuPlateforme[] | null>(null);
+  /**
+   * CE COMPTE N'A PAS ACCÈS AU LIEU OUVERT (constaté le 10/11 : « Access
+   * denied to this organization », brut, sur un compte de responsable arrivé
+   * sur un autre lieu). On dit pourquoi et quoi faire, au lieu de l'erreur.
+   */
+  const [horsLieu, setHorsLieu] = useState<{
+    email: string;
+    lieu: string;
+    sienne: { id: string; name: string } | null;
+  } | null>(null);
 
   useEffect(() => {
     const token = getToken();
@@ -47,29 +57,41 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     setReady(true);
 
     const orgId = getOrgId();
-    if (user?.globalRole === 'SUPER_ADMIN') {
-      apiTousLesLieux()
-        .then((tous) => {
-          const tries = [...tous].sort((a, b) => a.name.localeCompare(b.name, 'fr'));
-          setLieux(tries);
-          // Aucun lieu choisi : on ouvre le premier, plutôt qu'un tableau de
-          // bord vide. Son nom est affiché en tête, et se change d'un clic.
-          if (!orgId && tries[0]) {
-            choisirLieu(tries[0]);
-            window.location.reload();
-          }
-        })
-        .catch(() => setLieux([]));
-    }
-    if (!orgId) return;
     apiMeWithMemberships()
       .then((moi) => {
+        if (moi.globalRole === 'SUPER_ADMIN') {
+          apiTousLesLieux()
+            .then((tous) => {
+              const tries = [...tous].sort((x, y) => x.name.localeCompare(y.name, 'fr'));
+              setLieux(tries);
+              // Aucun lieu choisi : on ouvre le premier, plutôt qu'un tableau
+              // de bord vide. Son nom est affiché en tête, et se change d'un clic.
+              if (!orgId && tries[0]) {
+                choisirLieu(tries[0]);
+                window.location.reload();
+              }
+            })
+            .catch(() => setLieux([]));
+          return;
+        }
+        if (!orgId) return;
         const mienne = moi.memberships.find((m) => m.organizationId === orgId);
-        setSuspendue(Boolean(mienne) && mienne?.organization.status !== 'ACTIVE');
+        if (!mienne) {
+          const premiere = moi.memberships[0];
+          setHorsLieu({
+            email: moi.email,
+            lieu: getOrgName() || 'ce lieu',
+            sienne: premiere
+              ? { id: premiere.organizationId, name: premiere.organization.name }
+              : null,
+          });
+          return;
+        }
+        setSuspendue(mienne.organization.status !== 'ACTIVE');
       })
       .catch(() => {
         // Information secondaire : son absence ne doit pas empêcher de
-        // travailler.
+        // travailler — chaque écran affiche sa propre erreur.
       });
   }, [router]);
 
@@ -376,7 +398,78 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             commandes déjà payées se préparent et se remettent normalement.
           </div>
         )}
-        {children}
+        {horsLieu ? (
+          <div
+            style={{
+              background: '#fff',
+              border: `1px solid ${BRAND.border}`,
+              borderLeft: `4px solid ${BRAND.orange}`,
+              borderRadius: 12,
+              padding: '20px 22px',
+              margin: '32px 36px',
+              maxWidth: 680,
+              fontSize: 14.5,
+              lineHeight: 1.6,
+              color: BRAND.ink,
+            }}
+          >
+            <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 8 }}>
+              Ce compte n&apos;a pas accès à « {horsLieu.lieu} »
+            </div>
+            <div>
+              Tu es connecté avec <strong>{horsLieu.email}</strong>, qui n&apos;est pas membre de ce
+              lieu et n&apos;est pas super admin.
+            </div>
+            <div style={{ marginTop: 8 }}>
+              Pour programmer <strong>tous les lieux</strong>, déconnecte-toi et reconnecte-toi avec
+              ton <strong>adresse super admin</strong> — celle du back-office.
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={handleLogout}
+                style={{
+                  background: BRAND.orange,
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 999,
+                  padding: '10px 18px',
+                  fontWeight: 700,
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Me reconnecter avec une autre adresse
+              </button>
+              {horsLieu.sienne ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!horsLieu.sienne) return;
+                    choisirLieu(horsLieu.sienne);
+                    window.location.assign('/dashboard');
+                  }}
+                  style={{
+                    background: '#fff',
+                    color: BRAND.ink,
+                    border: `1px solid ${BRAND.border}`,
+                    borderRadius: 999,
+                    padding: '10px 18px',
+                    fontWeight: 600,
+                    fontSize: 14,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  Revenir à « {horsLieu.sienne.name} »
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          children
+        )}
       </main>
     </div>
   );
