@@ -1,0 +1,63 @@
+# AUDIT DES DÉPENDANCES — une faille connue dans un paquet ne doit pas passer
+# inaperçue (gouvernance du 11/11/2026, `brain/SECURITE.md`).
+#
+# CE QU'IL FAIT : `pnpm audit` sur les dépendances de PRODUCTION de tout le
+# monorepo (backend, consoles, app), contre la base de failles publiques. Le
+# workflow passe au ROUGE s'il trouve une faille de gravité ÉLEVÉE ou
+# CRITIQUE ; les failles moyennes et faibles sont listées sans bloquer.
+#
+# CE QU'IL NE FAIT PAS : aucune mise à jour automatique, aucune demande de
+# fusion. Corriger une faille = une tâche à part, testée (CI verte) comme
+# n'importe quel changement — une mise à jour de paquet peut casser l'app.
+#
+# QUAND : chaque lundi matin, à chaque changement de `pnpm-lock.yaml` sur
+# `main`, et à la demande (Actions → Audit des dependances → Run workflow).
+#
+# Il ne bloque rien d'autre : ni la CI, ni le déploiement. C'est une alerte.
+
+name: Audit des dependances
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/audit-dependances.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PNPM_VERSION: '11.3.0'
+  NODE_VERSION: '22'
+
+jobs:
+  audit:
+    name: Failles connues dans les dependances de production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # Lecture seule du fichier de verrouillage : pas besoin d'installer.
+      - name: Lister toutes les failles (sans bloquer)
+        run: pnpm audit --prod || true
+
+      - name: Bloquer sur les failles elevees ou critiques
+        run: |
+          if pnpm audit --prod --audit-level high; then
+            echo "Aucune faille de gravité élevée ou critique."
+          else
+            echo "::error::Faille de gravité ÉLEVÉE ou CRITIQUE dans une dépendance de production — voir l'étape précédente. À traiter dans une tâche à part, CI verte avant de pousser."
+            exit 1
+          fi

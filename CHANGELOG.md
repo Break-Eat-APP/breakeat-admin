@@ -5,6 +5,22 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.19] — 2026-11-11 — CI économe, failles de dépendances surveillées, test du temps réel stabilisé
+
+- **La CI ne tourne plus pour un commit de documentation seule** (`*.md`,
+  `brain/`, `GUIDE_DEVELOPPEMENT/`, `documents-legaux/`, `logo/`, Word, PDF).
+  Vérifié : aucun code ne lit ces fichiers. Un commit mixte la déclenche
+  toujours. Prépare le passage en dépôt privé (2 000 min/mois gratuites).
+- **Audit des dépendances** chaque lundi et à chaque changement de
+  `pnpm-lock.yaml` (`.github/workflows/audit-dependances.yml`) : `pnpm audit`
+  des dépendances de production, rouge si faille élevée ou critique. Aucune
+  mise à jour automatique.
+- **Test `temps-reel-multi-instances` stabilisé** (BUG-2026-012) : ports
+  éphémères au lieu de 45021/45022, fermetures attendues entre deux tests,
+  connexion du comptoir qui échoue tout de suite avec sa raison.
+
+---
+
 ## [1.7.18] — 2026-11-11 — La sauvegarde de nuit, restaurée pour de vrai
 
 Nouveau workflow `.github/workflows/essai-restauration.yml` : il prend la

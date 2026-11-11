@@ -35,7 +35,6 @@
 |---|---|---|---|---|---|---|
 | BUG-2026-010 | 10/11 | SEV-2 | mobile — écran Saison | Un lieu réglé « Ouvert en continu » sans match daté n'a **aucun bouton « Commander »** : l'écran dit « Ce lieu prend les commandes en continu » et le client est bloqué. Touche tout lieu en continu, Flaix ou non. | Confirmée : `saisonDuLieu` écarte le contenant permanent, `selection` reste nul (`apps/mobile/src/screens/saison.screen.tsx`) | OUVERT — en attente du feu vert de Rémi (lié au « lien calendrier Flaix », REPRISE point 5). **Ne pas basculer un lieu Flaix en continu d'ici là.** |
 | BUG-2026-011 | 10/11 | SEV-2 | backend — campagnes | Une campagne lancée par un **lieu Flaix n'atteint personne**. | Confirmée : `scheduled-push.service.ts` (`destinataires`) cible les clients ayant une `Order` BreakEat ; les commandes Flaix n'en créent pas ; les favoris sont gardés sur le téléphone | OUVERT — correctif possible sans Flaix (favoris au serveur, ≈ 1 j), puis E1 côté Flaix. Plan des API, REPRISE |
-| BUG-2026-012 | 10/11 | SEV-4 | backend — tests | Test d'intégration instable : `temps-reel-multi-instances` › « SANS canal commun » a échoué une fois (commit `871d5ff`, documentation seule), vert au passage suivant. | Probable : ports fixes 45021/45022 et `close()` non attendus dans `afterEach` | OUVERT — à regarder s'il revient |
 | BUG-2026-013 | 31/10 | SEV-3 | mobile — Android | Aucun envoi possible sur Google Play. | Confirmée : clé d'importation à réinitialiser, demandée à Google le 09/11 | OUVERT — attend Google |
 | BUG-2026-014 | 09/11 | SEV-3 | infra — préproduction | Il n'existe **aucun environnement de préproduction** : migrations et intégrations partent en production directement après la CI. | — | OUVERT — procédure prête (`GUIDE_DEVELOPPEMENT/ENVIRONNEMENT_BETA.md`) ; à faire avant les API Flaix |
 
@@ -54,6 +53,8 @@
 | BUG-2026-009 | 10/11 | SEV-2 | admin | « Access denied » brut pour le super admin sur les lieux dont il n'est pas membre. | Confirmée : contrôle d'appartenance sans exception super admin | CORRIGÉ — rôle relu en base (`orders.controller.ts`, `flaix.controller.ts`) |
 
 | BUG-2026-015 | 11/11 | SEV-4 | infra — sauvegardes | La restauration n'avait jamais été faite à partir d'un **artefact de nuit** réel (seulement par le script, le 18/09 et le 25/10). | — | **VÉRIFIÉ le 11/11** : workflow `essai-restauration.yml`, exécution 43092415355 — dernière sauvegarde de nuit téléchargée, déchiffrée avec la phrase réelle, restaurée sans erreur dans un PostgreSQL 18 jetable ; tables, migrations, organisations, lieux et commandes retrouvés. Relancé le 1er de chaque mois |
+
+| BUG-2026-012 | 10/11 | SEV-4 | backend — tests | Test d'intégration instable : `temps-reel-multi-instances` › « SANS canal commun » avait échoué une fois (commit `871d5ff`, documentation seule). | Probable : ports fixes 45021/45022, fermetures non attendues entre deux tests, client qui attendait sa connexion sans jamais échouer | CORRIGÉ le 11/11 — ports éphémères, fermetures attendues, connexion qui échoue tout de suite avec sa raison. À surveiller sur les prochains passages de CI |
 
 ## Incidents de production
 

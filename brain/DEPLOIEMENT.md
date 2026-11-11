@@ -38,7 +38,13 @@ s'appliquent **au démarrage** ; `/health` sert de sonde.
 
 Lint · TypeScript · Tests · **Tests d'intégration sur PostgreSQL réel**
 (toutes les migrations rejouées) · Build · Export web de l'app. Environ
-10 minutes de machine par passage. L'état se lit sur GitHub → Actions, ou
+10 minutes de machine par passage. **Elle ne tourne pas pour un commit qui ne
+touche que de la documentation** (`paths-ignore` : `*.md`, `brain/`,
+`GUIDE_DEVELOPPEMENT/`, `documents-legaux/`, `logo/`, Word, PDF…) ; un commit
+mixte la déclenche toujours.
+
+Autres workflows : sauvegarde de nuit, **essai de restauration** (1er du
+mois), **audit des dépendances** (chaque lundi), mise à jour à distance. L'état se lit sur GitHub → Actions, ou
 par l'API publique tant que le dépôt est public.
 
 ## Une migration de base

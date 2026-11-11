@@ -10,11 +10,46 @@ name: CI
 # tard serait alors sans aucun controle, en silence : le pire des deux. La
 # garder ne coute rien — une branche absente ne declenche jamais rien — et
 # le jour ou elle existe, la CI la couvre des le premier commit.
+#
+# PAS DE CI POUR UN COMMIT QUI NE TOUCHE QUE DE LA DOCUMENTATION (11/11/2026).
+# Un passage coûte ~10 min de machine ; 65 passages du 1er au 11/11, dont
+# beaucoup pour un REPRISE.md ou un audit. En dépôt privé, le forfait gratuit
+# (2 000 min/mois) serait épuisé — et GitHub arrêterait alors TOUS les
+# workflows, sauvegarde de nuit comprise. Vérifié : aucun code de l'app ni du
+# serveur ne lit ces fichiers. Un commit MIXTE (code + documentation) déclenche
+# toujours la CI : `paths-ignore` ne saute que si TOUT ce qui change est listé.
 on:
   push:
     branches: [main, develop]
+    paths-ignore:
+      - '**/*.md'
+      - 'brain/**'
+      - 'GUIDE_DEVELOPPEMENT/**'
+      - 'documents-legaux/**'
+      - 'logo/**'
+      - 'phases de DEV/**'
+      - '**/*.docx'
+      - '**/*.pdf'
+      - 'Gojiberry AI*'
+      - 'Gojiberry AI*/**'
+      - 'Notre solution _ break eat app*'
+      - 'Notre solution _ break eat app*/**'
   pull_request:
     branches: [main, develop]
+    # Même liste qu'au-dessus (pas d'ancre YAML : tous les outils ne la lisent pas).
+    paths-ignore:
+      - '**/*.md'
+      - 'brain/**'
+      - 'GUIDE_DEVELOPPEMENT/**'
+      - 'documents-legaux/**'
+      - 'logo/**'
+      - 'phases de DEV/**'
+      - '**/*.docx'
+      - '**/*.pdf'
+      - 'Gojiberry AI*'
+      - 'Gojiberry AI*/**'
+      - 'Notre solution _ break eat app*'
+      - 'Notre solution _ break eat app*/**'
 
 env:
   NODE_VERSION: '22'

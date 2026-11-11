@@ -29,15 +29,20 @@ const url = process.env.REDIS_URL_TEST;
 const decrire = url ? describe : describe.skip;
 
 decrire('temps réel à plusieurs instances (Redis réel)', () => {
-  const PORT_A = 45021;
-  const PORT_B = 45022;
+  // PORTS ÉPHÉMÈRES (11/11/2026, BUG-2026-012). Le test a échoué une fois en
+  // CI sur un commit de documentation seule, puis est repassé : deux ports
+  // FIXES (45021/45022), des fermetures non attendues entre deux tests, et un
+  // client qui attendait sa connexion sans jamais échouer. Chaque instance
+  // écoute désormais sur un port libre choisi par le système, chaque fermeture
+  // est attendue, et une connexion impossible échoue tout de suite, avec sa
+  // raison, au lieu de pendre jusqu'au délai du test.
   const SALON = 'supplier:nord';
 
   const aFermer: Array<{ serveur: Server; http: ServeurHttp; clients: Redis[] }> = [];
   let comptoir: Socket | undefined;
 
   /** Une instance de l'API, avec ou sans le canal commun. */
-  async function instance(port: number, partage: boolean) {
+  async function instance(partage: boolean): Promise<{ serveur: Server; port: number }> {
     const http = createServer();
     const serveur = new Server(http, { cors: { origin: '*' } });
     const clients: Redis[] = [];
@@ -52,10 +57,12 @@ decrire('temps réel à plusieurs instances (Redis réel)', () => {
     serveur.on('connection', (socket) => {
       socket.on('join', (salon: string) => void socket.join(salon));
     });
-    await new Promise<void>((resoudre) => http.listen(port, resoudre));
+    await new Promise<void>((resoudre) => http.listen(0, '127.0.0.1', resoudre));
+    const adresse = http.address();
+    const port = typeof adresse === 'object' && adresse ? adresse.port : 0;
 
     aFermer.push({ serveur, http, clients });
-    return serveur;
+    return { serveur, port };
   }
 
   /**
@@ -63,8 +70,16 @@ decrire('temps réel à plusieurs instances (Redis réel)', () => {
    * rend la promesse de ce qu'il recevra — ou `null` au bout de 2,5 s.
    */
   async function comptoirBranchéSur(port: number): Promise<{ recu: Promise<unknown> }> {
-    comptoir = connecter(`http://localhost:${port}`, { transports: ['websocket'] });
-    await new Promise<void>((resoudre) => comptoir?.on('connect', () => resoudre()));
+    comptoir = connecter(`http://127.0.0.1:${port}`, {
+      transports: ['websocket'],
+      reconnection: false,
+    });
+    await new Promise<void>((resoudre, rejeter) => {
+      comptoir?.on('connect', () => resoudre());
+      comptoir?.on('connect_error', (e: Error) =>
+        rejeter(new Error(`Comptoir non connecté au port ${port} : ${e.message}`)),
+      );
+    });
     comptoir.emit('join', SALON);
     // Le temps que l'instance inscrive le socket dans le salon.
     await new Promise((r) => setTimeout(r, 300));
@@ -82,9 +97,10 @@ decrire('temps réel à plusieurs instances (Redis réel)', () => {
   afterEach(async () => {
     comptoir?.close();
     comptoir = undefined;
-    for (const { serveur, http, clients } of aFermer) {
-      serveur.close();
-      http.close();
+    for (const { serveur, clients } of aFermer) {
+      // `close` de Socket.IO ferme aussi le serveur HTTP : on attend la fin,
+      // au lieu de laisser le test suivant démarrer sur des restes.
+      await new Promise<void>((resoudre) => serveur.close(() => resoudre()));
       await Promise.allSettled(clients.map((c) => c.quit()));
     }
     aFermer.length = 0;
@@ -99,20 +115,20 @@ decrire('temps réel à plusieurs instances (Redis réel)', () => {
    * simplifier.
    */
   it('SANS canal commun, l’autre instance ne reçoit rien', async () => {
-    const a = await instance(PORT_A, false);
-    await instance(PORT_B, false);
+    const { serveur: a } = await instance(false);
+    const b = await instance(false);
 
-    const { recu } = await comptoirBranchéSur(PORT_B);
+    const { recu } = await comptoirBranchéSur(b.port);
     a.to(SALON).emit('new_order', { numero: 'BE-42' });
 
     await expect(recu).resolves.toBeNull();
   });
 
   it('AVEC l’adaptateur Redis, l’événement traverse les instances', async () => {
-    const a = await instance(PORT_A, true);
-    await instance(PORT_B, true);
+    const { serveur: a } = await instance(true);
+    const b = await instance(true);
 
-    const { recu } = await comptoirBranchéSur(PORT_B);
+    const { recu } = await comptoirBranchéSur(b.port);
     a.to(SALON).emit('new_order', { numero: 'BE-42' });
 
     await expect(recu).resolves.toEqual({ numero: 'BE-42' });
@@ -124,10 +140,10 @@ decrire('temps réel à plusieurs instances (Redis réel)', () => {
    * tomberait dès qu'on ajoute une instance.
    */
   it('ne diffuse qu’au salon visé, même à travers Redis', async () => {
-    const a = await instance(PORT_A, true);
-    await instance(PORT_B, true);
+    const { serveur: a } = await instance(true);
+    const b = await instance(true);
 
-    const { recu } = await comptoirBranchéSur(PORT_B);
+    const { recu } = await comptoirBranchéSur(b.port);
     a.to('supplier:sud').emit('new_order', { numero: 'BE-43' });
 
     await expect(recu).resolves.toBeNull();

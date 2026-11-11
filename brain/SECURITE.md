@@ -41,6 +41,7 @@
 | Documents des clubs | PDF seulement, **10 Mo** au plus, borne posée dans l'intercepteur | `modules/documents/` |
 | Traçabilité | Chaque transition de commande dans `OrderAuditTrail` | `modules/orders/orders.service.ts` |
 | Dépendances | Versions verrouillées (`pnpm-lock.yaml`), installation `--frozen-lockfile` en CI | `.github/workflows/ci.yml` |
+| Failles connues | `pnpm audit` des dépendances de production chaque lundi et à chaque changement du verrouillage ; **rouge** si faille élevée ou critique (aucune mise à jour automatique) | `.github/workflows/audit-dependances.yml` (11/11/2026) |
 
 ## À faire
 
@@ -49,7 +50,7 @@
 | **Confirmation d'adresse e-mail** | N'importe qui peut créer un compte avec l'adresse d'un autre ; la réinscription après archivage repose sur l'adresse | P2 (demandé le 18/09) |
 | **Verrouillage temporaire après échecs de connexion**, avec un message clair | La limitation freine déjà (8 / 15 min) ; un verrouillage explicite va plus loin | P3 (demandé le 18/09) |
 | **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels (Brevo) n'est pas configuré | P2 — dépend de Brevo |
-| **Analyse des dépendances** (Dependabot, alertes seules) | Une faille connue ne serait signalée par rien | P2 |
+| **Alertes Dependabot de GitHub** (un clic : Settings → Code security → Dependabot alerts) | En plus de l'audit hebdomadaire, alerte par e-mail | P3 — à activer par Rémi |
 | **Dépôt privé** | Code et documents internes lisibles par tous | Décision de Rémi, reportée (voir REPRISE) |
 | **Isolation entre organisations — test croisé systématique** (le lieu A tente de lire le lieu B, route par route) | Les contrôles existent et ont des tests, mais pas de balayage complet | P2 |
 
