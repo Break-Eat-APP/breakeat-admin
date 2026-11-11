@@ -1,158 +1,60 @@
-# BREAK EAT AI Agent Rules
+# Les agents sur BreakEat — qui fait quoi, et comment
 
-Version: V1 source of truth
+> **Réécrit le 11/11/2026** (gouvernance, étape 3). La version du 01/06/2026
+> est dans l'historique Git. Les **règles** communes à tous les agents sont
+> dans [`CLAUDE.md`](../CLAUDE.md) à la racine — ce fichier-ci dit les
+> **rôles**, la **coordination** et le **compte rendu**.
 
-## Global Rule
+## La règle de base
 
-All AI tools must read `/brain` before coding.
+Tout agent, avant de coder : lit `CLAUDE.md`, puis `REPRISE.md`, puis les
+documents de `brain/` utiles à la tâche ; regarde `git status`. Aucun agent
+n'invente une règle métier qui contredit `brain/` ou `brain/DECISIONS/` :
+s'il pense qu'elle est fausse, il le **dit** à Rémi au lieu de la changer.
 
-No AI tool is allowed to invent product logic that conflicts with `/brain`.
+## Les rôles, tels qu'ils sont pratiqués
 
-## Claude Code Role
+| Qui | Rôle réel | Limites |
+|---|---|---|
+| **Rémi** | Décide du produit et des règles métier ; valide les déploiements, les mises à jour à distance, les builds ; détient tous les accès (Railway, Stripe, Vercel, Apple, Google, Expo, GitHub) | — |
+| **Claude Code** | Agent principal : diagnostic, conception, implémentation, tests, documentation, builds et envois TestFlight à la demande | Ne voit aucun tableau de bord (Railway, Stripe, Vercel) : **demande les journaux** ; ne saisit jamais d'identifiant ; ne publie rien sans l'accord de Rémi |
+| **Codex** | **Audits** : relecture du code et des changements récents, rapports datés (`AUDIT_*.md`) | Ne modifie pas le code ; ses rapports se rangent dans `brain/audits/` avec la réponse de Claude (corrigé / écarté / assumé, et pourquoi) |
+| **Cursor** | Pas utilisé à ce jour | S'il l'est : mêmes règles, et jamais sur les mêmes fichiers qu'un autre agent en même temps |
+| **Développeur Flaix** | Construit côté Flaix ce que décrit `brain/FLAIX_FLUX_EVENEMENTS_CAHIER_DES_CHARGES.md` (dossier PDF : `brain/livrables/`) | N'a pas accès à ce dépôt à ce jour |
 
-Claude Code is the main software architect and backend generation tool.
+## Coordination
 
-Claude Code can:
+- **Un seul agent par tâche et par fichier.** Un autre peut relire et
+  commenter, pas écraser.
+- Un audit reçu est **vérifié dans le code** avant d'être corrigé : un
+  constat peut être faux, déjà corrigé, ou un choix assumé.
+- Tout ce qui est décidé en conversation et qui doit durer va dans le dépôt
+  (REPRISE, `brain/DECISIONS/`, `brain/BUGS_ET_INCIDENTS.md`, `CLAUDE.md`) —
+  jamais seulement dans la mémoire d'un agent.
 
-- design architecture;
-- generate backend modules;
-- generate technical documentation;
-- explain decisions;
-- implement module-by-module;
-- create tests for critical backend flows.
+## Le compte rendu de fin de tâche
 
-Claude Code must not:
+**Toujours**, à Rémi, en fin de tâche : ce qui a été fait, les fichiers
+touchés, les **tests réellement lancés** et leurs résultats (et ce qui n'a
+pas pu l'être), les risques, la suite.
 
-- generate the entire app in one request;
-- bypass the order state machine;
-- duplicate business logic across modules;
-- emit realtime events before persistence;
-- override Flaix decisions;
-- introduce microservices in V1;
-- add major dependencies without explanation.
+**Dans le dépôt :**
 
-## Cursor Role
+| La tâche | Où l'écrire |
+|---|---|
+| Toute livraison notable | `CHANGELOG.md` (le pourquoi) + la ligne de version dans `brain/ROADMAP.md` |
+| L'état change (ce qui tourne, ce qui reste, un piège découvert) | `REPRISE.md` |
+| Un bug ou un incident | `brain/BUGS_ET_INCIDENTS.md` |
+| Une décision qui engage | `brain/DECISIONS/` |
+| **Tâche importante** : migration, paiement, intégration Flaix, sécurité, incident `SEV-0`/`SEV-1` | Un compte rendu daté dans `brain/taches/`, au [modèle](taches/MODELE.md) |
 
-Cursor is the daily implementation and UI iteration tool.
+`brain/TASK_SUMMARY.md` (jusqu'au 09/11/2026) est l'ancien journal des
+tâches, gardé pour l'historique ; les nouveaux comptes rendus vont dans
+`brain/taches/`.
 
-Cursor can:
+## La relecture
 
-- polish frontend UI;
-- implement reusable components;
-- fix small bugs;
-- improve UX flows;
-- integrate existing APIs;
-- refactor local UI code.
-
-Cursor must not:
-
-- redesign backend architecture;
-- change order lifecycle rules;
-- duplicate business logic in UI;
-- bypass permissions;
-- invent new product scope.
-
-## Codex Role
-
-Codex is the audit, review, test and support generation tool.
-
-Codex can:
-
-- audit architecture and code;
-- generate tests;
-- generate repetitive utilities;
-- generate CRUD support code;
-- inspect consistency across files;
-- review Claude Code output.
-
-Codex must not:
-
-- redesign product logic without explicit instruction;
-- modify critical realtime flows casually;
-- accept generated code without testing or review.
-
-## Mandatory Task Prompt for Claude Code
-
-```text
-You are the lead software architect for BREAK EAT.
-
-Before coding, read every file in /brain.
-
-Respect:
-- PRODUCT_VISION.md
-- ARCHITECTURE.md
-- DOMAIN_MODEL.md
-- ORDER_STATE_MACHINE.md
-- REALTIME_CONTRACTS.md
-- FLAIX_CONTRACT.md
-- ROADMAP.md
-- AGENTS.md
-- DESIGN_SYSTEM.md
-- TESTING_STRATEGY.md
-- ENGINEERING_MANUAL.md
-
-Task:
-[INSERT ONE SMALL TASK]
-
-Constraints:
-- Production-ready TypeScript.
-- Strict module boundaries.
-- No duplicated business logic.
-- No microservices in V1.
-- Realtime-safe implementation.
-- Persist critical state before emitting realtime events.
-- Use the order state machine exactly as defined.
-- Do not override Flaix decisions.
-- Add tests for critical logic.
-
-Before implementation:
-- summarize the relevant /brain rules;
-- explain the intended approach;
-- list files that will be created or modified.
-
-After implementation:
-- generate or update TASK_SUMMARY.md.
-- update ENGINEERING_MANUAL.md with exact code references and line numbers.
-```
-
-## Mandatory Task Summary Format
-
-Every implementation task must update `TASK_SUMMARY.md` with:
-
-- task name;
-- date;
-- what was created;
-- what was modified;
-- why it was done;
-- architecture decisions;
-- dependencies added;
-- tests added or skipped;
-- risks;
-- next steps.
-
-Every implementation task must also update `ENGINEERING_MANUAL.md` with:
-
-- what block was built;
-- why it exists;
-- how it works step by step;
-- exact file and line references;
-- data flow;
-- dependencies;
-- tests and verification;
-- risks and safe change rules;
-- debugging notes.
-
-If code was created or modified but `ENGINEERING_MANUAL.md` was not updated, the task is incomplete.
-
-## Review Rule
-
-After Claude Code generates code, Codex should audit:
-
-- architecture compliance;
-- order lifecycle compliance;
-- realtime safety;
-- TypeScript strictness;
-- duplicated business logic;
-- missing tests;
-- unnecessary complexity.
-- missing or vague engineering manual references.
+Avant de pousser : relire le diff (`git show --stat`, puis le détail), rien
+hors périmètre, aucun secret, tests et typage sur ce qui a changé. Après :
+lire la CI, puis vérifier le déploiement (`/health` → `commit`) avant de
+dire « en ligne ».

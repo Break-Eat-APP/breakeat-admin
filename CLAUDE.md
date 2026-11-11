@@ -20,12 +20,14 @@
 |---|---|---|
 | 1 | [`REPRISE.md`](REPRISE.md) — d'abord « ÉTAT AU … — LIRE D'ABORD », puis « SUJETS OUVERTS » et « Pièges du moment » | L'état réel : ce qui tourne, ce qui reste, ce qui a cassé |
 | 2 | [`GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md`](GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md) | Où se trouve quoi |
-| 3 | Selon le sujet, dans [`brain/`](brain/) | `ORDER_STATE_MACHINE.md` (commandes), `REALTIME_CONTRACTS.md` (temps réel), `FLAIX_FLUX_EVENEMENTS_CAHIER_DES_CHARGES.md` et `FRONTIERE_FLAIX_OPS.md` (Flaix), `CALENDRIER_SAISON.md` (saison), `DESIGN_SYSTEM.md` |
-| 4 | Les derniers éléments de [`CHANGELOG.md`](CHANGELOG.md) | Ce qui vient d'être livré, et pourquoi |
-| 5 | `git status` et `git log --oneline -10` | Ne jamais écraser un travail en cours |
+| 3 | [`brain/ARCHITECTURE.md`](brain/ARCHITECTURE.md) et [`brain/AGENTS.md`](brain/AGENTS.md) | Comment c'est construit ; qui fait quoi |
+| 4 | [`brain/BUGS_ET_INCIDENTS.md`](brain/BUGS_ET_INCIDENTS.md) et [`brain/DECISIONS/`](brain/DECISIONS/README.md) | Les bugs connus ; ce qui a été tranché, et pourquoi — ne pas défaire une décision sans la relire |
+| 5 | Selon le sujet, dans [`brain/`](brain/) | `ORDER_STATE_MACHINE.md` (commandes), `REALTIME_CONTRACTS.md` (temps réel), `FLAIX_FLUX_EVENEMENTS_CAHIER_DES_CHARGES.md` et `FRONTIERE_FLAIX_OPS.md` (Flaix), `CALENDRIER_SAISON.md` (saison), `DESIGN_SYSTEM.md` |
+| 6 | Les derniers éléments de [`CHANGELOG.md`](CHANGELOG.md) | Ce qui vient d'être livré, et pourquoi |
+| 7 | `git status` et `git log --oneline -10` | Ne jamais écraser un travail en cours |
 
-⚠️ `brain/ARCHITECTURE.md` et `brain/AGENTS.md` datent du 01/06/2026 et sont
-**dépassés** (mise à jour prévue). En cas de doute, **le code fait foi**.
+En cas de doute entre un document et le code, **le code fait foi** — et le
+document se corrige.
 
 ---
 
@@ -85,9 +87,12 @@ build — puis le rendu réel quand c'est visible (aperçu local, captures).
 - `CHANGELOG.md` : une entrée par livraison notable (le *pourquoi*, pas
   seulement le *quoi*), et la ligne de version dans `brain/ROADMAP.md` ;
 - `REPRISE.md` : l'état, les sujets ouverts, les pièges découverts ;
+- un bug ou un incident : une ligne dans `brain/BUGS_ET_INCIDENTS.md` ;
+- une décision qui engage : une fiche dans `brain/DECISIONS/` ;
 - un audit reçu (Codex…) se range dans `brain/audits/` avec la réponse ;
 - un compte rendu daté pour les tâches importantes (migration, paiement,
-  intégration Flaix, incident) — modèle à venir dans `brain/taches/`.
+  intégration Flaix, sécurité, incident) : `brain/taches/`, au modèle
+  `brain/taches/MODELE.md`.
 
 ---
 
