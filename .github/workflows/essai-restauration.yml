@@ -1,0 +1,168 @@
+# ESSAI DE RESTAURATION — la sauvegarde de nuit se relit-elle vraiment ?
+#
+# « Une sauvegarde jamais restaurée n'est pas une sauvegarde : c'est un
+# fichier. » La restauration a été vérifiée à la main le 18/09 et le 25/10
+# (script, base Docker). Ce qui manquait (BUG-2026-015) : repartir d'un
+# ARTEFACT DE NUIT réel, déchiffré avec la phrase réelle.
+#
+# CE QUE FAIT CE WORKFLOW
+#   1. prend la dernière exécution RÉUSSIE de « Sauvegarde de la base » ;
+#   2. télécharge son artefact chiffré ;
+#   3. le déchiffre avec le secret SAUVEGARDE_PASSPHRASE (jamais affiché) ;
+#   4. le restaure dans un PostgreSQL 18 JETABLE, créé pour l'occasion et
+#      détruit avec la machine — jamais la production ;
+#   5. vérifie qu'on retrouve les tables, l'historique des migrations et des
+#      données (organisations, lieux, commandes).
+#
+# CE QU'IL N'AFFICHE PAS : aucune donnée. Le dépôt est public, ses journaux
+# aussi. Seuls des comptes de TABLES et de MIGRATIONS, et « présentes / absentes »
+# pour les données. Le fichier déchiffré ne quitte pas la machine, qui est
+# détruite à la fin.
+#
+# QUAND : à la demande (Actions → Essai de restauration → Run workflow), le
+# 1er de chaque mois, et quand ce fichier change.
+
+name: Essai de restauration
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 1 * *'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/essai-restauration.yml'
+
+# Lire les exécutions et leurs artefacts ; rien d'autre.
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  restaurer:
+    name: Restaurer la dernière sauvegarde de nuit dans une base jetable
+    runs-on: ubuntu-latest
+    services:
+      essai:
+        # La même version majeure que la production (Railway : PostgreSQL 18).
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: essai
+          POSTGRES_PASSWORD: essai
+          POSTGRES_DB: essai
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U essai"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      BASE_ESSAI: postgresql://essai:essai@localhost:5432/essai
+      # Les outils PostgreSQL 18 viennent de l'image officielle : pas besoin
+      # d'installer un client (le runner fournit le 16, trop ancien).
+      PG18: docker run --rm --network host -v ${{ github.workspace }}:/w -w /w postgres:18-alpine
+    steps:
+      - name: Trouver la dernière sauvegarde de nuit réussie
+        id: source
+        run: |
+          set -euo pipefail
+          ligne=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow sauvegarde.yml \
+            --status success --limit 1 --json databaseId,createdAt \
+            -q '.[0] | "\(.databaseId) \(.createdAt)"')
+          if [ -z "$ligne" ]; then
+            echo "::error::Aucune exécution réussie de « Sauvegarde de la base »."
+            exit 1
+          fi
+          id="${ligne%% *}"; quand="${ligne#* }"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "quand=$quand" >> "$GITHUB_OUTPUT"
+          echo "Sauvegarde retenue : exécution $id, du $quand"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Télécharger l'artefact chiffré
+        run: |
+          set -euo pipefail
+          gh run download "${{ steps.source.outputs.id }}" --repo "$GITHUB_REPOSITORY" --dir telechargement
+          fichier=$(find telechargement -name '*.dump.gpg' | head -1)
+          if [ -z "$fichier" ]; then
+            echo "::error::L'artefact ne contient aucun fichier .dump.gpg."
+            exit 1
+          fi
+          mv "$fichier" sauvegarde.dump.gpg
+          echo "Fichier chiffré : $(stat -c%s sauvegarde.dump.gpg) octets"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # La phrase passe par un fichier, jamais en argument (même règle que la
+      # sauvegarde) ; elle est effacée aussitôt.
+      - name: Déchiffrer
+        run: |
+          set -euo pipefail
+          if [ -z "$PASSPHRASE" ]; then
+            echo "::error::Le secret SAUVEGARDE_PASSPHRASE est absent."
+            exit 1
+          fi
+          printf '%s' "$PASSPHRASE" > /tmp/phrase
+          gpg --batch --yes --decrypt --passphrase-file /tmp/phrase \
+              --output restauration.dump sauvegarde.dump.gpg
+          rm -f /tmp/phrase sauvegarde.dump.gpg
+          echo "Fichier déchiffré : $(stat -c%s restauration.dump) octets"
+        env:
+          PASSPHRASE: ${{ secrets.SAUVEGARDE_PASSPHRASE }}
+
+      # La commande documentée dans sauvegarde.yml, essayée le 25/10 sur une
+      # base vide. --no-owner / --no-acl : les rôles de la production
+      # n'existent pas ici, et ce n'est pas ce qu'on vérifie. Un avertissement
+      # de pg_restore n'arrête pas l'essai : c'est l'étape suivante qui juge
+      # sur ce qui est réellement revenu.
+      - name: Restaurer dans la base jetable
+        run: |
+          set -uo pipefail
+          if $PG18 pg_restore --clean --if-exists --no-owner --no-acl \
+              --dbname="$BASE_ESSAI" restauration.dump; then
+            echo "Restauration terminée sans erreur."
+          else
+            echo "::warning::pg_restore a signalé des erreurs (détail ci-dessus) — la vérification tranche."
+          fi
+          rm -f restauration.dump
+
+      - name: Vérifier ce qui est revenu
+        run: |
+          set -euo pipefail
+          q() { $PG18 psql "$BASE_ESSAI" -At -c "$1"; }
+
+          tables=$(q "select count(*) from information_schema.tables where table_schema = 'public' and table_type = 'BASE TABLE'")
+          migrations=$(q "select count(*) from _prisma_migrations where finished_at is not null and rolled_back_at is null")
+          derniere=$(q "select migration_name from _prisma_migrations where finished_at is not null order by finished_at desc limit 1")
+
+          present() { [ "$(q "select count(*) from \"$1\"")" -gt 0 ] && echo "présentes" || echo "ABSENTES"; }
+          orgs=$(present organizations)
+          lieux=$(present venues)
+          commandes=$(present orders)
+
+          {
+            echo "## Essai de restauration"
+            echo ""
+            echo "| | Résultat |"
+            echo "|---|---|"
+            echo "| Sauvegarde | exécution ${{ steps.source.outputs.id }}, du ${{ steps.source.outputs.quand }} |"
+            echo "| Tables restaurées | $tables |"
+            echo "| Migrations appliquées | $migrations |"
+            echo "| Dernière migration dans la sauvegarde | \`$derniere\` |"
+            echo "| Organisations | $orgs |"
+            echo "| Lieux | $lieux |"
+            echo "| Commandes | $commandes |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Tables : $tables — migrations : $migrations — dernière : $derniere"
+          echo "Organisations : $orgs — lieux : $lieux — commandes : $commandes"
+
+          echec=0
+          [ "$tables" -ge 40 ] || { echo "::error::Seulement $tables tables restaurées (40 attendues au moins)."; echec=1; }
+          [ "$migrations" -ge 40 ] || { echo "::error::Seulement $migrations migrations dans la sauvegarde."; echec=1; }
+          for v in "$orgs" "$lieux" "$commandes"; do
+            [ "$v" = "présentes" ] || { echo "::error::Des données attendues sont absentes de la sauvegarde."; echec=1; }
+          done
+          exit $echec
