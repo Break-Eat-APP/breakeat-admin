@@ -89,10 +89,15 @@ Au 11/11/2026 : **version 1.1.2, build 44** sur TestFlight.
   `SAUVEGARDE_PASSPHRASE` (la phrase est gardée **ailleurs** que dans GitHub ;
   sans elle, les sauvegardes sont illisibles).
 - Filet manuel : `backend/scripts/sauvegarde.js`.
-- **Restauration vérifiée** le 18/09 (146 commandes retrouvées) et le 25/10
-  (cycle complet sauvegarde → chiffrement → déchiffrement → restauration dans
-  une base vide). **Reste à faire une fois** : restaurer un **artefact de
-  nuit** téléchargé depuis GitHub, avec la phrase réelle.
+- **Restauration vérifiée** le 18/09 (146 commandes retrouvées), le 25/10
+  (cycle complet par le script) et **le 11/11 à partir d'un artefact de nuit
+  réel** (exécution 43092415355, sans erreur).
+- **Essai automatique** : `.github/workflows/essai-restauration.yml` —
+  télécharge la dernière sauvegarde de nuit réussie, la déchiffre avec le
+  secret, la restaure dans un PostgreSQL 18 **jetable** et vérifie tables,
+  migrations et données (sans rien afficher : le dépôt est public). Le 1er
+  de chaque mois, et à la demande (Actions → « Essai de restauration »). Le
+  détail chiffré est dans le résumé de l'exécution sur GitHub.
 
 **Restaurer**, sur une base **vide** :
 

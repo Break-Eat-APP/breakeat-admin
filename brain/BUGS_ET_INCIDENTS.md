@@ -38,7 +38,6 @@
 | BUG-2026-012 | 10/11 | SEV-4 | backend — tests | Test d'intégration instable : `temps-reel-multi-instances` › « SANS canal commun » a échoué une fois (commit `871d5ff`, documentation seule), vert au passage suivant. | Probable : ports fixes 45021/45022 et `close()` non attendus dans `afterEach` | OUVERT — à regarder s'il revient |
 | BUG-2026-013 | 31/10 | SEV-3 | mobile — Android | Aucun envoi possible sur Google Play. | Confirmée : clé d'importation à réinitialiser, demandée à Google le 09/11 | OUVERT — attend Google |
 | BUG-2026-014 | 09/11 | SEV-3 | infra — préproduction | Il n'existe **aucun environnement de préproduction** : migrations et intégrations partent en production directement après la CI. | — | OUVERT — procédure prête (`GUIDE_DEVELOPPEMENT/ENVIRONNEMENT_BETA.md`) ; à faire avant les API Flaix |
-| BUG-2026-015 | 11/11 | SEV-4 | infra — sauvegardes | Les sauvegardes de nuit tournent (`sauvegarde.yml`, vertes). La restauration a été vérifiée le 18/09 et le 25/10 (script, cycle complet) ; **jamais encore à partir d'un artefact de nuit** téléchargé de GitHub avec la phrase réelle. | — | OUVERT — une fois, de préférence avant le 22/11 (`brain/DEPLOIEMENT.md`) |
 
 ## Corrigés récemment (novembre 2026)
 
@@ -53,6 +52,8 @@
 | BUG-2026-007 | 10/11 | SEV-3 | mobile — saison | « La commande ouvre à 08:00 » **sans le jour** : affiché un mardi pour un concert le vendredi. | Confirmée | CORRIGÉ — CHANGELOG 1.7.11 |
 | BUG-2026-008 | 10/11 | SEV-2 | backend — panier | Le créneau pouvait changer après le début du paiement ; deux « Payer » simultanés pouvaient retenir deux fois le stock. | Confirmée (audit Codex du 10/11) | CORRIGÉ — `brain/audits/AUDIT_2026-11-10_codex-multi-lieux-charge.md` |
 | BUG-2026-009 | 10/11 | SEV-2 | admin | « Access denied » brut pour le super admin sur les lieux dont il n'est pas membre. | Confirmée : contrôle d'appartenance sans exception super admin | CORRIGÉ — rôle relu en base (`orders.controller.ts`, `flaix.controller.ts`) |
+
+| BUG-2026-015 | 11/11 | SEV-4 | infra — sauvegardes | La restauration n'avait jamais été faite à partir d'un **artefact de nuit** réel (seulement par le script, le 18/09 et le 25/10). | — | **VÉRIFIÉ le 11/11** : workflow `essai-restauration.yml`, exécution 43092415355 — dernière sauvegarde de nuit téléchargée, déchiffrée avec la phrase réelle, restaurée sans erreur dans un PostgreSQL 18 jetable ; tables, migrations, organisations, lieux et commandes retrouvés. Relancé le 1er de chaque mois |
 
 ## Incidents de production
 

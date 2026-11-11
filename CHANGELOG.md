@@ -5,6 +5,20 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.18] — 2026-11-11 — La sauvegarde de nuit, restaurée pour de vrai
+
+Nouveau workflow `.github/workflows/essai-restauration.yml` : il prend la
+dernière sauvegarde de nuit réussie, la déchiffre avec le secret (jamais
+affiché), la restaure dans un PostgreSQL 18 jetable et vérifie ce qui est
+revenu — au moins 40 tables, l'historique des migrations, des organisations,
+des lieux et des commandes. Aucune donnée dans les journaux (dépôt public).
+
+**Premier essai réussi le 11/11** (exécution 43092415355) : téléchargement,
+déchiffrement, restauration sans erreur ni avertissement, vérifications
+passées. Ferme BUG-2026-015. Relancé le 1er de chaque mois.
+
+---
+
 ## [1.7.17] — 2026-11-11 — La gouvernance technique intégrée au dépôt
 
 Application du document `BRAT_EAT_MASTER_ENGINEERING_GOVERNANCE.md` (v1.0),

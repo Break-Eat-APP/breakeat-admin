@@ -542,6 +542,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.15 | 2026-11-11 | App 1.1.2 : l'icône iOS sans effet « verre » (build 44) |
 | 1.7.16 | 2026-11-11 | « Prête » durable et sans doublon ; toucher de notification non rejoué |
 | 1.7.17 | 2026-11-11 | La gouvernance technique intégrée au dépôt (documentation seule) |
+| 1.7.18 | 2026-11-11 | La sauvegarde de nuit, restaurée pour de vrai (essai mensuel) |
 
 ---
 
