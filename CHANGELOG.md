@@ -5,6 +5,24 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.15] — 2026-11-11 — App 1.1.2 : l'icône iOS sans effet « verre »
+
+L'icône restait floue avec la build 43 alors que le fichier livré était net
+(vérifié : Expo copie l'image telle quelle). La cause : **iOS 26 habille toute
+icône ordinaire** de reflets, d'ombre et de dégradé — sur un aplat orange vif,
+le B paraissait flou. Le seul moyen de couper ces effets est le format
+**Icon Composer** d'Apple (`.icon`) : `assets/breakeat.icon/` (fond blanc
+plein, le B en calque à 66 %, reflet, ombre, transparence et « glass »
+désactivés), branché par `ios.icon`. Format écrit à la main d'après le schéma
+public de la communauté (pas d'Icon Composer sous Windows) : la build 44 le
+valide. Android et le web gardent `icone-app.png`.
+
+Changement natif → **version 1.1.2**, build 44.
+
+`~ apps/mobile/app.config.js` `+ apps/mobile/assets/breakeat.icon/`
+
+---
+
 ## [1.7.14] — 2026-11-11 — « Ta commande est prête » sonne enfin
 
 Rien ne prévenait le client que sa commande était prête : le push par étape

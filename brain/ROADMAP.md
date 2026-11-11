@@ -539,6 +539,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.12 | 2026-11-10 | App 1.1.1 : une icône qui respire (build 43) |
 | 1.7.13 | 2026-11-11 | App : clavier, bouton du bas, encoches ; le dossier Flaix en PDF |
 | 1.7.14 | 2026-11-11 | « Ta commande est prête » sonne enfin |
+| 1.7.15 | 2026-11-11 | App 1.1.2 : l'icône iOS sans effet « verre » (build 44) |
 
 ---
 

@@ -64,7 +64,9 @@ module.exports = {
   // 1.1.1 (10/11/2026) : la nouvelle icone est un changement NATIF (regle de
   // `runtimeVersion` plus bas). Les mises a jour a distance visent desormais
   // la 1.1.1 ; les telephones restes en 1.1.0 ne les recoivent plus.
-  version: '1.1.1',
+  // 1.1.2 (11/11/2026) : l'icone iOS au format Icon Composer (`ios.icon`),
+  // encore un changement natif.
+  version: '1.1.2',
   orientation: 'portrait',
   scheme: 'breakeat',
   // L'ICONE A SON PROPRE FICHIER (10/11/2026). Le B occupait 83 % de la
@@ -74,6 +76,14 @@ module.exports = {
   icon: './assets/icone-app.png',
   ios: {
     bundleIdentifier: BUNDLE_ID,
+    // L'ICONE iOS 26 SANS EFFET « VERRE » (11/11/2026). iOS 26 habille toute
+    // icone ordinaire de reflets, d'ombre et de degrade : sur un aplat orange
+    // vif, le B paraissait flou (vu par Remi, builds 42 et 43). Le format
+    // Icon Composer est le seul qui permette de couper ces effets : reflet,
+    // ombre et transparence desactives, calque « glass » a faux, fond blanc
+    // plein. `assets/breakeat.icon/icon.json` + `Assets/b.png` (le B a 66 %,
+    // fond transparent). L'`icon` racine reste celui d'Android et du web.
+    icon: './assets/breakeat.icon',
     supportsTablet: false,
     // « Continuer avec Apple ». Pose l'entitlement dans le projet Xcode : sans
     // lui, le bouton s'affiche et la demande echoue sur l'appareil, jamais a la
