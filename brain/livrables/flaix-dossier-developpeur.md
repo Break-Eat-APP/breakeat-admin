@@ -4,9 +4,10 @@
 
 **Le but.** Flaix devient **la seule saisie**. Les matchs créés dans Flaix
 apparaissent tout seuls dans l'app BreakEat, et les commandes passées dans
-Flaix y remontent avec tout ce que l'app sait déjà faire : « Mes commandes »,
-la Live Activity sur l'écran verrouillé, la notification « ta commande est
-prête », le reçu avec la TVA, la note et la fidélité.
+Flaix y remontent avec ce que l'app sait déjà faire : « Mes commandes »,
+la Live Activity sur l'écran verrouillé, le reçu avec la TVA, la note et la
+fidélité — et la notification « ta commande est prête », que BreakEat ajoute
+de son côté.
 
 | | Ce qu'on te demande | Pourquoi | Priorité |
 |---|---|---|---|
@@ -129,7 +130,7 @@ sait déjà faire avec une commande en dépend :
 | « Mes commandes » : le ticket, la buvette, « Commande n° 142 », le prix, la date | la commande, sa buvette, son numéro, son total, sa date |
 | La barre « reçue → en préparation → prête » | chaque changement d'état, **en temps réel** |
 | La **Live Activity** (écran verrouillé, Dynamic Island) et son décompte | l'état, et l'**heure estimée** à laquelle elle sera prête |
-| « Ta commande est prête » (notification) | l'état `READY`, dans les secondes qui suivent |
+| « Ta commande est prête » (notification — ajoutée côté BreakEat) | l'état `READY`, dans les secondes qui suivent |
 | L'heure de retrait sur le ticket | le créneau choisi, ou « dès que prête » |
 | Le **reçu** avec la TVA taux par taux | chaque ligne : produit, quantité, prix TTC, **taux de TVA** |
 | Le bandeau « produit manquant » | les lignes qui manquent, et combien |

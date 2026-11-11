@@ -36,9 +36,10 @@ md = f"""# Flaix ↔ BreakEat — les matchs, les commandes et la Live Activity
 
 **Le but.** Flaix devient **la seule saisie**. Les matchs créés dans Flaix
 apparaissent tout seuls dans l'app BreakEat, et les commandes passées dans
-Flaix y remontent avec tout ce que l'app sait déjà faire : « Mes commandes »,
-la Live Activity sur l'écran verrouillé, la notification « ta commande est
-prête », le reçu avec la TVA, la note et la fidélité.
+Flaix y remontent avec ce que l'app sait déjà faire : « Mes commandes »,
+la Live Activity sur l'écran verrouillé, le reçu avec la TVA, la note et la
+fidélité — et la notification « ta commande est prête », que BreakEat ajoute
+de son côté.
 
 | | Ce qu'on te demande | Pourquoi | Priorité |
 |---|---|---|---|

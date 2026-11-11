@@ -231,6 +231,14 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
   commande ouvre à 08:00 » ; pas de lien collé → « Prochain match … » ; rien
   → « Aucun match programmé ». ✅ Le jour est dit depuis la 1.7.11
   (`quandLaCommandeOuvre`) : « aujourd'hui / demain / ven. 13 nov. à 08:00 ».
+- **AUCUNE notification « ta commande est prête » aujourd'hui** (vérifié le
+  11/11). Le push par étape a été RETIRÉ le 07/09 (`orders.service.ts`, « PUSH
+  PAR ÉTAPE ») pour ne pas doubler la Live Activity. Or la Live Activity se
+  met à jour EN SILENCE à chaque étape (`pushOrderUpdate` sans `alerte`) :
+  seul « produit manquant » allume l'écran avec un son. Donc « prête » ne
+  sonne pas, et rien du tout sur Android ni sans Live Activity. Proposé à
+  Rémi : alerte sonore de la Live Activity sur `READY`, plus un push classique
+  « prête » quand il n'y a pas de Live Activity. Pas lancé.
 - **Test instable `temps-reel-multi-instances` › « SANS canal commun »** : a
   échoué une fois en CI le 10/11 (commit `871d5ff`, documentation seule) puis
   est repassé au vert sur `6d90cfa` sans changement de code. Si ça revient,
