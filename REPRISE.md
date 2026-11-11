@@ -15,7 +15,7 @@
 > | Résumé d'une session de travail | `brain/TASK_SUMMARY.md` (le plus récent en haut) |
 > | Dernier audit | `brain/audits/AUDIT_2026-11-09_dernieres-modifications.md` |
 > | État complet du dépôt, dette, tests (septembre) | `brain/audits/AUDIT_2026-09-18_etat-du-depot.md` |
-> | Ordre de construction initial (phases 1→19) | `DEVELOPMENT_LOG.md` — historique, non tenu au-delà |
+> | Ordre de construction initial (phases 1→19) | `brain/archives/DEVELOPMENT_LOG.md` — historique, non tenu au-delà |
 >
 > Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
 > `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
@@ -420,7 +420,8 @@ sert plus finit par faire croire qu'il sert.
 
 ## 🔎 L'AUDIT CODEX — état au 30/10/2026
 
-Deux documents à la racine : `AUDIT_CHIRURGICAL_REPRISE_2026-10-26.md` (le
+Deux documents dans `brain/audits/` (à la racine jusqu'au 11/11) :
+`AUDIT_CHIRURGICAL_REPRISE_2026-10-26.md` (le
 constat) et `REVERIFICATION_AUDIT_2026-10-27.md` (Codex a revérifié son
 propre audit sur le code corrigé). **Le second remplace le premier** pour
 tout ce qu'il revérifie.
@@ -488,7 +489,7 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Notifications** | Cloche corrigée (phase 52), build 21 envoyé | À ÉPROUVER en vrai : envoyer une campagne, app en arrière-plan, puis relire les journaux Railway (`Push token enregistré…`, `Expo push: N envoyés…`) |
 | **Lien calendrier Flaix (option A)** | ⏸️ En attente du point de Rémi avec son développeur (10/11). A maintenant, B aussi, C en option | ⛔ Écran Saison sans bouton « Commander » pour un lieu en continu : à corriger AVANT de basculer un lieu. Plus la case « Message d'information ». Détail dans « Ce qui reste », point 5 |
 | **Campagnes des lieux Flaix** | ⚠️ N'atteignent personne (aucune `Order` BreakEat sur un lieu Flaix, favoris gardés sur le téléphone) | Favoris au serveur + cible « a commandé OU favori » (≈ 1 jour), puis E1 côté Flaix. En attente du feu vert de Rémi |
-| **Gouvernance technique** (document `BRAT_EAT_MASTER_ENGINEERING_GOVERNANCE.md`, 11/11) | Audit fait le 11/11 ; étape 1 livrée : `CLAUDE.md` à la racine (règles et pièges, auparavant dans la seule mémoire de l'agent). Choix validé : tout reste dans `brain/`, pas de `docs/` parallèle | Étapes suivantes, une par une avec l'accord de Rémi : 2) `brain/BUGS_ET_INCIDENTS.md` + `brain/DECISIONS/` ; 3) `ARCHITECTURE.md`, `AGENTS.md` (figés au 01/06), `SECURITE.md`, `DEPLOIEMENT.md` ; 4) rangement des audits de la racine. Hors documentation, conseillé : dépôt privé (Rémi), restauration de sauvegarde testée, préproduction, Railway qui attend la CI |
+| **Gouvernance technique** (document `BRAT_EAT_MASTER_ENGINEERING_GOVERNANCE.md`, 11/11) | ✅ **Intégrée le 11/11, en 5 commits** : `CLAUDE.md` (racine) ; `brain/BUGS_ET_INCIDENTS.md` ; `brain/DECISIONS/` (ADR 0001 à 0008) ; `brain/ARCHITECTURE.md` et `brain/AGENTS.md` réécrits depuis le code ; `brain/taches/` (modèle + premier compte rendu) ; `brain/SECURITE.md` ; `brain/DEPLOIEMENT.md` ; audits de la racine → `brain/audits/`, documents dépassés → `brain/archives/`. Tout reste dans `brain/` (ADR-0008) | Hors documentation, conseillé : dépôt privé (reporté), une restauration depuis un artefact de nuit, préproduction, Railway qui attend la CI, Dependabot |
 | **Passerelle d'accès Flaix** | ⏸️ **Gelée le 10/11 par Rémi** — spécifiée seulement (cahier des charges Flaix, section D) | Feu vert de Rémi, choix D1 seul ou D1 puis D2, route et clé de test côté Flaix. Rien à coder d'ici là |
 | **Liens Flaix** | Saisis depuis la liste des événements (toute la saison d'un coup) **ou** depuis la fiche d'un match, même terminé (06/11) | Les coller à la main, un par match, tant que Flaix ne les pousse pas |
 | **Envoi EAS** | L'envoi automatique restait en file depuis les builds 19-21 | Toujours `eas submit --platform ios --profile beta --id <build>` à la main — c'est ainsi que la build 37 est partie le 06/11 |

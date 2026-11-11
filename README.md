@@ -65,9 +65,11 @@ information qui les contredit a tort :
 | [`brain/ENGINEERING_MANUAL.md`](brain/ENGINEERING_MANUAL.md) | Pourquoi cette décision technique ? (avec les références de code) |
 | [`brain/TASK_SUMMARY.md`](brain/TASK_SUMMARY.md) | Ce qu'a fait chaque session de travail |
 
-Les autres — `DEVELOPMENT_LOG.md`, les `AUDIT_*.md`, `BLOC_6_0_SETUP_GUIDE.md`
-— sont des **archives**. Elles disent la vérité du jour où elles ont été
-écrites, et pas forcément celle d'aujourd'hui.
+Les audits sont dans [`brain/audits/`](brain/audits/), et les documents
+dépassés (`DEVELOPMENT_LOG.md`, `BLOC_6_0_SETUP_GUIDE.md`, les premières
+règles « Brat Eat »…) dans [`brain/archives/`](brain/archives/README.md)
+depuis le 11/11/2026. Ils disent la vérité du jour où ils ont été écrits, et
+pas forcément celle d'aujourd'hui.
 
 ---
 

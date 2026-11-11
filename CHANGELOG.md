@@ -5,6 +5,36 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.17] — 2026-11-11 — La gouvernance technique intégrée au dépôt
+
+Application du document `BRAT_EAT_MASTER_ENGINEERING_GOVERNANCE.md` (v1.0),
+**adaptée au dépôt** : tout reste dans `brain/`, sans `docs/` parallèle
+(ADR-0008). Aucune ligne de code applicatif modifiée.
+
+- **`CLAUDE.md`** à la racine : ce qu'il faut lire, les règles absolues, la
+  méthode, le vocabulaire client, les migrations, le déploiement, les pièges
+  déjà payés — jusqu'ici dans la seule mémoire de l'agent.
+- **`brain/BUGS_ET_INCIDENTS.md`** : registre (BUG-/INC-), sévérités, 6 bugs
+  ouverts, 9 corrigés en novembre, 3 incidents de production.
+- **`brain/DECISIONS/`** : 8 fiches de décision écrites après coup (Flaix
+  encaisse, l'opérateur Flaix dit « prête », lien par événement, promesse dans
+  la transaction, version de l'app, programmation dans le tableau de bord du
+  lieu, icône Icon Composer, documentation dans `brain/`).
+- **`brain/ARCHITECTURE.md`** et **`brain/AGENTS.md`** réécrits depuis le code
+  (ils dataient du 01/06).
+- **`brain/taches/`** : modèle de compte rendu pour les tâches importantes, et
+  le premier (l'annonce « prête » durable).
+- **`brain/SECURITE.md`** et **`brain/DEPLOIEMENT.md`**, vérifiés dans le
+  code ; ils remplacent `DEPLOY-BACKEND.md` et `DEPLOYMENT_CHECKLIST.md`.
+- **Rangement** : les audits de la racine → `brain/audits/` ; documents
+  dépassés → `brain/archives/` (avec un index).
+
+Correction de l'audit de gouvernance : la restauration des sauvegardes
+**avait** été vérifiée (18/09 et 25/10) ; reste à le faire une fois depuis un
+artefact de nuit (BUG-2026-015).
+
+---
+
 ## [1.7.16] — 2026-11-11 — « Prête » durable et sans doublon ; le toucher d'une notification n'est plus rejoué
 
 Corrige les deux P2 de l'audit Codex du 11/11
