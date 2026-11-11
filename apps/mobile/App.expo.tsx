@@ -191,12 +191,13 @@ export default function AppPreview() {
       if (AppState.currentState === 'active') void useNotifStore.getState().rafraichir();
     }, 5 * 60_000);
 
-    // « Produit manquant » : toucher la notification mène là où le client lit
-    // ce qui manque. La navigation peut ne pas être prête au démarrage à froid.
+    // « Produit manquant » et « Ta commande est prête » (11/11) : toucher la
+    // notification mène à « Mes commandes ». La navigation peut ne pas être
+    // prête au démarrage à froid.
     const arreterOuvertures = ecouterOuvertures((data) => {
       // Le client vient de toucher une annonce : le compte a changé.
       void useNotifStore.getState().rafraichir();
-      if (data.type !== 'missing_items') return;
+      if (data.type !== 'missing_items' && data.type !== 'order_ready') return;
       const ouvrir = () => navigationRef.navigate('Commandes');
       if (navigationRef.isReady()) ouvrir();
       else setTimeout(() => navigationRef.isReady() && ouvrir(), 800);

@@ -374,4 +374,88 @@ describe('LiveActivityService', () => {
       expect(etat?.status).toBe('READY');
     });
   });
+
+  // ─── « Ta commande est prête » — la seule étape qui sonne (11/11) ───
+
+  describe('annoncer « prête »', () => {
+    let expo: { send: jest.Mock };
+    let jetons: { tokensForUsers: jest.Mock; purgeInvalid: jest.Mock };
+    let avecPush: LiveActivityService;
+
+    const commandePrete = (statut: OrderStatus) =>
+      prisma.order.findUnique.mockResolvedValue({
+        id: ORDER_A,
+        userId: USER_A,
+        status: statut,
+        publicOrderNumber: 'BE-1024',
+        dailyNumber: 142,
+        estimatedReadyAt: null,
+        pickupPointId: 'pp-1',
+        customerArrivedAt: null,
+        slot: null,
+        items: [],
+      });
+
+    beforeEach(() => {
+      expo = { send: jest.fn().mockResolvedValue({ sent: 1, invalidTokens: [] }) };
+      jetons = {
+        tokensForUsers: jest.fn().mockResolvedValue(['ExponentPushToken[abc]']),
+        purgeInvalid: jest.fn(),
+      };
+      avecPush = new LiveActivityService(prisma as never, apns as never, expo as never, jetons as never);
+    });
+
+    it('la Live Activity SONNE : mise à jour avec alerte, et pas de notification en double', async () => {
+      commandePrete(OrderStatus.READY);
+      prisma.liveActivity.findMany.mockResolvedValue([
+        { id: 'la-1', orderId: ORDER_A, pushToken: 'aa', status: 'ACTIVE' },
+      ]);
+
+      await avecPush.onOrderStatusChanged(ORDER_A, OrderStatus.READY);
+
+      const options = apns.sendLiveActivityUpdate.mock.calls[0][3];
+      expect(options.alert).toEqual({
+        title: 'Ta commande est prête',
+        body: 'Commande n° 142 — à récupérer au point de retrait Buvette 4.',
+      });
+      expect(expo.send).not.toHaveBeenCalled();
+    });
+
+    it('sans Live Activity (Android, refusée) : UNE notification classique', async () => {
+      commandePrete(OrderStatus.READY);
+      prisma.liveActivity.findMany.mockResolvedValue([]);
+
+      await avecPush.onOrderStatusChanged(ORDER_A, OrderStatus.READY);
+
+      expect(jetons.tokensForUsers).toHaveBeenCalledWith([USER_A]);
+      expect(expo.send).toHaveBeenCalledTimes(1);
+      expect(expo.send.mock.calls[0][0][0]).toEqual(
+        expect.objectContaining({
+          title: 'Ta commande est prête',
+          data: { type: 'order_ready', orderId: ORDER_A },
+        }),
+      );
+    });
+
+    it('les AUTRES étapes restent silencieuses', async () => {
+      commandePrete(OrderStatus.PREPARING);
+      prisma.liveActivity.findMany.mockResolvedValue([
+        { id: 'la-1', orderId: ORDER_A, pushToken: 'aa', status: 'ACTIVE' },
+      ]);
+
+      await avecPush.onOrderStatusChanged(ORDER_A, OrderStatus.PREPARING);
+
+      expect(apns.sendLiveActivityUpdate.mock.calls[0][3].alert).toBeUndefined();
+      expect(expo.send).not.toHaveBeenCalled();
+    });
+
+    it('Flaix dit « prête » mais le comptoir prépare encore : on ne sonne PAS', async () => {
+      commandePrete(OrderStatus.PREPARING);
+      prisma.liveActivity.findMany.mockResolvedValue([]);
+
+      await avecPush.applyOperationalUpdate(ORDER_A, {}, 'READY');
+
+      expect(expo.send).not.toHaveBeenCalled();
+    });
+  });
 });

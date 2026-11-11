@@ -4,6 +4,7 @@ import { LiveActivityService } from './live-activity.service';
 import { LiveActivityController } from './live-activity.controller';
 import { FlaixWebhookService } from './flaix-webhook.service';
 import { FlaixWebhookController } from './flaix-webhook.controller';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 /**
  * LiveActivityModule — phase 21.
@@ -17,6 +18,9 @@ import { FlaixWebhookController } from './flaix-webhook.controller';
  * notifier une transition (source 1 : board opérateur).
  */
 @Module({
+  // Les notifications classiques : « prête » quand aucune Live Activity
+  // n'est atteinte (Android, activité refusée).
+  imports: [NotificationsModule],
   controllers: [LiveActivityController, FlaixWebhookController],
   providers: [ApnsService, LiveActivityService, FlaixWebhookService],
   exports: [LiveActivityService],

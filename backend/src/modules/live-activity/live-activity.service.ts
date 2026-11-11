@@ -1,7 +1,9 @@
-import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { LiveActivityStatus, OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { ApnsService } from './apns.service';
+import { ExpoPushService } from '../notifications/expo-push.service';
+import { PushTokensService } from '../notifications/push-tokens.service';
 import { dateDePeremption } from './peremption';
 
 /**
@@ -124,6 +126,10 @@ export class LiveActivityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly apns: ApnsService,
+    // Facultatifs : sans eux (doublures de test), « prête » ne passe que par
+    // la Live Activity. En production, le module les fournit toujours.
+    @Optional() private readonly expoPush?: ExpoPushService,
+    @Optional() private readonly pushTokens?: PushTokensService,
   ) {}
 
   // ─── Enregistrement / cycle de vie côté app ─────────────────
@@ -415,7 +421,8 @@ export class LiveActivityService {
    */
   async onOrderStatusChanged(orderId: string, status: OrderStatus): Promise<void> {
     try {
-      await this.pushOrderUpdate(orderId);
+      if (status === OrderStatus.READY) await this.annoncerCommandePrete(orderId);
+      else await this.pushOrderUpdate(orderId);
       if (TERMINAL_ORDER_STATUSES.includes(status)) {
         // Filet : si aucune activité n'a pu être notifiée (appareil hors ligne),
         // on les clôt tout de même côté serveur pour ne plus rien leur envoyer.
@@ -461,6 +468,64 @@ export class LiveActivityService {
     if (Object.keys(patch).length > 0) {
       await this.prisma.order.update({ where: { id: orderId }, data: patch });
     }
-    await this.pushOrderUpdate(orderId, overrideStatus);
+    if (overrideStatus === 'READY') await this.annoncerCommandePrete(orderId, overrideStatus);
+    else await this.pushOrderUpdate(orderId, overrideStatus);
+  }
+
+  /**
+   * « TA COMMANDE EST PRÊTE » — LA SEULE ÉTAPE QUI SONNE (demande de Rémi, 11/11).
+   *
+   * Jusqu'ici, rien ne prévenait le client : le push par étape a été retiré le
+   * 07/09 (il doublait la Live Activity), et la Live Activity se met à jour EN
+   * SILENCE. « Prête » ne réveillait donc personne, et sur Android rien du tout.
+   *
+   * Désormais, et pour cette étape seulement :
+   *  1. la Live Activity est mise à jour AVEC une alerte — l'écran s'allume,
+   *     le téléphone sonne, l'activité se déploie ;
+   *  2. si aucune activité n'a été atteinte (Android, Live Activity refusée ou
+   *     terminée), une notification classique part, une seule fois.
+   * Les autres étapes restent silencieuses : un client qu'on sonne à chaque
+   * étape coupe les notifications.
+   *
+   * L'état est RELU avant d'annoncer : quand Flaix dit « prête » alors que le
+   * comptoir prépare encore, l'écran garde « en préparation » (voir
+   * `statutAffiche`) — et on ne sonne pas pour une nouvelle qu'on n'affiche
+   * pas. Le comptoir sonnera quand il le dira.
+   */
+  async annoncerCommandePrete(orderId: string, overrideStatus?: WidgetStatus): Promise<void> {
+    const etat = await this.buildContentState(orderId, overrideStatus);
+    if (!etat || etat.status !== 'READY') {
+      await this.pushOrderUpdate(orderId, overrideStatus);
+      return;
+    }
+
+    const titre = 'Ta commande est prête';
+    const corps =
+      `Commande n° ${etat.orderNumber} — ` +
+      (etat.pickupPoint
+        ? `à récupérer au point de retrait ${etat.pickupPoint}.`
+        : 'à récupérer au point de retrait.');
+
+    const atteintes = await this.pushOrderUpdate(orderId, overrideStatus, { title: titre, body: corps });
+    if (atteintes > 0 || !this.expoPush || !this.pushTokens) return;
+
+    const commande = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: { userId: true },
+    });
+    if (!commande) return;
+    const jetons = await this.pushTokens.tokensForUsers([commande.userId]);
+    if (jetons.length === 0) return;
+    const resultat = await this.expoPush.send(
+      jetons.map((to) => ({
+        to,
+        title: titre,
+        body: corps,
+        sound: 'default' as const,
+        // L'app ouvre « Mes commandes » (App.expo.tsx, `ecouterOuvertures`).
+        data: { type: 'order_ready', orderId },
+      })),
+    );
+    if (resultat.invalidTokens.length > 0) await this.pushTokens.purgeInvalid(resultat.invalidTokens);
   }
 }

@@ -5,6 +5,28 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.14] — 2026-11-11 — « Ta commande est prête » sonne enfin
+
+Rien ne prévenait le client que sa commande était prête : le push par étape
+avait été retiré le 07/09 (il doublait la Live Activity), et la Live Activity
+se met à jour en silence. Sur Android, rien du tout.
+
+Désormais, à l'étape « prête » et à elle seule :
+1. la **Live Activity** est mise à jour **avec une alerte** — l'écran
+   s'allume, le téléphone sonne : « Ta commande est prête — Commande n° 142 —
+   à récupérer au point de retrait Buvette 4. » ;
+2. si aucune Live Activity n'est atteinte (Android, activité refusée), **une
+   notification classique**, une seule ; la toucher ouvre « Mes commandes ».
+
+Les autres étapes restent silencieuses. Quand Flaix annonce « prête » alors
+que le comptoir prépare encore, l'écran garde « en préparation » et rien ne
+sonne. 4 tests ; suite complète verte (1 087).
+
+`~ backend/src/modules/live-activity/live-activity.service.ts` `~ live-activity.module.ts` `~ live-activity.service.spec.ts`
+`~ apps/mobile/App.expo.tsx` (toucher la notification ouvre « Mes commandes »)
+
+---
+
 ## [1.7.13] — 2026-11-11 — App : le clavier se ferme, le bouton du bas se voit, les encoches sont des trous ; le dossier Flaix en PDF
 
 - **Le clavier se ferme enfin** (note d'une commande, « Mes informations ») :

@@ -538,6 +538,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.11 | 2026-11-10 | App : le jour de l'ouverture, les favoris sans cadre, un ticket qui se lit comme tel |
 | 1.7.12 | 2026-11-10 | App 1.1.1 : une icône qui respire (build 43) |
 | 1.7.13 | 2026-11-11 | App : clavier, bouton du bas, encoches ; le dossier Flaix en PDF |
+| 1.7.14 | 2026-11-11 | « Ta commande est prête » sonne enfin |
 
 ---
 
