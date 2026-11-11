@@ -40,7 +40,7 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 | **CI GitHub** | ✅ **verte** sur `main` (7 jobs : Build, Tests, Tests d'intégration, Export web, TypeScript, Lint) — elle était ROUGE du 06/11 au 09/11 sans que personne ne la lise | `https://github.com/Break-Eat-APP/breakeat-admin/actions`, ou l'API `commits/<sha>/check-runs` (dépôt public) |
 | **Serveur (Railway)** | En ligne, sert `acf6187` (le code serveur le plus récent) | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit`, à comparer à `git log -1 origin/main` |
 | **Consoles (Vercel)** | Admin, back-office et opérateur, publiés depuis `main` | Voir « Déploiement des frontends » plus bas |
-| **iOS** | **Build 43** (`397e52c`, **version 1.1.1**) envoyée sur TestFlight le 10/11 — la nouvelle icône (B à 66 %), plus tout le travail du 10/11. ⚠️ Changement natif : les mises à jour à distance visent désormais la **1.1.1** ; les builds 41 et 42 (1.1.0) ne les reçoivent plus. Dernière mise à jour à distance en 1.1.0 : 10/11 à 15 h 34 (`82302b7`). Pour la vérification Apple : **la 43** | App Store Connect → TestFlight |
+| **iOS** | **Build 44** (`f446939`, **version 1.1.2**) sur TestFlight le 11/11 — **l'icône est enfin nette, validée par Rémi sur son iPhone** (format Icon Composer, effets « verre » d'iOS 26 coupés : voir « L'icône iOS » dans les pièges). Mise à jour à distance 1.1.2 publiée le 11/11 (`5c993f4` : clavier, bouton « Signaler », encoches, « prête » durable). ⚠️ Les builds 41 à 43 (1.1.0 / 1.1.1) ne reçoivent plus les mises à jour à distance. Pour la vérification Apple : **la 44** | App Store Connect → TestFlight |
 | **Android** | **Build 41 compilée** (mise à jour Expo 57.0.32 + mises à jour à distance). **Aucun envoi possible sur Google Play** avant que Google confirme la nouvelle clé d'importation (demandée le 09/11) | Play Console → Intégrité de l'application |
 | **Connexion** | E-mail + mot de passe, Apple, Google (iOS vérifié ; Android : clients OAuth créés, pas encore essayé) | — |
 | **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels n'est pas configuré | `GET /api/v1/auth/password-reset/available` → `false` |
@@ -251,6 +251,18 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
   transaction (`orders.ready_announce_due_at`), bail de 2 min, rattrapage
   `@Cron` chaque minute, 5 essais, `ready_announced_at` empêche la double
   sonnerie. Toucher la notification : traité une fois, puis effacé.
+- **L'icône iOS — NE PAS REVENIR EN ARRIÈRE (validée par Rémi le 11/11, build
+  44).** iOS 26 habille toute icône PNG ordinaire de reflets, d'ombre et d'un
+  dégradé : sur l'aplat orange, le B paraissait flou (builds 42 et 43) alors
+  que le fichier était net. La seule parade est le format **Icon Composer** :
+  `apps/mobile/assets/breakeat.icon/` (`icon.json` : fond blanc plein, calque
+  `b.png` — le B à 66 % sur fond transparent —, `specular: false`,
+  `shadow.kind: none`, `translucency.enabled: false`, `glass: false`), branché
+  par `ios.icon` dans `app.config.js`. L'`icon` racine (`icone-app.png`) ne sert
+  plus qu'à Android et au web ; Android garde son premier plan à 44 %
+  (`icone-android-premier-plan.png`). **Pour changer l'icône :** refaire
+  `Assets/b.png` (même cadre 1024, fond transparent), garder `icon.json`, et
+  c'est un changement NATIF → monter `version` + nouvelle build.
 - **Test instable `temps-reel-multi-instances` › « SANS canal commun »** : a
   échoué une fois en CI le 10/11 (commit `871d5ff`, documentation seule) puis
   est repassé au vert sur `6d90cfa` sans changement de code. Si ça revient,

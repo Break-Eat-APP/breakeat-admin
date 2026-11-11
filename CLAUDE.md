@@ -157,8 +157,12 @@ l'accord de Rémi.
 - **Tests mobiles** : Jest ne résout pas l'alias `@lib` ; un module importé par
   alias se moque avec `{ virtual: true }`, et les variables utilisées dans
   `jest.mock` doivent commencer par `mock`.
-- **iOS 26 habille les icônes** (reflets, ombre, dégradé) : l'icône iOS est au
-  format Icon Composer (`apps/mobile/assets/breakeat.icon`), effets coupés.
+- **L'icône iOS est au format Icon Composer** (`apps/mobile/assets/breakeat.icon`,
+  branché par `ios.icon`) — **validée nette sur iPhone le 11/11 (build 44), ne
+  pas revenir à un PNG** : iOS 26 habille toute icône PNG de reflets, d'ombre et
+  d'un dégradé, et le B paraissait flou. Pour la changer : refaire
+  `Assets/b.png` (1024, fond transparent), garder `icon.json`, monter `version`,
+  nouvelle build. Détail dans `REPRISE.md` (« L'icône iOS »).
 - **Le poste de développement a peu de mémoire** (6 Go, souvent < 600 Mo
   libres) : lancer Jest avec `-i` et `NODE_OPTIONS=--max-old-space-size=1000`,
   tester fichier par fichier ; la suite complète tourne en CI.
