@@ -27,6 +27,10 @@ Dans l'ordre, et rien d'autre pour commencer :
 | 2 | [`GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md`](GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md) | Où se trouve quoi — trouver le bon fichier en 30 secondes |
 | 3 | [`REPRISE.md`](REPRISE.md) | **L'état courant** : ce qui marche, ce qui bloque, ce qui reste |
 
+**Tu es un agent (Claude Code, Codex, Cursor) ?** Lis d'abord
+[`CLAUDE.md`](CLAUDE.md) : les règles qui ne se discutent pas et les pièges
+déjà payés.
+
 Ces trois-là suffisent pour poser une question intelligente. Le reste se lit
 quand on en a besoin.
 
