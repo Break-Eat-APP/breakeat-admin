@@ -74,6 +74,15 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
    **ticket redessiné d'après la maquette de Rémi**, **icône vectorielle**
    (`#FD4000`) — tout cela attend la **prochaine build iOS** (CHANGELOG 1.7.3).
 4. **Passer le dépôt GitHub en privé** (décision de Rémi) — audit, constat 1.
+   **Reporté par Rémi le 11/11.** Avant de le faire : (a) régler la CI pour
+   qu'elle ne tourne pas sur les commits de documentation seule — mesuré le
+   11/11 : ~10 min d'Actions par passage, 65 passages du 1er au 11/11, soit
+   ~1 900 min/mois pour 2 000 gratuites en privé ; au-delà, sans moyen de
+   paiement, GitHub ARRÊTE les workflows (sauvegarde de nuit et mise à jour à
+   distance comprises) ; (b) prévoir que l'agent ne lit plus l'état de la CI
+   sans identifiant (API publique) ; (c) vérifier Railway et Vercel au premier
+   envoi. Marche à suivre : Settings → General → Danger Zone → Change
+   repository visibility.
 5. **Le flux des commandes Flaix — côté développeur Flaix.** Une commande
    passée dans Flaix ne crée rien chez BreakEat ; la Live Activity, la note,
    la fidélité et « Je suis arrivé » en dépendent, et les trois lieux en
