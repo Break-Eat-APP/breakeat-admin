@@ -805,6 +805,16 @@ function OrderCard({
         {/* Les encoches du haut et du bas, au centre : ce qui fait lire
             « ticket » avant même d'avoir lu un mot. De la couleur du FOND de
             page : ce sont des trous, pas des pastilles. */}
+        {/*
+          LE LISERÉ BLANC, DESSINÉ PAR-DESSUS — ET LES ENCOCHES PAR-DESSUS LUI.
+
+          Il était la bordure du ticket lui-même. Or sur iPhone une bordure se
+          peint AU-DESSUS de tout le contenu : le trait blanc barrait chaque
+          encoche, et un vrai ticket montre un trou, pas un rond cerclé
+          (remarque de Rémi, 10/11). Une vue à part, posée avant les encoches,
+          laisse celles-ci couper le liseré.
+        */}
+        <View pointerEvents="none" style={styles.lisere} />
         <View style={styles.encocheHaut} />
         <View style={styles.encocheBas} />
       </View>
@@ -923,10 +933,6 @@ const styles = StyleSheet.create({
   },
   ticket: {
     borderRadius: 26,
-    // Le liseré blanc de la maquette : sans lui, l'en-tête orange se fondait
-    // dans le fond de page orange.
-    borderWidth: 2,
-    borderColor: '#fff',
     // Indispensable : c'est lui qui coupe les encoches en deux.
     overflow: 'hidden',
     backgroundColor: THEME.surface,
@@ -936,7 +942,17 @@ const styles = StyleSheet.create({
    * LES ENCOCHES — de la couleur du FOND DE PAGE (orange), jamais du blanc.
    * Ce sont des TROUS dans le ticket ; la moitié qui dépasse est rognée.
    */
+  // Le liseré blanc de la maquette : sans lui, l'en-tête orange se fondait
+  // dans le fond de page orange. Au-dessus du contenu, SOUS les encoches.
+  lisere: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: '#fff',
+    zIndex: 1,
+  },
   encocheHaut: {
+    zIndex: 2,
     position: 'absolute',
     top: -ENCOCHE_CENTRE / 2,
     left: '50%',
@@ -947,6 +963,7 @@ const styles = StyleSheet.create({
     backgroundColor: FOND_PAGE,
   },
   encocheBas: {
+    zIndex: 2,
     position: 'absolute',
     bottom: -ENCOCHE_CENTRE / 2,
     left: '50%',
@@ -965,7 +982,8 @@ const styles = StyleSheet.create({
   encocheGauche: { marginLeft: -ENCOCHE_COTE / 2 },
   encocheDroite: { marginRight: -ENCOCHE_COTE / 2 },
 
-  dechirure: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
+  // Au-dessus du liseré : ses encoches latérales le coupent aussi.
+  dechirure: { flexDirection: 'row', alignItems: 'center', marginTop: 6, zIndex: 2 },
   pointille: {
     flex: 1,
     marginHorizontal: 10,

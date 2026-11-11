@@ -16,6 +16,7 @@ import { THEME, FONT, HEAD } from '@lib/theme';
 import { apiNoterCommande } from '@lib/api/mobile-api';
 import { messageServeur } from '@lib/message-serveur';
 import { demanderNoteAppStore } from '@lib/note-app-store';
+import { BARRE_CLAVIER, FeuilleClavier } from '@components/feuille-clavier';
 
 const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null;
 
@@ -84,7 +85,9 @@ export function NoterCommande({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={() => fermer(null)}>
       <View style={styles.fond}>
-        <View style={styles.feuille}>
+        {/* La feuille sait vivre avec le clavier : « OK » au-dessus, toucher
+            ailleurs le range, et elle remonte au-dessus de lui (10/11). */}
+        <FeuilleClavier style={styles.feuille}>
           <Text style={styles.titre}>Comment ça s’est passé ?</Text>
           <Text style={styles.sous}>
             {buvette
@@ -121,6 +124,7 @@ export function NoterCommande({
               placeholderTextColor={THEME.grey}
               multiline
               maxLength={1000}
+              inputAccessoryViewID={BARRE_CLAVIER}
               style={[styles.champ, NO_OUTLINE]}
             />
           ) : null}
@@ -142,7 +146,7 @@ export function NoterCommande({
           <Pressable onPress={() => fermer(null)} disabled={envoi} hitSlop={8}>
             <Text style={styles.plusTard}>Plus tard</Text>
           </Pressable>
-        </View>
+        </FeuilleClavier>
       </View>
     </Modal>
   );
@@ -156,6 +160,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 26,
     padding: 24,
     paddingBottom: 34,
+    maxHeight: '92%',
   },
   titre: { color: THEME.ink, fontSize: 20, fontFamily: HEAD.bold },
   sous: {

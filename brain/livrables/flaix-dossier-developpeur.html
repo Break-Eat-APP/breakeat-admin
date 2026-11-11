@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<title>Flaix ↔ BreakEat — matchs, commandes, Live Activity</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; color: #1c1917; font-size: 10.5pt; line-height: 1.5; }
+  h1 { color: #FD4000; font-size: 21pt; line-height: 1.2; margin: 0 0 4px; }
+  .meta { color: #78716c; font-size: 9.5pt; margin: 0 0 18px; border-bottom: 2px solid #FD4000; padding-bottom: 10px; }
+  h2 { color: #FD4000; font-size: 15pt; margin: 26px 0 8px; page-break-after: avoid; }
+  h3 { font-size: 12pt; margin: 18px 0 6px; page-break-after: avoid; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0 14px; font-size: 9.5pt; }
+  tr { page-break-inside: avoid; }
+  th, td { border: 1px solid #e7e0da; padding: 6px 8px; text-align: left; vertical-align: top; }
+  th { background: #FFF1EA; }
+  code { font-family: Consolas, monospace; font-size: 9pt; background: #f5f2ef; padding: 1px 4px; border-radius: 3px; }
+  pre { background: #1c1917; color: #f5f2ef; padding: 10px 12px; border-radius: 6px; white-space: pre-wrap; word-break: break-word; font-size: 8.6pt; line-height: 1.4; page-break-inside: avoid; }
+  pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+  ul, ol { padding-left: 20px; }
+  li { margin: 3px 0; }
+  strong { color: #111; }
+</style></head><body>
+<h1>Flaix ↔ BreakEat — les matchs, les commandes et la Live Activity</h1>
+<p class="meta">À l'attention du développeur Flaix · BreakEat · 11 novembre 2026 · version 1</p>
+
+<p><strong>Le but.</strong> Flaix devient <strong>la seule saisie</strong>. Les matchs créés dans Flaix
+apparaissent tout seuls dans l'app BreakEat, et les commandes passées dans
+Flaix y remontent avec tout ce que l'app sait déjà faire : « Mes commandes »,
+la Live Activity sur l'écran verrouillé, la notification « ta commande est
+prête », le reçu avec la TVA, la note et la fidélité.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Ce qu'on te demande</th>
+<th>Pourquoi</th>
+<th>Priorité</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>1</strong></td>
+<td><strong>Le lien calendrier</strong> de chaque lieu</td>
+<td>Le client ouvre ta page depuis l'app</td>
+<td>Tout de suite</td>
+</tr>
+<tr>
+<td><strong>2</strong></td>
+<td><strong>Le flux des matchs</strong> (JSON)</td>
+<td>Plus de double saisie : les matchs arrivent tout seuls</td>
+<td>Haute</td>
+</tr>
+<tr>
+<td><strong>3</strong></td>
+<td><strong>Les événements de commande</strong> (webhook signé)</td>
+<td>« Mes commandes », Live Activity, « prête », reçu, note, fidélité, campagnes</td>
+<td><strong>La plus haute</strong></td>
+</tr>
+<tr>
+<td>—</td>
+<td>Le fichier iCal</td>
+<td>Les supporters ajoutent les matchs à leur agenda</td>
+<td>Facultatif</td>
+</tr>
+</tbody>
+</table>
+<p>Rien n'est encore développé, ni chez toi ni chez nous. Ce dossier fixe le
+format pour que chacun avance de son côté. <strong>BreakEat reçoit déjà des
+événements signés de Flaix pour la Live Activity</strong> : la partie 3 prolonge ce
+qui existe au lieu de le remplacer.</p>
+<h2>1. Le lien calendrier de chaque lieu</h2>
+<ol>
+<li><strong>Une adresse par lieu</strong>, stable dans le temps (elle sera enregistrée une
+   fois pour toutes dans l'admin BreakEat).</li>
+<li>La page s'affiche correctement <strong>sur mobile, à l'intérieur d'une autre
+   app</strong> (« webview ») :<ul>
+<li>pas d'en-tête qui interdit l'intégration (<code>X-Frame-Options</code>,
+ <code>Content-Security-Policy: frame-ancestors</code>) ;</li>
+<li>la page <strong>et le paiement</strong> restent si possible sur <code>flaixlabs.com</code> ou
+ <code>synertic.net</code>. Un autre domaine fonctionne (en HTTPS), mais l'app affiche
+ alors au client un bandeau « Paiement sur <domaine> ». <strong>Nous dire quel
+ prestataire de paiement est utilisé</strong>, et sur quel domaine.</li>
+</ul>
+</li>
+<li>Chaque match mène à <strong>sa</strong> page de commande.</li>
+</ol>
+<p><strong>En plus :</strong> le lien doit accepter nos <strong>étiquettes d'identité</strong>, que
+BreakEat remplace par les coordonnées du client connecté avant d'ouvrir ta
+page — <code>[#firstname]</code>, <code>[#lastname]</code>, <code>[#mail]</code>, <code>[#Votre portable]</code> — et une
+<strong>nouvelle</strong> : <code>[#breakeatId]</code>, l'identifiant du client chez BreakEat. Garde-la
+avec la commande : c'est elle qui permet de la rattacher au bon client
+(partie 3).</p>
+<h2>2. Le flux des matchs</h2>
+<p><strong>Une adresse par lieu</strong>, en lecture publique, qui renvoie en JSON la liste
+des matchs <strong>à venir et des 7 derniers jours</strong>.</p>
+<p>Exemple d'adresse (le chemin exact est libre) :</p>
+<pre><code>GET https://&lt;domaine-flaix&gt;/api/lieux/&lt;identifiant-du-lieu&gt;/evenements
+</code></pre>
+<p>Exemple de réponse :</p>
+<pre><code class="language-json">{
+  &quot;lieu&quot;: { &quot;id&quot;: &quot;velodrome&quot;, &quot;nom&quot;: &quot;Orange Vélodrome&quot; },
+  &quot;genereLe&quot;: &quot;2026-11-10T09:00:00Z&quot;,
+  &quot;evenements&quot;: [
+    {
+      &quot;id&quot;: &quot;m-123&quot;,
+      &quot;nom&quot;: &quot;Marseille vs Lens&quot;,
+      &quot;debut&quot;: &quot;2026-11-22T21:00:00+01:00&quot;,
+      &quot;fin&quot;: &quot;2026-11-22T23:00:00+01:00&quot;,
+      &quot;adversaire&quot;: &quot;RC Lens&quot;,
+      &quot;logoAdversaire&quot;: &quot;https://&lt;domaine-flaix&gt;/logos/lens.png&quot;,
+      &quot;affiche&quot;: null,
+      &quot;ouvertureCommande&quot;: &quot;2026-11-22T08:00:00+01:00&quot;,
+      &quot;lienCommande&quot;: &quot;https://&lt;domaine-flaix&gt;/commande/m-123&quot;,
+      &quot;statut&quot;: &quot;actif&quot;,
+      &quot;modifieLe&quot;: &quot;2026-11-09T18:00:00Z&quot;
+    }
+  ]
+}
+</code></pre>
+<h3>Les champs</h3>
+<table>
+<thead>
+<tr>
+<th>Champ</th>
+<th>Obligatoire</th>
+<th>Exemple</th>
+<th>Pourquoi</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><strong>oui</strong></td>
+<td><code>m-123</code></td>
+<td>Identifiant <strong>stable</strong> : BreakEat reconnaît un match modifié au lieu de le créer en double. <strong>Ne jamais le réutiliser</strong> pour un autre match.</td>
+</tr>
+<tr>
+<td><code>nom</code></td>
+<td><strong>oui</strong></td>
+<td><code>Marseille vs Lens</code></td>
+<td>Le titre affiché.</td>
+</tr>
+<tr>
+<td><code>debut</code>, <code>fin</code></td>
+<td><strong>oui</strong></td>
+<td><code>2026-11-22T21:00:00+01:00</code></td>
+<td>Format ISO 8601 <strong>avec le fuseau horaire</strong> (<code>+01:00</code> ou <code>Z</code>). Sans fuseau, on risque un décalage d'une heure au changement d'heure.</td>
+</tr>
+<tr>
+<td><code>adversaire</code></td>
+<td>non</td>
+<td><code>RC Lens</code></td>
+<td>Affichage du match.</td>
+</tr>
+<tr>
+<td><code>logoAdversaire</code></td>
+<td>non</td>
+<td><code>https://…/lens.png</code></td>
+<td>Image en HTTPS, carrée de préférence.</td>
+</tr>
+<tr>
+<td><code>affiche</code></td>
+<td>non</td>
+<td><code>https://…/affiche.jpg</code></td>
+<td>Pour les concerts et événements sans adversaire.</td>
+</tr>
+<tr>
+<td><code>ouvertureCommande</code></td>
+<td><strong>oui</strong></td>
+<td><code>2026-11-22T08:00:00+01:00</code></td>
+<td>L'heure à laquelle <strong>la commande ouvre</strong>. BreakEat affiche « La commande ouvre à 08:00 » en attendant. <code>null</code> = ouverte dès maintenant.</td>
+</tr>
+<tr>
+<td><code>lienCommande</code></td>
+<td><strong>oui</strong></td>
+<td><code>https://…/commande/m-123</code></td>
+<td>Le bouton « Commander ». Peut accepter des paramètres (identité du client), comme les liens actuels.</td>
+</tr>
+<tr>
+<td><code>statut</code></td>
+<td><strong>oui</strong></td>
+<td><code>actif</code> ou <code>annule</code></td>
+<td>Un match annulé doit disparaître partout. <strong>Ne pas le retirer de la liste</strong> : le passer en <code>annule</code>, sinon BreakEat ne peut pas faire la différence entre « annulé » et « oublié ».</td>
+</tr>
+<tr>
+<td><code>modifieLe</code></td>
+<td><strong>oui</strong></td>
+<td><code>2026-11-09T18:00:00Z</code></td>
+<td>Date de la dernière modification du match.</td>
+</tr>
+</tbody>
+</table>
+<h3>Les règles</h3>
+<ul>
+<li>Matchs <strong>triés par date de début</strong>.</li>
+<li>Adresse <strong>sans mot de passe</strong>, en <strong>lecture seule</strong>. Elle ne doit contenir
+  <strong>aucune donnée client</strong> (ni nom, ni commande) : seulement le calendrier
+  public.</li>
+<li>BreakEat l'interrogera <strong>toutes les 5 à 10 minutes</strong> par lieu, pour une
+  cinquantaine de lieux : une réponse <strong>rapide</strong> (moins d'une seconde), mise en
+  cache côté Flaix si besoin. Un en-tête <code>ETag</code> ou <code>Last-Modified</code> est un plus.</li>
+<li>Réponse <code>200</code> avec une liste vide s'il n'y a aucun match ; <code>404</code> seulement si
+  le lieu n'existe pas.</li>
+<li>Encodage UTF-8 (accents des noms de clubs).</li>
+</ul>
+<h3>En option : le fichier iCal</h3>
+<p>La même liste au format <code>.ics</code>, une adresse par lieu :</p>
+<pre><code>GET https://&lt;domaine-flaix&gt;/api/lieux/&lt;identifiant-du-lieu&gt;/evenements.ics
+</code></pre>
+<p>Correspondance : <code>UID</code> = <code>id</code>, <code>SUMMARY</code> = <code>nom</code>, <code>DTSTART</code> / <code>DTEND</code> =
+<code>debut</code> / <code>fin</code>, <code>URL</code> = <code>lienCommande</code>, <code>STATUS:CANCELLED</code> pour un match
+annulé, <code>LAST-MODIFIED</code> = <code>modifieLe</code>. L'heure d'ouverture de la commande
+peut aller dans un champ <code>X-FLAIX-OUVERTURE-COMMANDE</code>. Généralement une
+demi-journée de travail une fois B fait.</p>
+<h2>3. Les commandes et la Live Activity</h2>
+<p>C'est la partie la plus importante. Aujourd'hui, <strong>une
+commande passée dans Flaix ne crée rien chez BreakEat</strong>. Tout ce que l'app
+sait déjà faire avec une commande en dépend :</p>
+<table>
+<thead>
+<tr>
+<th>Ce que le client voit dans l'app</th>
+<th>Ce que BreakEat doit recevoir</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>« Mes commandes » : le ticket, la buvette, « Commande n° 142 », le prix, la date</td>
+<td>la commande, sa buvette, son numéro, son total, sa date</td>
+</tr>
+<tr>
+<td>La barre « reçue → en préparation → prête »</td>
+<td>chaque changement d'état, <strong>en temps réel</strong></td>
+</tr>
+<tr>
+<td>La <strong>Live Activity</strong> (écran verrouillé, Dynamic Island) et son décompte</td>
+<td>l'état, et l'<strong>heure estimée</strong> à laquelle elle sera prête</td>
+</tr>
+<tr>
+<td>« Ta commande est prête » (notification)</td>
+<td>l'état <code>READY</code>, dans les secondes qui suivent</td>
+</tr>
+<tr>
+<td>L'heure de retrait sur le ticket</td>
+<td>le créneau choisi, ou « dès que prête »</td>
+</tr>
+<tr>
+<td>Le <strong>reçu</strong> avec la TVA taux par taux</td>
+<td>chaque ligne : produit, quantité, prix TTC, <strong>taux de TVA</strong></td>
+</tr>
+<tr>
+<td>Le bandeau « produit manquant »</td>
+<td>les lignes qui manquent, et combien</td>
+</tr>
+<tr>
+<td>Le bandeau de remboursement</td>
+<td>le montant remboursé</td>
+</tr>
+<tr>
+<td>« Noter ma commande », les points de fidélité</td>
+<td>l'état <code>COLLECTED</code> (récupérée)</td>
+</tr>
+<tr>
+<td>Les campagnes vers « ceux qui ont commandé »</td>
+<td><strong>qui</strong> a commandé : l'identifiant BreakEat du client</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Ce qui existe déjà et qu'on garde.</strong> BreakEat reçoit DÉJÀ des événements
+signés de Flaix pour la Live Activity : même signature
+HMAC-SHA256, même anti-rejeu (5 minutes), même idempotence par <code>eventId</code>,
+mêmes noms d'événements (<code>ORDER_STATUS_CHANGED</code>, <code>ORDER_READY</code>,
+<code>ORDER_DELAYED</code>, <code>ORDER_CANCELLED</code>, <code>ORDER_COLLECTED</code>, <code>PICKUP_SLOT_CHANGED</code>,
+<code>PICKUP_POINT_CHANGED</code>). Seule limite : ils désignent une commande
+<strong>BreakEat</strong> (<code>orderId</code>), qui n'existe pas quand on commande chez Flaix.
+D'où deux ajouts seulement :</p>
+<ol>
+<li><strong>Un événement <code>ORDER_CREATED</code></strong> qui porte toute la commande — la première
+   fois que BreakEat en entend parler ;</li>
+<li><strong><code>flaixOrderId</code></strong> à la place de <code>orderId</code> dans tous les événements : la
+   référence Flaix, stable. BreakEat fait la correspondance.</li>
+</ol>
+<pre><code>POST https://&lt;api-breakeat&gt;/api/v1/webhooks/flaix
+X-Flaix-Signature: &lt;HMAC-SHA256 du corps brut, secret partagé&gt;
+{
+  &quot;eventId&quot;: &quot;evt-5521&quot;,                 // unique : clé d'idempotence
+  &quot;event&quot;: &quot;ORDER_CREATED&quot;,
+  &quot;timestamp&quot;: &quot;2026-11-22T20:12:04Z&quot;,   // anti-rejeu
+  &quot;flaixOrderId&quot;: &quot;c-98765&quot;,             // stable, jamais réutilisé
+  &quot;lieu&quot;: &quot;velodrome&quot;,                   // id Flaix du lieu
+  &quot;evenement&quot;: &quot;m-123&quot;,                  // id du match (le même que dans B)
+  &quot;client&quot;: {
+    &quot;breakeatId&quot;: &quot;4b1e…&quot;,               // rendu par l'étiquette [#breakeatId]
+    &quot;email&quot;: &quot;client@exemple.fr&quot;         // de secours, pour le rapprochement
+  },
+  &quot;numero&quot;: &quot;142&quot;,                       // ce que le client dit au comptoir
+  &quot;buvette&quot;: { &quot;id&quot;: &quot;b-nord&quot;, &quot;nom&quot;: &quot;Tribune Nord&quot; },
+  &quot;retrait&quot;: {
+    &quot;creneau&quot;: &quot;2026-11-22T21:45:00+01:00&quot;,   // null = « dès que prête »
+    &quot;point&quot;: &quot;Comptoir 3&quot;
+  },
+  &quot;lignes&quot;: [
+    { &quot;produit&quot;: &quot;Hot-dog&quot;, &quot;quantite&quot;: 2, &quot;totalCentimes&quot;: 1200, &quot;tvaPourDixMille&quot;: 1000 },
+    { &quot;produit&quot;: &quot;Coca 50 cl&quot;, &quot;quantite&quot;: 1, &quot;totalCentimes&quot;: 450, &quot;tvaPourDixMille&quot;: 550 }
+  ],
+  &quot;totalCentimes&quot;: 1650,
+  &quot;payeeLe&quot;: &quot;2026-11-22T20:12:01+01:00&quot;,
+  &quot;status&quot;: &quot;CREATED&quot;,
+  &quot;estimatedReadyAt&quot;: &quot;2026-11-22T20:25:00+01:00&quot;,
+  &quot;lienRecu&quot;: null                       // facultatif : le reçu officiel Flaix
+}
+</code></pre>
+<p>Puis, à chaque étape, un événement court :</p>
+<pre><code>{ &quot;eventId&quot;: &quot;evt-5530&quot;, &quot;event&quot;: &quot;ORDER_READY&quot;, &quot;timestamp&quot;: &quot;…&quot;,
+  &quot;flaixOrderId&quot;: &quot;c-98765&quot;, &quot;status&quot;: &quot;READY&quot;, &quot;estimatedReadyAt&quot;: null }
+</code></pre>
+<p>Deux événements de plus, pour ce que l'app affiche déjà :</p>
+<ul>
+<li><strong><code>ORDER_ITEMS_MISSING</code></strong> — <code>{ "lignes": [{ "produit": "Hot-dog", "manquant": 1 }] }</code> :
+  le bandeau « produit manquant » ;</li>
+<li><strong><code>ORDER_REFUNDED</code></strong> — <code>{ "rembourseCentimes": 600, "total": false }</code> :
+  le bandeau de remboursement (<code>total: true</code> = remboursée entièrement).</li>
+</ul>
+<p><strong>Les exigences :</strong></p>
+<ul>
+<li><strong>Le client est reconnu</strong> grâce à une nouvelle étiquette dans le lien de
+  commande, <code>[#breakeatId]</code>, que BreakEat remplit déjà pour <code>[#firstname]</code>,
+  <code>[#mail]</code>, etc. Flaix la garde avec la commande et la renvoie ici. Sans
+  elle, la commande ne peut être rattachée à personne : ni « Mes commandes »,
+  ni Live Activity.</li>
+<li><strong>Temps réel</strong> : <code>ORDER_READY</code> part <strong>dans les secondes</strong> qui suivent le
+  geste du comptoir — c'est lui qui fait sonner le téléphone.</li>
+<li><strong>Dans l'ordre, sans doublon</strong> : un événement plus ancien qu'un autre déjà
+  reçu est ignoré ; un événement rejoué (même <code>eventId</code>) aussi.</li>
+<li><strong>Réessais</strong> en cas d'échec (par exemple 10 s, 1 min, 5 min, 30 min) : une
+  coupure de quelques minutes ne doit perdre aucune commande.</li>
+<li><strong>Une adresse de relecture</strong> : <code>GET /api/commandes/&lt;flaixOrderId&gt;</code> côté
+  Flaix (avec une clé d’API fournie par Flaix), pour que BreakEat rattrape une commande dont il a
+  manqué un événement.</li>
+<li><strong>Le taux de TVA par ligne</strong> est indispensable : sans lui, le reçu n'est
+  plus un justificatif. Si Flaix émet déjà son propre reçu, <code>lienRecu</code> permet
+  à l'app de l'afficher à la place du sien.</li>
+</ul>
+<p><strong>Dans l'autre sens (BreakEat → Flaix), un seul signal :</strong> « <strong>Je suis
+arrivé</strong> ». Le client le touche quand il est devant le comptoir ; aujourd'hui
+il n'arrive qu'à BreakEat. Pour que le comptoir Flaix le voie :
+<code>POST https://&lt;domaine-flaix&gt;/api/commandes/&lt;flaixOrderId&gt;/arrivee</code> (avec une clé
+d’API fournie par Flaix), sans corps. À Flaix de dire s'il sait l'afficher au comptoir.</p>
+<h2>4. Sécurité</h2>
+<ul>
+<li><strong>Deux secrets, jamais dans une app ni dans un navigateur</strong> : le secret de
+  signature des événements (partie 3), et, si tu l'utilises, la clé de l'API
+  de relecture. Seuls les deux serveurs les connaissent.</li>
+<li>Ils s'échangent <strong>par un canal sûr</strong> (gestionnaire de mots de passe partagé,
+  message chiffré) — <strong>jamais par e-mail en clair</strong>.</li>
+<li><strong>Révocables et remplaçables sans coupure</strong> : deux secrets valides pendant
+  le changement.</li>
+<li>Le flux des matchs (partie 2) est <strong>public et en lecture seule</strong> : il ne
+  contient <strong>aucune donnée client</strong>.</li>
+<li>Une panne d'un côté <strong>n'arrête jamais l'autre</strong> : BreakEat garde les
+  derniers matchs connus, Flaix réessaie ses envois.</li>
+</ul>
+<h2>5. Ce qu'on attend de toi</h2>
+<ol>
+<li><strong>Faisable, et pour quand ?</strong> Partie par partie (1, 2, 3).</li>
+<li><strong>L'étiquette <code>[#breakeatId]</code></strong> dans le lien de commande : acceptée ?</li>
+<li><strong>La TVA par ligne</strong> dans les événements de commande : disponible ? Et
+   émets-tu déjà ton propre reçu (<code>lienRecu</code>) ?</li>
+<li><strong>« Je suis arrivé »</strong> : peux-tu l'afficher au comptoir ?</li>
+<li><strong>Un environnement de test</strong> : l'adresse du flux des matchs, l'adresse de
+   relecture d'une commande, <strong>un lieu de test</strong> avec un match et des
+   produits, et le <strong>secret de signature</strong> (par canal sûr).</li>
+<li>Le <strong>domaine</strong> de la page de commande et celui du <strong>paiement</strong> (pour
+   l'affichage dans l'app).</li>
+</ol>
+<h2>6. Ce que BreakEat fait de son côté</h2>
+<p>Pour information — rien à faire chez toi.</p>
+<ul>
+<li><strong>Les matchs</strong> : un import automatique toutes les quelques minutes, qui
+  crée ou met à jour les matchs par leur <code>id</code> Flaix et retire les matchs
+  annulés. <strong>1 à 2 jours</strong> une fois une adresse de test disponible.</li>
+<li><strong>Les commandes</strong> : la réception de <code>ORDER_CREATED</code> et des événements
+  suivants, le rattachement au client par <code>[#breakeatId]</code>, puis « Mes
+  commandes », la Live Activity, la notification « prête », le reçu, les
+  bandeaux « produit manquant » et « remboursement », la note et la fidélité
+  — <strong>avec le design actuel de l'app</strong>. <strong>1 à 2 jours</strong> une fois des
+  événements de test reçus.</li>
+<li><strong>L'étiquette <code>[#breakeatId]</code></strong> dans les liens de commande, et l'envoi de
+  « Je suis arrivé ».</li>
+</ul>
+<p><strong>Plus tard, si besoin</strong> (non demandé aujourd'hui) : ouvrir le tableau de bord
+Flaix depuis BreakEat sans se reconnecter (lien d'accès signé), et afficher
+dans le tableau de bord Flaix les chiffres de l'app (fréquentation, favoris,
+notifications) ou lancer une notification depuis Flaix. Ces sujets ont leur
+propre cahier des charges, disponible sur demande.</p>
+</body></html>

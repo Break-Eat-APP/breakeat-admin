@@ -5,6 +5,31 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.13] — 2026-11-11 — App : le clavier se ferme, le bouton du bas se voit, les encoches sont des trous ; le dossier Flaix en PDF
+
+- **Le clavier se ferme enfin** (note d'une commande, « Mes informations ») :
+  il n'y avait aucun moyen de le ranger — le pavé du téléphone et un champ
+  sur plusieurs lignes n'ont pas de touche « OK » sur iPhone — et
+  « Enregistrer » restait dessous. Nouvelle feuille commune
+  (`components/feuille-clavier.tsx`) : « OK » au-dessus du clavier, toucher
+  ailleurs le range, la feuille remonte au-dessus du clavier, et un appui sur
+  « Enregistrer » clavier ouvert n'est plus avalé.
+- **Détail d'une commande** : « Signaler un problème » n'est plus à moitié
+  caché sous la barre du bas en fin de défilement.
+- **Le ticket** : le liseré blanc ne barre plus les encoches. Sur iPhone, une
+  bordure se peint au-dessus du contenu ; le liseré est désormais une vue à
+  part, posée sous les encoches — un trou, pas un rond cerclé.
+- **Le dossier pour le développeur Flaix**, en PDF :
+  `brain/livrables/BreakEat-Flaix_matchs-commandes-live-activity.pdf` (lien
+  calendrier, flux des matchs, événements de commande et Live Activity,
+  sécurité, ce qu'on attend de lui). Refait par
+  `brain/livrables/fabriquer-dossier-flaix.py` depuis le cahier des charges.
+
+`+ apps/mobile/src/components/feuille-clavier.tsx` `~ noter-commande.tsx` `~ demande-coordonnees.tsx`
+`~ order-tracking.screen.tsx` `~ order-history.screen.tsx` `+ brain/livrables/`
+
+---
+
 ## [1.7.12] — 2026-11-10 — App 1.1.1 : une icône qui respire
 
 L'icône paraissait floue sur l'iPhone (build 42). Le fichier était net : le B

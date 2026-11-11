@@ -29,6 +29,7 @@ import { showAlert } from '@lib/alert';
 import { Ionicons } from '@expo/vector-icons';
 import { MissingItemsBanner, ROUGE_MANQUANT } from '@components/missing-items-banner';
 import { RemboursementBanner } from '@components/remboursement-banner';
+import { useBottomBarSpace } from '@components/app-bottom-bar';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderTracking'>;
 
@@ -155,6 +156,9 @@ function retourEnArriere(navigation: {
 }
 
 export function OrderTrackingScreen({ route, navigation }: Props) {
+  // L'espace de la barre flottante du bas : sans lui, « Signaler un problème »
+  // restait à moitié caché dessous en bout de défilement (vu le 10/11).
+  const espaceBas = useBottomBarSpace();
   const { orderId } = route.params;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -292,7 +296,7 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
         }
       />
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: espaceBas + 16 }]}>
         {/*
           LE NUMERO DE COMMANDE, EN GRAND ET EN PREMIER.
 

@@ -15,6 +15,7 @@ import { THEME, FONT } from '@lib/theme';
 import { apiMettreAJourProfil, type MonProfil } from '@lib/api/mobile-api';
 import { afficherTelephone, normaliserTelephone } from '@lib/telephone';
 import { messageServeur } from '@lib/message-serveur';
+import { BARRE_CLAVIER, FeuilleClavier } from '@components/feuille-clavier';
 
 const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null;
 
@@ -120,7 +121,10 @@ export function DemandeCoordonnees({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={() => onTermine(false)}>
       <View style={styles.fond}>
-        <View style={styles.feuille}>
+        {/* La feuille sait vivre avec le clavier (10/11) : le pavé du
+            téléphone n'a pas de touche « OK » sur iPhone, et le bouton
+            « Enregistrer » restait sous le clavier. */}
+        <FeuilleClavier style={styles.feuille} contenuStyle={styles.colonne}>
           <Text style={styles.titre}>
             {edition ? 'Mes informations' : 'Pour commander plus vite'}
           </Text>
@@ -138,6 +142,8 @@ export function DemandeCoordonnees({
             placeholderTextColor={THEME.grey}
             autoComplete="given-name"
             textContentType="givenName"
+            returnKeyType="done"
+            inputAccessoryViewID={BARRE_CLAVIER}
             style={[styles.champ, NO_OUTLINE]}
           />
 
@@ -149,6 +155,8 @@ export function DemandeCoordonnees({
             placeholderTextColor={THEME.grey}
             autoComplete="family-name"
             textContentType="familyName"
+            returnKeyType="done"
+            inputAccessoryViewID={BARRE_CLAVIER}
             style={[styles.champ, NO_OUTLINE]}
           />
 
@@ -161,6 +169,7 @@ export function DemandeCoordonnees({
             keyboardType="phone-pad"
             autoComplete="tel"
             textContentType="telephoneNumber"
+            inputAccessoryViewID={BARRE_CLAVIER}
             style={[styles.champ, NO_OUTLINE]}
           />
 
@@ -174,6 +183,8 @@ export function DemandeCoordonnees({
                 onChangeText={setAffiche}
                 placeholder="Comment t'appeler dans l'app"
                 placeholderTextColor={THEME.grey}
+                returnKeyType="done"
+                inputAccessoryViewID={BARRE_CLAVIER}
                 style={[styles.champ, NO_OUTLINE]}
               />
               <Text style={styles.labelEmail}>Adresse e-mail</Text>
@@ -202,7 +213,7 @@ export function DemandeCoordonnees({
           <Pressable onPress={() => onTermine(false)} disabled={envoi} hitSlop={8}>
             <Text style={styles.plusTard}>{edition ? 'Annuler' : 'Plus tard'}</Text>
           </Pressable>
-        </View>
+        </FeuilleClavier>
       </View>
     </Modal>
   );
@@ -216,8 +227,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 26,
     padding: 24,
     paddingBottom: 34,
-    gap: 6,
+    maxHeight: '92%',
   },
+  colonne: { gap: 6 },
   titre: { color: THEME.ink, fontSize: 20, fontFamily: FONT.bold },
   sous: {
     color: THEME.inkSoft,
