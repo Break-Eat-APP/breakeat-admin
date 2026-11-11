@@ -973,17 +973,17 @@ model CartItem {
 ///
 /// V1: one Order = one Supplier (multi-vendor flag stays OFF in V1).
 model Order {
-  id                String        @id @default(uuid())
+  id                    String        @id @default(uuid())
   /// Human-readable, unique identifier shown to customer + operator (e.g. BE-00000123).
-  publicOrderNumber String        @unique @map("public_order_number")
-  userId            String        @map("user_id")
-  organizationId    String        @map("organization_id")
-  eventId           String        @map("event_id")
-  venueId           String        @map("venue_id")
-  supplierId        String        @map("supplier_id")
-  pickupPointId     String        @map("pickup_point_id")
+  publicOrderNumber     String        @unique @map("public_order_number")
+  userId                String        @map("user_id")
+  organizationId        String        @map("organization_id")
+  eventId               String        @map("event_id")
+  venueId               String        @map("venue_id")
+  supplierId            String        @map("supplier_id")
+  pickupPointId         String        @map("pickup_point_id")
   /// Phase 7 — slot assignment.
-  slotId            String?       @map("slot_id")
+  slotId                String?       @map("slot_id")
   /// Numero COURT montre au client et crie au comptoir : « N° 18 ».
   ///
   /// Reparti a 1 chaque jour de service, et unique PAR LIEU -- pas par buvette.
@@ -994,41 +994,55 @@ model Order {
   /// `publicOrderNumber` reste la reference de support, unique a vie.
   /// Nul pour les commandes anterieures au 06/09/2026 : l'affichage retombe
   /// alors sur la reference longue.
-  dailyNumber       Int?          @map("daily_number")
+  dailyNumber           Int?          @map("daily_number")
   /// Le panier d'ou vient cette commande. C'est LE lien qui permet a l'app de
   /// retrouver sa commande au retour du paiement : elle ne connait que l'id du
   /// panier, jamais celui du PaymentIntent (cree par Stripe, cote serveur).
   /// Unique : un panier ne produit qu'une commande, meme si le webhook est
   /// livre deux fois.
-  cartId            String?       @unique @map("cart_id")
-  status            OrderStatus   @default(PAID)
-  paymentStatus     PaymentStatus @default(SUCCEEDED) @map("payment_status")
+  cartId                String?       @unique @map("cart_id")
+  status                OrderStatus   @default(PAID)
+  paymentStatus         PaymentStatus @default(SUCCEEDED) @map("payment_status")
   /// PHASE 21 — heure de disponibilité estimée, telle que calculée par Flaix
   /// (ou laissée nulle si aucune estimation). Affichée dans la Live Activity
   /// (« Retrait prévu à 19:42 ») et réévaluable en cours de préparation.
-  estimatedReadyAt  DateTime?     @map("estimated_ready_at")
+  estimatedReadyAt      DateTime?     @map("estimated_ready_at")
   /// PHASE 19 — le client a signalé « je suis arrivé » au point de retrait.
   /// Horodatage (et non booléen) : le board opérateur trie/priorise par ancienneté
   /// d'attente. null = pas encore annoncé. Remis à null n'est jamais nécessaire :
   /// la commande quitte le board une fois récupérée.
-  customerArrivedAt DateTime?     @map("customer_arrived_at")
+  customerArrivedAt     DateTime?     @map("customer_arrived_at")
   /// Dernier signalement de produits manquants par le comptoir ; nul si rien
   /// ne manque. Le détail est porté par les lignes (`OrderItem.missingQuantity`).
-  missingReportedAt DateTime?     @map("missing_reported_at")
+  missingReportedAt     DateTime?     @map("missing_reported_at")
+  /// « TA COMMANDE EST PRÊTE » — LA FILE D'ANNONCE, PORTÉE PAR LA COMMANDE
+  /// (audit Codex du 11/11). L'annonce partait APRÈS le commit, en
+  /// fire-and-forget : un arrêt du serveur entre les deux la perdait.
+  ///
+  /// `readyAnnounceDueAt` est posé DANS la transaction qui passe la commande à
+  /// READY : c'est la promesse d'annoncer. Il sert aussi de BAIL — l'envoi le
+  /// repousse de deux minutes avant d'émettre ; un serveur qui meurt en route
+  /// laisse le bail expirer, et le rattrapage de la minute reprend.
+  /// `readyAnnouncedAt` dit que c'est fait : il empêche aussi Flaix de faire
+  /// sonner une seconde fois une commande déjà annoncée par le comptoir.
+  /// `readyAnnounceAttempts` borne les reprises (5).
+  readyAnnounceDueAt    DateTime?     @map("ready_announce_due_at")
+  readyAnnouncedAt      DateTime?     @map("ready_announced_at")
+  readyAnnounceAttempts Int           @default(0) @map("ready_announce_attempts")
   /// Frozen totals at order creation. Never recomputed.
-  subtotalCents     Int           @map("subtotal_cents")
+  subtotalCents         Int           @map("subtotal_cents")
   /// PHASE 20 — remise fidélité figée au paiement. totalCents = subtotal - discount.
-  discountCents     Int           @default(0) @map("discount_cents")
-  totalCents        Int           @map("total_cents")
+  discountCents         Int           @default(0) @map("discount_cents")
+  totalCents            Int           @map("total_cents")
   /// Points débités pour obtenir `discountCents` (figés eux aussi).
-  pointsRedeemed    Int           @default(0) @map("points_redeemed")
+  pointsRedeemed        Int           @default(0) @map("points_redeemed")
   /// Points crédités à la récupération de la commande (0 tant que non récupérée).
-  pointsEarned      Int           @default(0) @map("points_earned")
-  currency          String        @default("eur")
+  pointsEarned          Int           @default(0) @map("points_earned")
+  currency              String        @default("eur")
   /// Phase 9 — analytics tags.
-  metadata          Json          @default("{}")
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
+  metadata              Json          @default("{}")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
 
   user           User              @relation(fields: [userId], references: [id])
   slot           Slot?             @relation(fields: [slotId], references: [id], onDelete: SetNull)
@@ -1043,6 +1057,9 @@ model Order {
   @@index([supplierId, status])
   @@index([slotId])
   @@index([organizationId])
+  /// Le rattrapage cherche les annonces dues : sans index, il parcourrait
+  /// toutes les commandes chaque minute.
+  @@index([readyAnnounceDueAt])
   @@map("orders")
 }
 

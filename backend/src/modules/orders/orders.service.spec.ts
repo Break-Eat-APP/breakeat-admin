@@ -1031,6 +1031,37 @@ describe('OrdersService', () => {
       expect(realtime.publier).toHaveBeenCalledTimes(2);
     });
 
+    it('la PROMESSE d’annoncer « prête » est écrite DANS la transaction (audit Codex du 11/11)', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.PREPARING));
+      transactionRend(mockOrder(OrderStatus.READY));
+
+      await service.transition(ORDER_ID, OrderStatus.READY, OrderActorType.OPERATOR, USER_ID);
+
+      // Un arrêt du serveur après le commit ne perd plus l'annonce : le
+      // rattrapage de la minute retrouve cette échéance.
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { id: ORDER_ID },
+        data: {
+          status: OrderStatus.READY,
+          readyAnnounceDueAt: expect.any(Date),
+          readyAnnouncedAt: null,
+          readyAnnounceAttempts: 0,
+        },
+      });
+    });
+
+    it('les autres transitions ne promettent aucune annonce', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.ACCEPTED));
+      transactionRend(mockOrder(OrderStatus.PREPARING));
+
+      await service.transition(ORDER_ID, OrderStatus.PREPARING, OrderActorType.OPERATOR, USER_ID);
+
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { id: ORDER_ID },
+        data: { status: OrderStatus.PREPARING },
+      });
+    });
+
     it('does NOT emit realtime when transition is invalid (guard fires first)', async () => {
       (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder(OrderStatus.COMPLETED));
 

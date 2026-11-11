@@ -87,31 +87,70 @@ export function ecouterPush(onRecu: () => void): () => void {
 }
 
 /**
+ * Les réponses (« touchers ») déjà traitées pendant cette session.
+ *
+ * AUDIT CODEX DU 11/11 : au démarrage à froid, la MÊME réponse arrivait deux
+ * fois — par la lecture initiale et par l'écouteur — et, faute d'être effacée,
+ * elle était RELUE à chaque lancement suivant : l'app ramenait le client sur
+ * « Mes commandes » sans qu'il ait rien touché. Au niveau du module, et non de
+ * l'abonnement : l'écoute est refaite à chaque connexion, la mémoire demeure.
+ */
+const reponsesTraitees = new Set<string>();
+
+/** Ce qui distingue un toucher d'un autre : la notification ET le geste. */
+function cleDeReponse(r: Notifications.NotificationResponse): string {
+  return `${r.notification.request.identifier}:${r.actionIdentifier}`;
+}
+
+/**
+ * Traite un toucher UNE seule fois, puis l'efface : il ne sera plus rendu par
+ * `getLastNotificationResponse` au prochain lancement. Exportée pour les tests.
+ */
+export function traiterReponse(
+  r: Notifications.NotificationResponse | null | undefined,
+  onOuvrir: (data: Record<string, unknown>) => void,
+): void {
+  if (!r) return;
+  const cle = cleDeReponse(r);
+  if (reponsesTraitees.has(cle)) return;
+  reponsesTraitees.add(cle);
+  try {
+    Notifications.clearLastNotificationResponse();
+  } catch {
+    // Effacer n'est qu'une précaution : la mémoire de session suffit déjà
+    // à ne pas rejouer ce toucher tant que l'app vit.
+  }
+  onOuvrir((r.notification.request.content.data ?? {}) as Record<string, unknown>);
+}
+
+/**
  * Écoute les notifications TOUCHÉES par le client, y compris celle qui a
  * rouvert l'app alors qu'elle était fermée.
  *
- * Sans cela, toucher « Produit manquant » ouvrait l'app sur l'accueil : le
- * client devait deviner où lire ce qui manquait.
+ * Sans cela, toucher « Produit manquant » ou « Ta commande est prête » ouvrait
+ * l'app sur l'accueil : le client devait deviner où lire la suite.
  */
 export function ecouterOuvertures(onOuvrir: (data: Record<string, unknown>) => void): () => void {
   if (Platform.OS === 'web') return () => undefined;
-  let actif = true;
 
   // L'app était fermée : la notification qui l'a lancée n'arrive pas par
-  // l'écouteur, elle attend d'être lue.
-  void Notifications.getLastNotificationResponseAsync()
-    .then((r) => {
-      if (actif && r) onOuvrir(r.notification.request.content.data ?? {});
-    })
-    .catch(() => undefined);
+  // l'écouteur, elle attend d'être lue. Si l'écouteur la reçoit AUSSI, la
+  // mémoire des réponses traitées évite le double traitement.
+  try {
+    traiterReponse(Notifications.getLastNotificationResponse(), onOuvrir);
+  } catch {
+    // Lecture impossible : l'écouteur ci-dessous prend le relais.
+  }
 
   const abonnement = Notifications.addNotificationResponseReceivedListener((r) =>
-    onOuvrir(r.notification.request.content.data ?? {}),
+    traiterReponse(r, onOuvrir),
   );
-  return () => {
-    actif = false;
-    abonnement.remove();
-  };
+  return () => abonnement.remove();
+}
+
+/** Pour les tests : oublie les réponses traitées. */
+export function oublierReponsesTraitees(): void {
+  reponsesTraitees.clear();
 }
 
 /**

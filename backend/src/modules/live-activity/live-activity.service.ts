@@ -4,6 +4,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { ApnsService } from './apns.service';
 import { ExpoPushService } from '../notifications/expo-push.service';
 import { PushTokensService } from '../notifications/push-tokens.service';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { dateDePeremption } from './peremption';
 
 /**
@@ -119,8 +120,15 @@ const DISMISS_AFTER_MS = 60 * 1000;
  * triplet (activité, commande, utilisateur). Une commande ne peut donc jamais
  * mettre à jour la Live Activity d'une autre commande, ni d'un autre client.
  */
+/** Le bail d'une annonce « prête » en cours d'envoi. */
+const BAIL_ANNONCE_MS = 2 * 60 * 1000;
+/** Au-delà, on renonce : un appareil injoignable ne le deviendra pas. */
+const ESSAIS_ANNONCE_MAX = 5;
+
 @Injectable()
 export class LiveActivityService {
+  /** Un seul rattrapage à la fois sur cette réplique. */
+  private rattrapageEnCours = false;
   private readonly logger = new Logger(LiveActivityService.name);
 
   constructor(
@@ -491,11 +499,48 @@ export class LiveActivityService {
    * comptoir prépare encore, l'écran garde « en préparation » (voir
    * `statutAffiche`) — et on ne sonne pas pour une nouvelle qu'on n'affiche
    * pas. Le comptoir sonnera quand il le dira.
+   *
+   * DURABLE ET SANS DOUBLON (audit Codex du 11/11). L'annonce est RÉSERVÉE
+   * avant d'être émise : `readyAnnouncedAt` encore nul, et
+   * `readyAnnounceDueAt` échu (ou nul, pour un « prête » venu de Flaix). La
+   * réservation repousse l'échéance de `BAIL_ANNONCE_MS` : c'est le bail. Une
+   * fois émise, `readyAnnouncedAt` est posé. Conséquences :
+   *  - un serveur qui meurt en route laisse le bail expirer, et
+   *    `rattraperAnnoncesPretes` reprend (au plus `ESSAIS_ANNONCE_MAX` fois) ;
+   *  - une commande déjà annoncée par le comptoir ne sonne pas une seconde
+   *    fois quand Flaix confirme « prête » ;
+   *  - deux répliques ne sonnent pas ensemble : une seule obtient le bail.
+   *
+   * `rafraichirSiDejaPris` : hors rattrapage, une commande déjà annoncée (ou en
+   * cours d'annonce ailleurs) reçoit tout de même la mise à jour SILENCIEUSE
+   * de sa Live Activity — l'estimation ou le point de retrait ont pu changer.
    */
-  async annoncerCommandePrete(orderId: string, overrideStatus?: WidgetStatus): Promise<void> {
+  async annoncerCommandePrete(
+    orderId: string,
+    overrideStatus?: WidgetStatus,
+    rafraichirSiDejaPris = true,
+  ): Promise<void> {
     const etat = await this.buildContentState(orderId, overrideStatus);
     if (!etat || etat.status !== 'READY') {
-      await this.pushOrderUpdate(orderId, overrideStatus);
+      if (rafraichirSiDejaPris) await this.pushOrderUpdate(orderId, overrideStatus);
+      return;
+    }
+
+    const maintenant = new Date();
+    const pris = await this.prisma.order.updateMany({
+      where: {
+        id: orderId,
+        readyAnnouncedAt: null,
+        readyAnnounceAttempts: { lt: ESSAIS_ANNONCE_MAX },
+        OR: [{ readyAnnounceDueAt: null }, { readyAnnounceDueAt: { lte: maintenant } }],
+      },
+      data: {
+        readyAnnounceDueAt: new Date(maintenant.getTime() + BAIL_ANNONCE_MS),
+        readyAnnounceAttempts: { increment: 1 },
+      },
+    });
+    if (pris.count === 0) {
+      if (rafraichirSiDejaPris) await this.pushOrderUpdate(orderId, overrideStatus);
       return;
     }
 
@@ -506,26 +551,91 @@ export class LiveActivityService {
         ? `à récupérer au point de retrait ${etat.pickupPoint}.`
         : 'à récupérer au point de retrait.');
 
+    // Une exception ici laisse le bail courir : le rattrapage reprendra.
     const atteintes = await this.pushOrderUpdate(orderId, overrideStatus, { title: titre, body: corps });
-    if (atteintes > 0 || !this.expoPush || !this.pushTokens) return;
+    if (atteintes === 0 && this.expoPush && this.pushTokens) {
+      const commande = await this.prisma.order.findUnique({
+        where: { id: orderId },
+        select: { userId: true },
+      });
+      const jetons = commande ? await this.pushTokens.tokensForUsers([commande.userId]) : [];
+      if (jetons.length > 0) {
+        const resultat = await this.expoPush.send(
+          jetons.map((to) => ({
+            to,
+            title: titre,
+            body: corps,
+            sound: 'default' as const,
+            // L'app ouvre « Mes commandes » (App.expo.tsx, `ecouterOuvertures`).
+            data: { type: 'order_ready', orderId },
+          })),
+        );
+        if (resultat.invalidTokens.length > 0) {
+          await this.pushTokens.purgeInvalid(resultat.invalidTokens);
+        }
+      }
+    }
 
-    const commande = await this.prisma.order.findUnique({
+    // FAIT. Un client sans appareil joignable est aussi « fait » : réessayer ne
+    // lui fera pas pousser un téléphone.
+    await this.prisma.order.update({
       where: { id: orderId },
-      select: { userId: true },
+      data: { readyAnnouncedAt: new Date(), readyAnnounceDueAt: null },
     });
-    if (!commande) return;
-    const jetons = await this.pushTokens.tokensForUsers([commande.userId]);
-    if (jetons.length === 0) return;
-    const resultat = await this.expoPush.send(
-      jetons.map((to) => ({
-        to,
-        title: titre,
-        body: corps,
-        sound: 'default' as const,
-        // L'app ouvre « Mes commandes » (App.expo.tsx, `ecouterOuvertures`).
-        data: { type: 'order_ready', orderId },
-      })),
-    );
-    if (resultat.invalidTokens.length > 0) await this.pushTokens.purgeInvalid(resultat.invalidTokens);
+  }
+
+  /**
+   * LE RATTRAPAGE DES ANNONCES « PRÊTE » — chaque minute.
+   *
+   * L'envoi immédiat couvre le cas normal ; ce tour n'existe que pour les
+   * ratés : serveur arrêté entre le commit et l'envoi, APNs ou Expo en panne.
+   * Une commande qui n'est plus prête (récupérée, annulée) est abandonnée :
+   * annoncer « prête » à quelqu'un qui a déjà son plateau serait faux.
+   */
+  @Cron(CronExpression.EVERY_MINUTE)
+  async rattraperAnnoncesPretes(): Promise<number> {
+    if (this.rattrapageEnCours) return 0;
+    this.rattrapageEnCours = true;
+    let reprises = 0;
+    try {
+      const dues = await this.prisma.order.findMany({
+        where: {
+          readyAnnouncedAt: null,
+          readyAnnounceDueAt: { lte: new Date() },
+          readyAnnounceAttempts: { lt: ESSAIS_ANNONCE_MAX },
+        },
+        select: { id: true, status: true },
+        orderBy: { readyAnnounceDueAt: 'asc' },
+        take: 50,
+      });
+      for (const due of dues) {
+        try {
+          if (due.status !== OrderStatus.READY) {
+            await this.prisma.order.updateMany({
+              where: { id: due.id, readyAnnouncedAt: null },
+              data: { readyAnnounceDueAt: null },
+            });
+            continue;
+          }
+          await this.annoncerCommandePrete(due.id, undefined, false);
+          reprises++;
+        } catch (err) {
+          this.logger.warn(
+            `Annonce « prête » encore en échec pour ${due.id} (reprise à la minute) : ${
+              err instanceof Error ? err.message : err
+            }`,
+          );
+        }
+      }
+    } catch (err) {
+      this.logger.warn(
+        `Rattrapage des annonces « prête » impossible ce tour-ci : ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    } finally {
+      this.rattrapageEnCours = false;
+    }
+    return reprises;
   }
 }

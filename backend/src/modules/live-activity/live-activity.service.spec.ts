@@ -17,7 +17,7 @@ function okSend() {
 describe('LiveActivityService', () => {
   let service: LiveActivityService;
   let prisma: {
-    order: { findUnique: jest.Mock; update: jest.Mock };
+    order: { findUnique: jest.Mock; update: jest.Mock; updateMany: jest.Mock; findMany: jest.Mock };
     pickupPoint: { findUnique: jest.Mock };
     liveActivity: {
       upsert: jest.Mock;
@@ -42,6 +42,9 @@ describe('LiveActivityService', () => {
           slot: null,
         }),
         update: jest.fn().mockResolvedValue({}),
+        // La réservation de l'annonce « prête » : obtenue par défaut.
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       pickupPoint: { findUnique: jest.fn().mockResolvedValue({ name: 'Buvette 4' }) },
       liveActivity: {
@@ -456,6 +459,82 @@ describe('LiveActivityService', () => {
       await avecPush.applyOperationalUpdate(ORDER_A, {}, 'READY');
 
       expect(expo.send).not.toHaveBeenCalled();
+    });
+
+    // ─── Durable et sans doublon (audit Codex du 11/11) ───
+
+    it('marque l’annonce FAITE une fois émise', async () => {
+      commandePrete(OrderStatus.READY);
+      prisma.liveActivity.findMany.mockResolvedValue([]);
+
+      await avecPush.onOrderStatusChanged(ORDER_A, OrderStatus.READY);
+
+      expect(prisma.order.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ id: ORDER_A, readyAnnouncedAt: null }),
+        }),
+      );
+      expect(prisma.order.update).toHaveBeenCalledWith({
+        where: { id: ORDER_A },
+        data: { readyAnnouncedAt: expect.any(Date), readyAnnounceDueAt: null },
+      });
+    });
+
+    it('déjà annoncée (ou en cours ailleurs) : pas de seconde sonnerie, juste la mise à jour silencieuse', async () => {
+      commandePrete(OrderStatus.READY);
+      prisma.order.updateMany.mockResolvedValueOnce({ count: 0 });
+      prisma.liveActivity.findMany.mockResolvedValue([
+        { id: 'la-1', orderId: ORDER_A, pushToken: 'aa', status: 'ACTIVE' },
+      ]);
+
+      // Flaix confirme « prête » une commande que le comptoir a déjà annoncée.
+      await avecPush.applyOperationalUpdate(ORDER_A, {}, 'READY');
+
+      expect(apns.sendLiveActivityUpdate).toHaveBeenCalledTimes(1);
+      expect(apns.sendLiveActivityUpdate.mock.calls[0][3].alert).toBeUndefined();
+      expect(expo.send).not.toHaveBeenCalled();
+    });
+
+    it('un envoi qui ÉCHOUE n’est pas marqué fait : le bail court, le rattrapage reprendra', async () => {
+      commandePrete(OrderStatus.READY);
+      prisma.liveActivity.findMany.mockResolvedValue([]);
+      expo.send.mockRejectedValueOnce(new Error('Expo indisponible'));
+
+      // N'explose pas : la transition de commande ne doit jamais en pâtir.
+      await expect(avecPush.onOrderStatusChanged(ORDER_A, OrderStatus.READY)).resolves.toBeUndefined();
+
+      expect(prisma.order.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ readyAnnouncedAt: expect.any(Date) }) }),
+      );
+    });
+
+    it('le RATTRAPAGE annonce une commande prête restée sans annonce (serveur arrêté)', async () => {
+      prisma.order.findMany.mockResolvedValueOnce([{ id: ORDER_A, status: OrderStatus.READY }]);
+      commandePrete(OrderStatus.READY);
+      prisma.liveActivity.findMany.mockResolvedValue([]);
+
+      const reprises = await avecPush.rattraperAnnoncesPretes();
+
+      expect(reprises).toBe(1);
+      expect(expo.send).toHaveBeenCalledTimes(1);
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ readyAnnouncedAt: null, readyAnnounceDueAt: { lte: expect.any(Date) } }),
+        }),
+      );
+    });
+
+    it('le rattrapage ABANDONNE une commande qui n’est plus prête (déjà récupérée)', async () => {
+      prisma.order.findMany.mockResolvedValueOnce([{ id: ORDER_A, status: OrderStatus.PICKED_UP }]);
+
+      const reprises = await avecPush.rattraperAnnoncesPretes();
+
+      expect(reprises).toBe(0);
+      expect(expo.send).not.toHaveBeenCalled();
+      expect(prisma.order.updateMany).toHaveBeenCalledWith({
+        where: { id: ORDER_A, readyAnnouncedAt: null },
+        data: { readyAnnounceDueAt: null },
+      });
     });
   });
 });

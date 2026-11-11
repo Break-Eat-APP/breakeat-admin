@@ -935,7 +935,16 @@ export class OrdersService {
     const updated = await this.prisma.$transaction(async (tx) => {
       const apres = await tx.order.update({
         where: { id: orderId },
-        data: { status: to },
+        data: {
+          status: to,
+          // LA PROMESSE D'ANNONCER « PRÊTE », dans la même transaction que le
+          // changement de statut (audit Codex du 11/11) : si le serveur
+          // s'arrête avant l'envoi, le rattrapage de la minute la tient.
+          // Voir `LiveActivityService.annoncerCommandePrete`.
+          ...(to === OrderStatus.READY
+            ? { readyAnnounceDueAt: new Date(), readyAnnouncedAt: null, readyAnnounceAttempts: 0 }
+            : {}),
+        },
       });
       await tx.orderAuditTrail.create({
         data: {

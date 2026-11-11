@@ -5,6 +5,26 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.16] — 2026-11-11 — « Prête » durable et sans doublon ; le toucher d'une notification n'est plus rejoué
+
+Corrige les deux P2 de l'audit Codex du 11/11
+(`brain/audits/AUDIT_2026-11-11_codex-notification-prete.md`).
+
+- **L'annonce « prête » survit à un arrêt du serveur.** Sa promesse est écrite
+  dans la transaction qui passe la commande à « prête » ; l'envoi la réserve
+  par un bail de 2 minutes, la marque faite une fois émise, et un rattrapage
+  chaque minute reprend les ratés (5 essais au plus). Une commande déjà
+  annoncée ne sonne pas une seconde fois — ni quand Flaix confirme, ni sur
+  deux serveurs à la fois. Migration `20261111_annonce_commande_prete`.
+- **Toucher une notification** n'est traité qu'une fois (plus de double
+  navigation au démarrage à froid) et n'est plus rejoué au lancement suivant.
+
+`~ backend/prisma/schema.prisma` `+ migrations/20261111_annonce_commande_prete`
+`~ live-activity.service.ts (+ spec)` `~ orders.service.ts (+ spec)`
+`~ apps/mobile/src/lib/push-notifications.ts` `+ __tests__/ouvertures-notification.test.ts`
+
+---
+
 ## [1.7.15] — 2026-11-11 — App 1.1.2 : l'icône iOS sans effet « verre »
 
 L'icône restait floue avec la build 43 alors que le fichier livré était net

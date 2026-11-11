@@ -247,6 +247,10 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
   étapes restent silencieuses (push par étape retiré le 07/09, il doublait la
   Live Activity). Flaix qui dit « prête » avant le comptoir ne sonne pas
   (`statutAffiche`). Pour les commandes Flaix : dès que E1 arrive.
+  **Durable depuis la 1.7.16** (audit Codex) : promesse écrite dans la
+  transaction (`orders.ready_announce_due_at`), bail de 2 min, rattrapage
+  `@Cron` chaque minute, 5 essais, `ready_announced_at` empêche la double
+  sonnerie. Toucher la notification : traité une fois, puis effacé.
 - **Test instable `temps-reel-multi-instances` › « SANS canal commun »** : a
   échoué une fois en CI le 10/11 (commit `871d5ff`, documentation seule) puis
   est repassé au vert sur `6d90cfa` sans changement de code. Si ça revient,
