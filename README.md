@@ -113,7 +113,9 @@ corepack pnpm install
 
 Puis voir [`GUIDE_DEVELOPPEMENT/README.md`](GUIDE_DEVELOPPEMENT/README.md) § 4
 pour lancer chaque application, et
-[`DEPLOYMENT_CHECKLIST.md`](DEPLOYMENT_CHECKLIST.md) avant toute mise en ligne.
+[`brain/DEPLOIEMENT.md`](brain/DEPLOIEMENT.md) avant toute mise en ligne
+(déploiement, versions de l'app, sauvegardes, retour arrière). La sécurité :
+[`brain/SECURITE.md`](brain/SECURITE.md).
 
 **Déploiement** : pousser sur `main` suffit. Railway construit l'API et passe
 les migrations tout seul (`pnpm db:migrate:prod` est dans son `startCommand`) ;

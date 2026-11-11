@@ -159,6 +159,7 @@ Déploiement, versions, mises à jour à distance, sauvegardes :
 `GET /health`, qui rend le **commit** déployé.
 
 **Pas d'environnement de préproduction** au 11/11/2026 (BUG-2026-014).
+Les sécurités du serveur : [`brain/SECURITE.md`](SECURITE.md).
 
 ---
 
