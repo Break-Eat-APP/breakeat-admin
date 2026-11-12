@@ -5,6 +5,26 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.20] — 2026-11-12 — Failles des dépendances : 62 → 4, et les 4 assumées
+
+Le premier audit des dépendances (`audit-dependances.yml`) trouvait 62 failles
+« élevées », 0 critique, **aucune dans le serveur** : toutes dans l'outillage
+Expo (fabrication de l'app) et Next.js (consoles). Correction par versions
+forcées dans `pnpm-workspace.yaml` (`overrides`), **toujours dans la même
+version majeure** que celle demandée : `brace-expansion`, `js-yaml`,
+`@xmldom/xmldom`, `node-forge`, `nanoid`, `postcss`, `source-map-js`,
+`browserslist`, `fast-uri`, `compression`. Fichier de verrouillage recalculé
+(`--lockfile-only`) : seuls ces paquets et leurs petites dépendances bougent.
+
+Restent **4 avis, acceptés et documentés** dans le workflow : `sharp` 0.34
+(imposé par Next 15, inutilisé sur Vercel) et `decode-uri-component` 0.2 (la
+version corrigée est un module ES que React Navigation ne charge pas). Toute
+NOUVELLE faille élevée fait toujours passer l'audit au rouge. BUG-2026-016.
+
+`~ pnpm-workspace.yaml` `~ pnpm-lock.yaml` `~ .github/workflows/audit-dependances.yml`
+
+---
+
 ## [1.7.19] — 2026-11-11 — CI économe, failles de dépendances surveillées, test du temps réel stabilisé
 
 - **La CI ne tourne plus pour un commit de documentation seule** (`*.md`,

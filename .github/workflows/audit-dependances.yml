@@ -56,9 +56,23 @@ jobs:
       - name: Lister toutes les failles (sans bloquer)
         run: pnpm audit --prod || true
 
+      # RISQUES ACCEPTÉS (12/11/2026, BUG-2026-016) — et seulement ceux-là :
+      # une NOUVELLE faille, même sur ces paquets, fait toujours passer au rouge.
+      #   sharp 0.34 (3 avis : libvips, libheif, librsvg) — imposé par Next.js 15 ;
+      #     sur Vercel l'optimisation d'images ne l'utilise pas. À lever avec
+      #     la montée de Next qui embarque sharp 0.35.
+      #   decode-uri-component 0.2 — via React Navigation (`query-string`) ; la
+      #     version corrigée (0.5) est un module ES que `query-string` ne charge
+      #     pas. Effet possible : figer l'app sur une adresse piégée ; aucun
+      #     accès aux données. À lever avec la montée de React Navigation.
+      # Chaque identifiant retiré d'ici doit l'être dans brain/BUGS_ET_INCIDENTS.md.
       - name: Bloquer sur les failles elevees ou critiques
         run: |
-          if pnpm audit --prod --audit-level high; then
+          if pnpm audit --prod --audit-level high \
+              --ignore GHSA-f88m-g3jw-g9cj \
+              --ignore GHSA-rgj7-g3m4-5g8c \
+              --ignore GHSA-wq5f-xc86-pv6w \
+              --ignore GHSA-qr28-fpjm-wq7f; then
             echo "Aucune faille de gravité élevée ou critique."
           else
             echo "::error::Faille de gravité ÉLEVÉE ou CRITIQUE dans une dépendance de production — voir l'étape précédente. À traiter dans une tâche à part, CI verte avant de pousser."

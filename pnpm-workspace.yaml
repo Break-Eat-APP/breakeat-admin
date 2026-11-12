@@ -76,3 +76,31 @@ overrides:
   # Expo : jamais expose a une requete, mais une chaine de build compromise
   # signe les binaires qui partent sur les telephones.
   'shell-quote@<1.11.0': '^1.11.0'
+  # AUDIT DES DÉPENDANCES DU 12/11/2026 (BUG-2026-016) : versions corrigées,
+  # TOUJOURS dans la même version majeure que celle demandée par le paquet
+  # parent. Presque toutes servent à la construction (outillage Expo, Next.js,
+  # greffon Sentry), aucune n'est dans le serveur. Non forcés, et pourquoi :
+  # `sharp` (0.34 → 0.35, imposé par Next ; sur Vercel l'optimisation d'images
+  # ne l'utilise pas) et `decode-uri-component` (0.2 → 0.5 passe en module ES,
+  # que `query-string` de React Navigation ne sait pas charger) — voir
+  # brain/BUGS_ET_INCIDENTS.md.
+  'brace-expansion@>=1.0.0 <1.1.20': '^1.1.20'
+  'brace-expansion@>=5.0.0 <5.0.11': '^5.0.11'
+  'js-yaml@>=3.0.0 <3.15.2': '^3.15.2'
+  'js-yaml@>=4.0.0 <4.3.2': '^4.3.2'
+  '@xmldom/xmldom@>=0.8.0 <0.8.15': '^0.8.15'
+  '@xmldom/xmldom@>=0.9.0 <0.9.12': '^0.9.12'
+  'node-forge@>=1.0.0 <1.4.1': '^1.4.1'
+  'nanoid@>=3.0.0 <3.3.18': '^3.3.18'
+  'postcss@>=8.0.0 <8.5.18': '^8.5.18'
+  'source-map-js@<1.2.2': '^1.2.2'
+  'browserslist@>=4.0.0 <4.28.7': '^4.28.7'
+  'fast-uri@>=3.0.0 <3.1.7': '^3.1.7'
+  'compression@>=1.0.0 <1.8.2': '^1.8.2'
+
+auditConfig:
+  ignoreGhsas:
+    - GHSA-f88m-g3jw-g9cj
+    - GHSA-rgj7-g3m4-5g8c
+    - GHSA-wq5f-xc86-pv6w
+    - GHSA-qr28-fpjm-wq7f

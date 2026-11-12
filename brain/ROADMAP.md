@@ -544,6 +544,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.17 | 2026-11-11 | La gouvernance technique intégrée au dépôt (documentation seule) |
 | 1.7.18 | 2026-11-11 | La sauvegarde de nuit, restaurée pour de vrai (essai mensuel) |
 | 1.7.19 | 2026-11-11 | CI économe, audit des dépendances, test du temps réel stabilisé |
+| 1.7.20 | 2026-11-12 | Failles des dépendances : 62 → 4, et les 4 assumées |
 
 ---
 
