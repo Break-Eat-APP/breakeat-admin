@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Animated,
+  Image,
   AppState,
   DeviceEventEmitter,
   Linking,
@@ -41,6 +42,7 @@ import { useSuiviStore } from '@store/suivi.store';
 import { JAUNE_FOND, JAUNE_TEXTE } from '@lib/suivi-commande';
 import { MissingItemsBanner } from '@components/missing-items-banner';
 import { RemboursementBanner } from '@components/remboursement-banner';
+import { visuelDeLieu } from '@lib/visuel-lieu';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -608,9 +610,27 @@ function OrderCard({
       <View style={styles.ticket}>
         {/* L'EN-TÊTE : la buvette, et le numéro qu'on dira au comptoir. */}
         <View style={styles.entete}>
-          <Text style={styles.enteteNom} numberOfLines={1}>
-            {order.supplierName ?? 'Commande'}
-          </Text>
+          {/*
+            LE LIEU, AU-DESSUS DE LA BUVETTE, ET SON IMAGE À DROITE (demande de
+            Rémi, 12/11). « Buvette Nord » ne dit pas OÙ : un supporter qui
+            suit deux clubs ne savait plus de quel stade venait le ticket. Le
+            coin droit de l'en-tête orange était vide : il porte maintenant le
+            logo du club (entier, sur un rond blanc — posé à même l'orange, un
+            écusson perd ses couleurs), ou la photo du lieu à défaut.
+          */}
+          <View style={styles.enteteLigne}>
+            <View style={styles.enteteTextes}>
+              {order.venueName ? (
+                <Text style={styles.enteteLieu} numberOfLines={1}>
+                  {order.venueName}
+                </Text>
+              ) : null}
+              <Text style={styles.enteteNom} numberOfLines={1}>
+                {order.supplierName ?? 'Commande'}
+              </Text>
+            </View>
+            <ImageDuLieu order={order} />
+          </View>
           {/*
             LE NUMÉRO, EN ORANGE SUR UNE BULLE BLANCHE.
 
@@ -823,6 +843,29 @@ function OrderCard({
 }
 
 /**
+ * L'image du lieu dans l'en-tête du ticket : le logo du club entier sur un rond
+ * blanc, ou la photo du lieu qui remplit le rond. Rien sinon — un rond vide
+ * serait une tache sans raison.
+ */
+function ImageDuLieu({ order }: { order: Order }) {
+  const visuel = visuelDeLieu(
+    { name: order.venueName ?? '', imageUrl: order.venueLogoUrl, photoUrl: order.venuePhotoUrl },
+    'logo',
+  );
+  if (visuel.type !== 'image') return null;
+  return (
+    <View style={styles.enteteImage}>
+      <Image
+        source={{ uri: visuel.uri }}
+        style={visuel.cadrage === 'cover' ? styles.enteteImagePleine : styles.enteteImageLogo}
+        resizeMode={visuel.cadrage}
+        accessibilityIgnoresInvertColors
+      />
+    </View>
+  );
+}
+
+/**
  * L'heure de retrait, seule — la date a sa propre colonne.
  *
  * Le libellé du club quand il en a donné un (« Mi-temps »), sinon l'heure de
@@ -1019,6 +1062,22 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   enteteNom: { color: '#fff', fontSize: 26, lineHeight: 31, fontFamily: HEAD.bold, letterSpacing: -0.4 },
+  enteteLigne: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  enteteTextes: { flex: 1, minWidth: 0, gap: 2 },
+  // Le lieu : plus petit que la buvette, au-dessus d'elle — on cherche d'abord
+  // le comptoir, le lieu situe.
+  enteteLieu: { color: 'rgba(255,255,255,0.88)', fontSize: 14, fontFamily: HEAD.semibold, letterSpacing: 0.2 },
+  enteteImage: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  enteteImageLogo: { width: '82%', height: '82%' },
+  enteteImagePleine: { width: '100%', height: '100%' },
   numeroBulle: {
     flexDirection: 'row',
     alignItems: 'baseline',

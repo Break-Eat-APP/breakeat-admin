@@ -22,6 +22,7 @@ import { SlotsService } from '../slots/slots.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { LiveActivityService } from '../live-activity/live-activity.service';
 import { jourDeService } from '../../common/helpers/jour-de-service';
+import { libelleTaux, ventilerSurTotal } from '../../common/helpers/tva';
 import { consommerLeStock, rendreLeStock } from '../stock/retenue-stock';
 
 /**
@@ -1062,7 +1063,15 @@ export class OrdersService {
   async withPickupGuidance<T extends { supplierId: string; venueId: string }>(
     orders: T[],
   ): Promise<
-    (T & { supplierName: string | null; pickupPlanUrl: string | null; note: number | null })[]
+    (T & {
+      supplierName: string | null;
+      pickupPlanUrl: string | null;
+      note: number | null;
+      venueName: string | null;
+      venueLogoUrl: string | null;
+      venuePhotoUrl: string | null;
+      tva: { tranches: { label: string; tvaCents: number }[]; tvaCents: number } | null;
+    })[]
   > {
     if (orders.length === 0) return [];
 
@@ -1073,7 +1082,16 @@ export class OrdersService {
       }),
       this.prisma.venue.findMany({
         where: { id: { in: [...new Set(orders.map((o) => o.venueId))] } },
-        select: { id: true, buvettePlanUrl: true },
+        // Le nom et l'image du LIEU, pour l'en-tête du ticket (demande de
+        // Rémi, 12/11) : le logo du club d'abord, la photo du lieu à défaut —
+        // le même ordre que l'en-tête de l'écran du lieu.
+        select: {
+          id: true,
+          buvettePlanUrl: true,
+          name: true,
+          photoUrl: true,
+          organization: { select: { logoUrl: true } },
+        },
       }),
     ]);
     const parBuvette = new Map(suppliers.map((s) => [s.id, s]));
@@ -1085,9 +1103,43 @@ export class OrdersService {
       // La relation est LUE quand l'appelant l'a demandee (`include`), et
       // absente sinon. On ne la retire pas de l'objet : cette fonction est
       // generique et promet de rendre `T` intact, plus ses deux champs.
-      const avec = order as T & { rating?: { stars: number } | null };
+      const avec = order as T & {
+        rating?: { stars: number } | null;
+        items?: { vatRateBps: number; lineTotalCents: number }[];
+        totalCents?: number;
+      };
       return {
         ...order,
+        /**
+         * LA TVA, CALCULÉE ICI ET NULLE PART AILLEURS (12/11).
+         *
+         * Chaque ligne reçoit le libellé de son taux (« 10 % »), et la
+         * commande la ventilation taux par taux — la MÊME que le reçu
+         * (`ventilerSurTotal`, remise fidélité répartie au prorata, la somme
+         * des tranches redonne le total payé). L'app affiche, elle ne calcule
+         * pas : deux calculs finiraient par donner deux chiffres.
+         */
+        ...(avec.items
+          ? {
+              items: avec.items.map((l) => ({ ...l, tvaLabel: libelleTaux(l.vatRateBps) })),
+            }
+          : {}),
+        tva:
+          avec.items && typeof avec.totalCents === 'number'
+            ? (() => {
+                const v = ventilerSurTotal(
+                  avec.items.map((l) => ({ ttcCents: l.lineTotalCents, vatRateBps: l.vatRateBps })),
+                  avec.totalCents,
+                );
+                return {
+                  tranches: v.tranches.map((t) => ({ label: t.label, tvaCents: t.tvaCents })),
+                  tvaCents: v.tvaCents,
+                };
+              })()
+            : null,
+        venueName: lieu?.name ?? null,
+        venueLogoUrl: lieu?.organization?.logoUrl ?? null,
+        venuePhotoUrl: lieu?.photoUrl ?? null,
         supplierName: buvette?.name ?? null,
         pickupPlanUrl: buvette?.planUrl ?? lieu?.buvettePlanUrl ?? null,
         /**

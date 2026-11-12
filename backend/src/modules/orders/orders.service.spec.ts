@@ -212,8 +212,51 @@ describe('OrdersService', () => {
         { id: 'sup-sud', name: 'Buvette Sud', planUrl: null },
       ]);
       (prisma.venue.findMany as jest.Mock).mockResolvedValue([
-        { id: 'venue-1', buvettePlanUrl: 'https://cdn/stade.png' },
+        {
+          id: 'venue-1',
+          buvettePlanUrl: 'https://cdn/stade.png',
+          name: 'Orange Vélodrome',
+          photoUrl: 'https://cdn/velodrome.jpg',
+          organization: { logoUrl: 'https://cdn/om.png' },
+        },
       ]);
+    });
+
+    it('donne le nom et l’image du LIEU (logo du club, photo à défaut)', async () => {
+      const [o] = await service.withPickupGuidance([commande('o1', 'sup-nord')]);
+
+      expect(o.venueName).toBe('Orange Vélodrome');
+      expect(o.venueLogoUrl).toBe('https://cdn/om.png');
+      expect(o.venuePhotoUrl).toBe('https://cdn/velodrome.jpg');
+    });
+
+    it('donne la TVA de chaque ligne ET sa ventilation — la même que le reçu', async () => {
+      const [o] = await service.withPickupGuidance([
+        {
+          ...commande('o1', 'sup-nord'),
+          totalCents: 1650,
+          items: [
+            { vatRateBps: 1000, lineTotalCents: 1200 },
+            { vatRateBps: 550, lineTotalCents: 450 },
+          ],
+        },
+      ]);
+
+      const lignes = (o as unknown as { items: { tvaLabel: string }[] }).items;
+      expect(lignes.map((l) => l.tvaLabel)).toEqual(['10 %', '5,5 %']);
+      // 12,00 € à 10 % → TVA 1,09 € ; 4,50 € à 5,5 % → TVA 0,23 €.
+      expect(o.tva).toEqual({
+        tranches: [
+          { label: '5,5 %', tvaCents: 23 },
+          { label: '10 %', tvaCents: 109 },
+        ],
+        tvaCents: 132,
+      });
+    });
+
+    it('sans les lignes, pas de TVA inventée', async () => {
+      const [o] = await service.withPickupGuidance([commande('o1', 'sup-nord')]);
+      expect(o.tva).toBeNull();
     });
 
     it('donne à chaque commande le plan de SA buvette', async () => {

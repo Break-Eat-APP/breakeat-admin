@@ -5,6 +5,31 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.21] — 2026-11-12 — Le ticket dit le lieu ; le détail de commande dit la TVA
+
+Demandes de Rémi du 12/11.
+
+- **La TVA dans le détail de la commande** : chaque produit affiche son taux
+  (« TVA 10 % », « TVA 20 % »), et sous le « Total TTC », la TVA **taux par
+  taux** (« dont TVA 10 % : 1,09 € »). Elle n'était qu'au reçu. Calculée **par
+  le serveur**, avec la même fonction que le reçu (`ventilerSurTotal`, remise
+  fidélité répartie au prorata) : l'app affiche, elle ne recalcule pas — deux
+  calculs finiraient par donner deux chiffres.
+- **Le ticket de « Mes commandes » dit le lieu** : le nom du lieu au-dessus du
+  nom de la buvette, et son image dans le coin droit de l'en-tête orange,
+  jusqu'ici vide — le logo du club entier sur un rond blanc, ou la photo du
+  lieu à défaut.
+
+Serveur : `withPickupGuidance` (`orders.service.ts`) ajoute `venueName`,
+`venueLogoUrl`, `venuePhotoUrl`, `tva` et le `tvaLabel` de chaque ligne aux
+routes `GET /orders` et `GET /orders/:id`. 3 tests. App : mise à jour à
+distance.
+
+`~ backend/src/modules/orders/orders.service.ts (+ spec)` `~ apps/mobile/src/lib/api/mobile-api.ts`
+`~ apps/mobile/src/screens/order-history.screen.tsx` `~ apps/mobile/src/screens/order-tracking.screen.tsx`
+
+---
+
 ## [1.7.20] — 2026-11-12 — Failles des dépendances : 62 → 4, et les 4 assumées
 
 Le premier audit des dépendances (`audit-dependances.yml`) trouvait 62 failles

@@ -389,6 +389,15 @@ export interface Order {
   pickupPlanUrl?: string | null;
   /** Le comptoir a signalé un produit manquant (null si rien ne manque). */
   missingReportedAt?: string | null;
+  /** Le LIEU de la commande et son image (logo du club, photo à défaut). */
+  venueName?: string | null;
+  venueLogoUrl?: string | null;
+  venuePhotoUrl?: string | null;
+  /**
+   * La TVA, ventilée par taux — calculée par le SERVEUR, la même que le reçu
+   * (remise fidélité répartie au prorata). L'app affiche, ne calcule pas.
+   */
+  tva?: { tranches: Array<{ label: string; tvaCents: number }>; tvaCents: number } | null;
   items: Array<{
     productId: string;
     productNameSnapshot: string;
@@ -397,6 +406,8 @@ export interface Order {
     lineTotalCents: number;
     /** Unités que le comptoir n'a pas pu servir. */
     missingQuantity?: number;
+    /** Le taux de TVA de la ligne, prêt à afficher (« 10 % »). */
+    tvaLabel?: string;
   }>;
 }
 

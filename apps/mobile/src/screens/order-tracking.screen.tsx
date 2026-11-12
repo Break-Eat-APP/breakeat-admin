@@ -376,19 +376,24 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
             return (
             <View key={i} style={styles.itemRow}>
               <Text style={styles.itemQty}>{item.quantity}×</Text>
-              <Text
-                style={[
-                  styles.itemName,
-                  manque > 0 && styles.itemManquant,
-                  // Barré seulement si la ligne manque EN ENTIER : pour une
-                  // bière sur deux, il en reste une à récupérer.
-                  manque >= item.quantity && styles.itemBarre,
-                ]}
-                numberOfLines={1}
-              >
-                {item.productNameSnapshot}
-                {manque > 0 ? ` · ${manque} manquant${manque > 1 ? 's' : ''}` : ''}
-              </Text>
+              <View style={styles.itemTextes}>
+                <Text
+                  style={[
+                    styles.itemName,
+                    manque > 0 && styles.itemManquant,
+                    // Barré seulement si la ligne manque EN ENTIER : pour une
+                    // bière sur deux, il en reste une à récupérer.
+                    manque >= item.quantity && styles.itemBarre,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.productNameSnapshot}
+                  {manque > 0 ? ` · ${manque} manquant${manque > 1 ? 's' : ''}` : ''}
+                </Text>
+                {/* Le taux de la ligne (12/11) : une bière à 20 %, un
+                    sandwich à 10 % — le client le voit comme sur le reçu. */}
+                {item.tvaLabel ? <Text style={styles.itemTva}>TVA {item.tvaLabel}</Text> : null}
+              </View>
               <Text style={styles.itemPrice}>
                 {formatPrice(item.unitPriceCentsSnapshot * item.quantity)}
               </Text>
@@ -397,9 +402,20 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
           })}
           <View style={styles.divider} />
           <View style={styles.itemRow}>
-            <Text style={styles.totalLabel}>Total</Text>
+            <Text style={styles.totalLabel}>Total TTC</Text>
             <Text style={styles.totalValue}>{formatPrice(order.totalCents)}</Text>
           </View>
+          {/* LA TVA, TAUX PAR TAUX — calculée par le serveur, la même que le
+              reçu (remise fidélité comprise). Rien d'affiché si elle manque :
+              mieux vaut pas de ligne qu'un chiffre recalculé ici. */}
+          {order.tva && order.tva.tranches.length > 0
+            ? order.tva.tranches.map((t) => (
+                <View key={t.label} style={styles.tvaRow}>
+                  <Text style={styles.tvaLabel}>dont TVA {t.label}</Text>
+                  <Text style={styles.tvaValeur}>{formatPrice(t.tvaCents)}</Text>
+                </View>
+              ))
+            : null}
         </View>
 
         {/*
@@ -581,7 +597,12 @@ const styles = StyleSheet.create({
   cardTitle: { color: THEME.inkSoft, fontSize: 12, fontWeight: '600', marginBottom: 4 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   itemQty: { color: THEME.inkSoft, fontSize: 14, minWidth: 24 },
-  itemName: { color: THEME.ink, fontSize: 14, flex: 1 },
+  itemTextes: { flex: 1, minWidth: 0 },
+  itemName: { color: THEME.ink, fontSize: 14 },
+  itemTva: { color: THEME.grey, fontSize: 11.5, marginTop: 1 },
+  tvaRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: -4 },
+  tvaLabel: { color: THEME.inkSoft, fontSize: 12.5 },
+  tvaValeur: { color: THEME.inkSoft, fontSize: 12.5, fontVariant: ['tabular-nums'] },
   itemManquant: { color: ROUGE_MANQUANT, fontWeight: '700' },
   itemBarre: { textDecorationLine: 'line-through' },
   itemPrice: { color: THEME.inkSoft, fontSize: 14 },
