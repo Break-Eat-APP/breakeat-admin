@@ -843,21 +843,53 @@ function OrderCard({
 }
 
 /**
- * L'image du lieu dans l'en-tête du ticket : le logo du club entier sur un rond
- * blanc, ou la photo du lieu qui remplit le rond. Rien sinon — un rond vide
- * serait une tache sans raison.
+ * L'image du lieu dans l'en-tête du ticket — À LA FORME DE L'IMAGE.
+ *
+ * Elle était découpée en ROND : la photo carrée du Vélodrome y perdait ses
+ * coins (remarque de Rémi, 12/11). Le cadre suit maintenant les proportions
+ * réelles de l'image (lues par `Image.getSize`) : carrée, elle reste carrée ;
+ * en largeur, elle s'élargit — dans des bornes, pour ne pas écraser le nom.
+ * Coins simplement adoucis. Un logo garde son fond blanc : posé à même
+ * l'orange, un écusson perd ses couleurs. Rien si le lieu n'a pas d'image.
  */
+const HAUTEUR_IMAGE = 58;
+
 function ImageDuLieu({ order }: { order: Order }) {
   const visuel = visuelDeLieu(
     { name: order.venueName ?? '', imageUrl: order.venueLogoUrl, photoUrl: order.venuePhotoUrl },
     'logo',
   );
+  const uri = visuel.type === 'image' ? visuel.uri : null;
+  // Carré tant que les proportions ne sont pas connues : c'est le cas courant.
+  const [ratio, setRatio] = useState(1);
+  useEffect(() => {
+    if (!uri) return;
+    let actif = true;
+    Image.getSize(
+      uri,
+      (l, h) => {
+        if (actif && l > 0 && h > 0) setRatio(Math.min(Math.max(l / h, 0.6), 1.8));
+      },
+      () => undefined,
+    );
+    return () => {
+      actif = false;
+    };
+  }, [uri]);
+
   if (visuel.type !== 'image') return null;
+  const logo = visuel.cadrage === 'contain';
   return (
-    <View style={styles.enteteImage}>
+    <View
+      style={[
+        styles.enteteImage,
+        { width: Math.round(HAUTEUR_IMAGE * ratio) },
+        logo && styles.enteteImageFond,
+      ]}
+    >
       <Image
         source={{ uri: visuel.uri }}
-        style={visuel.cadrage === 'cover' ? styles.enteteImagePleine : styles.enteteImageLogo}
+        style={logo ? styles.enteteImageLogo : styles.enteteImagePleine}
         resizeMode={visuel.cadrage}
         accessibilityIgnoresInvertColors
       />
@@ -1068,15 +1100,14 @@ const styles = StyleSheet.create({
   // le comptoir, le lieu situe.
   enteteLieu: { color: 'rgba(255,255,255,0.88)', fontSize: 14, fontFamily: HEAD.semibold, letterSpacing: 0.2 },
   enteteImage: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#fff',
+    height: HAUTEUR_IMAGE,
+    borderRadius: 12,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  enteteImageLogo: { width: '82%', height: '82%' },
+  enteteImageFond: { backgroundColor: '#fff' },
+  enteteImageLogo: { width: '86%', height: '86%' },
   enteteImagePleine: { width: '100%', height: '100%' },
   numeroBulle: {
     flexDirection: 'row',

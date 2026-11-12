@@ -5,6 +5,18 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.22] — 2026-11-12 — L'image du lieu sur le ticket garde sa forme
+
+L'image du lieu, dans l'en-tête orange du ticket, était découpée en **rond** :
+la photo carrée du Vélodrome y perdait ses coins (remarque de Rémi). Le cadre
+suit maintenant les **proportions réelles** de l'image (`Image.getSize`) —
+carrée, elle reste carrée ; en largeur, elle s'élargit dans des bornes — avec
+des coins simplement adoucis. Un logo garde son fond blanc.
+
+`~ apps/mobile/src/screens/order-history.screen.tsx` — mise à jour à distance.
+
+---
+
 ## [1.7.21] — 2026-11-12 — Le ticket dit le lieu ; le détail de commande dit la TVA
 
 Demandes de Rémi du 12/11.
