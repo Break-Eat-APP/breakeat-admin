@@ -14,6 +14,9 @@
 # `main`, et à la demande (Actions → Audit des dependances → Run workflow).
 #
 # Il ne bloque rien d'autre : ni la CI, ni le déploiement. C'est une alerte.
+#
+# Premier passage (11/11/2026) resté bloqué en file d'attente par la panne de
+# GitHub Actions ; relancé le 12/11 par la modification de ce commentaire.
 
 name: Audit des dependances
 

@@ -19,6 +19,12 @@ name: CI
 # serveur ne lit ces fichiers. Un commit MIXTE (code + documentation) déclenche
 # toujours la CI : `paths-ignore` ne saute que si TOUT ce qui change est listé.
 on:
+  # RELANCE À LA MAIN (12/11/2026). Pendant la panne de GitHub Actions du
+  # 11/11 au soir, deux passages sont restés « en file d'attente » sans
+  # démarrer, et GitHub refusait de les annuler. Sans ce déclencheur, la seule
+  # façon de relancer la CI était de pousser un faux changement de code.
+  # Actions → CI → Run workflow.
+  workflow_dispatch:
   push:
     branches: [main, develop]
     paths-ignore:
