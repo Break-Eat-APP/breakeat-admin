@@ -547,6 +547,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.20 | 2026-11-12 | Failles des dépendances : 62 → 4, et les 4 assumées |
 | 1.7.21 | 2026-11-12 | Le ticket dit le lieu ; le détail de commande dit la TVA |
 | 1.7.22 | 2026-11-12 | L'image du lieu sur le ticket garde sa forme |
+| 1.7.23 | 2026-11-13 | L'image du lieu à sa forme partout ; le plan des buvettes depuis la commande |
 
 ---
 

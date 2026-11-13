@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -33,6 +32,8 @@ import {
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { DemandeCoordonnees } from '@components/demande-coordonnees';
 import { VignetteEvenement } from '@components/vignette-evenement';
+import { ImageDuLieu } from '@components/image-du-lieu';
+import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { THEME, shadowCard, HEAD, FONT } from '@lib/theme';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Saison'>;
@@ -95,6 +96,7 @@ export function SaisonScreen({ route, navigation }: Props) {
   const [matchEnAttente, setMatchEnAttente] = useState<string | null>(null);
   /** Le temps d'aller demander la destination : le bouton ne doit pas partir deux fois. */
   const [envoiCommande, setEnvoiCommande] = useState(false);
+  const [planOuvert, setPlanOuvert] = useState(false);
 
   /**
    * Le lieu se relit À CHAQUE RETOUR sur l'écran, et pas une fois pour toutes.
@@ -329,20 +331,19 @@ export function SaisonScreen({ route, navigation }: Props) {
             <Ionicons name="chevron-back" size={24} color="#fff" />
           </Pressable>
           {/*
-            LE LOGO DU CLUB, À CÔTÉ DU NOM (demande de Rémi, 10/11). Dans un
-            rond BLANC : un écusson posé à même l'orange perdait ses couleurs.
-            Le logo d'abord ; la photo du lieu à défaut ; rien sinon — un rond
-            vide serait une tache sans raison.
+            LE LOGO DU CLUB, À CÔTÉ DU NOM (demande de Rémi, 10/11), À LA FORME
+            DE L'IMAGE (13/11) : il était enfermé dans un rond, et une image
+            carrée y perdait ses coins. Même composant que le ticket.
           */}
-          {lieu?.imageUrl || lieu?.photoUrl ? (
-            <View style={styles.logoRond}>
-              <Image
-                source={{ uri: (lieu.imageUrl ?? lieu.photoUrl) as string }}
-                style={lieu.imageUrl ? styles.logoImage : styles.logoPhoto}
-                resizeMode={lieu.imageUrl ? 'contain' : 'cover'}
-                accessibilityIgnoresInvertColors
-              />
-            </View>
+          {lieu ? (
+            <ImageDuLieu
+              nom={lieu.name}
+              logoUrl={lieu.imageUrl}
+              photoUrl={lieu.photoUrl}
+              hauteur={40}
+              rayon={9}
+              style={styles.logoLieu}
+            />
           ) : null}
           <Text style={styles.titre} numberOfLines={1}>
             {lieu?.name ?? venueName}
@@ -352,15 +353,42 @@ export function SaisonScreen({ route, navigation }: Props) {
         {/* Calculé UNE fois : l'appeler deux fois refaisait le travail à
             chaque rendu, et laissait croire que les deux appels pouvaient
             répondre différemment. */}
-        {chargement || !etat ? null : (
-          <View style={styles.pastille}>
-            <Ionicons name={etat.icone} size={14} color="rgba(255,255,255,0.9)" />
-            <Text style={styles.pastilleTexte} numberOfLines={1}>
-              {etat.texte}
-            </Text>
+        {chargement || (!etat && !lieu?.buvettePlanUrl) ? null : (
+          <View style={styles.pastilles}>
+            {etat ? (
+              <View style={styles.pastille}>
+                <Ionicons name={etat.icone} size={14} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.pastilleTexte} numberOfLines={1}>
+                  {etat.texte}
+                </Text>
+              </View>
+            ) : null}
+            {/*
+              LE PLAN DES BUVETTES, AUSSI ICI (13/11). Il n'était que sur la
+              carte du lieu à l'accueil : arrivé sur l'écran du lieu, le client
+              ne le retrouvait plus. Seulement si le club en a déposé un — un
+              bouton qui ouvrirait une page vide vaut moins que pas de bouton.
+            */}
+            {lieu?.buvettePlanUrl ? (
+              <Pressable
+                style={[styles.pastille, styles.pastillePlan]}
+                onPress={() => setPlanOuvert(true)}
+                accessibilityRole="button"
+              >
+                <Ionicons name="map-outline" size={14} color={THEME.orange} />
+                <Text style={[styles.pastilleTexte, { color: THEME.orange }]}>Plan des buvettes</Text>
+              </Pressable>
+            ) : null}
           </View>
         )}
       </View>
+
+      <BuvettePlanViewer
+        visible={planOuvert}
+        url={lieu?.buvettePlanUrl}
+        onClose={() => setPlanOuvert(false)}
+        title={lieu ? `Plan des buvettes — ${lieu.name}` : 'Plan des buvettes'}
+      />
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: espaceBas }]}
@@ -598,19 +626,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 26,
   },
   bandRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  logoRond: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-    marginRight: 4,
-  },
-  /** Un écusson se centre sans être rogné ; une photo remplit le rond. */
-  logoImage: { width: 30, height: 30 },
-  logoPhoto: { width: 38, height: 38 },
+  logoLieu: { marginRight: 4 },
   retour: { padding: 4, borderRadius: 8 },
   /**
    * `minWidth: 0` N'EST PAS DÉCORATIF.
@@ -642,6 +658,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   pastilleTexte: { color: '#fff', fontSize: 13, fontFamily: HEAD.semibold },
+  pastilles: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
+  pastillePlan: { backgroundColor: '#fff' },
 
   mois: { marginBottom: 18 },
   moisTitre: {

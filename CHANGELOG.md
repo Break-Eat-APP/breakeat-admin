@@ -5,6 +5,33 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.23] — 2026-11-13 — L'image du lieu à sa forme partout ; le plan des buvettes depuis la commande
+
+Deux remarques de Rémi du 13/11.
+
+- **Le logo à côté du nom du lieu** (en-tête de l'écran du lieu) était encore
+  découpé en **rond** : une image carrée y perdait ses coins. La règle corrigée
+  la veille sur le ticket vivait dans une copie locale ; elle devient **un seul
+  composant**, `ImageDuLieu` — le cadre suit les proportions réelles de l'image
+  (carrée reste carrée), coins adoucis ; un logo garde un fond blanc (sur
+  l'orange vif, un écusson perd ses couleurs), une photo remplit le cadre. Le
+  ticket et l'en-tête du lieu l'utilisent tous les deux.
+- **Le plan des buvettes** n'était qu'à trois endroits : la carte du lieu à
+  l'accueil, le bouton « Y aller » du ticket (seulement tant que la commande est
+  en cours) et l'écran de confirmation après paiement. En ouvrant sa commande,
+  on ne le trouvait pas. Il est maintenant :
+  - dans le **détail de la commande** (on touche le ticket), sous l'état : une
+    carte « Trouver ma buvette » qui ouvre le plan de la buvette, à défaut celui
+    du lieu (`pickupPlanUrl`, résolu par le serveur) ;
+  - dans l'**en-tête de l'écran du lieu** : une pastille « Plan des buvettes ».
+  Rien ne s'affiche si le club n'a déposé aucun plan.
+
+`+ apps/mobile/src/components/image-du-lieu.tsx`
+`~ apps/mobile/src/screens/order-history.screen.tsx`, `order-tracking.screen.tsx`,
+`saison.screen.tsx` — JavaScript seul : mise à jour à distance (version 1.1.2).
+
+---
+
 ## [1.7.22] — 2026-11-12 — L'image du lieu sur le ticket garde sa forme
 
 L'image du lieu, dans l'en-tête orange du ticket, était découpée en **rond** :

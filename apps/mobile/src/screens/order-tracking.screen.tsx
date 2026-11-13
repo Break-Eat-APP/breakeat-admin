@@ -30,6 +30,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { MissingItemsBanner, ROUGE_MANQUANT } from '@components/missing-items-banner';
 import { RemboursementBanner } from '@components/remboursement-banner';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
+import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'OrderTracking'>;
 
@@ -159,6 +160,7 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
   // L'espace de la barre flottante du bas : sans lui, « Signaler un problème »
   // restait à moitié caché dessous en bout de défilement (vu le 10/11).
   const espaceBas = useBottomBarSpace();
+  const [planOuvert, setPlanOuvert] = useState(false);
   const { orderId } = route.params;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -322,6 +324,34 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
           <Text style={styles.statusDesc}>{statusCfg.description}</Text>
         </View>
 
+        {/*
+          TROUVER MA BUVETTE (demande de Rémi, 13/11). Le plan n'était que sur
+          le ticket (« Y aller », tant que la commande est en cours) et sur la
+          carte du lieu : en ouvrant sa commande, on ne le trouvait pas. Il est
+          ici, sous l'état — c'est la question qu'on se pose juste après
+          « est-ce prêt ? ». Le plan de la BUVETTE, à défaut celui du lieu
+          (`pickupPlanUrl`, résolu par le serveur) ; rien si le club n'en a
+          déposé aucun.
+        */}
+        {order.pickupPlanUrl ? (
+          <Pressable
+            style={({ pressed }) => [styles.planCarte, pressed && { opacity: 0.75 }]}
+            onPress={() => setPlanOuvert(true)}
+            accessibilityRole="button"
+          >
+            <View style={styles.planIcone}>
+              <Ionicons name="map-outline" size={22} color={THEME.orange} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.planTitre}>Trouver ma buvette</Text>
+              <Text style={styles.planSous} numberOfLines={1}>
+                {order.supplierName ? `${order.supplierName} · voir le plan` : 'Voir le plan des buvettes'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={THEME.orange} />
+          </Pressable>
+        ) : null}
+
         {/* Produit manquant — juste sous le statut : c'est la nouvelle qui
             change ce que le client doit faire. Plus rien à faire une fois la
             commande terminée. */}
@@ -444,6 +474,13 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
           </Text>
         )}
       </ScrollView>
+
+      <BuvettePlanViewer
+        visible={planOuvert}
+        url={order.pickupPlanUrl}
+        onClose={() => setPlanOuvert(false)}
+        title={order.supplierName ? `Plan — ${order.supplierName}` : 'Plan des buvettes'}
+      />
     </View>
   );
 }
@@ -538,6 +575,27 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
 
+  planCarte: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: THEME.surface,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#FFC9B3',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  planIcone: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#FFF1EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planTitre: { color: THEME.ink, fontSize: 15.5, fontFamily: FONT.bold },
+  planSous: { color: THEME.inkSoft, fontSize: 13, fontFamily: FONT.medium, marginTop: 2 },
   statusHero: {
     borderRadius: 16,
     padding: 24,
