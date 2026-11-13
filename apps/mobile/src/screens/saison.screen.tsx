@@ -26,6 +26,7 @@ import { ouvertALaCommande, quandLaCommandeOuvre } from '@lib/ouverture-lieu';
 import {
   libelleAttente,
   libelleDateLongue,
+  heureDuJour,
   libelleJour,
   parMois,
 } from '@lib/calendrier-saison';
@@ -308,6 +309,72 @@ export function SaisonScreen({ route, navigation }: Props) {
   // travail, et laissait croire que les deux appels pouvaient differer.
   const etat = etatCommande();
 
+  /*
+    LA CARTE DU MATCH — ce que la tuile ne peut pas porter : la date complète,
+    et le bouton. Elle se pose SOUS LE MOIS du match choisi (13/11) : avec la
+    grille, en bas de page elle pouvait se retrouver un écran plus bas que la
+    tuile qu'on vient de toucher.
+  */
+  const carteSelection = selection ? (
+    <View style={[styles.carte, shadowCard]}>
+      <View style={styles.carteHaut}>
+        {/* `lecture` : la carte n'a qu'une image, elle peut la
+            donner en grand — une affiche de concert y passe de 32
+            pixels de large à 88, et devient lisible. */}
+        <VignetteEvenement evenement={selection} taille={44} role="lecture" />
+        <View style={styles.carteTextes}>
+          <Text style={styles.carteNom} numberOfLines={2}>
+            {selection.opponentName ?? selection.name}
+          </Text>
+          <Text style={styles.carteDate} numberOfLines={1}>
+            {libelleDateLongue(selection.startAt)}
+          </Text>
+        </View>
+      </View>
+
+      {selection.ouvert ? (
+        // DÉSARMÉ LE TEMPS D'ALLER CHERCHER LA DESTINATION. Deux
+        // appuis rapides partiraient sinon deux fois, et le
+        // second écraserait le premier avec un aller-retour de
+        // retard — on ouvrirait la page d'avant.
+        <Pressable
+          style={[styles.bouton, envoiCommande && styles.boutonEnCours]}
+          onPress={commander}
+          disabled={envoiCommande}
+        >
+          <Text style={styles.boutonTexte}>
+            {envoiCommande ? 'Un instant…' : 'Commander'}
+          </Text>
+          {envoiCommande ? null : (
+            <Ionicons name="arrow-forward" size={17} color="#fff" />
+          )}
+        </Pressable>
+      ) : (
+        /*
+          DEUX TONS, ET ILS NE DISENT PAS LA MÊME CHOSE.
+
+          L'orange annonce quelque chose qui VA ARRIVER — la
+          commande ouvrira à telle heure, il y a une raison de
+          revenir. Un match terminé n'annonce rien : en orange, il
+          attirait l'œil vers la seule ligne de l'écran où il n'y a
+          rien à faire.
+        */
+        <View style={[styles.attente, selection.passe && styles.attenteFinie]}>
+          <Ionicons
+            name={selection.passe ? 'checkmark-done-outline' : 'time-outline'}
+            size={15}
+            color={selection.passe ? THEME.inkSoft : THEME.orangeDark}
+          />
+          <Text
+            style={[styles.attenteTexte, selection.passe && styles.attenteTexteFini]}
+          >
+            {phraseAttente(selection, lieu)}
+          </Text>
+        </View>
+      )}
+    </View>
+  ) : null;
+
   return (
     <View style={styles.root}>
       {/*
@@ -411,20 +478,25 @@ export function SaisonScreen({ route, navigation }: Props) {
             {mois.map((m) => (
               <View key={m.cle} style={styles.mois}>
                 <Text style={styles.moisTitre}>{m.libelle}</Text>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.ruban}
-                >
+                {/*
+                  DEUX COLONNES, DE GRANDS BLASONS (Rémi et son développeur,
+                  13/11). Le ruban horizontal laissait la moitié de l'écran
+                  vide dès qu'un mois comptait moins de quatre matchs — le cas
+                  de presque toutes les saisons. Chaque match devient une
+                  petite affiche ; une saison pleine reste courte (vingt
+                  matchs, dix rangées).
+                */}
+                <View style={styles.grille}>
                   {m.matchs.map((match) => (
-                    <CaseMatch
+                    <TuileMatch
                       key={match.id}
                       match={match}
                       selectionne={match.id === selectionId}
                       onPress={() => setChoisi(match.id)}
                     />
                   ))}
-                </ScrollView>
+                </View>
+                {selection && m.matchs.some((x) => x.id === selection.id) ? carteSelection : null}
               </View>
             ))}
 
@@ -452,72 +524,6 @@ export function SaisonScreen({ route, navigation }: Props) {
               </View>
             ) : null}
 
-            {/*
-              LA CARTE DU MATCH — ce que la case ne peut pas porter.
-
-              Le nom de l'adversaire, l'heure, et le bouton. C'est ce qui a
-              remplacé la vue « liste » : l'information y est au complet, sans
-              second écran à maintenir.
-            */}
-            {selection ? (
-              <View style={[styles.carte, shadowCard]}>
-                <View style={styles.carteHaut}>
-                  {/* `lecture` : la carte n'a qu'une image, elle peut la
-                      donner en grand — une affiche de concert y passe de 32
-                      pixels de large à 88, et devient lisible. */}
-                  <VignetteEvenement evenement={selection} taille={44} role="lecture" />
-                  <View style={styles.carteTextes}>
-                    <Text style={styles.carteNom} numberOfLines={2}>
-                      {selection.opponentName ?? selection.name}
-                    </Text>
-                    <Text style={styles.carteDate} numberOfLines={1}>
-                      {libelleDateLongue(selection.startAt)}
-                    </Text>
-                  </View>
-                </View>
-
-                {selection.ouvert ? (
-                  // DÉSARMÉ LE TEMPS D'ALLER CHERCHER LA DESTINATION. Deux
-                  // appuis rapides partiraient sinon deux fois, et le
-                  // second écraserait le premier avec un aller-retour de
-                  // retard — on ouvrirait la page d'avant.
-                  <Pressable
-                    style={[styles.bouton, envoiCommande && styles.boutonEnCours]}
-                    onPress={commander}
-                    disabled={envoiCommande}
-                  >
-                    <Text style={styles.boutonTexte}>
-                      {envoiCommande ? 'Un instant…' : 'Commander'}
-                    </Text>
-                    {envoiCommande ? null : (
-                      <Ionicons name="arrow-forward" size={17} color="#fff" />
-                    )}
-                  </Pressable>
-                ) : (
-                  /*
-                    DEUX TONS, ET ILS NE DISENT PAS LA MÊME CHOSE.
-
-                    L'orange annonce quelque chose qui VA ARRIVER — la
-                    commande ouvrira à telle heure, il y a une raison de
-                    revenir. Un match terminé n'annonce rien : en orange, il
-                    attirait l'œil vers la seule ligne de l'écran où il n'y a
-                    rien à faire.
-                  */
-                  <View style={[styles.attente, selection.passe && styles.attenteFinie]}>
-                    <Ionicons
-                      name={selection.passe ? 'checkmark-done-outline' : 'time-outline'}
-                      size={15}
-                      color={selection.passe ? THEME.inkSoft : THEME.orangeDark}
-                    />
-                    <Text
-                      style={[styles.attenteTexte, selection.passe && styles.attenteTexteFini]}
-                    >
-                      {phraseAttente(selection, lieu)}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            ) : null}
           </>
         )}
       </ScrollView>
@@ -561,8 +567,13 @@ function phraseAttente(match: EvenementDeSaison, lieu: PublicVenue | null): stri
   return 'La commande n’est pas encore ouverte';
 }
 
-/** Une case du ruban : le blason, et le jour en dessous. */
-function CaseMatch({
+/**
+ * UNE TUILE DE LA GRILLE : le blason en grand, l'adversaire, le jour et l'heure.
+ *
+ * « Commande ouverte » remplace la date quand on peut commander : c'est la
+ * seule information sur laquelle le supporter peut agir.
+ */
+function TuileMatch({
   match,
   selectionne,
   onPress,
@@ -572,12 +583,10 @@ function CaseMatch({
   onPress: () => void;
 }) {
   const attente = libelleAttente(match.startAt, new Date());
-  // « dans 5 jours » ne tient pas sous une case ; « demain » si.
-  const sousTitre = match.ouvert
-    ? 'ouvert'
-    : attente === "aujourd'hui" || attente === 'demain'
-      ? attente
-      : libelleJour(match.startAt);
+  const jour = attente === "aujourd'hui" || attente === 'demain' ? attente : libelleJour(match.startAt);
+  const date = new Date(match.startAt);
+  const heure = Number.isNaN(date.getTime()) ? '' : heureDuJour(date);
+  const sousTitre = match.ouvert ? 'Commande ouverte' : heure ? `${jour} · ${heure}` : jour;
 
   return (
     <Pressable
@@ -585,30 +594,28 @@ function CaseMatch({
       /*
         OUVERT L'EMPORTE SUR PASSÉ.
 
-        Les deux peuvent être vrais en même temps, et ce n'est pas un défaut
-        de calcul : un club qui laisse son événement au statut ACTIVE après
-        le match le garde commandable — c'est la règle du parcours Break Eat
-        (`cheminDeCommande`), et `ouvert` la reflète fidèlement.
-
-        Mais estomper une case tout en la cerclant d'orange, avec « ouvert »
-        écrit dessous, c'est se contredire à l'écran. Entre « c'est fini » et
-        « tu peux commander », le supporter n'a besoin que du second : c'est
-        le seul des deux sur lequel il peut agir.
+        Les deux peuvent être vrais en même temps : un club qui laisse son
+        événement au statut ACTIVE après le match le garde commandable (règle
+        de `cheminDeCommande`). Estomper une tuile tout en la cerclant
+        d'orange, c'est se contredire : entre « c'est fini » et « tu peux
+        commander », le supporter n'a besoin que du second.
       */
-      style={[styles.case, match.passe && !match.ouvert && styles.casePassee]}
+      style={({ pressed }) => [
+        styles.tuile,
+        match.ouvert && styles.tuileOuverte,
+        selectionne && !match.ouvert && styles.tuileChoisie,
+        match.passe && !match.ouvert && styles.tuilePassee,
+        pressed && { opacity: 0.8 },
+      ]}
       accessibilityRole="button"
       accessibilityLabel={`${match.opponentName ?? match.name}, ${libelleDateLongue(match.startAt)}`}
       accessibilityState={{ selected: selectionne }}
     >
-      <VignetteEvenement
-        evenement={match}
-        taille={48}
-        anneau={match.ouvert ? 'ouvert' : selectionne ? 'choisi' : 'aucun'}
-      />
-      <Text
-        style={[styles.caseJour, match.ouvert && styles.caseJourOuvert]}
-        numberOfLines={1}
-      >
+      <VignetteEvenement evenement={match} taille={72} />
+      <Text style={styles.tuileNom} numberOfLines={1}>
+        {match.opponentName ?? match.name}
+      </Text>
+      <Text style={[styles.tuileJour, match.ouvert && styles.tuileJourOuvert]} numberOfLines={1}>
         {sousTitre}
       </Text>
     </Pressable>
@@ -673,26 +680,51 @@ const styles = StyleSheet.create({
     marginLeft: 18,
     marginBottom: 12,
   },
-  ruban: { paddingHorizontal: 16, gap: 10 },
-
-  case: { width: 62, alignItems: 'center' },
+  grille: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    rowGap: 10,
+    paddingHorizontal: 16,
+  },
+  tuile: {
+    width: '48.5%',
+    alignItems: 'center',
+    backgroundColor: THEME.surface,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    paddingTop: 16,
+    paddingBottom: 13,
+    paddingHorizontal: 8,
+    ...shadowCard,
+  },
+  tuileOuverte: { borderColor: THEME.orange },
+  tuileChoisie: { borderColor: THEME.ink },
   // L'opacité dit le TEMPS : le match est joué, il s'efface.
-  casePassee: { opacity: 0.4 },
-  caseJour: {
-    marginTop: 7,
-    fontSize: 11,
+  tuilePassee: { opacity: 0.4 },
+  tuileNom: {
+    marginTop: 10,
+    color: THEME.ink,
+    fontSize: 14.5,
+    fontFamily: HEAD.bold,
+    textAlign: 'center',
+  },
+  tuileJour: {
+    marginTop: 3,
+    fontSize: 12.5,
     color: THEME.inkSoft,
     fontFamily: FONT.medium,
     textAlign: 'center',
   },
-  caseJourOuvert: { color: THEME.orange, fontFamily: FONT.bold },
+  tuileJourOuvert: { color: THEME.orange, fontFamily: FONT.bold },
 
 
   carte: {
     backgroundColor: THEME.surface,
     borderRadius: THEME.radius.card,
     marginHorizontal: 16,
-    marginTop: 4,
+    marginTop: 12,
     padding: 15,
   },
   carteHaut: { flexDirection: 'row', alignItems: 'center', gap: 13 },
