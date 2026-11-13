@@ -5,6 +5,17 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.24] — 2026-11-13 — L'image du lieu, sans fond
+
+Rémi l'avait demandé « sans le background » : la 1.7.23 gardait un fond blanc
+derrière les logos, ce qui faisait un cadre blanc autour. L'image est
+maintenant posée telle quelle, à sa forme, sur l'orange (en-tête du lieu et
+ticket). Un logo détouré se pose directement sur l'orange.
+
+`~ apps/mobile/src/components/image-du-lieu.tsx` — mise à jour à distance.
+
+---
+
 ## [1.7.23] — 2026-11-13 — L'image du lieu à sa forme partout ; le plan des buvettes depuis la commande
 
 Deux remarques de Rémi du 13/11.

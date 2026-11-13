@@ -15,9 +15,9 @@ import { visuelDeLieu } from '@lib/visuel-lieu';
  * elle reste carrée ; en largeur, elle s'élargit — dans des bornes, pour ne pas
  * écraser le nom à côté. Coins simplement adoucis.
  *
- * Le LOGO garde un fond blanc : ces en-têtes sont orange vif, et un écusson
- * posé à même l'orange perd ses couleurs (un logo au fond blanc y ferait en
- * plus un carré blanc). La PHOTO, elle, remplit le cadre, sans fond.
+ * SANS FOND (demande de Rémi, 13/11) : l'image est posée telle quelle, à sa
+ * forme. Un logo détouré se pose directement sur l'orange ; un logo carré
+ * reste un carré. (Le fond blanc ajouté jusqu'ici faisait un cadre autour.)
  * Rien si le lieu n'a pas d'image — un cadre vide serait une tache sans raison.
  */
 export function ImageDuLieu({
@@ -55,19 +55,17 @@ export function ImageDuLieu({
   }, [uri]);
 
   if (visuel.type !== 'image') return null;
-  const logo = visuel.cadrage === 'contain';
   return (
     <View
       style={[
         styles.cadre,
         { height: hauteur, width: Math.round(hauteur * ratio), borderRadius: rayon },
-        logo && styles.fond,
         style,
       ]}
     >
       <Image
         source={{ uri: visuel.uri }}
-        style={logo ? styles.logo : styles.pleine}
+        style={styles.pleine}
         resizeMode={visuel.cadrage}
         accessibilityIgnoresInvertColors
       />
@@ -77,7 +75,5 @@ export function ImageDuLieu({
 
 const styles = StyleSheet.create({
   cadre: { overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  fond: { backgroundColor: '#fff' },
-  logo: { width: '86%', height: '86%' },
   pleine: { width: '100%', height: '100%' },
 });
