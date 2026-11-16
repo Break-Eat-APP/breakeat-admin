@@ -558,6 +558,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.31 | 2026-11-16 | Partager l'addition : un vrai lien, plus de détour par le paiement |
 | 1.7.32 | 2026-11-16 | Suivi remis à zéro une minute après le retrait ; Live Activity resserrée (version 1.1.3) |
 | 1.7.33 | 2026-11-16 | Console : « point de retrait » au lieu de « fournisseur » |
+| 1.7.34 | 2026-11-16 | L'adversaire se corrige aussi sur un lieu BreakEat |
 
 ---
 

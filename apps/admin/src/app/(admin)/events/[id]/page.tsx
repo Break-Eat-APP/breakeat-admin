@@ -786,6 +786,27 @@ export default function EventDetailPage() {
           </Card>
         </>
       ) : null}
+      {/*
+        L'ADVERSAIRE SUR UN LIEU BREAKEAT AUSSI (Rémi, 16/11/2026). Il n'était
+        modifiable que sur un lieu Flaix : au Vélodrome, on renommait le match
+        mais on ne pouvait plus corriger l'adversaire saisi à la création. Même
+        éditeur, sans le champ de lien Flaix ; le serveur l'acceptait déjà.
+      */}
+      {!estFlaix && !event.isPermanentContainer ? (
+        <Card title="Adversaire, blason et affiche">
+          <LiensCommandeFlaix
+            orgId={orgId}
+            events={[event]}
+            modeContinu={false}
+            portee="evenement"
+            avecLien={false}
+            onSaved={(maj) => {
+              const m = maj.find((x) => x.id === event.id);
+              if (m) setEvent((e) => (e ? { ...e, ...m } : e));
+            }}
+          />
+        </Card>
+      ) : null}
 
       {/*
         LES CHIFFRES BREAK EAT — masqués sur un lieu Flaix, parce qu'ils y

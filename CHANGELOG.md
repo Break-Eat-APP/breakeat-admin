@@ -5,6 +5,18 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.34] — 2026-11-16 — L'adversaire se corrige aussi sur un lieu BreakEat
+
+Remarque de Rémi (Vélodrome) : sur la fiche d'un événement, on pouvait
+renommer le match mais pas corriger l'adversaire saisi à la création
+(« UEFA »). L'éditeur adversaire / blason / affiche n'existait que pour les
+lieux Flaix. Il s'affiche maintenant pour tous les événements datés, sans le
+champ de lien Flaix ; le serveur l'acceptait déjà.
+
+`~ apps/admin/src/app/(admin)/events/[id]/page.tsx`.
+
+---
+
 ## [1.7.33] — 2026-11-16 — Console : « point de retrait » au lieu de « fournisseur »
 
 Demande de Rémi : le menu appelait déjà les buvettes « Points de retrait »,
