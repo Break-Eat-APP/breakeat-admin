@@ -12,7 +12,7 @@ import {
   formatPrice,
 } from '@lib/api/mobile-api';
 import { showAlert } from '@lib/alert';
-import { useCartStore } from '@store/cart.store';
+import { AU_PLUS_VITE, useCartStore } from '@store/cart.store';
 import { PageHeader } from '@components/page-header';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { THEME, shadowCard, FONT } from '@lib/theme';
@@ -73,8 +73,9 @@ export function CartScreen({ navigation }: Props) {
     //
     // Sans creneau, l'ardoise partait sans heure de retrait et la tournee
     // arrivait au comptoir en « des que prete ».
-    if (!selectedSlotId) {
+    if (!selectedSlotId && selectedSlotLabel !== AU_PLUS_VITE) {
       // Le partage reprend tout seul au retour, une fois le créneau choisi.
+      // « Au plus vite » (aucun créneau) vaut choix : il ne relance pas l'écran.
       partageApresCreneau.current = true;
       navigation.navigate('SlotSelector', { eventId, puisPartager: true });
       return;
@@ -93,7 +94,7 @@ export function CartScreen({ navigation }: Props) {
         items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
       );
       // Le creneau voyage AVEC le panier : l'ardoise en herite, puis la commande.
-      await apiChoisirCreneau(cart.id, selectedSlotId);
+      if (selectedSlotId) await apiChoisirCreneau(cart.id, selectedSlotId);
       const split = await apiOpenSplit(cart.id);
       navigation.navigate('Split', { code: split.code });
     } catch (e: unknown) {
@@ -114,11 +115,11 @@ export function CartScreen({ navigation }: Props) {
    */
   const partageApresCreneau = useRef(false);
   useEffect(() => {
-    if (partageApresCreneau.current && selectedSlotId) {
+    if (partageApresCreneau.current && (selectedSlotId || selectedSlotLabel === AU_PLUS_VITE)) {
       partageApresCreneau.current = false;
       void handlePartagerAddition();
     }
-  }, [selectedSlotId]);
+  }, [selectedSlotId, selectedSlotLabel]);
 
   const handleContinue = () => {
     if (!eventId) return;
@@ -202,7 +203,7 @@ export function CartScreen({ navigation }: Props) {
                       <ActivityIndicator size="small" color={THEME.orange} />
                     ) : null}
                     <Text style={styles.inviteBtnText}>
-                      {selectedSlotId ? 'Partager l’addition' : 'Choisir un créneau puis partager'}
+                      {selectedSlotLabel ? 'Partager l’addition' : 'Choisir un créneau puis partager'}
                     </Text>
                   </Pressable>
                 ) : null}

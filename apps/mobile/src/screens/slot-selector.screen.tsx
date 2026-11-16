@@ -12,7 +12,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiGetPublicSlots, formatTime, type PublicSlot } from '@lib/api/mobile-api';
 import { rangerCreneaux, titreEtDetail } from '@lib/sections-creneaux';
-import { useCartStore } from '@store/cart.store';
+import { AU_PLUS_VITE, useCartStore } from '@store/cart.store';
 import { PageHeader } from '@components/page-header';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -36,7 +36,7 @@ function slotLabel(slot: PublicSlot): string {
 
 export function SlotSelectorScreen({ route, navigation }: Props) {
   const { eventId, puisPartager } = route.params;
-  const { setSlot, selectedSlotId, supplierId } = useCartStore();
+  const { setSlot, selectedSlotId, selectedSlotLabel, supplierId } = useCartStore();
 
   const [slots, setSlots] = useState<PublicSlot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +58,21 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * « AU PLUS VITE » (Rémi, 16/11/2026) : toujours proposé, même quand
+   * l'événement n'a aucun créneau — c'est là qu'on restait bloqué. Sans
+   * créneau, la commande part « dès que prête » : le paiement le sait déjà.
+   */
+  const auPlusVite = () => {
+    setSlot(null, AU_PLUS_VITE);
+    if (puisPartager) {
+      navigation.goBack();
+      return;
+    }
+    navigation.navigate('Checkout');
+  };
+  const auPlusViteChoisi = selectedSlotId === null && selectedSlotLabel === AU_PLUS_VITE;
 
   const handleSelect = (slot: PublicSlot) => {
     const remaining = slot.capacity - slot.currentLoad;
@@ -105,11 +120,27 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
 
       <Text style={styles.subtitle}>Choisis le moment où tu viendras chercher ta commande.</Text>
 
-      {slots.length === 0 ? (
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>Aucun créneau disponible pour cet événement.</Text>
-        </View>
-      ) : (
+      <View style={styles.list}>
+        <Pressable
+          style={[styles.slotCard, styles.auPlusVite, auPlusViteChoisi && styles.slotCardSelected]}
+          onPress={auPlusVite}
+          accessibilityRole="button"
+        >
+          <View style={styles.slotLeft}>
+            <Text style={styles.slotTime}>Au plus vite</Text>
+            <Text style={styles.slotDetail}>Dès que ta commande est prête</Text>
+          </View>
+          <View style={styles.slotRight}>
+            {auPlusViteChoisi ? (
+              <Ionicons name="checkmark-circle" size={22} color={THEME.orange} />
+            ) : (
+              <Ionicons name="flash" size={22} color={THEME.orange} />
+            )}
+          </View>
+        </Pressable>
+      </View>
+
+      {slots.length === 0 ? null : (
         // RANGÉS PAR MOMENT (16/11) : « Mi-temps », « Deuxième pause »,
         // « Créneaux horaires »… — un titre de section par moment.
         <SectionList
@@ -218,6 +249,7 @@ const styles = StyleSheet.create({
   },
   sectionTrait: { flex: 1, height: 1, backgroundColor: THEME.border },
   slotDetail: { color: THEME.inkSoft, fontSize: 13.5, fontFamily: FONT.medium, marginTop: 2 },
+  auPlusVite: { marginBottom: 0 },
 
   slotCard: {
     backgroundColor: THEME.surface,

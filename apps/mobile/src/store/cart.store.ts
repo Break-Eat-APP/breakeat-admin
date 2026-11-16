@@ -1,5 +1,8 @@
 import { create } from 'zustand';
 
+/** Le libellé du choix « au plus vite » : pas de créneau, dès que c'est prêt. */
+export const AU_PLUS_VITE = 'Au plus vite';
+
 export interface CartItem {
   productId: string;
   productName: string;
@@ -44,7 +47,8 @@ interface CartState {
   incrementItem: (productId: string) => void;
   decrementItem: (productId: string) => void;
 
-  setSlot: (slotId: string, label: string) => void;
+  /** `null` + `AU_PLUS_VITE` : le client a choisi « au plus vite » (16/11/2026). */
+  setSlot: (slotId: string | null, label: string) => void;
   clearSlot: () => void;
 
   resetCart: () => void;

@@ -661,9 +661,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     alignSelf: 'flex-start',
-    // DÉCOLLÉE DU LOGO (16/11) : à 12, elle touchait l'image du lieu ; à 18,
-    // elle le paraissait encore. 22, avec un logo de 34.
-    marginTop: 22,
     marginLeft: 8,
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: THEME.radius.pill,
@@ -671,7 +668,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   pastilleTexte: { color: '#fff', fontSize: 13, fontFamily: HEAD.semibold },
-  pastilles: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
+  // L'ÉCART SOUS L'IMAGE EST PORTÉ PAR LE CONTENEUR (16/11/2026). Posé sur la
+  // pastille, dans une rangée qui passe à la ligne, il n'était pas appliqué sur
+  // iPhone : la pastille touchait l'image (capture de Rémi). Le conteneur, lui,
+  // le respecte toujours.
+  pastilles: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', marginTop: 20, gap: 8 },
   pastillePlan: { backgroundColor: '#fff' },
 
   mois: { marginBottom: 18 },

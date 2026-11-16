@@ -5,6 +5,24 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.38] — 2026-11-16 — « Au plus vite » toujours proposé ; la pastille du lieu enfin décollée
+
+- **« Au plus vite »** (Rémi) : l'écran des créneaux ne proposait que les
+  créneaux du club — sur un événement sans créneau (ou dont les créneaux sont
+  passés), le client restait bloqué. « Au plus vite — dès que ta commande est
+  prête » est désormais toujours en tête. Sans créneau, la commande part « dès
+  que prête » : le paiement le savait déjà. Vaut aussi pour « Partager
+  l'addition ».
+- **La pastille de l'en-tête du lieu touchait encore l'image** sur iPhone
+  (capture de Rémi) : la marge était posée sur la pastille, dans une rangée qui
+  passe à la ligne, et n'y était pas appliquée. Elle est portée par le
+  conteneur (20 points).
+
+`~ apps/mobile` (`slot-selector`, `cart`, `store/cart.store.ts`, `saison`) —
+mise à jour à distance (1.1.3).
+
+---
+
 ## [1.7.37] — 2026-11-16 — La pastille de l'en-tête du lieu, vraiment décollée
 
 « Prochain événement dans N jours » paraissait encore collée à l'image du lieu
