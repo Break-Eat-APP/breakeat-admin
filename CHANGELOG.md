@@ -5,6 +5,17 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.37] — 2026-11-16 — La pastille de l'en-tête du lieu, vraiment décollée
+
+« Prochain événement dans N jours » paraissait encore collée à l'image du lieu
+(Rémi). Le logo passe de 40 à 34 points et la pastille descend de 4 points : environ
+10 points d'air en plus, et la bande orange ne grandit pas (elle raccourcit
+même de 2 points).
+
+`~ apps/mobile/src/screens/saison.screen.tsx` — mise à jour à distance (1.1.3).
+
+---
+
 ## [1.7.36] — 2026-11-16 — Un comptoir par défaut pour chaque point de retrait ; plus de créneau passé proposé
 
 - **Comptoir par défaut** (accord de Rémi) : une commande ne se paie pas sans

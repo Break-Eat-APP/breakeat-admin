@@ -403,8 +403,11 @@ export function SaisonScreen({ route, navigation }: Props) {
               nom={lieu.name}
               logoUrl={lieu.imageUrl}
               photoUrl={lieu.photoUrl}
-              hauteur={40}
-              rayon={9}
+              // 34 et non 40 (16/11) : la pastille du dessous paraissait collée
+              // à l'image ; un logo un peu plus petit lui rend de l'air sans
+              // grandir la bande.
+              hauteur={34}
+              rayon={8}
               style={styles.logoLieu}
             />
           ) : null}
@@ -658,8 +661,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     alignSelf: 'flex-start',
-    // DÉCOLLÉE DU LOGO (16/11) : à 12, elle touchait l'image du lieu.
-    marginTop: 18,
+    // DÉCOLLÉE DU LOGO (16/11) : à 12, elle touchait l'image du lieu ; à 18,
+    // elle le paraissait encore. 22, avec un logo de 34.
+    marginTop: 22,
     marginLeft: 8,
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: THEME.radius.pill,
