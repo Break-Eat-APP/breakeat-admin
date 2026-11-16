@@ -394,7 +394,7 @@ L'ancien cessera immediatement de fonctionner.`)) return;
                     fontFamily: 'inherit',
                   }}
                 >
-                  <option value="">— Aucun fournisseur assigné —</option>
+                  <option value="">— Aucun point de retrait assigné —</option>
                   {suppliers.map((s) => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
@@ -574,7 +574,7 @@ L'ancien cessera immediatement de fonctionner.`)) return;
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
               <tr style={{ background: BRAND.bgSubtle }}>
-                {['Membre', 'Email', 'Rôle', 'Fournisseur assigné', ''].map((h) => (
+                {['Membre', 'Email', 'Rôle', 'Point de retrait assigné', ''].map((h) => (
                   <th
                     key={h}
                     style={{

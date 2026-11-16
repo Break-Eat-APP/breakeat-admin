@@ -1135,7 +1135,7 @@ export default function EventDetailPage() {
           réglages qu'aucun client ne verrait jamais. */}
       {!estFlaix && (
       <Card
-        title={`Fournisseurs attachés (${suppliers.length})`}
+        title={`Points de retrait attachés (${suppliers.length})`}
         action={
           <button
             onClick={() => setShowNewSupplier((v) => !v)}
@@ -1154,7 +1154,7 @@ export default function EventDetailPage() {
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <input
                 type="text"
-                placeholder="Nom du fournisseur *"
+                placeholder="Nom du point de retrait *"
                 value={newSupName}
                 onChange={(e) => setNewSupName(e.target.value)}
                 required
@@ -1189,7 +1189,7 @@ export default function EventDetailPage() {
             required
             style={{ flex: 1, minWidth: 200, padding: '8px 10px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 13, background: BRAND.surface, fontFamily: 'inherit' }}
           >
-            <option value="">Sélectionner un fournisseur existant…</option>
+            <option value="">Sélectionner un point de retrait existant…</option>
             {orgSuppliers.filter((s) => !attachedIds.has(s.id)).map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
@@ -1208,7 +1208,7 @@ export default function EventDetailPage() {
 
         {/* Attached list */}
         {suppliers.length === 0 ? (
-          <p style={{ color: BRAND.grey, fontSize: 14 }}>Aucun fournisseur attaché à cet événement.</p>
+          <p style={{ color: BRAND.grey, fontSize: 14 }}>Aucun point de retrait attaché à cet événement.</p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {suppliers.map((s) => (
@@ -1256,7 +1256,7 @@ export default function EventDetailPage() {
         <>
       {/* Suppliers — add link to manage products */}
       {suppliers.length > 0 && (
-        <Card title="Gérer les produits par fournisseur">
+        <Card title="Gérer les produits par point de retrait">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {suppliers.map((s) => (
               <Link
@@ -1276,9 +1276,9 @@ export default function EventDetailPage() {
       )}
 
       {/* Pickup Points */}
-      <Card title={`Points de retrait (${pickupPoints.length})`}>
+      <Card title={`Comptoirs de retrait (${pickupPoints.length})`}>
         <p style={{ color: BRAND.grey, fontSize: 13, margin: '0 0 12px', lineHeight: 1.5 }}>
-          Rattache jusqu&apos;à <strong>4 points de retrait par buvette</strong> (comptoirs). Le client choisit
+          Rattache jusqu&apos;à <strong>4 comptoirs par point de retrait</strong>. Le client choisit
           où récupérer sa commande.
         </p>
         <form onSubmit={handleCreatePickupPoint} style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>

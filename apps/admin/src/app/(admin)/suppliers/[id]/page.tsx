@@ -330,7 +330,7 @@ export default function SupplierDetailPage() {
   if (!orgId) return <div style={{ padding: 32, color: '#dc2626', fontSize: 14, fontFamily: BRAND.font }}>Aucune organisation.</div>;
   if (loading) return <div style={{ padding: 32, color: BRAND.grey, fontSize: 14, fontFamily: BRAND.font }}>Chargement…</div>;
   if (error) return <div style={{ padding: 32, color: '#dc2626', fontSize: 14, background: '#fee2e2', borderRadius: 8, margin: 32, fontFamily: BRAND.font }}>{error}</div>;
-  if (!supplier) return <div style={{ padding: 32, color: '#dc2626', fontSize: 14, fontFamily: BRAND.font }}>Fournisseur introuvable.</div>;
+  if (!supplier) return <div style={{ padding: 32, color: '#dc2626', fontSize: 14, fontFamily: BRAND.font }}>Point de retrait introuvable.</div>;
 
   const catById = Object.fromEntries(categories.map((c) => [c.id, c.name]));
   const productsByCat = categories.map((cat) => ({

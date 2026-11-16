@@ -5,6 +5,20 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.33] — 2026-11-16 — Console : « point de retrait » au lieu de « fournisseur »
+
+Demande de Rémi : le menu appelait déjà les buvettes « Points de retrait »,
+mais la fiche d'un événement disait « Fournisseurs attachés » et « Gérer les
+produits par fournisseur ». Tout dit maintenant **point de retrait** (fiche de
+l'événement, fiche de la buvette, page Équipe). Les comptoirs à l'intérieur
+d'une buvette, qui s'appelaient eux aussi « Points de retrait » sur la fiche de
+l'événement, deviennent **« Comptoirs de retrait »** — deux sections du même
+nom pour deux choses différentes auraient été pires.
+
+`~ apps/admin` (fiche événement, fiche buvette, Équipe).
+
+---
+
 ## [1.7.32] — 2026-11-16 — Le suivi se remet à zéro une minute après le retrait ; Live Activity « prête » resserrée (1.1.3)
 
 - **La pastille de « Mes commandes »** (éclair cerclé de vert) restait dix
