@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { THEME } from '@lib/theme';
+import { FONT, HEAD, THEME } from '@lib/theme';
 import {
   ActivityIndicator,
-  FlatList,
+  SectionList,
   Pressable,
   StyleSheet,
   Text,
@@ -11,6 +11,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
 import { apiGetPublicSlots, formatTime, type PublicSlot } from '@lib/api/mobile-api';
+import { rangerCreneaux, titreEtDetail } from '@lib/sections-creneaux';
 import { useCartStore } from '@store/cart.store';
 import { PageHeader } from '@components/page-header';
 import { Ionicons } from '@expo/vector-icons';
@@ -95,21 +96,29 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
     <View style={styles.root}>
       <PageHeader title="Choisir un créneau" />
 
-      <Text style={styles.subtitle}>
-        Sélectionnez l'heure à laquelle vous récupérerez votre commande.
-      </Text>
+      <Text style={styles.subtitle}>Choisis le moment où tu viendras chercher ta commande.</Text>
 
       {slots.length === 0 ? (
         <View style={styles.emptyBox}>
           <Text style={styles.emptyText}>Aucun créneau disponible pour cet événement.</Text>
         </View>
       ) : (
-        <FlatList
-          data={slots}
+        // RANGÉS PAR MOMENT (16/11) : « Mi-temps », « Deuxième pause »,
+        // « Créneaux horaires »… — un titre de section par moment.
+        <SectionList
+          sections={rangerCreneaux(slots)}
           keyExtractor={(s) => s.id}
           contentContainerStyle={styles.list}
+          stickySectionHeadersEnabled={false}
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionEntete}>
+              <Text style={styles.sectionTitre}>{section.titre}</Text>
+              <View style={styles.sectionTrait} />
+            </View>
+          )}
           renderItem={({ item }) => {
             const isSelected = selectedSlotId === item.id;
+            const { titre, detail } = titreEtDetail(item);
 
             return (
               <Pressable
@@ -120,7 +129,8 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
                 onPress={() => handleSelect(item)}
               >
                 <View style={styles.slotLeft}>
-                  <Text style={styles.slotTime}>{slotLabel(item)}</Text>
+                  <Text style={styles.slotTime}>{titre}</Text>
+                  {detail ? <Text style={styles.slotDetail}>{detail}</Text> : null}
                 </View>
 
                 {/* Plus de compteur de places : le club n'en gere pas, et
@@ -182,7 +192,25 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  list: { paddingHorizontal: 16, gap: 10, paddingBottom: 40 },
+  list: { paddingHorizontal: 16, paddingBottom: 140 },
+
+  // Le séparateur de section : le nom du moment, puis un filet.
+  sectionEntete: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  sectionTitre: {
+    color: THEME.orange,
+    fontSize: 13,
+    fontFamily: HEAD.bold,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  sectionTrait: { flex: 1, height: 1, backgroundColor: THEME.border },
+  slotDetail: { color: THEME.inkSoft, fontSize: 13.5, fontFamily: FONT.medium, marginTop: 2 },
 
   slotCard: {
     backgroundColor: THEME.surface,
@@ -192,6 +220,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1.5,
     borderColor: THEME.bgSubtle,
+    marginBottom: 10,
   },
   slotCardSelected: {
     borderColor: THEME.orange,

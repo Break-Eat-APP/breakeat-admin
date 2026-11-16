@@ -5,6 +5,28 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.30] — 2026-11-16 — Les créneaux disent leur moment ; le poste opérateur ne propose plus ce qu'il refuse
+
+Remarques de Rémi, en testant le concert du Dôme :
+
+- **Le choix du créneau** n'affichait que l'heure : un créneau réglé « Mi-temps »
+  sur la buvette se lisait « 17:30 ». Les créneaux sont maintenant **rangés par
+  moment**, avec un séparateur : « Dès que c'est prêt », « Mi-temps »,
+  « Deuxième pause », « Créneaux horaires », « À heure précise ». Le nom donné
+  par le club passe en titre, la plage horaire dessous. Le moment ne vaut que
+  pour un créneau issu d'un modèle de la buvette ; ceux saisis sur l'événement
+  vont sous « Créneaux horaires ». Texte de l'écran passé au tutoiement.
+- **Poste opérateur — erreur rouge sur un créneau** (BUG-2026-019) : un poste
+  rattaché à une buvette affichait aussi les créneaux COMMUNS à toutes les
+  buvettes, cliquables ; le serveur refuse (volontairement) qu'un seul comptoir
+  les ferme. Ils restent visibles, marqués « commun », en lecture seule.
+
+`~ backend/src/modules/events/public-events.controller.ts` (moment du créneau),
+`~ apps/mobile` (`slot-selector.screen.tsx`, `lib/sections-creneaux.ts` + test),
+`~ apps/operator` (`SlotBar.tsx`, tableau de bord). Mise à jour à distance pour l'app.
+
+---
+
 ## [1.7.29] — 2026-11-16 — Les écrans de commande tutoient le client
 
 Le détail de la commande disait encore « Votre commande est prête !

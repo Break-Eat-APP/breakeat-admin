@@ -23,10 +23,18 @@ export function SlotBar({
   eventId,
   token,
   supplierId,
+  posteEpingle = false,
 }: {
   eventId: string;
   token: string;
   supplierId: string | null;
+  /**
+   * Compte rattaché à UNE buvette. Le serveur lui refuse d'ouvrir ou de fermer
+   * un créneau COMMUN (sans buvette) : il déciderait pour les autres comptoirs.
+   * Ces créneaux restent visibles, mais en lecture seule (16/11/2026) — ils
+   * étaient cliquables, et le clic finissait en erreur rouge.
+   */
+  posteEpingle?: boolean;
 }) {
   const [slots, setSlots] = useState<PickupSlot[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -96,16 +104,21 @@ export function SlotBar({
       {slots.map((slot) => {
         const ouvert = slot.status === 'OPEN';
         const complet = slot.status === 'FULL';
+        const commun = posteEpingle && slot.supplierId === null;
         return (
           <button
             key={slot.id}
             type="button"
-            onClick={() => void basculer(slot)}
-            disabled={busyId === slot.id}
+            onClick={() => {
+              if (!commun) void basculer(slot);
+            }}
+            disabled={busyId === slot.id || commun}
             title={
-              ouvert
-                ? 'Ferme ce créneau. Les commandes déjà passées restent à préparer.'
-                : 'Rouvre ce créneau à la prise de commandes.'
+              commun
+                ? 'Créneau commun à toutes les buvettes : c’est le responsable qui l’ouvre ou le ferme.'
+                : ouvert
+                  ? 'Ferme ce créneau. Les commandes déjà passées restent à préparer.'
+                  : 'Rouvre ce créneau à la prise de commandes.'
             }
             style={{
               display: 'inline-flex',
@@ -116,7 +129,7 @@ export function SlotBar({
               fontSize: 13.5,
               fontWeight: 700,
               fontFamily: 'inherit',
-              cursor: busyId === slot.id ? 'wait' : 'pointer',
+              cursor: commun ? 'default' : busyId === slot.id ? 'wait' : 'pointer',
               opacity: busyId === slot.id ? 0.55 : 1,
               border: `1px solid ${ouvert ? '#6ee7b7' : complet ? '#fcd34d' : BRAND.border}`,
               background: ouvert ? '#ecfdf5' : complet ? '#fffbeb' : BRAND.bgSubtle,
@@ -134,6 +147,7 @@ export function SlotBar({
               }}
             />
             {slot.label ?? heure(slot.startAt)}
+            {commun ? <span style={{ fontWeight: 500, opacity: 0.75 }}> · commun</span> : null}
           </button>
         );
       })}

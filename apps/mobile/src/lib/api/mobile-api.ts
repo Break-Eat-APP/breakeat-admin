@@ -289,6 +289,9 @@ export interface PublicSlot {
   capacity: number;
   currentLoad: number;
   status: string;
+  /** Absents d'un serveur antérieur au 16/11. Le moment ne vaut que si `templateId`. */
+  kind?: string;
+  templateId?: string | null;
 }
 
 export interface BackendCart {

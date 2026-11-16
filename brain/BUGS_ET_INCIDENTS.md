@@ -61,6 +61,8 @@
 | BUG-2026-017 | 16/11 | **SEV-1** | sécurité — organisations | **Prise de compte possible** : un responsable de club invitait par e-mail un compte EXISTANT (responsable d'un autre club, client, plateforme) comme opérateur, puis redéfinissait son mot de passe. | Confirmée par lecture du code (`inviteByEmail` + `resetMemberPassword`, contrôle limité au rôle dans CE club). Exploitation non constatée, non vérifiable depuis le dépôt | CORRIGÉ le 16/11 : `assertCompteDuClubSeulement` — un club ne redéfinit que les comptes sans vie hors de lui. Compte rendu : `brain/taches/2026-11-16-test-croise-organisations.md` |
 | BUG-2026-018 | 16/11 | SEV-3 | sécurité — commandes | `PATCH /orders/:id/assign-slot` acceptait le créneau d'un autre événement, donc d'un autre club, et y consommait une place. | Confirmée par lecture du code | CORRIGÉ le 16/11 : `assertCreneauCompatible` (même événement, même buvette) |
 
+| BUG-2026-019 | 16/11 | SEV-4 | poste opérateur | Un poste rattaché à une buvette affichait les créneaux communs (sans buvette) comme cliquables ; le clic finissait en erreur rouge 403 « Ce créneau ne concerne pas ta buvette ». | Confirmée : `SlotBar` les montrait, `requirePorteeBuvette` les refuse (règle voulue) | CORRIGÉ le 16/11 : créneaux communs en lecture seule, marqués « commun », sur un poste rattaché |
+
 ## Incidents de production
 
 | ID | Date | Sév. | Description | Cause | Leçon (où elle vit maintenant) |

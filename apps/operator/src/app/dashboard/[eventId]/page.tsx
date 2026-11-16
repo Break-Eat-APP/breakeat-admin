@@ -141,6 +141,9 @@ export default function DashboardPage() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   // Phase 12.9 — supplier filter
   const [supplierId, setSupplierId] = useState<string | null>(null);
+  // Le compte est RATTACHÉ à une buvette (et non un manager qui en choisit une) :
+  // le serveur lui refuse alors les créneaux communs à toutes les buvettes.
+  const [posteEpingle, setPosteEpingle] = useState(false);
   /** Buvettes du lieu, pour le choix quand le poste n'en connait aucune. */
   const [supplierName, setSupplierName] = useState<string | null>(null);
   /**
@@ -210,6 +213,7 @@ export default function DashboardPage() {
         const epingle = moi.memberships.find((m) => m.supplierId);
         if (epingle?.supplierId) {
           setSupplierId(epingle.supplierId);
+          setPosteEpingle(true);
           setSupplierName(epingle.supplier?.name ?? null);
           return;
         }
@@ -581,7 +585,7 @@ export default function DashboardPage() {
       {/* Créneaux de récupération — ouverts ou fermés par l’équipier.
           Placés juste sous l’en-tête : c’est le premier réglage qu’on
           touche en prenant son poste, avant même de regarder la file. */}
-      {token && <SlotBar eventId={eventId} token={token} supplierId={supplierId} />}
+      {token && <SlotBar eventId={eventId} token={token} supplierId={supplierId} posteEpingle={posteEpingle} />}
 
       {clubSuspendu && (
         <div

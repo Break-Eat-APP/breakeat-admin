@@ -403,6 +403,13 @@ export class PublicEventsController {
         currentLoad: true,
         status: true,
         supplierId: true,
+        // LE MOMENT DU CRÉNEAU (16/11/2026) : « Mi-temps », « Deuxième
+        // pause »… L'app le montre en titre de section. Il ne vaut que pour un
+        // créneau issu d'un modèle de la buvette (`templateId`) : un créneau
+        // saisi sur l'événement garde le moment par défaut de la base, qui ne
+        // dit rien.
+        kind: true,
+        templateId: true,
       },
     });
   }
