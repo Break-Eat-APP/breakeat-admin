@@ -381,7 +381,7 @@ private struct MissingHeroRow: View {
           .foregroundStyle(Brand.ink)
           .lineLimit(1)
           .minimumScaleFactor(0.8)
-        Text("Rendez-vous au point de retrait")
+        Text("Rends-toi au point de retrait")
           .font(.system(size: 13, weight: .medium))
           .foregroundStyle(Brand.inkSoft)
           .lineLimit(1)
@@ -435,7 +435,14 @@ private struct LockScreenView: View {
     // détail, progression, bouton) débordait : la marque disparaissait, le
     // bouton vert était coupé à moitié. En cas de manque, on s'en tient donc à
     // l'essentiel : quoi faire, ce qui manque, où en est la commande.
-    VStack(alignment: .leading, spacing: state.hasMissingItems ? 10 : 13) {
+    // PRÊTE, AVEC LE BOUTON D'ARRIVÉE : la version la plus haute. Marque,
+    // ligne d'état, progression et bouton dépassaient la hauteur qu'iOS
+    // accorde (≈ 160 points) : il rognait le bas, et le bouton venait coller
+    // au bord — « moche et étouffé » (Rémi, 16/11). Une commande prête n'a
+    // plus de progression à montrer : le titre le dit. On la retire, et on
+    // resserre un peu.
+    let compacte = state.canAnnounceArrival && !state.hasMissingItems
+    VStack(alignment: .leading, spacing: state.hasMissingItems || compacte ? 10 : 13) {
       if state.hasMissingItems {
         MissingHeroRow(state: state)
         MissingRow(summary: state.missingSummary)
@@ -446,7 +453,7 @@ private struct LockScreenView: View {
 
       // Progression — masquée si la commande est annulée (le parcours n'a plus
       // de sens) mais conservée une fois récupérée, pour montrer l'aboutissement.
-      if !state.isCancelled {
+      if !state.isCancelled && !compacte {
         ProgressTrack(state: state)
       }
 
@@ -462,7 +469,7 @@ private struct LockScreenView: View {
       }
     }
     .padding(.horizontal, 16)
-    .padding(.vertical, 14)
+    .padding(.vertical, compacte ? 13 : 14)
     .activityBackgroundTint(Color.white)
     .activitySystemActionForegroundColor(Brand.orange)
   }
@@ -534,7 +541,7 @@ struct BreakEatLiveActivity: Widget {
               .foregroundStyle(.white)
               .lineLimit(1)
             Text(context.state.hasMissingItems
-              ? "Rendez-vous au point de retrait"
+              ? "Rends-toi au point de retrait"
               : "N° \(context.state.orderNumber)")
               .font(.system(size: 11))
               .foregroundStyle(.white.opacity(0.6))
