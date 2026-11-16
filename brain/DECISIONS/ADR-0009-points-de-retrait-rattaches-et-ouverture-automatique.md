@@ -33,6 +33,10 @@ s'est pas ouvert tout seul. Rien de tout cela n'était automatisé.
    hors ligne** n'est jamais touché. Le club peut toujours changer un statut à
    la main.
 
+6. Chaque point de retrait rattaché reçoit, s'il n'en a aucun sur
+   l'événement, un **comptoir par défaut à son nom** (ajout du 16/11, accord de
+   Rémi) : sans comptoir, une commande ne se paie pas.
+
 ## Pourquoi
 - Un oubli de rattachement ou d'ouverture, c'est une buvette vide le soir du
   match — l'échec le plus visible de l'app.

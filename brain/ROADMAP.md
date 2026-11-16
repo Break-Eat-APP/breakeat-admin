@@ -560,6 +560,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.33 | 2026-11-16 | Console : « point de retrait » au lieu de « fournisseur » |
 | 1.7.34 | 2026-11-16 | L'adversaire se corrige aussi sur un lieu BreakEat |
 | 1.7.35 | 2026-11-16 | Points de retrait rattachés d'office ; ouverture et fermeture automatiques ; menu « Configuration » |
+| 1.7.36 | 2026-11-16 | Un comptoir par défaut pour chaque point de retrait ; plus de créneau passé proposé |
 
 ---
 

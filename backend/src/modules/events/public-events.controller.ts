@@ -388,6 +388,10 @@ export class PublicEventsController {
       where: {
         eventId,
         status: SlotStatus.OPEN,
+        // UN CRÉNEAU PASSÉ N'EST PLUS PROPOSÉ (16/11/2026) : à 20 h, le client
+        // voyait encore « 14:00 – 14:15 » et pouvait le choisir. Seule la liste
+        // du CLIENT est filtrée ; la console et le poste opérateur voient tout.
+        endAt: { gt: new Date() },
         OR: [{ serviceDate: null }, { serviceDate: journee }],
         ...(supplierId
           ? { AND: [{ OR: [{ supplierId }, { supplierId: null }] }] }

@@ -5,6 +5,25 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.36] — 2026-11-16 — Un comptoir par défaut pour chaque point de retrait ; plus de créneau passé proposé
+
+- **Comptoir par défaut** (accord de Rémi) : une commande ne se paie pas sans
+  comptoir de retrait, et les comptoirs se créaient à la main pour chaque
+  événement — un événement ouvert automatiquement aurait pu n'avoir rien où
+  encaisser. Chaque point de retrait rattaché à un événement (d'office ou par
+  « Réactiver ») reçoit maintenant, s'il n'en a aucun, un comptoir **à son
+  nom** : « Buvette Nord » reste « Buvette Nord » pour le client, sans second
+  nom qui le perdrait. La section « Comptoirs de retrait » ne sert plus qu'à en
+  ajouter pour une grande buvette.
+- **Créneaux** : on reste simple (créneaux communs à l'événement), mais un
+  créneau **passé** n'est plus proposé au client — à 20 h, « 14:00 – 14:15 »
+  restait choisissable. La console et le poste opérateur voient toujours tout.
+
+`~ backend/src/common/helpers/rattachement-buvettes.ts` (+ spec),
+`~ events.service.ts` (+ spec), `~ public-events.controller.ts`.
+
+---
+
 ## [1.7.35] — 2026-11-16 — Points de retrait rattachés d'office ; ouverture et fermeture automatiques ; menu « Configuration »
 
 Décisions de Rémi (ADR-0009), après le test du concert du Dôme :

@@ -53,9 +53,16 @@ describe('EventsService', () => {
             organizationMember: { findUnique: jest.fn() },
             venue: { findFirst: jest.fn() },
             order: { count: jest.fn() },
+            // Le comptoir par défaut d'un point de retrait rattaché (16/11/2026).
+            pickupPoint: {
+              findMany: jest.fn().mockResolvedValue([]),
+              createMany: jest.fn().mockResolvedValue({ count: 0 }),
+            },
             event: {
               create: jest.fn(),
-              findMany: jest.fn(),
+              // Une liste vide par défaut : le comptoir par défaut lit les
+              // événements rattachés (16/11/2026).
+              findMany: jest.fn().mockResolvedValue([]),
               findFirst: jest.fn(),
               update: jest.fn(),
               delete: jest.fn(),

@@ -1,4 +1,4 @@
-import { EventStatus, SupplierStatus } from '@prisma/client';
+import { EventStatus, PickupPointStatus, SupplierStatus } from '@prisma/client';
 import type { PrismaService } from '../../database/prisma.service';
 
 /**
@@ -40,6 +40,7 @@ export async function rattacherLesPointsDeRetrait(
     data: buvettes.map((b) => ({ eventId, supplierId: b.id })),
     skipDuplicates: true,
   });
+  await assurerLesComptoirs(prisma, [eventId], buvettes.map((b) => b.id));
   return r.count;
 }
 
@@ -63,5 +64,60 @@ export async function rattacherAuxEvenements(
     data: evenements.map((e) => ({ eventId: e.id, supplierId })),
     skipDuplicates: true,
   });
+  await assurerLesComptoirs(prisma, evenements.map((e) => e.id), [supplierId]);
+  return r.count;
+}
+
+/**
+ * UN COMPTOIR PAR DÉFAUT, AU NOM DU POINT DE RETRAIT (Rémi, 16/11/2026).
+ *
+ * Une commande ne se paie pas sans comptoir de retrait, et les comptoirs se
+ * créaient à la main, événement par événement : un événement ouvert
+ * automatiquement aurait pu n'avoir rien où encaisser. Chaque point de retrait
+ * rattaché reçoit donc, s'il n'en a aucun sur cet événement, un comptoir qui
+ * porte SON nom — « Buvette Nord » reste « Buvette Nord » pour le client, sans
+ * second nom qui le perdrait. La section « Comptoirs de retrait » ne sert plus
+ * qu'à en ajouter (jusqu'à 4) pour une grande buvette.
+ *
+ * Rend le nombre de comptoirs créés.
+ */
+export async function assurerLesComptoirs(
+  prisma: PrismaService,
+  eventIds: string[],
+  supplierIds: string[],
+): Promise<number> {
+  if (eventIds.length === 0 || supplierIds.length === 0) return 0;
+  const [evenements, buvettes, existants] = await Promise.all([
+    prisma.event.findMany({
+      where: { id: { in: eventIds }, isPermanentContainer: false },
+      select: { id: true, organizationId: true, venueId: true },
+    }),
+    prisma.supplier.findMany({
+      where: { id: { in: supplierIds } },
+      select: { id: true, name: true },
+    }),
+    prisma.pickupPoint.findMany({
+      where: {
+        eventId: { in: eventIds },
+        supplierId: { in: supplierIds },
+        status: PickupPointStatus.ACTIVE,
+      },
+      select: { eventId: true, supplierId: true },
+    }),
+  ]);
+  const deja = new Set(existants.map((p) => `${p.eventId}|${p.supplierId}`));
+  const aCreer = evenements.flatMap((e) =>
+    buvettes
+      .filter((b) => !deja.has(`${e.id}|${b.id}`))
+      .map((b) => ({
+        organizationId: e.organizationId,
+        venueId: e.venueId,
+        eventId: e.id,
+        supplierId: b.id,
+        name: b.name,
+      })),
+  );
+  if (aCreer.length === 0) return 0;
+  const r = await prisma.pickupPoint.createMany({ data: aCreer });
   return r.count;
 }

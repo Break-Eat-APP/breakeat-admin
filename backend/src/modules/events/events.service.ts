@@ -7,7 +7,10 @@ import {
 } from '@nestjs/common';
 import { EventStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
-import { rattacherLesPointsDeRetrait } from '../../common/helpers/rattachement-buvettes';
+import {
+  assurerLesComptoirs,
+  rattacherLesPointsDeRetrait,
+} from '../../common/helpers/rattachement-buvettes';
 import {
   requireOrgAccess,
   MANAGE_ROLES,
@@ -310,6 +313,8 @@ export class EventsService {
     const es = await this.prisma.eventSupplier.create({
       data: { eventId, supplierId },
     });
+    // Réactivé sur cet événement : son comptoir par défaut, s'il n'en a aucun.
+    await assurerLesComptoirs(this.prisma, [eventId], [supplierId]);
 
     this.logger.log(`Supplier ${supplierId} attached to event ${eventId}`);
     return es;
