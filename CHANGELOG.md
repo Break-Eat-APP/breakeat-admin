@@ -5,6 +5,27 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.31] — 2026-11-16 — Partager l'addition : un vrai lien, et plus de détour par le paiement
+
+Remarques de Rémi en testant avec un ami :
+
+- **Le lien n'était pas cliquable** : le message envoyait `breakeat://split/CODE`,
+  que WhatsApp et les SMS ne transforment pas en lien. Le serveur fabrique
+  maintenant un **lien https** (`<adresse publique de l'app web>/split/CODE`,
+  variable `PUBLIC_WEB_URL`) : l'ami clique, la page s'ouvre dans son
+  navigateur, il coche ce qu'il prend et paie sa part, sans rien installer.
+  Vérifié sur l'app web en ligne avec un vrai code (la page de partage
+  s'affiche avec ses articles).
+- **« Choisir un créneau puis partager »** envoyait, après le créneau, au
+  PAIEMENT : l'hôte devait revenir en arrière et rappuyer sur « Partager
+  l'addition ». Le choix du créneau revient désormais au panier, qui enchaîne
+  le partage tout seul.
+
+`~ backend/src/modules/order-splits/order-splits.service.ts` (champ `lien`),
+`~ apps/mobile` (`cart`, `slot-selector`, `split`, navigation). Mise à jour à distance.
+
+---
+
 ## [1.7.30] — 2026-11-16 — Les créneaux disent leur moment ; le poste opérateur ne propose plus ce qu'il refuse
 
 Remarques de Rémi, en testant le concert du Dôme :

@@ -177,7 +177,9 @@ export function SplitScreen({ route, navigation }: Props) {
     await Share.share({
       message:
         `On commande${ou} — prends ce que tu veux et paie ta part :\n\n` +
-        `breakeat://split/${code}\n\n` +
+        // Un lien https : WhatsApp et les SMS ne rendent pas cliquable
+        // `breakeat://`. Le serveur le fabrique (adresse publique de l'app web).
+        `${split?.lien ?? `breakeat://split/${code}`}\n\n` +
         `Code : ${code}`,
     });
   };

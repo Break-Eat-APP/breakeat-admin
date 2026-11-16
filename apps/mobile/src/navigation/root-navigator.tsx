@@ -69,7 +69,8 @@ export type RootStackParamList = {
     venueName?: string;
   };
   SupplierCatalog: { eventId: string; supplierId: string };
-  SlotSelector: { eventId: string };
+  /** `puisPartager` : on vient de « Partager l'addition » — revenir au panier, pas au paiement. */
+  SlotSelector: { eventId: string; puisPartager?: boolean };
   Checkout: undefined;
   OrderConfirmation: {
     orderId: string;

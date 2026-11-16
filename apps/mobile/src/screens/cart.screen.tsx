@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -74,7 +74,9 @@ export function CartScreen({ navigation }: Props) {
     // Sans creneau, l'ardoise partait sans heure de retrait et la tournee
     // arrivait au comptoir en « des que prete ».
     if (!selectedSlotId) {
-      navigation.navigate('SlotSelector', { eventId });
+      // Le partage reprend tout seul au retour, une fois le créneau choisi.
+      partageApresCreneau.current = true;
+      navigation.navigate('SlotSelector', { eventId, puisPartager: true });
       return;
     }
 
@@ -104,6 +106,19 @@ export function CartScreen({ navigation }: Props) {
       setInvitationEnCours(false);
     }
   };
+
+  /**
+   * LE PARTAGE REPREND APRÈS LE CRÉNEAU (16/11/2026). « Choisir un créneau puis
+   * partager » ouvrait le choix du créneau, qui envoyait ensuite au paiement :
+   * l'hôte devait revenir en arrière et rappuyer sur « Partager l'addition ».
+   */
+  const partageApresCreneau = useRef(false);
+  useEffect(() => {
+    if (partageApresCreneau.current && selectedSlotId) {
+      partageApresCreneau.current = false;
+      void handlePartagerAddition();
+    }
+  }, [selectedSlotId]);
 
   const handleContinue = () => {
     if (!eventId) return;

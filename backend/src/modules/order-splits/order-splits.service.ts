@@ -74,6 +74,13 @@ const RESERVATION_MS = 5 * 60 * 1000;
 
 export interface VueArdoise {
   code: string;
+  /**
+   * LE LIEN À ENVOYER, en https (16/11/2026). Le message partait avec
+   * `breakeat://split/CODE` : WhatsApp et les SMS ne rendent pas cliquable une
+   * adresse qui ne commence pas par http. Le lien web s'ouvre partout — dans
+   * le navigateur, l'ami paie sa part sans rien installer.
+   */
+  lien: string;
   status: OrderSplitStatus;
   supplierName: string | null;
   eventId: string;
@@ -296,8 +303,10 @@ export class OrderSplitsService {
       claimantName: u.share?.claimantName ?? null,
     }));
 
+    const webUrl = this.config.get<string>('app.split.webUrl') ?? '';
     return {
       code: split.code,
+      lien: `${webUrl}/split/${split.code}`,
       status: split.status,
       supplierName: buvette?.name ?? null,
       eventId: split.eventId,

@@ -1053,6 +1053,8 @@ export interface SplitUnit {
 
 export interface OrderSplit {
   code: string;
+  /** Le lien https à envoyer (serveur du 16/11 et suivants). */
+  lien?: string;
   /**
    * SENDING : les cartes sont en train d'etre encaissees (quelques secondes).
    * FAILED  : la commande n'a pas pu etre creee, tout le monde a ete rembourse.

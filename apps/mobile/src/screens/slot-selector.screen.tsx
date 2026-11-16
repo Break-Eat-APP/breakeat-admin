@@ -35,7 +35,7 @@ function slotLabel(slot: PublicSlot): string {
 }
 
 export function SlotSelectorScreen({ route, navigation }: Props) {
-  const { eventId } = route.params;
+  const { eventId, puisPartager } = route.params;
   const { setSlot, selectedSlotId, supplierId } = useCartStore();
 
   const [slots, setSlots] = useState<PublicSlot[]>([]);
@@ -63,6 +63,13 @@ export function SlotSelectorScreen({ route, navigation }: Props) {
     const remaining = slot.capacity - slot.currentLoad;
     if (remaining <= 0) return; // Full slot — ignore tap
     setSlot(slot.id, slotLabel(slot));
+    // VENU POUR PARTAGER L'ADDITION (16/11) : on revient au panier, qui
+    // enchaîne le partage. Partir au paiement envoyait l'hôte sur Stripe
+    // payer seul la commande qu'il voulait partager.
+    if (puisPartager) {
+      navigation.goBack();
+      return;
+    }
     navigation.navigate('Checkout');
   };
 
