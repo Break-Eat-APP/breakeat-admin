@@ -550,6 +550,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.23 | 2026-11-13 | L'image du lieu à sa forme partout ; le plan des buvettes depuis la commande |
 | 1.7.24 | 2026-11-13 | L'image du lieu, sans fond |
 | 1.7.25 | 2026-11-16 | Le calendrier de la saison en 2 colonnes, grands blasons |
+| 1.7.26 | 2026-11-16 | Test croisé entre organisations : deux failles corrigées |
 
 ---
 

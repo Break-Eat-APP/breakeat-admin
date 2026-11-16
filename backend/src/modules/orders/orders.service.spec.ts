@@ -168,6 +168,7 @@ describe('OrdersService', () => {
               upsert: jest.fn(),
             },
             cart: { findUnique: jest.fn() },
+            slot: { findUnique: jest.fn() },
             product: { findMany: jest.fn() },
             order: {
               findFirst: jest.fn(),
@@ -1442,6 +1443,9 @@ describe('OrdersService', () => {
     it('assigns order to slot and returns updated order', async () => {
       const assignedOrder = { ...mockOrder(), slotId: SLOT_ID };
       (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder());
+      (prisma.slot.findUnique as jest.Mock).mockResolvedValue({
+        eventId: EVENT_ID, status: 'OPEN', supplierId: null,
+      });
       (slotsService.assignOrderToSlot as jest.Mock).mockResolvedValue(undefined);
       (prisma.order.findUniqueOrThrow as jest.Mock).mockResolvedValue(assignedOrder);
 
@@ -1461,6 +1465,29 @@ describe('OrdersService', () => {
 
       await expect(service.assignOrderToSlot(ORDER_ID, SLOT_ID)).rejects.toThrow(NotFoundException);
       expect(transactionMock).not.toHaveBeenCalled();
+    });
+
+    // Test croisé entre organisations (16/11) : le créneau d'un AUTRE
+    // événement — d'un autre club — n'est jamais touché.
+    it('refuse le créneau d un autre événement, sans prendre de place', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder());
+      (prisma.slot.findUnique as jest.Mock).mockResolvedValue({
+        eventId: 'evenement-d-un-autre-club', status: 'OPEN', supplierId: null,
+      });
+
+      await expect(service.assignOrderToSlot(ORDER_ID, SLOT_ID)).rejects.toThrow(BadRequestException);
+      expect(transactionMock).not.toHaveBeenCalled();
+      expect(slotsService.assignOrderToSlot).not.toHaveBeenCalled();
+    });
+
+    it('refuse le créneau d une autre buvette du même événement', async () => {
+      (prisma.order.findUnique as jest.Mock).mockResolvedValue(mockOrder());
+      (prisma.slot.findUnique as jest.Mock).mockResolvedValue({
+        eventId: EVENT_ID, status: 'OPEN', supplierId: 'autre-buvette',
+      });
+
+      await expect(service.assignOrderToSlot(ORDER_ID, SLOT_ID)).rejects.toThrow(BadRequestException);
+      expect(slotsService.assignOrderToSlot).not.toHaveBeenCalled();
     });
   });
 

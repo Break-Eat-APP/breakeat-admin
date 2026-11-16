@@ -5,6 +5,26 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.26] — 2026-11-16 — Test croisé entre organisations : deux failles corrigées
+
+Revue route par route (~220 routes) de ce qu'un club peut faire chez un autre.
+Le code est rigoureux dans l'ensemble ; deux défauts, corrigés et testés :
+
+- **Prise de compte (sérieux)** : un responsable de club pouvait inviter un
+  compte existant (le responsable d'un autre club, un client, la plateforme)
+  comme opérateur, puis redéfinir son mot de passe. Un club ne redéfinit plus
+  que les comptes qu'il a lui-même créés et qui n'ont aucune vie ailleurs ;
+  sinon, seule la plateforme le peut (BUG-2026-017).
+- **Créneau d'un autre club** : au comptoir, une commande pouvait être placée
+  sur le créneau d'un autre événement (BUG-2026-018).
+
+Compte rendu : `brain/taches/2026-11-16-test-croise-organisations.md`.
+
+`~ backend/src/modules/organizations/organizations.service.ts` (+ spec),
+`~ backend/src/modules/orders/orders.service.ts` (+ spec) — serveur seul.
+
+---
+
 ## [1.7.25] — 2026-11-16 — Le calendrier de la saison en 2 colonnes, grands blasons
 
 Décidé par Rémi et son développeur : avec un ou deux matchs par mois, le ruban

@@ -671,6 +671,7 @@ export class OrganizationsService {
         throw new ForbiddenException('Only ORG_ADMIN can reset a member password');
       }
       this.assertRoleDelegable(member.orgRole);
+      await this.assertCompteDuClubSeulement(member.userId);
     }
 
     if (member.userId === callerId) {
@@ -691,6 +692,49 @@ export class OrganizationsService {
 
     return { email: member.user.email };
   }
+  /**
+   * UN CLUB NE REDÉFINIT QUE LES COMPTES QU'IL A LUI-MÊME CRÉÉS (test croisé
+   * entre organisations, 16/11/2026).
+   *
+   * L'invitation par e-mail rattache un compte QUI EXISTE DÉJÀ, sans que son
+   * propriétaire l'accepte. Le contrôle de rôle ci-dessus ne regarde que CE
+   * club : invité ici comme opérateur, le responsable d'un autre club — ou un
+   * client de l'app, ou la plateforme elle-même — passait le contrôle, et son
+   * mot de passe pouvait être remplacé. Le compte entier changeait de main,
+   * avec ses droits ailleurs.
+   *
+   * Le compte doit donc n'avoir AUCUNE vie hors de ce club :
+   *  - le rôle global le plus faible (jamais la plateforme) ;
+   *  - aucune autre organisation ;
+   *  - jamais créé par la personne elle-même dans l'app (CGU acceptées) ni
+   *    relié à Apple ou Google ;
+   *  - aucune commande passée comme client.
+   * Sinon, seule la plateforme (super admin) peut le faire.
+   */
+  private async assertCompteDuClubSeulement(userId: string): Promise<void> {
+    const compte = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        globalRole: true,
+        cguAcceptedAt: true,
+        _count: { select: { memberships: true, orders: true, identities: true } },
+      },
+    });
+    const autonome =
+      !compte ||
+      compte.globalRole !== GlobalRole.CUSTOMER ||
+      compte.cguAcceptedAt !== null ||
+      compte._count.memberships > 1 ||
+      compte._count.orders > 0 ||
+      compte._count.identities > 0;
+    if (autonome) {
+      throw new ForbiddenException(
+        'Ce compte est aussi utilisé en dehors de votre club : seul BreakEat peut ' +
+          'redéfinir son mot de passe. La personne peut aussi utiliser « mot de passe oublié ».',
+      );
+    }
+  }
+
   async removeMember(
     organizationId: string,
     memberId: string,

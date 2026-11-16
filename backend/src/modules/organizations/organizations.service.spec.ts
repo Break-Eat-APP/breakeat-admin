@@ -353,6 +353,19 @@ describe('OrganizationsService', () => {
   describe('resetMemberPassword', () => {
     const MEMBER_ID = 'member-1';
 
+    // Le compte visé : par défaut, un compte d'opérateur créé par CE club
+    // (aucune autre vie). Chaque test de refus en change un seul trait.
+    const compte = (surcharge: Record<string, unknown> = {}) => ({
+      globalRole: 'CUSTOMER',
+      cguAcceptedAt: null,
+      _count: { memberships: 1, orders: 0, identities: 0 },
+      ...surcharge,
+    });
+
+    beforeEach(() => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(compte());
+    });
+
     // Membre d'ORG_ID, rattache par defaut a un utilisateur AUTRE que l'appelant.
     const membre = (orgRole: string = OrgRole.OPERATOR, userId = TARGET_ID) => ({
       id: MEMBER_ID,
@@ -421,6 +434,40 @@ describe('OrganizationsService', () => {
       );
 
       expect(prisma.user.update).toHaveBeenCalledTimes(1);
+    });
+
+    describe('un compte qui vit hors du club (prise de compte croisée)', () => {
+      const casDeRefus: [string, Record<string, unknown>][] = [
+        ['le compte de la plateforme', { globalRole: 'SUPER_ADMIN' }],
+        ['membre d une autre organisation', { _count: { memberships: 2, orders: 0, identities: 0 } }],
+        ['un client qui a commandé', { _count: { memberships: 1, orders: 3, identities: 0 } }],
+        ['un compte relié à Apple ou Google', { _count: { memberships: 1, orders: 0, identities: 1 } }],
+        ['un compte créé par la personne dans l app', { cguAcceptedAt: new Date('2026-10-01') }],
+      ];
+
+      it.each(casDeRefus)('refuse : %s', async (_nom, surcharge) => {
+        (prisma.organizationMember.findUnique as jest.Mock)
+          .mockResolvedValueOnce(membre())
+          .mockResolvedValueOnce({ orgRole: OrgRole.ORG_ADMIN });
+        (prisma.user.findUnique as jest.Mock).mockResolvedValue(compte(surcharge));
+
+        await expect(
+          service.resetMemberPassword(ORG_ID, MEMBER_ID, CALLER_ID, 'CUSTOMER', 'peu-importe'),
+        ).rejects.toThrow(ForbiddenException);
+        expect(prisma.user.update).not.toHaveBeenCalled();
+      });
+
+      it('la plateforme, elle, peut toujours dépanner ce compte', async () => {
+        (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValueOnce(membre());
+        (prisma.user.findUnique as jest.Mock).mockResolvedValue(
+          compte({ _count: { memberships: 2, orders: 3, identities: 1 } }),
+        );
+
+        await service.resetMemberPassword(
+          ORG_ID, MEMBER_ID, CALLER_ID, 'SUPER_ADMIN', 'nouveau-mot-de-passe',
+        );
+        expect(prisma.user.update).toHaveBeenCalledTimes(1);
+      });
     });
 
     it('un simple membre ne peut rien redefinir', async () => {

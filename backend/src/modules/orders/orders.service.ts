@@ -24,6 +24,7 @@ import { LiveActivityService } from '../live-activity/live-activity.service';
 import { jourDeService } from '../../common/helpers/jour-de-service';
 import { libelleTaux, ventilerSurTotal } from '../../common/helpers/tva';
 import { consommerLeStock, rendreLeStock } from '../stock/retenue-stock';
+import { assertCreneauCompatible } from '../../common/helpers/retrait-compatible';
 
 /**
  * OrdersService — owns the Order lifecycle from PaymentIntent.succeeded onward.
@@ -1452,6 +1453,14 @@ export class OrdersService {
   async assignOrderToSlot(orderId: string, slotId: string): Promise<Order> {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) throw new NotFoundException(`Order ${orderId} not found`);
+
+    // LE CRÉNEAU DOIT ÊTRE CELUI DE LA COMMANDE (test croisé entre
+    // organisations, 16/11/2026). Le contrôleur vérifie que l'opérateur tient
+    // la COMMANDE ; rien ne vérifiait le créneau envoyé avec elle. Un opérateur
+    // du club A pouvait passer l'identifiant d'un créneau du club B et y
+    // consommer une place. Même règle que le panier : même événement, même
+    // buvette.
+    await assertCreneauCompatible(this.prisma, slotId, order);
 
     let assigned!: Order;
     await this.prisma.$transaction(async (tx) => {

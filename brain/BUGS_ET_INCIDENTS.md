@@ -58,6 +58,9 @@
 
 | BUG-2026-016 | 12/11 | SEV-3 | dépendances | Premier audit des dépendances : **62 failles « élevées »**, 0 critique, **aucune dans le serveur** — outillage Expo (app mobile) et Next.js (consoles). | Confirmée (`pnpm audit --prod`) | CORRIGÉ le 12/11 : versions corrigées forcées dans la même version majeure (`pnpm-workspace.yaml` → `overrides`), **62 → 4**. Les 4 restantes sont des **risques acceptés**, listés dans `.github/workflows/audit-dependances.yml` : `sharp` 0.34 (3 avis, imposé par Next 15, non utilisé sur Vercel) et `decode-uri-component` 0.2 (via React Navigation ; la version corrigée est un module ES qu'il ne charge pas ; effet possible : figer l'app sur une adresse piégée, aucun accès aux données). À lever avec les prochaines montées de Next et de React Navigation. **Vérifié** : CI verte, Railway redéployé, et **build iOS de contrôle n° 45 réussie** (12/11, non envoyée sur TestFlight) |
 
+| BUG-2026-017 | 16/11 | **SEV-1** | sécurité — organisations | **Prise de compte possible** : un responsable de club invitait par e-mail un compte EXISTANT (responsable d'un autre club, client, plateforme) comme opérateur, puis redéfinissait son mot de passe. | Confirmée par lecture du code (`inviteByEmail` + `resetMemberPassword`, contrôle limité au rôle dans CE club). Exploitation non constatée, non vérifiable depuis le dépôt | CORRIGÉ le 16/11 : `assertCompteDuClubSeulement` — un club ne redéfinit que les comptes sans vie hors de lui. Compte rendu : `brain/taches/2026-11-16-test-croise-organisations.md` |
+| BUG-2026-018 | 16/11 | SEV-3 | sécurité — commandes | `PATCH /orders/:id/assign-slot` acceptait le créneau d'un autre événement, donc d'un autre club, et y consommait une place. | Confirmée par lecture du code | CORRIGÉ le 16/11 : `assertCreneauCompatible` (même événement, même buvette) |
+
 ## Incidents de production
 
 | ID | Date | Sév. | Description | Cause | Leçon (où elle vit maintenant) |
