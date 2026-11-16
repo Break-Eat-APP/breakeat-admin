@@ -66,7 +66,10 @@ module.exports = {
   // la 1.1.1 ; les telephones restes en 1.1.0 ne les recoivent plus.
   // 1.1.2 (11/11/2026) : l'icone iOS au format Icon Composer (`ios.icon`),
   // encore un changement natif.
-  version: '1.1.2',
+  // 1.1.3 (16/11/2026) : la Live Activity « prête » resserrée (natif : le
+  // widget). Les builds 1.1.2 (dont la 44) ne recevront plus les mises à jour
+  // à distance publiées après cette version.
+  version: '1.1.3',
   orientation: 'portrait',
   scheme: 'breakeat',
   // L'ICONE A SON PROPRE FICHIER (10/11/2026). Le B occupait 83 % de la
