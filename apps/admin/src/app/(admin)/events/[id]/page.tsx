@@ -11,7 +11,6 @@ import {
   apiGetSuppliers,
   apiAttachSupplier,
   apiDetachSupplier,
-  apiCreateSupplier,
   apiGetPickupPoints,
   apiCreatePickupPoint,
   apiDeletePickupPoint,
@@ -115,16 +114,10 @@ export default function EventDetailPage() {
   const [changingStatus, setChangingStatus] = useState(false);
 
   // Attach supplier
-  const [attachId, setAttachId] = useState('');
-  const [attaching, setAttaching] = useState(false);
-  const [attachError, setAttachError] = useState('');
+  // Le point de retrait en cours d'activation / désactivation sur cet événement.
+  const [basculeId, setBasculeId] = useState<string | null>(null);
 
   // Create supplier
-  const [showNewSupplier, setShowNewSupplier] = useState(false);
-  const [newSupName, setNewSupName] = useState('');
-  const [newSupZone, setNewSupZone] = useState('');
-  const [creatingSupplier, setCreatingSupplier] = useState(false);
-  const [createSupError, setCreateSupError] = useState('');
 
   // Pickup point form
   const [ppName, setPpName] = useState('');
@@ -259,44 +252,23 @@ export default function EventDetailPage() {
     }
   }
 
-  async function handleAttach(e: React.FormEvent) {
-    e.preventDefault();
-    setAttaching(true);
-    setAttachError('');
+  /**
+   * ACTIVER / DÉSACTIVER UN POINT DE RETRAIT POUR CET ÉVÉNEMENT (16/11/2026).
+   *
+   * Les points de retrait se créent dans la section « Points de retrait » et
+   * s'attachent d'office à chaque événement. Ici, on ne fait plus que
+   * désactiver celui qui ne sert pas ce soir — ou le réactiver.
+   */
+  async function basculerPointDeRetrait(supplierId: string, actif: boolean) {
+    setBasculeId(supplierId);
     try {
-      await apiAttachSupplier(orgId, eventId, attachId.trim());
-      setAttachId('');
-      await load();
-    } catch (err) {
-      setAttachError(err instanceof Error ? err.message : 'Erreur');
-    } finally {
-      setAttaching(false);
-    }
-  }
-
-  async function handleDetach(supplierId: string) {
-    try {
-      await apiDetachSupplier(orgId, eventId, supplierId);
+      if (actif) await apiDetachSupplier(orgId, eventId, supplierId);
+      else await apiAttachSupplier(orgId, eventId, supplierId);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur');
-    }
-  }
-
-  async function handleCreateSupplier(e: React.FormEvent) {
-    e.preventDefault();
-    setCreatingSupplier(true);
-    setCreateSupError('');
-    try {
-      const s = await apiCreateSupplier(orgId, { name: newSupName, preparationZone: newSupZone || undefined });
-      setShowNewSupplier(false);
-      setNewSupName('');
-      setNewSupZone('');
-      setOrgSuppliers((prev) => [...prev, s]);
-    } catch (err) {
-      setCreateSupError(err instanceof Error ? err.message : 'Erreur');
     } finally {
-      setCreatingSupplier(false);
+      setBasculeId(null);
     }
   }
 
@@ -951,6 +923,18 @@ export default function EventDetailPage() {
 
       {/* Status change */}
       <Card title="Statut de l'événement">
+        {/* L'AUTOMATISME, DIT LÀ OÙ ON CHERCHE (16/11/2026) : sans cette
+            phrase, un club continuerait d'ouvrir à la main ce qui s'ouvre seul. */}
+        {!estFlaix && !event.isPermanentContainer ? (
+          <p style={{ color: BRAND.grey, fontSize: 13, margin: '0 0 12px', lineHeight: 1.5 }}>
+            <strong style={{ color: BRAND.ink }}>Automatique.</strong> Un événement en brouillon passe en
+            actif à l&apos;heure d&apos;ouverture de la commande du lieu
+            {venue?.ordersOpenAt ? ` (${venue.ordersOpenAt} le jour de l’événement)` : ''}, et ses points
+            de retrait s&apos;ouvrent avec lui. À l&apos;heure de fin, il passe en terminé et ses points de
+            retrait se ferment. Tu peux toujours le changer à la main ci-dessous ; le comptoir garde son
+            bouton « fermer ».
+          </p>
+        ) : null}
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <select
             value={newStatus}
@@ -1155,100 +1139,62 @@ export default function EventDetailPage() {
           Flaix, c'est Flaix qui les tient — les proposer ici créait des
           réglages qu'aucun client ne verrait jamais. */}
       {!estFlaix && (
-      <Card
-        title={`Points de retrait attachés (${suppliers.length})`}
-        action={
-          <button
-            onClick={() => setShowNewSupplier((v) => !v)}
-            style={{ background: BRAND.bgSubtle, border: `1px solid ${BRAND.border}`, borderRadius: 6, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: BRAND.inkSoft, fontFamily: 'inherit' }}
-          >
-            + Créer fournisseur
-          </button>
-        }
-      >
-        {/* Create supplier inline form */}
-        {showNewSupplier && (
-          <form
-            onSubmit={handleCreateSupplier}
-            style={{ background: BRAND.bgSubtle, borderRadius: 8, padding: 16, marginBottom: 16, border: `1px solid ${BRAND.border}` }}
-          >
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <input
-                type="text"
-                placeholder="Nom du point de retrait *"
-                value={newSupName}
-                onChange={(e) => setNewSupName(e.target.value)}
-                required
-                style={{ flex: 1, minWidth: 150, padding: '7px 10px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 13, fontFamily: 'inherit' }}
-              />
-              <input
-                type="text"
-                placeholder="Zone de préparation (optionnel)"
-                value={newSupZone}
-                onChange={(e) => setNewSupZone(e.target.value)}
-                style={{ flex: 1, minWidth: 150, padding: '7px 10px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 13, fontFamily: 'inherit' }}
-              />
-              <button
-                type="submit"
-                disabled={creatingSupplier}
-                onMouseEnter={(e) => { if (!creatingSupplier) e.currentTarget.style.background = BRAND.orangeDark; }}
-                onMouseLeave={(e) => { if (!creatingSupplier) e.currentTarget.style.background = BRAND.orange; }}
-                style={{ background: creatingSupplier ? BRAND.grey : BRAND.orange, color: '#fff', border: 'none', borderRadius: 6, padding: '7px 16px', fontWeight: 600, fontSize: 13, cursor: creatingSupplier ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s ease' }}
-              >
-                {creatingSupplier ? 'Création…' : 'Créer'}
-              </button>
-            </div>
-            {createSupError && <div style={{ color: '#dc2626', fontSize: 13, marginTop: 8 }}>{createSupError}</div>}
-          </form>
-        )}
-
-        {/* Attach existing supplier */}
-        <form onSubmit={handleAttach} style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-          <select
-            value={attachId}
-            onChange={(e) => setAttachId(e.target.value)}
-            required
-            style={{ flex: 1, minWidth: 200, padding: '8px 10px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 13, background: BRAND.surface, fontFamily: 'inherit' }}
-          >
-            <option value="">Sélectionner un point de retrait existant…</option>
-            {orgSuppliers.filter((s) => !attachedIds.has(s.id)).map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-          <button
-            type="submit"
-            disabled={attaching || !attachId}
-            onMouseEnter={(e) => { if (!(attaching || !attachId)) e.currentTarget.style.background = BRAND.orangeDark; }}
-            onMouseLeave={(e) => { if (!(attaching || !attachId)) e.currentTarget.style.background = BRAND.orange; }}
-            style={{ background: attaching ? BRAND.grey : BRAND.orange, color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', fontWeight: 600, fontSize: 13, cursor: attaching || !attachId ? 'not-allowed' : 'pointer', fontFamily: 'inherit', transition: 'background 0.15s ease' }}
-          >
-            {attaching ? 'Ajout…' : 'Attacher'}
-          </button>
-          {attachError && <span style={{ color: '#dc2626', fontSize: 13, alignSelf: 'center' }}>{attachError}</span>}
-        </form>
-
-        {/* Attached list */}
-        {suppliers.length === 0 ? (
-          <p style={{ color: BRAND.grey, fontSize: 14 }}>Aucun point de retrait attaché à cet événement.</p>
+      <Card title={`Points de retrait de l’événement (${suppliers.length} sur ${orgSuppliers.length})`}>
+        <p style={{ color: BRAND.grey, fontSize: 13, margin: '0 0 12px', lineHeight: 1.5 }}>
+          Tous les points de retrait du lieu sont rattachés d&apos;office à l&apos;événement. Désactive
+          celui qui ne sert pas ce jour-là. Pour en créer un, va dans <strong>Configuration → Points de
+          retrait</strong>.
+        </p>
+        {orgSuppliers.length === 0 ? (
+          <p style={{ color: BRAND.grey, fontSize: 14, margin: 0 }}>
+            Aucun point de retrait. Crée-le dans Configuration → Points de retrait : il rejoindra cet
+            événement tout seul.
+          </p>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {suppliers.map((s) => (
-              <div
-                key={s.id}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', background: BRAND.bgSubtle, borderRadius: 8, border: `1px solid ${BRAND.border}` }}
-              >
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14, color: BRAND.ink }}>{s.name}</div>
-                  {s.preparationZone && <div style={{ fontSize: 12, color: BRAND.grey }}>Zone : {s.preparationZone}</div>}
-                </div>
-                <button
-                  onClick={() => void handleDetach(s.id)}
-                  style={{ background: 'none', border: '1px solid #fca5a5', color: '#dc2626', borderRadius: 6, padding: '4px 10px', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit' }}
+            {orgSuppliers.map((s) => {
+              const actif = attachedIds.has(s.id);
+              return (
+                <div
+                  key={s.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '10px 12px',
+                    background: actif ? BRAND.bgSubtle : BRAND.surface,
+                    borderRadius: 8,
+                    border: `1px solid ${BRAND.border}`,
+                    opacity: actif ? 1 : 0.7,
+                  }}
                 >
-                  Détacher
-                </button>
-              </div>
-            ))}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: BRAND.ink }}>{s.name}</div>
+                    <div style={{ fontSize: 12, color: actif ? '#047857' : BRAND.grey }}>
+                      {actif ? 'Actif sur cet événement' : 'Désactivé pour cet événement'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void basculerPointDeRetrait(s.id, actif)}
+                    disabled={basculeId === s.id}
+                    style={{
+                      background: actif ? 'none' : BRAND.orange,
+                      border: actif ? '1px solid #fca5a5' : 'none',
+                      color: actif ? '#dc2626' : '#fff',
+                      borderRadius: 6,
+                      padding: '5px 12px',
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      cursor: basculeId === s.id ? 'wait' : 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {basculeId === s.id ? '…' : actif ? 'Désactiver' : 'Réactiver'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
       </Card>

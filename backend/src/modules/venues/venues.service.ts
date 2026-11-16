@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { rattacherLesPointsDeRetrait } from '../../common/helpers/rattachement-buvettes';
 import {
   requireOrgAccess,
   MANAGE_ROLES,
@@ -110,7 +111,7 @@ export class VenuesService {
     }
 
     try {
-      await this.prisma.event.create({
+      const contenant = await this.prisma.event.create({
         data: {
           organizationId: venue.organizationId,
           venueId: venue.id,
@@ -123,6 +124,8 @@ export class VenuesService {
           isPermanentContainer: true,
         },
       });
+      // Le service continu reçoit, lui aussi, tous les points de retrait.
+      await rattacherLesPointsDeRetrait(this.prisma, contenant.id, venue.organizationId);
       this.logger.log(`Contenant permanent créé pour le lieu ${venue.id}`);
     } catch (err) {
       // P2002 = l'index unique partiel a joué : le contenant existe déjà, soit

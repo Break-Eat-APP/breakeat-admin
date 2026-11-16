@@ -129,9 +129,16 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     const groupe = NAV_GROUPS.find((g) => g.slug === slug);
     if (!groupe) return false;
     if (pathname === `/section/${slug}`) return true;
-    return groupe.items.some(
-      (i) => !i.external && (pathname === i.href || pathname.startsWith(`${i.href}/`)),
-    );
+    if (
+      groupe.items.some(
+        (i) => !i.external && (pathname === i.href || pathname.startsWith(`${i.href}/`)),
+      )
+    ) {
+      return true;
+    }
+    // Un groupe rangé dedans (les points de retrait dans « Configuration »)
+    // allume son parent.
+    return NAV_GROUPS.some((g) => g.parent === slug && actif(g.slug));
   };
 
   return (
@@ -279,7 +286,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           tenir à jour — et un menu qui s'allonge sans rien expliquer.
         */}
         <nav style={{ flex: 1, padding: '14px 0 14px' }}>
-          {NAV_GROUPS.map((group) => (
+          {NAV_GROUPS.filter((g) => !g.parent).map((group) => (
             <div key={group.title}>
               {/*
                 LE TITRE DE SECTION EST UN LIEN.

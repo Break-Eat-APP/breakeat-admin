@@ -5,6 +5,35 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.35] — 2026-11-16 — Points de retrait rattachés d'office ; ouverture et fermeture automatiques ; menu « Configuration »
+
+Décisions de Rémi (ADR-0009), après le test du concert du Dôme :
+
+- **Rattachement automatique** : un point de retrait se crée seulement dans
+  Configuration → Points de retrait et rejoint d'office les événements à venir ;
+  un événement qui naît reçoit tous les points de retrait du club. Sur la fiche
+  de l'événement, la carte liste tous les points de retrait avec **Désactiver /
+  Réactiver** (plus de création ni de liste « attacher »). La fiche d'une
+  buvette perd « Rattacher à un événement », et ne montre « Créneaux de
+  récupération » que pour un lieu ouvert en continu (seul cas où ils servent).
+- **Ouverture et fermeture automatiques** (lieux BreakEat) : un brouillon avec
+  un point de retrait passe **Actif à l'heure d'ouverture de la commande** du
+  lieu (08:00 par défaut, le jour J) et ouvre ses points de retrait fermés ; à
+  la **fin**, il passe **Terminé** et ferme ses points de retrait qui ne servent
+  plus ailleurs. Le comptoir garde « fermer » ; pause et hors ligne ne sont
+  jamais touchés ; aucune commande en cours n'est perdue. La carte « Statut »
+  de la fiche l'explique.
+- **Menu** : « Mon lieu » devient **« Configuration »** ; « Points de retrait »
+  n'a plus d'entrée propre et devient une carte de Configuration, qui ouvre les
+  buvettes et l'encaissement.
+
+`+ backend/src/common/helpers/rattachement-buvettes.ts`,
+`+ backend/src/modules/events/ouverture-automatique.service.ts` (+ spec),
+`~ events / suppliers / venues` services (+ specs), `~ apps/admin` (menu, fiche
+événement, fiche buvette).
+
+---
+
 ## [1.7.34] — 2026-11-16 — L'adversaire se corrige aussi sur un lieu BreakEat
 
 Remarque de Rémi (Vélodrome) : sur la fiche d'un événement, on pouvait

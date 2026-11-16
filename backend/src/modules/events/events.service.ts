@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { EventStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
+import { rattacherLesPointsDeRetrait } from '../../common/helpers/rattachement-buvettes';
 import {
   requireOrgAccess,
   MANAGE_ROLES,
@@ -105,7 +106,12 @@ export class EventsService {
       },
     });
 
-    this.logger.log(`Event created: ${event.id} ("${event.name}") in org ${organizationId}`);
+    // Tous les points de retrait du club, d'office (16/11/2026) : la
+    // désactivation, au besoin, se fait ensuite sur la fiche de l'événement.
+    const rattaches = await rattacherLesPointsDeRetrait(this.prisma, event.id, organizationId);
+    this.logger.log(
+      `Event created: ${event.id} ("${event.name}") in org ${organizationId} — ${rattaches} point(s) de retrait rattaché(s)`,
+    );
     return event;
   }
 

@@ -29,3 +29,4 @@ ne jamais réutiliser un numéro. Une décision remplacée passe en
 | [0006](ADR-0006-programmation-dans-le-tableau-de-bord-du-lieu.md) | Le super admin crée les lieux ; toute la programmation se fait dans le tableau de bord du lieu | 10/11/2026 | ACCEPTÉE |
 | [0007](ADR-0007-icone-ios-icon-composer.md) | L'icône iOS est au format Icon Composer | 11/11/2026 | ACCEPTÉE |
 | [0008](ADR-0008-documentation-dans-brain.md) | La documentation vit dans `brain/`, pas dans un `docs/` parallèle | 11/11/2026 | ACCEPTÉE |
+| [0009](ADR-0009-points-de-retrait-rattaches-et-ouverture-automatique.md) | Points de retrait rattachés d'office ; ouverture et fermeture automatiques | 16/11/2026 | ACCEPTÉE |

@@ -60,11 +60,12 @@ describe('EventsService', () => {
               update: jest.fn(),
               delete: jest.fn(),
             },
-            supplier: { findFirst: jest.fn() },
+            supplier: { findFirst: jest.fn(), findMany: jest.fn().mockResolvedValue([]) },
             eventSupplier: {
               findUnique: jest.fn(),
               create: jest.fn(),
               delete: jest.fn(),
+              createMany: jest.fn().mockResolvedValue({ count: 0 }),
             },
             // Phase 14.7 — group access wiring
             group: { count: jest.fn() },
@@ -97,6 +98,33 @@ describe('EventsService', () => {
 
       expect(result).toEqual(created);
       expect(prisma.event.create).toHaveBeenCalledTimes(1);
+    });
+
+    // 16/11/2026 : un événement qui naît reçoit tous les points de retrait du club.
+    it('rattache d’office tous les points de retrait du club (hors ligne exclus)', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.venue.findFirst as jest.Mock).mockResolvedValue({ id: VENUE_ID });
+      const created = mockEvent();
+      (prisma.event.create as jest.Mock).mockResolvedValue(created);
+      (prisma.supplier.findMany as jest.Mock).mockResolvedValue([{ id: 'nord' }, { id: 'sud' }]);
+
+      await service.create(ORG_ID, USER_ID, {
+        venueId: VENUE_ID,
+        name: 'Test Event',
+        startAt: '2026-06-01T09:00:00Z',
+        endAt: '2026-06-01T18:00:00Z',
+      });
+
+      const filtre = (prisma.supplier.findMany as jest.Mock).mock.calls[0][0].where;
+      expect(filtre.organizationId).toBe(ORG_ID);
+      expect(filtre.status).toEqual({ notIn: ['OFFLINE'] });
+      expect(prisma.eventSupplier.createMany).toHaveBeenCalledWith({
+        data: [
+          { eventId: created.id, supplierId: 'nord' },
+          { eventId: created.id, supplierId: 'sud' },
+        ],
+        skipDuplicates: true,
+      });
     });
 
     it('throws ForbiddenException when caller is not an org member', async () => {

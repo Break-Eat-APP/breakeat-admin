@@ -50,6 +50,12 @@ export type GroupeNav = {
   /** La phrase sous le titre de la page de section. */
   sous: string;
   items: EntreeNav[];
+  /**
+   * Groupe RANGÉ DANS UN AUTRE (16/11/2026) : absent du menu de gauche, on y
+   * entre par une carte de son parent — dont l'entrée reste allumée tant qu'on
+   * est dans l'un de ses écrans.
+   */
+  parent?: string;
 };
 
 export const NAV_GROUPS: GroupeNav[] = [
@@ -102,9 +108,13 @@ export const NAV_GROUPS: GroupeNav[] = [
   {
     // Regroupé par objet plutôt que par écran : « mon lieu », « mes points de
     // retrait », « mon équipe ». Le club cherche une chose, pas une page.
+    // « Mon lieu » devient « Configuration » (Rémi, 16/11/2026), et accueille
+    // les points de retrait — une carte, qui ouvre les buvettes et
+    // l'encaissement. L'identifiant d'URL ne change pas : les liens gardés
+    // restent bons.
     slug: 'mon-lieu',
     icon: Building2,
-    title: 'Mon lieu',
+    title: 'Configuration',
     sous: 'Tous les réglages du lieu, au même endroit.',
     items: [
       {
@@ -127,6 +137,13 @@ export const NAV_GROUPS: GroupeNav[] = [
         label: 'Événements',
         description:
           'Créer un match, le rendre actif, et coller les liens de commande Flaix de la saison.',
+      },
+      {
+        href: '/section/points-de-retrait',
+        icon: Store,
+        label: 'Points de retrait',
+        description:
+          'Les buvettes (produits, prix, TVA, créneaux) et l’encaissement — le compte qui reçoit l’argent.',
       },
       {
         // L'apparence décrit ce que le client voit DE CE LIEU : sa place est ici,
@@ -159,6 +176,8 @@ export const NAV_GROUPS: GroupeNav[] = [
     icon: Store,
     title: 'Points de retrait',
     sous: 'Où l’on sert, et où va l’argent.',
+    // Rangé dans « Configuration » : plus d'entrée propre dans le menu.
+    parent: 'mon-lieu',
     items: [
       {
         href: '/suppliers',

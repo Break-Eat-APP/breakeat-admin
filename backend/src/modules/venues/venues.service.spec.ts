@@ -18,6 +18,8 @@ describe('VenuesService — mode permanent', () => {
     event: { create: jest.Mock; findFirst: jest.Mock; update: jest.Mock; updateMany: jest.Mock };
     organizationMember: { findUnique: jest.Mock };
     user: { findUnique: jest.Mock };
+    supplier: { findMany: jest.Mock };
+    eventSupplier: { createMany: jest.Mock };
   };
 
   const ORG_ID = 'org-1';
@@ -56,6 +58,9 @@ describe('VenuesService — mode permanent', () => {
         }),
       },
       user: { findUnique: jest.fn().mockResolvedValue({ id: USER_ID, globalRole: 'CUSTOMER' }) },
+      // Le contenant créé reçoit les points de retrait du club (16/11/2026).
+      supplier: { findMany: jest.fn().mockResolvedValue([]) },
+      eventSupplier: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },
     };
 
     const module: TestingModule = await Test.createTestingModule({

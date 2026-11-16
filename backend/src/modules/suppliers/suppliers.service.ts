@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service';
+import { rattacherAuxEvenements } from '../../common/helpers/rattachement-buvettes';
 import { OrgRole } from '../../common/enums/role.enum';
 import {
   requireOrgAccess,
@@ -64,7 +65,11 @@ export class SuppliersService {
       },
     });
 
-    this.logger.log(`Supplier created: ${supplier.id} ("${supplier.name}") in org ${organizationId}`);
+    // Rejoint d'office tous les événements à venir du club (16/11/2026).
+    const rattaches = await rattacherAuxEvenements(this.prisma, supplier.id, organizationId);
+    this.logger.log(
+      `Supplier created: ${supplier.id} ("${supplier.name}") in org ${organizationId} — rattaché à ${rattaches} événement(s)`,
+    );
     return supplier;
   }
 
@@ -162,6 +167,9 @@ export class SuppliersService {
 
       return buvette;
     });
+
+    // Le double rejoint, lui aussi, les événements à venir du club.
+    await rattacherAuxEvenements(this.prisma, copie.id, copie.organizationId);
 
     const combien = source.categories.reduce((n, c) => n + c.products.length, 0);
     this.logger.log(

@@ -14,12 +14,9 @@ import {
   apiCreateProduct,
   apiUpdateProduct,
   apiDeleteProduct,
-  apiGetEvents,
-  apiAttachSupplier,
   type Supplier,
   type Category,
   type Product,
-  type AdminEvent,
   getOrgId,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
@@ -68,6 +65,9 @@ export default function SupplierDetailPage() {
   const params = useParams();
   const supplierId = params.id as string;
   const [venueId, setVenueId] = useState<string | null>(null);
+  // Les « créneaux de récupération » de la buvette ne servent qu'au service
+  // continu d'un lieu ouvert tous les jours : ailleurs, on ne les montre pas.
+  const [lieuEnContinu, setLieuEnContinu] = useState(false);
   const orgId = getOrgId();
 
   const [supplier, setSupplier] = useState<Supplier | null>(null);
@@ -94,7 +94,6 @@ export default function SupplierDetailPage() {
   const [productError, setProductError] = useState('');
 
   // Réglages de la buvette (nom / statut)
-  const [events, setEvents] = useState<AdminEvent[]>([]);
   const [settingsName, setSettingsName] = useState('');
   const [settingsPlan, setSettingsPlan] = useState('');
   const [settingsImage, setSettingsImage] = useState('');
@@ -103,9 +102,6 @@ export default function SupplierDetailPage() {
   const [statusSaving, setStatusSaving] = useState(false);
 
   // Rattachement à un événement
-  const [attachEventId, setAttachEventId] = useState('');
-  const [attaching, setAttaching] = useState(false);
-  const [attachMsg, setAttachMsg] = useState('');
 
   // Parrainage exploitant externe
   const [referralBusy, setReferralBusy] = useState(false);
@@ -115,15 +111,16 @@ export default function SupplierDetailPage() {
     setLoading(true);
     setError('');
     try {
-      const [sups, venues, cats, prods, evs] = await Promise.all([
+      const [sups, venues, cats, prods] = await Promise.all([
         apiGetSuppliers(orgId),
         apiGetVenues(orgId),
         apiGetCategories(orgId, supplierId),
         apiGetProducts(orgId, supplierId),
-        apiGetEvents(orgId),
       ]);
       // Un club = un lieu : le premier fait autorite.
-      setVenueId((Array.isArray(venues) ? venues : [])[0]?.id ?? null);
+      const lieu = (Array.isArray(venues) ? venues : [])[0];
+      setVenueId(lieu?.id ?? null);
+      setLieuEnContinu(lieu?.operatingMode === 'PERMANENT');
       const found = (Array.isArray(sups) ? sups : []).find((s) => s.id === supplierId);
       setSupplier(found ?? null);
       setSettingsName(found?.name ?? '');
@@ -131,7 +128,6 @@ export default function SupplierDetailPage() {
       setSettingsImage(found?.imageUrl ?? '');
       setCategories(Array.isArray(cats) ? cats : []);
       setProducts(Array.isArray(prods) ? prods : []);
-      setEvents(Array.isArray(evs) ? evs : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de chargement');
     } finally {
@@ -294,23 +290,6 @@ export default function SupplierDetailPage() {
     }
   }
 
-  async function handleAttach(e: React.FormEvent) {
-    e.preventDefault();
-    if (!attachEventId) return;
-    setAttaching(true);
-    setAttachMsg('');
-    try {
-      await apiAttachSupplier(orgId, attachEventId, supplierId);
-      const evName = events.find((ev) => ev.id === attachEventId)?.name ?? 'événement';
-      setAttachMsg(`✓ Buvette rattachée à « ${evName} ».`);
-      setAttachEventId('');
-    } catch (err) {
-      setAttachMsg(err instanceof Error ? err.message : 'Erreur (déjà rattachée ?)');
-    } finally {
-      setAttaching(false);
-    }
-  }
-
   async function handleRegenerateReferral() {
     setReferralBusy(true);
     try {
@@ -467,41 +446,15 @@ export default function SupplierDetailPage() {
           Ils appartiennent a une buvette : les configurer sur la page du lieu
           obligeait a re-choisir la buvette a chaque ajout, alors qu'on sait
           deja de laquelle on parle. */}
-      {venueId && (
+      {venueId && lieuEnContinu && (
         <Card title="Créneaux de récupération">
           <SlotTemplatesPanel orgId={orgId} venueId={venueId} supplierId={supplierId} />
         </Card>
       )}
 
-      {/* Rattacher à un événement */}
-      <Card title="Rattacher à un événement">
-        <p style={{ color: BRAND.grey, fontSize: 13, margin: '0 0 12px', lineHeight: 1.5 }}>
-          Une buvette se configure une fois puis sert plusieurs événements. Rattache-la ici, ou gère
-          le détail (créneaux, points de retrait) depuis la page de chaque événement.
-        </p>
-        {events.length === 0 ? (
-          <p style={{ color: BRAND.grey, fontSize: 14, margin: 0 }}>Aucun événement. Créez-en un d&apos;abord.</p>
-        ) : (
-          <form onSubmit={handleAttach} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <select value={attachEventId} onChange={(e) => setAttachEventId(e.target.value)} style={{ ...fieldInput, width: 'auto', minWidth: 240, cursor: 'pointer' }}>
-              <option value="">Choisir un événement…</option>
-              {events.map((ev) => (
-                <option key={ev.id} value={ev.id}>{ev.name} ({ev.status})</option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              disabled={attaching || !attachEventId}
-              style={{ background: attaching || !attachEventId ? BRAND.grey : BRAND.orange, color: '#fff', border: 'none', borderRadius: BRAND.radius.control, padding: '9px 18px', fontWeight: 600, fontSize: 13.5, cursor: attaching || !attachEventId ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
-            >
-              {attaching ? 'Rattachement…' : 'Rattacher'}
-            </button>
-            {attachMsg && (
-              <span style={{ fontSize: 13, color: attachMsg.startsWith('✓') ? '#16a34a' : '#dc2626' }}>{attachMsg}</span>
-            )}
-          </form>
-        )}
-      </Card>
+      {/* « Rattacher à un événement » a disparu (16/11/2026) : chaque point de
+          retrait est rattaché d'office aux événements du lieu, et se désactive
+          au besoin depuis la fiche de l'événement. */}
 
       {/* Exploitant externe — parrainage */}
       <Card title="Exploitant externe — parrainage">
