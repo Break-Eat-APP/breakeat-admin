@@ -5,6 +5,22 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.25] — 2026-11-16 — Le calendrier de la saison en 2 colonnes, grands blasons
+
+Décidé par Rémi et son développeur : avec un ou deux matchs par mois, le ruban
+horizontal laissait la moitié de l'écran vide. Le calendrier de l'écran du lieu
+devient une **grille de 2 colonnes** : chaque match est une tuile (blason
+72 px au lieu de 48, adversaire, « sam 22 · 20 h »). Une commande ouverte :
+liseré orange et « Commande ouverte ». Un match passé s'estompe. La carte
+« Commander » se pose **sous le mois** du match touché (en bas de page, elle
+pouvait se retrouver loin de la tuile). Une saison pleine reste courte : vingt
+matchs, dix rangées.
+
+`~ apps/mobile/src/screens/saison.screen.tsx` — JavaScript seul : mise à jour à
+distance (version 1.1.2).
+
+---
+
 ## [1.7.24] — 2026-11-13 — L'image du lieu, sans fond
 
 Rémi l'avait demandé « sans le background » : la 1.7.23 gardait un fond blanc
