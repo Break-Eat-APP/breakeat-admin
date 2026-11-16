@@ -89,10 +89,9 @@ La suite complète et les tests d'intégration tournent en CI.
 
 ## Risques restants
 
-- **L'invitation rattache un compte existant sans son accord.** Le correctif
-  ferme la prise de compte ; le rattachement reste possible (un responsable
-  peut faire apparaître le compte de quelqu'un dans son club). À terme : une
-  invitation à **accepter** par l'invité.
+- ~~L'invitation rattache un compte existant sans son accord.~~ **Fait le
+  même jour (CHANGELOG 1.7.27)** : un compte existant reçoit une invitation à
+  accepter ; aucun droit avant acceptation.
 - **Un opérateur épinglé à une buvette** voit les commandes en cours de toutes
   les buvettes de l'événement par `GET /orders/event/:id/active` (le tableau
   `dashboard`, lui, applique l'épinglage). Interne au club, faible enjeu.
@@ -109,7 +108,7 @@ Railway redéploie `main` automatiquement. Vérifier `/health` → `commit`.
 
 ## Suite
 
-1. Une invitation à accepter (P2).
+1. ~~Une invitation à accepter (P2).~~ Fait (1.7.27).
 2. L'épinglage sur `GET /orders/event/:id/active` (P3).
 3. Un test d'intégration croisé sur base réelle (deux clubs, chaque route) en
    CI, pour que la règle ne se perde pas.

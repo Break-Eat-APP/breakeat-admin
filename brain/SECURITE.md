@@ -40,6 +40,7 @@
 | Erreurs | Muettes en production, avec une référence à retrouver dans les journaux | filtre d'exceptions du backend |
 | Documents des clubs | PDF seulement, **10 Mo** au plus, borne posée dans l'intercepteur | `modules/documents/` |
 | Isolation entre organisations | **Revue route par route le 16/11/2026** (~220 routes) : ressources relues avec l'organisation ou rattachées par leur parent. Deux défauts corrigés (BUG-2026-017, 018). Détail : `brain/taches/2026-11-16-test-croise-organisations.md` | services, `common/helpers/require-org-access.ts` |
+| Invitations | Un club n'ajoute plus un compte existant d'office : **invitation à accepter** (14 jours), aucun droit avant acceptation ; réinitialisation de mot de passe limitée aux comptes créés par le club (16/11/2026) | `modules/organizations/organizations.service.ts` |
 | Traçabilité | Chaque transition de commande dans `OrderAuditTrail` | `modules/orders/orders.service.ts` |
 | Dépendances | Versions verrouillées (`pnpm-lock.yaml`), installation `--frozen-lockfile` en CI | `.github/workflows/ci.yml` |
 | Failles connues | `pnpm audit` des dépendances de production chaque lundi et à chaque changement du verrouillage ; **rouge** si faille élevée ou critique (aucune mise à jour automatique) | `.github/workflows/audit-dependances.yml` (11/11/2026) |
@@ -53,8 +54,7 @@
 | **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels (Brevo) n'est pas configuré | P2 — dépend de Brevo |
 | **Alertes Dependabot de GitHub** (un clic : Settings → Code security → Dependabot alerts) | En plus de l'audit hebdomadaire, alerte par e-mail | P3 — à activer par Rémi |
 | **Dépôt privé** | Code et documents internes lisibles par tous | Décision de Rémi, reportée (voir REPRISE) |
-| **Isolation entre organisations — test croisé systématique** (le lieu A tente de lire le lieu B, route par route) | Les contrôles existent et ont des tests, mais pas de balayage complet | P2 || **Invitation à accepter** par l'invité | Le test croisé du 16/11 a montré qu'une invitation rattache un compte existant sans son accord (la prise de compte qui en découlait est corrigée, BUG-2026-017) | P2 |
-| **Test d'intégration croisé en CI** (deux clubs, chaque route, sur base réelle) | La revue du 16/11 est faite à la main ; un test garderait la règle | P3 |
+| **Isolation entre organisations — test croisé systématique** (le lieu A tente de lire le lieu B, route par route) | Les contrôles existent et ont des tests, mais pas de balayage complet | P2 || **Test d'intégration croisé en CI** (deux clubs, chaque route, sur base réelle) | La revue du 16/11 est faite à la main ; un test garderait la règle | P3 |
 
 ## À VÉRIFIER (hors du dépôt)
 

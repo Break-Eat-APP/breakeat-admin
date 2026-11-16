@@ -261,6 +261,7 @@ model User {
   updatedAt     DateTime   @updatedAt @map("updated_at")
 
   memberships      OrganizationMember[]
+  invitations      OrganizationInvitation[] @relation("InvitationsRecues")
   identities       UserIdentity[]
   refreshTokens    RefreshToken[]
   passwordResets   PasswordReset[]
@@ -394,6 +395,7 @@ model Organization {
   updatedAt            DateTime            @updatedAt @map("updated_at")
 
   members                 OrganizationMember[]
+  invitations             OrganizationInvitation[]
   venues                  Venue[]
   events                  Event[]
   suppliers               Supplier[]
@@ -426,6 +428,34 @@ model OrganizationMember {
 
   @@unique([userId, organizationId])
   @@map("organization_members")
+}
+
+/// UNE INVITATION À ACCEPTER (16/11/2026).
+///
+/// Un club qui invite un compte QUI EXISTE DÉJÀ ne l'ajoute plus d'office :
+/// l'invitation attend ici que la personne l'accepte. Tant qu'elle n'est pas
+/// acceptée, il n'existe AUCUNE appartenance — donc aucun droit, nulle part :
+/// les contrôles d'accès ne lisent que `OrganizationMember`.
+///
+/// Un compte créé PAR le club à l'invitation reste membre tout de suite (le
+/// club en est l'origine). La plateforme (super admin) ajoute directement.
+model OrganizationInvitation {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+  orgRole        OrgRole  @default(OPERATOR) @map("org_role")
+  supplierId     String?  @map("supplier_id")
+  invitedById    String?  @map("invited_by_id")
+  expiresAt      DateTime @map("expires_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user         User         @relation("InvitationsRecues", fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier     Supplier?    @relation("InvitationsBuvette", fields: [supplierId], references: [id], onDelete: SetNull)
+
+  /// Une seule invitation en attente par personne et par club.
+  @@unique([userId, organizationId])
+  @@map("organization_invitations")
 }
 
 // ─── PHASE 3 MODELS ───────────────────────────────────────────
@@ -708,6 +738,7 @@ model Supplier {
   slots             Slot[]
   /// PHASE 12.7 — operators assigned to this supplier
   assignedOperators OrganizationMember[] @relation("OperatorAssignments")
+  invitations       OrganizationInvitation[] @relation("InvitationsBuvette")
   slotTemplates     SlotTemplate[]
 
   @@map("suppliers")

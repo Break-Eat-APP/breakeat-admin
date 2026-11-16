@@ -48,6 +48,14 @@ export default function LoginPage() {
       const me = await apiMeWithMemberships();
       const firstMembership = me.memberships[0];
 
+      // UNE INVITATION ATTEND (16/11/2026) : un club a invité ce compte, qui
+      // existait déjà. La personne décide d'abord — accepter ou refuser —
+      // avant d'entrer où que ce soit.
+      if ((me.invitations ?? []).length > 0) {
+        router.replace('/invitations');
+        return;
+      }
+
       // Arrivé par « Ouvrir son tableau de bord » du back-office (`/ouvrir`) :
       // on reprend CE lieu, si ce compte y a droit — sinon on l'oublie.
       let demande: { club: string; nom: string } | null = null;

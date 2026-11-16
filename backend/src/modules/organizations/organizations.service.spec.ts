@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
@@ -71,6 +72,13 @@ describe('OrganizationsService', () => {
             },
             user: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
             supplier: { findUnique: jest.fn() },
+            organizationInvitation: {
+              upsert: jest.fn(),
+              findFirst: jest.fn(),
+              findMany: jest.fn(),
+              delete: jest.fn(),
+              deleteMany: jest.fn(),
+            },
             // La vraie transaction passe un client au rappel : on lui donne la
             // même doublure, ce qui suffit à observer les écritures émises.
             $transaction: jest.fn((cb: (tx: unknown) => unknown) => cb(prisma)),
@@ -122,16 +130,17 @@ describe('OrganizationsService', () => {
   // ─── addMember ───────────────────────────────────────────────
 
   describe('addMember', () => {
-    it('adds member when caller is ORG_ADMIN', async () => {
-      (prisma.organizationMember.findUnique as jest.Mock)
-        .mockResolvedValueOnce(mockMembership(OrgRole.ORG_ADMIN)) // caller check
-        .mockResolvedValueOnce(null);                              // duplicate check
-      (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: TARGET_ID });
-      const created = { userId: TARGET_ID, organizationId: ORG_ID, orgRole: OrgRole.OPERATOR };
-      (prisma.organizationMember.create as jest.Mock).mockResolvedValue(created);
+    // 16/11/2026 : ajouter un compte par son identifiant, c'est le rattacher
+    // sans son accord. Un club passe désormais par l'invitation par e-mail.
+    it('un club n ajoute plus un compte par son identifiant', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValueOnce(
+        mockMembership(OrgRole.ORG_ADMIN),
+      );
 
-      const result = await service.addMember(ORG_ID, CALLER_ID, 'CUSTOMER', TARGET_ID, OrgRole.OPERATOR);
-      expect(result).toEqual(created);
+      await expect(
+        service.addMember(ORG_ID, CALLER_ID, 'CUSTOMER', TARGET_ID, OrgRole.OPERATOR),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.organizationMember.create).not.toHaveBeenCalled();
     });
 
     it('interdit à un ORG_ADMIN de fabriquer un autre responsable', async () => {
@@ -163,25 +172,22 @@ describe('OrganizationsService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('throws NotFoundException when target user does not exist', async () => {
-      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValueOnce(
-        mockMembership(OrgRole.ORG_ADMIN),
-      );
+    it('throws NotFoundException when target user does not exist (plateforme)', async () => {
       (prisma.user.findUnique as jest.Mock).mockResolvedValue(null); // target not found
 
       await expect(
-        service.addMember(ORG_ID, CALLER_ID, 'CUSTOMER', TARGET_ID, OrgRole.OPERATOR),
+        service.addMember(ORG_ID, CALLER_ID, 'SUPER_ADMIN', TARGET_ID, OrgRole.OPERATOR),
       ).rejects.toThrow(NotFoundException);
     });
 
-    it('throws ConflictException when target is already a member', async () => {
-      (prisma.organizationMember.findUnique as jest.Mock)
-        .mockResolvedValueOnce(mockMembership(OrgRole.ORG_ADMIN)) // caller check
-        .mockResolvedValueOnce({ userId: TARGET_ID });              // duplicate found
+    it('throws ConflictException when target is already a member (plateforme)', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValueOnce({
+        userId: TARGET_ID,
+      }); // duplicate found
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({ id: TARGET_ID });
 
       await expect(
-        service.addMember(ORG_ID, CALLER_ID, 'CUSTOMER', TARGET_ID, OrgRole.OPERATOR),
+        service.addMember(ORG_ID, CALLER_ID, 'SUPER_ADMIN', TARGET_ID, OrgRole.OPERATOR),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -345,6 +351,133 @@ describe('OrganizationsService', () => {
         service.inviteByEmail(ORG_ID, CALLER_ID, 'SUPER_ADMIN', EMAIL, OrgRole.MANAGER),
       ).rejects.toThrow(NotFoundException);
       expect(prisma.user.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // --- Invitations à accepter (16/11/2026) ----------------------
+
+  describe('invitation à accepter', () => {
+    const EMAIL = 'responsable@autre-club.fr';
+    const INVITATION_ID = 'invitation-1';
+    const compteExistant = { id: TARGET_ID, email: EMAIL, displayName: 'Responsable' };
+
+    it('un club qui invite un compte EXISTANT crée une invitation, pas un membre', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock)
+        .mockResolvedValueOnce(mockMembership(OrgRole.ORG_ADMIN)) // l'appelant
+        .mockResolvedValueOnce(null); // pas encore membre
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(compteExistant);
+      (prisma.organizationInvitation.upsert as jest.Mock).mockResolvedValue({ id: INVITATION_ID });
+
+      const result = await service.inviteByEmail(
+        ORG_ID, CALLER_ID, 'CUSTOMER', EMAIL, OrgRole.OPERATOR,
+      );
+
+      expect(result.enAttente).toBe(true);
+      expect(result.accountCreated).toBe(false);
+      expect(prisma.organizationMember.create).not.toHaveBeenCalled();
+      expect(prisma.user.create).not.toHaveBeenCalled();
+      const arg = (prisma.organizationInvitation.upsert as jest.Mock).mock.calls[0][0];
+      expect(arg.create.userId).toBe(TARGET_ID);
+      expect(arg.create.organizationId).toBe(ORG_ID);
+      expect(arg.create.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it('la plateforme ajoute toujours directement un compte existant', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue(compteExistant);
+      (prisma.organizationMember.create as jest.Mock).mockResolvedValue({
+        id: 'member-1', user: compteExistant, supplier: null,
+      });
+
+      const result = await service.inviteByEmail(
+        ORG_ID, CALLER_ID, 'SUPER_ADMIN', EMAIL, OrgRole.MANAGER,
+      );
+
+      expect(result.enAttente).toBe(false);
+      expect(prisma.organizationInvitation.upsert).not.toHaveBeenCalled();
+      expect(prisma.organizationMember.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('la personne invitée accepte : elle devient membre, l invitation disparaît', async () => {
+      (prisma.organizationInvitation.findFirst as jest.Mock).mockResolvedValue({
+        id: INVITATION_ID, userId: TARGET_ID, organizationId: ORG_ID,
+        orgRole: OrgRole.OPERATOR, supplierId: 'buvette-1',
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(null);
+      (prisma.organizationMember.create as jest.Mock).mockResolvedValue({ id: 'member-1' });
+
+      await service.accepterInvitation(TARGET_ID, INVITATION_ID);
+
+      // L'invitation est lue AVEC l'identifiant de la personne : nul n'accepte
+      // à la place d'un autre.
+      expect((prisma.organizationInvitation.findFirst as jest.Mock).mock.calls[0][0].where).toEqual({
+        id: INVITATION_ID, userId: TARGET_ID,
+      });
+      const cree = (prisma.organizationMember.create as jest.Mock).mock.calls[0][0].data;
+      expect(cree).toEqual({
+        userId: TARGET_ID, organizationId: ORG_ID, orgRole: OrgRole.OPERATOR, supplierId: 'buvette-1',
+      });
+      expect(prisma.organizationInvitation.delete).toHaveBeenCalledWith({ where: { id: INVITATION_ID } });
+    });
+
+    it('l invitation d un autre compte reste introuvable', async () => {
+      (prisma.organizationInvitation.findFirst as jest.Mock).mockResolvedValue(null);
+
+      await expect(service.accepterInvitation('quelqu-un-d-autre', INVITATION_ID)).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.organizationMember.create).not.toHaveBeenCalled();
+    });
+
+    it('une invitation expirée ne donne rien, et disparaît', async () => {
+      (prisma.organizationInvitation.findFirst as jest.Mock).mockResolvedValue({
+        id: INVITATION_ID, userId: TARGET_ID, organizationId: ORG_ID,
+        orgRole: OrgRole.OPERATOR, supplierId: null,
+        expiresAt: new Date(Date.now() - 1_000),
+      });
+
+      await expect(service.accepterInvitation(TARGET_ID, INVITATION_ID)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(prisma.organizationMember.create).not.toHaveBeenCalled();
+      expect(prisma.organizationInvitation.delete).toHaveBeenCalledTimes(1);
+    });
+
+    it('la personne refuse : seule SON invitation disparaît', async () => {
+      (prisma.organizationInvitation.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
+
+      await service.refuserInvitation(TARGET_ID, INVITATION_ID);
+
+      expect(prisma.organizationInvitation.deleteMany).toHaveBeenCalledWith({
+        where: { id: INVITATION_ID, userId: TARGET_ID },
+      });
+      expect(prisma.organizationMember.create).not.toHaveBeenCalled();
+    });
+
+    it('un simple membre ne peut pas retirer une invitation du club', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValueOnce(
+        mockMembership(OrgRole.OPERATOR),
+      );
+
+      await expect(
+        service.annulerInvitation(ORG_ID, INVITATION_ID, CALLER_ID, 'CUSTOMER'),
+      ).rejects.toThrow(ForbiddenException);
+      expect(prisma.organizationInvitation.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('un club ne retire que SES invitations', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValueOnce(
+        mockMembership(OrgRole.ORG_ADMIN),
+      );
+      (prisma.organizationInvitation.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.annulerInvitation(ORG_ID, 'invitation-d-un-autre-club', CALLER_ID, 'CUSTOMER'),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.organizationInvitation.deleteMany).toHaveBeenCalledWith({
+        where: { id: 'invitation-d-un-autre-club', organizationId: ORG_ID },
+      });
     });
   });
 

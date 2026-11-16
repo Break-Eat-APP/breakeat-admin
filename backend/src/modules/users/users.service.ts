@@ -178,6 +178,20 @@ export class UsersService {
             },
           },
         },
+        // LES INVITATIONS EN ATTENTE (16/11/2026) : un club qui invite un
+        // compte existant ne le rattache plus d'office. Les consoles les
+        // montrent à la connexion, pour que la personne accepte ou refuse.
+        invitations: {
+          where: { expiresAt: { gt: new Date() } },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            orgRole: true,
+            expiresAt: true,
+            organization: { select: { id: true, name: true, logoUrl: true } },
+            supplier: { select: { id: true, name: true } },
+          },
+        },
       },
     });
     if (!user) throw new NotFoundException('User not found');

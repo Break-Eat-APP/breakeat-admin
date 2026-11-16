@@ -3,13 +3,16 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Store } from 'lucide-react';
 import {
+  apiAnnulerInvitation,
   apiGetOrgMembers,
+  apiInvitationsDuClub,
   apiInviteMember,
   apiRemoveMember,
   apiResetMemberPassword,
   apiGetSuppliers,
   getOrgId,
   getStoredUser,
+  type InvitationDuClub,
   type OrgMemberWithUser,
   type Supplier,
 } from '@/lib/api/admin-client';
@@ -122,6 +125,8 @@ export default function TeamPage() {
   const roleOptions = isPlatform ? ROLE_OPTIONS_PLATEFORME : ROLE_OPTIONS_CLUB;
 
   const [members, setMembers] = useState<OrgMemberWithUser[]>([]);
+  const [invitations, setInvitations] = useState<InvitationDuClub[]>([]);
+  const [annulantId, setAnnulantId] = useState<string | null>(null);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -149,12 +154,16 @@ export default function TeamPage() {
     setLoading(true);
     setError('');
     try {
-      const [membersData, suppliersData] = await Promise.all([
+      const [membersData, suppliersData, invitationsData] = await Promise.all([
         apiGetOrgMembers(orgId),
         apiGetSuppliers(orgId),
+        // Un serveur antérieur au 16/11 n'a pas cette route : la page reste
+        // utilisable, simplement sans la liste des invitations.
+        apiInvitationsDuClub(orgId).catch(() => [] as InvitationDuClub[]),
       ]);
       setMembers(membersData);
       setSuppliers(suppliersData);
+      setInvitations(invitationsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur de chargement');
     } finally {
@@ -190,10 +199,15 @@ export default function TeamPage() {
         newMember.accountCreated ? { email: newMember.user.email, password } : null,
       );
       setInvitePassword('');
+      // UN COMPTE QUI EXISTAIT N'EST PAS ENCORE MEMBRE (16/11/2026) : il a
+      // reçu une invitation, qu'il acceptera à sa prochaine connexion.
       setInviteSuccess(
-        newMember.accountCreated
-          ? `Compte créé pour ${newMember.user.email}.`
-          : `${newMember.user.displayName} (${newMember.user.email}) a rejoint l’organisation avec son compte existant.`,
+        newMember.enAttente
+          ? `${newMember.user.email} a déjà un compte BreakEat : une invitation l’attend. ` +
+              'Elle apparaîtra à sa prochaine connexion, et la personne rejoindra votre équipe en l’acceptant.'
+          : newMember.accountCreated
+            ? `Compte créé pour ${newMember.user.email}.`
+            : `${newMember.user.displayName} (${newMember.user.email}) a rejoint l’organisation avec son compte existant.`,
       );
       setInviteEmail('');
       setInviteRole('OPERATOR');
@@ -233,6 +247,20 @@ L'ancien cessera immediatement de fonctionner.`)) return;
       setResettingId(null);
     }
   }
+  async function handleAnnulerInvitation(inv: InvitationDuClub) {
+    if (!orgId) return;
+    if (!confirm(`Retirer l’invitation envoyée à ${inv.user.email} ?`)) return;
+    setAnnulantId(inv.id);
+    try {
+      await apiAnnulerInvitation(orgId, inv.id);
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors du retrait de l’invitation');
+    } finally {
+      setAnnulantId(null);
+    }
+  }
+
   async function handleRemove(memberId: string, email: string) {
     if (!orgId) return;
     if (!confirm(`Retirer ${email} de l'organisation ?`)) return;
@@ -446,6 +474,69 @@ L'ancien cessera immediatement de fonctionner.`)) return;
           </div>
         </form>
       </div>
+
+      {/* ── Invitations en attente (16/11/2026) ─────────────────── */}
+      {invitations.length > 0 ? (
+        <div
+          style={{
+            background: BRAND.surface,
+            borderRadius: 12,
+            boxShadow: BRAND.shadowCard,
+            border: `1px solid ${BRAND.border}`,
+            overflow: 'hidden',
+            marginBottom: 24,
+          }}
+        >
+          <div style={{ padding: '16px 24px', borderBottom: `1px solid ${BRAND.border}` }}>
+            <h2 style={{ ...BRAND.sectionTitle, margin: 0 }}>
+              Invitations en attente ({invitations.length})
+            </h2>
+            <div style={{ color: BRAND.grey, fontSize: 13, marginTop: 4 }}>
+              Ces personnes ont déjà un compte BreakEat. Elles rejoindront l’équipe en
+              acceptant l’invitation, à leur prochaine connexion.
+            </div>
+          </div>
+          {invitations.map((inv) => (
+            <div
+              key={inv.id}
+              style={{
+                padding: '12px 24px',
+                borderBottom: `1px solid ${BRAND.border}`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 16,
+                fontSize: 14,
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, color: BRAND.ink }}>{inv.user.email}</div>
+                <div style={{ color: BRAND.grey, fontSize: 12.5 }}>
+                  {inv.orgRole}
+                  {inv.supplier ? ` · ${inv.supplier.name}` : ''}
+                  {' · valable jusqu’au '}
+                  {new Date(inv.expiresAt).toLocaleDateString('fr-FR')}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleAnnulerInvitation(inv)}
+                disabled={annulantId === inv.id}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 8,
+                  border: `1px solid ${BRAND.border}`,
+                  background: '#fff',
+                  color: BRAND.ink,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                {annulantId === inv.id ? '…' : 'Retirer'}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {/* ── Members list ────────────────────────────────────────── */}
       <div

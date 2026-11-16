@@ -205,4 +205,56 @@ export class OrganizationsController {
       user.globalRole,
     );
   }
+
+  // ─── Invitations à accepter (16/11/2026) ─────────────────
+
+  /**
+   * POST /organizations/invitations/:invitationId/accepter
+   * La personne INVITÉE accepte : elle devient membre. Le service lit
+   * l'invitation avec son identifiant à elle — personne d'autre ne peut
+   * accepter à sa place.
+   */
+  @Post('invitations/:invitationId/accepter')
+  @HttpCode(HttpStatus.OK)
+  accepterInvitation(
+    @Param('invitationId', ParseUUIDPipe) invitationId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.organizationsService.accepterInvitation(user.sub, invitationId);
+  }
+
+  /** POST /organizations/invitations/:invitationId/refuser — la personne invitée refuse. */
+  @Post('invitations/:invitationId/refuser')
+  @HttpCode(HttpStatus.OK)
+  refuserInvitation(
+    @Param('invitationId', ParseUUIDPipe) invitationId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.organizationsService.refuserInvitation(user.sub, invitationId);
+  }
+
+  /** GET /organizations/:id/invitations — les invitations en attente du club. */
+  @Get(':id/invitations')
+  invitationsDuClub(
+    @Param('id', ParseUUIDPipe) organizationId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.organizationsService.invitationsDuClub(organizationId, user.sub);
+  }
+
+  /** DELETE /organizations/:id/invitations/:invitationId — le club retire son invitation. */
+  @Delete(':id/invitations/:invitationId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  annulerInvitation(
+    @Param('id', ParseUUIDPipe) organizationId: string,
+    @Param('invitationId', ParseUUIDPipe) invitationId: string,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    return this.organizationsService.annulerInvitation(
+      organizationId,
+      invitationId,
+      user.sub,
+      user.globalRole,
+    );
+  }
 }

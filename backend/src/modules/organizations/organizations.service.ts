@@ -36,7 +36,25 @@ export type MemberWithDetails = OrganizationMember & {
  * (le mot de passe provisoire est actif, il faut le transmettre) du compte qui
  * existait déjà (le mot de passe fourni a été ignoré — l'annoncer serait faux).
  */
-export type InviteResult = MemberWithDetails & { accountCreated: boolean };
+export type InviteResult =
+  | (MemberWithDetails & { accountCreated: boolean; enAttente: false })
+  | InvitationEnAttente;
+
+/**
+ * Ce que reçoit le club quand il invite un compte QUI EXISTE DÉJÀ : une
+ * invitation, pas un membre. La personne l'accepte à sa prochaine connexion.
+ */
+export type InvitationEnAttente = {
+  enAttente: true;
+  accountCreated: false;
+  invitationId: string;
+  orgRole: OrgRole;
+  expiresAt: Date;
+  user: { id: string; email: string; displayName: string };
+};
+
+/** Une invitation reste valable quatorze jours. */
+const VALIDITE_INVITATION_MS = 14 * 24 * 60 * 60 * 1000;
 
 /**
  * Rôles qu'un responsable de club (ORG_ADMIN) peut distribuer lui-même.
@@ -438,7 +456,12 @@ export class OrganizationsService {
       if (!callerMembership || callerMembership.orgRole !== OrgRole.ORG_ADMIN) {
         throw new ForbiddenException('Only ORG_ADMIN can add members');
       }
-      this.assertRoleDelegable(role);
+      // Ajouter un compte par son identifiant, c'est le rattacher sans son
+      // accord (16/11/2026). Un club passe par l'invitation par e-mail, que la
+      // personne accepte. Aucun écran n'utilisait cette route côté club.
+      throw new ForbiddenException(
+        'Invitez cette personne par son adresse e-mail : elle acceptera à sa prochaine connexion.',
+      );
     }
 
     // Verify the target user actually exists in the platform
@@ -533,6 +556,19 @@ export class OrganizationsService {
       }
     }
 
+    // UN COMPTE QUI EXISTE DÉJÀ N'EST PLUS RATTACHÉ D'OFFICE (16/11/2026).
+    //
+    // Il l'était, sans l'accord de son propriétaire : un club pouvait faire
+    // apparaître chez lui le compte du responsable d'un autre club, ou d'un
+    // client. Il reçoit désormais une INVITATION, qu'il accepte ou refuse à sa
+    // prochaine connexion. Tant qu'il n'a pas accepté, il n'a aucun droit ici.
+    //
+    // La plateforme (super admin) ajoute directement : c'est elle qui installe
+    // les clubs, et elle répond de ses ajouts.
+    if (existant && callerGlobalRole !== GlobalRole.SUPER_ADMIN) {
+      return this.inviterCompteExistant(organizationId, callerId, existant, role, supplierId);
+    }
+
     // L'empreinte du mot de passe est calculée HORS transaction : argon2 prend
     // volontairement du temps, et une transaction ouverte pendant ce calcul
     // garderait un verrou pour rien.
@@ -583,7 +619,130 @@ export class OrganizationsService {
       `Member invited: ${member.user.email} → org ${organizationId} as ${role}${supplierId ? ` (supplier ${supplierId})` : ''} (by ${callerId})`,
     );
 
-    return { ...(member as MemberWithDetails), accountCreated };
+    return { ...(member as MemberWithDetails), accountCreated, enAttente: false };
+  }
+
+  // ─── Invitations à accepter ───────────────────────────────
+
+  private async inviterCompteExistant(
+    organizationId: string,
+    callerId: string,
+    compte: { id: string; email: string; displayName: string },
+    role: OrgRole,
+    supplierId?: string,
+  ): Promise<InvitationEnAttente> {
+    const expiresAt = new Date(Date.now() + VALIDITE_INVITATION_MS);
+    // Réinviter RAFRAÎCHIT l'invitation en attente (rôle, buvette, échéance)
+    // plutôt que d'échouer : c'est ce qu'on attend d'un « renvoyer ».
+    const invitation = await this.prisma.organizationInvitation.upsert({
+      where: { userId_organizationId: { userId: compte.id, organizationId } },
+      create: {
+        userId: compte.id,
+        organizationId,
+        orgRole: role,
+        supplierId: supplierId ?? null,
+        invitedById: callerId,
+        expiresAt,
+      },
+      update: { orgRole: role, supplierId: supplierId ?? null, invitedById: callerId, expiresAt },
+    });
+    this.logger.log(
+      `Invitation en attente : ${compte.email} → org ${organizationId} as ${role} (by ${callerId})`,
+    );
+    return {
+      enAttente: true,
+      accountCreated: false,
+      invitationId: invitation.id,
+      orgRole: role,
+      expiresAt,
+      user: { id: compte.id, email: compte.email, displayName: compte.displayName },
+    };
+  }
+
+  /**
+   * LA PERSONNE ACCEPTE : l'appartenance naît, l'invitation disparaît, dans la
+   * même transaction. Seule la personne invitée peut accepter — l'invitation
+   * est lue avec SON identifiant, jamais par le seul identifiant d'invitation.
+   */
+  async accepterInvitation(userId: string, invitationId: string): Promise<OrganizationMember> {
+    const invitation = await this.prisma.organizationInvitation.findFirst({
+      where: { id: invitationId, userId },
+    });
+    if (!invitation) throw new NotFoundException('Invitation introuvable.');
+    if (invitation.expiresAt.getTime() <= Date.now()) {
+      await this.prisma.organizationInvitation.delete({ where: { id: invitation.id } });
+      throw new BadRequestException(
+        'Cette invitation a expiré. Demandez au club de vous inviter à nouveau.',
+      );
+    }
+
+    const membre = await this.prisma.$transaction(async (tx) => {
+      const deja = await tx.organizationMember.findUnique({
+        where: { userId_organizationId: { userId, organizationId: invitation.organizationId } },
+      });
+      const cree =
+        deja ??
+        (await tx.organizationMember.create({
+          data: {
+            userId,
+            organizationId: invitation.organizationId,
+            orgRole: invitation.orgRole,
+            supplierId: invitation.supplierId,
+          },
+        }));
+      await tx.organizationInvitation.delete({ where: { id: invitation.id } });
+      return cree;
+    });
+    this.logger.log(`Invitation acceptée : user ${userId} → org ${invitation.organizationId}`);
+    return membre;
+  }
+
+  /** La personne refuse : l'invitation disparaît, rien d'autre ne change. */
+  async refuserInvitation(userId: string, invitationId: string): Promise<{ refusee: true }> {
+    const supprimees = await this.prisma.organizationInvitation.deleteMany({
+      where: { id: invitationId, userId },
+    });
+    if (supprimees.count === 0) throw new NotFoundException('Invitation introuvable.');
+    this.logger.log(`Invitation refusée : user ${userId} (invitation ${invitationId})`);
+    return { refusee: true };
+  }
+
+  /** Les invitations en attente d'un club, pour sa page « Équipe ». */
+  async invitationsDuClub(organizationId: string, callerId: string) {
+    await requireOrgAccess(this.prisma, callerId, organizationId, MANAGE_ROLES);
+    return this.prisma.organizationInvitation.findMany({
+      where: { organizationId, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        orgRole: true,
+        expiresAt: true,
+        createdAt: true,
+        user: { select: { email: true, displayName: true } },
+        supplier: { select: { id: true, name: true } },
+      },
+    });
+  }
+
+  /** Le club retire une invitation qu'il a envoyée. */
+  async annulerInvitation(
+    organizationId: string,
+    invitationId: string,
+    callerId: string,
+    callerGlobalRole: string,
+  ): Promise<void> {
+    if (callerGlobalRole !== GlobalRole.SUPER_ADMIN) {
+      const appelant = await this.prisma.organizationMember.findUnique({
+        where: { userId_organizationId: { userId: callerId, organizationId } },
+      });
+      if (!appelant || appelant.orgRole !== OrgRole.ORG_ADMIN) {
+        throw new ForbiddenException('Only ORG_ADMIN can cancel an invitation');
+      }
+    }
+    const supprimees = await this.prisma.organizationInvitation.deleteMany({
+      where: { id: invitationId, organizationId },
+    });
+    if (supprimees.count === 0) throw new NotFoundException('Invitation introuvable.');
   }
 
   /**

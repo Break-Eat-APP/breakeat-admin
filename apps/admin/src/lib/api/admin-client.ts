@@ -254,8 +254,22 @@ export interface Membership {
   organization: { id: string; name: string; slug: string; status: string };
 }
 
+/**
+ * Une invitation qu'un club m'a envoyée et que je n'ai pas encore acceptée
+ * (16/11/2026). Tant qu'elle n'est pas acceptée, elle ne donne aucun droit.
+ */
+export interface InvitationRecue {
+  id: string;
+  orgRole: string;
+  expiresAt: string;
+  organization: { id: string; name: string; logoUrl: string | null };
+  supplier: { id: string; name: string } | null;
+}
+
 export interface MeWithMemberships extends AdminUser {
   memberships: Membership[];
+  /** Absent d'un serveur antérieur au 16/11 : toujours lire `?? []`. */
+  invitations?: InvitationRecue[];
 }
 
 export interface AuthResponse {
@@ -310,8 +324,30 @@ export interface OrgMemberWithUser extends OrgMember {
  * d'être créé : le mot de passe provisoire envoyé est alors actif et doit être
  * transmis. Sinon le compte existait déjà et ce mot de passe a été ignoré.
  */
-export interface InviteResult extends OrgMemberWithUser {
-  accountCreated: boolean;
+/**
+ * Ce que rend une invitation. Un compte NOUVEAU (créé par le club) est membre
+ * tout de suite ; un compte QUI EXISTAIT reçoit une invitation à accepter
+ * (`enAttente`), et n'est pas encore membre.
+ */
+export type InviteResult =
+  | (OrgMemberWithUser & { accountCreated: boolean; enAttente?: false })
+  | {
+      enAttente: true;
+      accountCreated: false;
+      invitationId: string;
+      orgRole: string;
+      expiresAt: string;
+      user: { id: string; email: string; displayName: string };
+    };
+
+/** Une invitation envoyée par le club, en attente d'acceptation. */
+export interface InvitationDuClub {
+  id: string;
+  orgRole: string;
+  expiresAt: string;
+  createdAt: string;
+  user: { email: string; displayName: string };
+  supplier: { id: string; name: string } | null;
 }
 
 export type EventVisibility = 'PUBLIC' | 'PRIVATE';
@@ -579,6 +615,26 @@ export async function apiResetMemberPassword(
     { newPassword },
   );
 }
+/** POST /organizations/invitations/:id/accepter — j'accepte l'invitation d'un club. */
+export async function apiAccepterInvitation(invitationId: string): Promise<void> {
+  await req<unknown>('POST', `/organizations/invitations/${invitationId}/accepter`);
+}
+
+/** POST /organizations/invitations/:id/refuser — je refuse l'invitation d'un club. */
+export async function apiRefuserInvitation(invitationId: string): Promise<void> {
+  await req<unknown>('POST', `/organizations/invitations/${invitationId}/refuser`);
+}
+
+/** GET /organizations/:id/invitations — les invitations en attente du club. */
+export async function apiInvitationsDuClub(orgId: string): Promise<InvitationDuClub[]> {
+  return req<InvitationDuClub[]>('GET', `/organizations/${orgId}/invitations`);
+}
+
+/** DELETE /organizations/:id/invitations/:invitationId — le club retire son invitation. */
+export async function apiAnnulerInvitation(orgId: string, invitationId: string): Promise<void> {
+  return req<void>('DELETE', `/organizations/${orgId}/invitations/${invitationId}`);
+}
+
 /** DELETE /organizations/:id/members/:memberId */
 export async function apiRemoveMember(orgId: string, memberId: string): Promise<void> {
   return req<void>('DELETE', `/organizations/${orgId}/members/${memberId}`);

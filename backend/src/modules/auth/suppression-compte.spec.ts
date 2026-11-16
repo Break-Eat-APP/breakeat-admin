@@ -51,6 +51,7 @@ describe('AuthService — suppression de compte par son titulaire', () => {
         count: jest.fn().mockResolvedValue(opts.autresAdmins ?? 1),
         deleteMany: jest.fn(),
       },
+      organizationInvitation: { deleteMany: jest.fn() },
       userIdentity: { deleteMany: jest.fn() },
       refreshToken: { deleteMany: jest.fn(), create: jest.fn() },
       pushToken: { deleteMany: jest.fn() },
@@ -128,6 +129,7 @@ describe('AuthService — suppression de compte par son titulaire', () => {
     expect(prisma.cart.deleteMany).toHaveBeenCalledWith({ where: { userId: MOI } });
     expect(prisma.userNotification.deleteMany).toHaveBeenCalledWith({ where: { userId: MOI } });
     expect(prisma.organizationMember.deleteMany).toHaveBeenCalledWith({ where: { userId: MOI } });
+    expect(prisma.organizationInvitation.deleteMany).toHaveBeenCalledWith({ where: { userId: MOI } });
   });
 
   it('NE TOUCHE PAS aux commandes — ce sont les comptes du club', async () => {

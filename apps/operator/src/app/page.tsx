@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { Store } from 'lucide-react';
-import { fetchMeWithMemberships } from '@/lib/api/orders-client';
+import {
+  fetchMeWithMemberships,
+  repondreInvitation,
+  type InvitationRecue,
+} from '@/lib/api/orders-client';
 import { BRAND, BreakEatLogo } from '@break-eat/brand';
 import { LoginForm } from '@/components/LoginForm';
 
@@ -47,11 +51,29 @@ function EventSelector({ token }: { token: string }) {
   // produisaient le meme ecran vide et aucun diagnostic n'etait possible.
   const [loadError, setLoadError] = useState('');
   const [noMembership, setNoMembership] = useState(false);
+  const [invitations, setInvitations] = useState<InvitationRecue[]>([]);
+  const [reponseEnCours, setReponseEnCours] = useState<string | null>(null);
+
+  /**
+   * ACCEPTER OU REFUSER UNE INVITATION (16/11/2026). Accepter crée
+   * l'appartenance : on recharge pour que le poste ouvre ce club.
+   */
+  async function repondre(inv: InvitationRecue, reponse: 'accepter' | 'refuser') {
+    setReponseEnCours(inv.id);
+    try {
+      await repondreInvitation(token, inv.id, reponse);
+      window.location.reload();
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Réponse impossible pour le moment');
+      setReponseEnCours(null);
+    }
+  }
 
   useEffect(() => {
     void (async () => {
       try {
         const me = await fetchMeWithMemberships(token);
+        setInvitations(me.invitations ?? []);
         const firstMembership = me.memberships[0];
         if (!firstMembership) {
           // Compte valide, mais rattache a aucune organisation : c'est une
@@ -151,6 +173,40 @@ function EventSelector({ token }: { token: string }) {
         <p style={{ color: BRAND.grey, fontSize: 14, marginBottom: 24 }}>
           Sélectionnez l&apos;événement à gérer pour accéder au tableau de bord des commandes.
         </p>
+
+        {/* Invitations en attente : un club attend la réponse de ce compte. */}
+        {invitations.map((inv) => (
+          <div
+            key={inv.id}
+            style={{ background: '#fff7ed', border: `1.5px solid ${BRAND.orange}`, borderRadius: 12, padding: 18, marginBottom: 16 }}
+          >
+            <div style={{ fontWeight: 700, color: BRAND.ink, fontSize: 15, marginBottom: 4 }}>
+              {inv.organization.name} vous invite dans son équipe
+            </div>
+            <div style={{ color: BRAND.grey, fontSize: 13, marginBottom: 12 }}>
+              {inv.supplier ? `Buvette : ${inv.supplier.name} · ` : ''}
+              valable jusqu&apos;au {new Date(inv.expiresAt).toLocaleDateString('fr-FR')}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => void repondre(inv, 'accepter')}
+                disabled={reponseEnCours !== null}
+                style={{ padding: '9px 16px', borderRadius: 10, border: 'none', background: BRAND.orange, color: '#fff', fontWeight: 700, fontSize: 14, cursor: 'pointer' }}
+              >
+                {reponseEnCours === inv.id ? 'Un instant…' : 'Accepter'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void repondre(inv, 'refuser')}
+                disabled={reponseEnCours !== null}
+                style={{ padding: '9px 16px', borderRadius: 10, border: `1.5px solid ${BRAND.border}`, background: '#fff', color: BRAND.ink, fontWeight: 600, fontSize: 14, cursor: 'pointer' }}
+              >
+                Refuser
+              </button>
+            </div>
+          </div>
+        ))}
 
         {/* Events list */}
         {loading ? (

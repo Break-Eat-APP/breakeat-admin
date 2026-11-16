@@ -5,6 +5,32 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.27] — 2026-11-16 — L'invitation d'un club s'accepte
+
+Suite du test croisé entre organisations : un club rattachait un compte
+EXISTANT sans l'accord de son propriétaire (le responsable d'un autre club, un
+client). Désormais :
+
+- **un compte nouveau**, créé par le club à l'invitation, est membre tout de
+  suite, comme avant ;
+- **un compte qui existait** reçoit une **invitation**, valable 14 jours. Elle
+  l'attend à sa prochaine connexion — console du club (`/invitations`) ou poste
+  opérateur — où il **accepte ou refuse**. Tant qu'il n'a pas accepté, il n'a
+  aucun droit dans ce club ;
+- la page « Équipe » le dit clairement, liste les **invitations en attente** et
+  permet d'en **retirer** une ;
+- la **plateforme** (super admin) ajoute toujours directement ;
+- l'ajout d'un compte **par son identifiant** est réservé à la plateforme
+  (aucun écran de club ne l'utilisait).
+
+Migration `20261116_invitation_a_accepter` : une table neuve
+(`organization_invitations`), clés en UUID, aucune ligne existante touchée.
+
+`~ backend` (organisations, utilisateurs, suppression de compte) + specs,
+`~ apps/admin` (connexion, `/invitations`, Équipe), `~ apps/operator` (accueil).
+
+---
+
 ## [1.7.26] — 2026-11-16 — Test croisé entre organisations : deux failles corrigées
 
 Revue route par route (~220 routes) de ce qu'un club peut faire chez un autre.

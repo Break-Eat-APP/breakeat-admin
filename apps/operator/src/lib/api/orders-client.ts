@@ -235,12 +235,38 @@ export interface OperatorMembership {
   supplier: { id: string; name: string; status: string } | null;
 }
 
+/**
+ * Une invitation d'un club, pas encore acceptée (16/11/2026). Un club qui
+ * invite un compte existant ne le rattache plus d'office : la personne accepte
+ * ici, et ce n'est qu'alors qu'elle devient membre.
+ */
+export interface InvitationRecue {
+  id: string;
+  orgRole: string;
+  expiresAt: string;
+  organization: { id: string; name: string; logoUrl: string | null };
+  supplier: { id: string; name: string } | null;
+}
+
 export interface MeWithMemberships {
   id: string;
   email: string;
   displayName: string;
   globalRole: string;
   memberships: OperatorMembership[];
+  /** Absent d'un serveur antérieur au 16/11 : toujours lire `?? []`. */
+  invitations?: InvitationRecue[];
+}
+
+/** J'accepte (ou je refuse) l'invitation d'un club. */
+export async function repondreInvitation(
+  token: string,
+  invitationId: string,
+  reponse: 'accepter' | 'refuser',
+): Promise<void> {
+  await apiFetch<unknown>(`/organizations/invitations/${invitationId}/${reponse}`, token, {
+    method: 'POST',
+  });
 }
 
 /**
