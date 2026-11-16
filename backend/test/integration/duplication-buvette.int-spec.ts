@@ -100,13 +100,23 @@ decrire('duplication d’une buvette (base réelle)', () => {
     expect(await s.prisma.stock.count({ where: { supplierId: copie.id } })).toBe(0);
   });
 
-  it('ne la rattache à AUCUN événement, et la laisse fermée', async () => {
-    // Une buvette dupliquée en plein match apparaîtrait aussitôt chez les
-    // clients, sans personne derrière le comptoir.
+  it('la rattache aux événements à venir du club, mais la laisse FERMÉE', async () => {
+    // ADR-0009 (16/11/2026) : un point de retrait qui naît — créé ou dupliqué —
+    // rejoint d'office les événements à venir du club. Il reste FERMÉ : une
+    // copie faite en plein match n'apparaît pas commandable chez les clients
+    // sans personne derrière le comptoir. L'ouverture automatique n'ouvre les
+    // points de retrait qu'au moment où l'ÉVÉNEMENT s'ouvre.
     const o = await creerOrganisationComplete(s.prisma, unique('club'), sa);
+    const aVenir = await s.prisma.event.count({
+      where: {
+        organizationId: o.org.id,
+        status: { notIn: ['ENDED', 'CANCELLED'] },
+        OR: [{ isPermanentContainer: true }, { endAt: { gt: new Date() } }],
+      },
+    });
     const copie = await buvettes.dupliquer(o.org.id, sa, o.supplier.id, 'Buvette Sud');
 
-    expect(await s.prisma.eventSupplier.count({ where: { supplierId: copie.id } })).toBe(0);
+    expect(await s.prisma.eventSupplier.count({ where: { supplierId: copie.id } })).toBe(aVenir);
     expect(copie.status).toBe(SupplierStatus.CLOSED);
   });
 
