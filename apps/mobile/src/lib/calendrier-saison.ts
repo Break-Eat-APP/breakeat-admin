@@ -136,6 +136,26 @@ export function libelleAttente(iso: string, maintenant: Date): string {
 }
 
 /**
+ * « dans 6 jours », TOUJOURS EN JOURS — l'en-tête de l'écran du lieu
+ * (règle de Rémi, 16/11/2026).
+ *
+ * `libelleAttente` se tait au-delà d'une semaine, pour les tuiles. L'en-tête,
+ * lui, dit toujours combien de jours il reste avant le prochain événement :
+ * « aujourd'hui », « demain », puis « dans N jours », quel que soit N. Même
+ * calcul en jours de calendrier. Rend `''` sur une date passée ou illisible.
+ */
+export function delaiAvantEvenement(iso: string, maintenant: Date): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const minuit = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const jours = Math.round((minuit(d) - minuit(maintenant)) / 86_400_000);
+  if (jours < 0) return '';
+  if (jours === 0) return "aujourd'hui";
+  if (jours === 1) return 'demain';
+  return `dans ${jours} jours`;
+}
+
+/**
  * Les initiales d'un nom, pour le disque qui remplace un blason absent.
  *
  * LES SÉPARATEURS NE SONT PAS DES MOTS. Les événements s'appellent

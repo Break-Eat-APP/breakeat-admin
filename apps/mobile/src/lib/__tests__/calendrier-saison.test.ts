@@ -14,6 +14,7 @@
  *    les phrases de l'écran se trompent avec elle.
  */
 import {
+  delaiAvantEvenement,
   heureDuJour,
   initialesAdversaire,
   libelleAttente,
@@ -125,6 +126,31 @@ describe('les dates écrites', () => {
   it('une date illisible rend une chaîne vide, pas « Invalid Date »', () => {
     expect(libelleJour('n’importe quoi')).toBe('');
     expect(libelleDateLongue('n’importe quoi')).toBe('');
+  });
+});
+
+describe('le délai de l’en-tête (toujours en jours)', () => {
+  const CE_SOIR = new Date(2026, 9, 30, 22, 0);
+
+  it('« aujourd’hui », « demain », puis le nombre de jours', () => {
+    expect(delaiAvantEvenement(new Date(2026, 9, 30, 14, 30).toISOString(), CE_SOIR)).toBe(
+      "aujourd'hui",
+    );
+    expect(delaiAvantEvenement(new Date(2026, 9, 31, 14, 30).toISOString(), CE_SOIR)).toBe('demain');
+    expect(delaiAvantEvenement(new Date(2026, 10, 5, 14, 30).toISOString(), CE_SOIR)).toBe(
+      'dans 6 jours',
+    );
+  });
+
+  it('compte aussi au-delà d’une semaine (contrairement aux tuiles)', () => {
+    expect(delaiAvantEvenement(new Date(2026, 11, 20, 14, 30).toISOString(), CE_SOIR)).toBe(
+      'dans 51 jours',
+    );
+  });
+
+  it('se tait sur un événement passé ou une date illisible', () => {
+    expect(delaiAvantEvenement(new Date(2026, 9, 3, 14, 30).toISOString(), CE_SOIR)).toBe('');
+    expect(delaiAvantEvenement('pas-une-date', CE_SOIR)).toBe('');
   });
 });
 

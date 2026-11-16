@@ -552,6 +552,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.25 | 2026-11-16 | Le calendrier de la saison en 2 colonnes, grands blasons |
 | 1.7.26 | 2026-11-16 | Test croisé entre organisations : deux failles corrigées |
 | 1.7.27 | 2026-11-16 | L'invitation d'un club s'accepte |
+| 1.7.28 | 2026-11-16 | L'en-tête du lieu : « Prochain événement dans 6 jours » |
 
 ---
 

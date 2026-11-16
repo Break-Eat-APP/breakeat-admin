@@ -22,8 +22,9 @@ import {
 } from '@lib/api/mobile-api';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { showAlert } from '@lib/alert';
-import { ouvertALaCommande, quandLaCommandeOuvre } from '@lib/ouverture-lieu';
+import { ouvertALaCommande } from '@lib/ouverture-lieu';
 import {
+  delaiAvantEvenement,
   libelleAttente,
   libelleDateLongue,
   heureDuJour,
@@ -267,17 +268,6 @@ export function SaisonScreen({ route, navigation }: Props) {
   // ── Ce que le bandeau annonce ─────────────────────────────────────
 
   const ouvert = lieu ? ouvertALaCommande(lieu) : false;
-  /**
-   * L'HEURE S'ÉCRIT 08:00, PAS « 8 h ».
-   *
-   * `heureDOuverture` rend déjà « 08:00 ». On passait par `heureLisible` pour
-   * en faire « 8 h », une forme plus française mais plus lente à lire : on
-   * hésite une demi-seconde entre 8 h du matin et 8 h du soir, et le zéro de
-   * tête lève le doute sans y penser. Sur un écran qu'on consulte en marchant
-   * vers le stade, cette demi-seconde compte.
-   */
-  // Avec le JOUR : « demain à 08:00 », « ven. 13 nov. à 08:00 » (10/11).
-  const ouvreA = lieu ? quandLaCommandeOuvre(lieu) : null;
 
   /**
    * CE QUE LE BANDEAU ANNONCE — ET CE QU'IL TAIT.
@@ -290,19 +280,25 @@ export function SaisonScreen({ route, navigation }: Props) {
    * `null` fait disparaître la pastille entière, pas seulement son texte : une
    * pastille vide serait une tache orange sans raison.
    */
+  /*
+    LA RÈGLE DE L'EN-TÊTE (Rémi, 16/11/2026), la même pour tous les lieux :
+    « Prochain événement dans 6 jours » — ÉVÉNEMENT et non match, car il y a
+    aussi des concerts et des spectacles. L'heure d'ouverture de la commande
+    n'y figure plus : la carte du match touché la donne déjà, et l'en-tête la
+    répétait. Commande ouverte : RIEN en haut — la tuile du jour le dit, en vert.
+  */
   const etatCommande = (): { icone: keyof typeof Ionicons.glyphMap; texte: string } | null => {
     if (ouvert) return null;
-    if (ouvreA) return { icone: 'time-outline', texte: `La commande ouvre ${ouvreA}` };
     if (lieu?.prochainEvenement) {
-      const quand = libelleAttente(lieu.prochainEvenement.startAt, new Date());
+      const quand = delaiAvantEvenement(lieu.prochainEvenement.startAt, new Date());
       return {
         icone: 'calendar-outline',
         texte: quand
-          ? `Prochain match ${quand}`
-          : `Prochain match ${libelleDateLongue(lieu.prochainEvenement.startAt)}`,
+          ? `Prochain événement ${quand}`
+          : `Prochain événement ${libelleDateLongue(lieu.prochainEvenement.startAt)}`,
       };
     }
-    return { icone: 'calendar-outline', texte: 'Aucun match programmé' };
+    return { icone: 'calendar-outline', texte: 'Aucun événement programmé' };
   };
 
   // Une seule evaluation : l’appeler deux fois dans le rendu refaisait le
@@ -509,7 +505,7 @@ export function SaisonScreen({ route, navigation }: Props) {
             */}
             {rienAVenir ? (
               <Text style={styles.note}>
-                Les prochains matchs apparaîtront ici dès que le club les programme.
+                Les prochains événements apparaîtront ici dès que le club les programme.
               </Text>
             ) : null}
 
@@ -519,7 +515,7 @@ export function SaisonScreen({ route, navigation }: Props) {
                 <Text style={styles.vide}>
                   {ouvert
                     ? 'Ce lieu prend les commandes en continu.'
-                    : 'Aucun match programmé sur ce lieu pour l’instant.'}
+                    : 'Aucun événement programmé sur ce lieu pour l’instant.'}
                 </Text>
               </View>
             ) : null}
@@ -560,9 +556,9 @@ export function SaisonScreen({ route, navigation }: Props) {
  * événement à la main — annoncer « 8 h » y serait une promesse inventée.
  */
 function phraseAttente(match: EvenementDeSaison, lieu: PublicVenue | null): string {
-  if (match.passe) return 'Match terminé';
+  if (match.passe) return 'Événement terminé';
   if (lieu?.flaixEnabled) {
-    return `La commande ouvre à ${lieu.heureOuvertureCommande} le jour du match`;
+    return `La commande ouvre à ${lieu.heureOuvertureCommande} le jour de l’événement`;
   }
   return 'La commande n’est pas encore ouverte';
 }
@@ -622,13 +618,18 @@ function TuileMatch({
   );
 }
 
+/** Le vert de « commande ouverte » — celui de « Prête » dans Mes commandes. */
+const VERT_OUVERT = '#16a34a';
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
   scroll: { paddingTop: 16 },
 
   band: {
     backgroundColor: THEME.orange,
-    paddingBottom: 16,
+    // 16 → 10 : la pastille descend de 6 (marginTop 12 → 18), la bande garde
+    // sa hauteur (16/11).
+    paddingBottom: 10,
     paddingHorizontal: 12,
     borderBottomLeftRadius: 26,
   },
@@ -657,7 +658,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     alignSelf: 'flex-start',
-    marginTop: 12,
+    // DÉCOLLÉE DU LOGO (16/11) : à 12, elle touchait l'image du lieu.
+    marginTop: 18,
     marginLeft: 8,
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: THEME.radius.pill,
@@ -699,7 +701,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     ...shadowCard,
   },
-  tuileOuverte: { borderColor: THEME.orange },
+  // COMMANDE OUVERTE EN VERT (16/11) : c'est le feu vert du jour, et il ne
+  // se dit QUE sur la tuile de l'événement — rien dans l'en-tête.
+  tuileOuverte: { borderColor: VERT_OUVERT },
   tuileChoisie: { borderColor: THEME.ink },
   // L'opacité dit le TEMPS : le match est joué, il s'efface.
   tuilePassee: { opacity: 0.4 },
@@ -717,7 +721,7 @@ const styles = StyleSheet.create({
     fontFamily: FONT.medium,
     textAlign: 'center',
   },
-  tuileJourOuvert: { color: THEME.orange, fontFamily: FONT.bold },
+  tuileJourOuvert: { color: VERT_OUVERT, fontFamily: FONT.bold },
 
 
   carte: {

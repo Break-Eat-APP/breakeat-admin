@@ -5,6 +5,27 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.28] — 2026-11-16 — L'en-tête du lieu : « Prochain événement dans 6 jours »
+
+Validé par Rémi : la grille de 2 colonnes reste. Et une règle pour l'en-tête
+orange de l'écran du lieu, la même partout :
+
+- **« Prochain événement dans N jours »** (« aujourd'hui », « demain », puis le
+  nombre de jours, même au-delà d'une semaine). **Événement** et non match :
+  il y a aussi des concerts et des spectacles. Sur cet écran, « match »
+  devient « événement » (« Événement terminé », « le jour de l'événement »…) ;
+- **l'heure d'ouverture de la commande n'est plus dans l'en-tête** : la carte
+  de l'événement touché la donne déjà ;
+- **commande ouverte** : rien dans l'en-tête ; la tuile de l'événement affiche
+  « Commande ouverte » **en vert** (liseré vert) ;
+- la pastille est **décollée de l'image du lieu** (6 px plus bas), sans
+  agrandir la bande orange.
+
+`~ apps/mobile/src/screens/saison.screen.tsx`, `lib/calendrier-saison.ts`
+(+ test) — JavaScript seul : mise à jour à distance (version 1.1.2).
+
+---
+
 ## [1.7.27] — 2026-11-16 — L'invitation d'un club s'accepte
 
 Suite du test croisé entre organisations : un club rattachait un compte
