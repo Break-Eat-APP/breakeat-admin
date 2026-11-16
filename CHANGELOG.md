@@ -5,6 +5,24 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.32] — 2026-11-16 — Le suivi se remet à zéro une minute après le retrait ; Live Activity « prête » resserrée (1.1.3)
+
+- **La pastille de « Mes commandes »** (éclair cerclé de vert) restait dix
+  minutes après la récupération. Règle de Rémi : **une minute**, puis le suivi
+  se remet à zéro.
+- **La Live Activity « Commande prête »** était plus haute que ce qu'iOS
+  accorde (≈ 160 points) : il rognait le bas, le bouton « je suis là » collait
+  au bord. Pour une commande prête, la barre de progression est retirée (le
+  titre dit déjà « prête ») et l'espacement resserré. « Rendez-vous au point de
+  retrait » devient « Rends-toi… » (île dynamique, produit manquant).
+- **Version 1.1.3** : le widget est natif. Les builds 1.1.2 (dont la 44) ne
+  reçoivent plus les mises à jour à distance publiées après celle-ci.
+
+`~ apps/mobile/src/lib/suivi-commande.ts` (+ test),
+`~ apps/mobile/targets/live-activity/BreakEatLiveActivity.swift`, `app.config.js`.
+
+---
+
 ## [1.7.31] — 2026-11-16 — Partager l'addition : un vrai lien, et plus de détour par le paiement
 
 Remarques de Rémi en testant avec un ami :

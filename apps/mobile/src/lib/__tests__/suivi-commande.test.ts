@@ -15,7 +15,7 @@ const MAINTENANT = Date.parse('2026-09-21T20:00:00Z');
 const ilYa = (minutes: number) => new Date(MAINTENANT - minutes * 60_000).toISOString();
 
 function commande(status: string, extra: Partial<CommandeSuivie> = {}): CommandeSuivie {
-  return { status, createdAt: ilYa(30), updatedAt: ilYa(1), paymentStatus: 'SUCCEEDED', ...extra };
+  return { status, createdAt: ilYa(30), updatedAt: ilYa(0.25), paymentStatus: 'SUCCEEDED', ...extra };
 }
 
 describe('etatPastille', () => {
@@ -45,7 +45,7 @@ describe('etatPastille', () => {
     expect(etatPastille([finie, commande('PREPARING')], MAINTENANT)).toBe('preparation');
   });
 
-  it('le ✓ disparaît au bout de dix minutes', () => {
+  it('le ✓ disparaît au bout d’une minute', () => {
     const minutes = DUREE_FIN_MS / 60_000;
     expect(etatPastille([commande('PICKED_UP', { updatedAt: ilYa(minutes - 1) })], MAINTENANT)).toBe('recuperee');
     expect(etatPastille([commande('PICKED_UP', { updatedAt: ilYa(minutes + 1) })], MAINTENANT)).toBe('repos');
@@ -68,13 +68,13 @@ describe('etatPastille', () => {
   });
 
   it('parmi les commandes terminées, seule la plus récente compte', () => {
-    const remboursee = commande('CANCELLED', { paymentStatus: 'REFUNDED', updatedAt: ilYa(5) });
-    const recuperee = commande('PICKED_UP', { updatedAt: ilYa(1) });
+    const remboursee = commande('CANCELLED', { paymentStatus: 'REFUNDED', updatedAt: ilYa(0.5) });
+    const recuperee = commande('PICKED_UP', { updatedAt: ilYa(0.25) });
     expect(etatPastille([remboursee, recuperee], MAINTENANT)).toBe('recuperee');
   });
 
   it('retombe sur la date de création si l’API ne donne pas de mise à jour', () => {
-    const c: CommandeSuivie = { status: 'PICKED_UP', createdAt: ilYa(2) };
+    const c: CommandeSuivie = { status: 'PICKED_UP', createdAt: ilYa(0.5) };
     expect(etatPastille([c], MAINTENANT)).toBe('recuperee');
   });
 });
@@ -84,8 +84,8 @@ describe('expirationEtat', () => {
     expect(expirationEtat([commande('READY')], MAINTENANT)).toBeNull();
   });
 
-  it('le ✓ expire dix minutes après la récupération', () => {
-    const c = commande('PICKED_UP', { updatedAt: ilYa(4) });
-    expect(expirationEtat([c], MAINTENANT)).toBe(6 * 60_000);
+  it('le ✓ expire une minute après la récupération', () => {
+    const c = commande('PICKED_UP', { updatedAt: ilYa(0.25) });
+    expect(expirationEtat([c], MAINTENANT)).toBe(45_000);
   });
 });

@@ -556,6 +556,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.29 | 2026-11-16 | Les écrans de commande tutoient le client |
 | 1.7.30 | 2026-11-16 | Les créneaux disent leur moment ; poste opérateur sans erreur sur les créneaux communs |
 | 1.7.31 | 2026-11-16 | Partager l'addition : un vrai lien, plus de détour par le paiement |
+| 1.7.32 | 2026-11-16 | Suivi remis à zéro une minute après le retrait ; Live Activity resserrée (version 1.1.3) |
 
 ---
 

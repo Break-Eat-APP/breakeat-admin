@@ -36,11 +36,11 @@ export const JAUNE_FOND = 'rgba(234, 179, 8, 0.14)';
 /**
  * Combien de temps le ✓ (ou le bleu du remboursement) reste affiché.
  *
- * Assez pour que le client le voie en rouvrant l'app après être reparti du
- * comptoir ; pas au point que la pastille parle encore d'une commande
- * mangée depuis une heure.
+ * UNE MINUTE (règle de Rémi, 16/11/2026 ; c'était dix) : dès que le client a
+ * récupéré sa commande, le suivi se remet à zéro — le temps de voir le ✓ en
+ * repartant du comptoir, pas davantage.
  */
-export const DUREE_FIN_MS = 10 * 60_000;
+export const DUREE_FIN_MS = 60_000;
 
 /** Rang d'avancement : plus il est haut, plus le client doit bouger vite. */
 const RANG_EN_COURS: Record<string, number> = {
@@ -77,7 +77,7 @@ function horodatage(c: CommandeSuivie): number {
  *    de se déplacer en premier. Un remboursement partiel ne change rien — la
  *    commande continue d'être servie.
  * 2. Sinon, la DERNIÈRE commande terminée, si elle l'a été il y a moins de
- *    dix minutes : ✓ vert si récupérée, bleu si remboursée.
+ *    une minute : ✓ vert si récupérée, bleu si remboursée.
  * 3. Sinon, la pastille au repos.
  */
 export function etatPastille(

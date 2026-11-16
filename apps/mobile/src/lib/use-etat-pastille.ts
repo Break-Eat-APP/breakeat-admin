@@ -81,7 +81,7 @@ export function useEtatPastille(routeCourante?: string): EtatPastille {
 
   // `Date.now()` à chaque rendu, et non une horloge gardée en état : une
   // horloge figée au démarrage ferait durer le ✓ d'une commande récupérée une
-  // heure plus tard bien au-delà de ses dix minutes.
+  // heure plus tard bien au-delà de sa minute.
   const maintenant = Date.now();
   const reste = expirationEtat(commandes, maintenant);
   useEffect(() => {
