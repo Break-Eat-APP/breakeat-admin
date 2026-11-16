@@ -52,7 +52,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
     icon: 'card-outline',
     color: THEME.orange,
     bg: THEME.orangeTint,
-    description: 'Votre commande a été reçue. En attente de confirmation du stand.',
+    description: 'Ta commande a été reçue. En attente de confirmation du stand.',
     isFinal: false,
   },
   /**
@@ -72,7 +72,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
     icon: 'checkmark-circle-outline',
     color: '#16a34a',
     bg: '#ecfdf5',
-    description: 'Le stand a bien reçu votre commande. Préparation à venir.',
+    description: 'Le stand a bien reçu ta commande. Préparation à venir.',
     isFinal: false,
   },
   PREPARING: {
@@ -80,7 +80,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
     icon: 'flame-outline',
     color: '#d97706',
     bg: '#fffbeb',
-    description: 'Votre commande est en cours de préparation.',
+    description: 'Ta commande est en cours de préparation.',
     isFinal: false,
   },
   READY: {
@@ -88,7 +88,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
     icon: 'bag-check-outline',
     color: '#16a34a',
     bg: '#ecfdf5',
-    description: 'Votre commande est prête ! Rendez-vous au point de retrait.',
+    description: 'Ta commande est prête ! Rends-toi au point de retrait.',
     isFinal: false,
   },
   // EN VERT (demande de Rémi, 10/11) : c'est la bonne nouvelle de la commande,
@@ -106,7 +106,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
     icon: 'close-circle-outline',
     color: '#dc2626',
     bg: '#fef2f2',
-    description: 'Votre commande a été annulée. Contactez un opérateur.',
+    description: 'Ta commande a été annulée. Rapproche-toi du stand.',
     isFinal: true,
   },
   RECOVERED: {
@@ -400,7 +400,7 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
 
         {/* Order items */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Votre commande</Text>
+          <Text style={styles.cardTitle}>Ta commande</Text>
           {order.items.map((item, i) => {
             const manque = item.missingQuantity ?? 0;
             return (

@@ -5,6 +5,20 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.29] — 2026-11-16 — Les écrans de commande tutoient le client
+
+Le détail de la commande disait encore « Votre commande est prête !
+Rendez-vous au point de retrait », alors que l'app tutoie partout ailleurs
+(« Ta commande est prête » dans la notification) — et ce texte paraît sur un
+visuel des stores. Corrigé sur le détail (tous les états), la confirmation
+après paiement et le bandeau « produit manquant ».
+
+`~ apps/mobile/src/screens/order-tracking.screen.tsx`,
+`order-confirmation.screen.tsx`, `components/missing-items-banner.tsx` —
+mise à jour à distance.
+
+---
+
 ## [1.7.28] — 2026-11-16 — L'en-tête du lieu : « Prochain événement dans 6 jours »
 
 Validé par Rémi : la grille de 2 colonnes reste. Et une règle pour l'en-tête

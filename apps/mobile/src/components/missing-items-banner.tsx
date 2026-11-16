@@ -46,7 +46,7 @@ export function MissingItemsBanner({
     <View style={[styles.cadre, style]} accessibilityRole="alert">
       <Text style={styles.titre}>Produit manquant</Text>
       <Text style={styles.texte}>
-        Il manque {resume}. Rendez-vous au point de retrait{comptoir ? ` ${comptoir}` : ''}.
+        Il manque {resume}. Rends-toi au point de retrait{comptoir ? ` ${comptoir}` : ''}.
       </Text>
     </View>
   );

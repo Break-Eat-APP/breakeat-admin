@@ -75,7 +75,7 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
       {/* Texts */}
       <Animated.View style={[styles.textBlock, { opacity: fadeAnim }]}>
         <Text style={styles.title}>Commande confirmée !</Text>
-        <Text style={styles.subtitle}>Votre commande a été passée avec succès.</Text>
+        <Text style={styles.subtitle}>Ta commande a été passée avec succès.</Text>
 
         <View style={styles.orderCard}>
           <View style={styles.orderRow}>
@@ -103,7 +103,7 @@ export function OrderConfirmationScreen({ route, navigation }: Props) {
 
         <View style={styles.infoBox}>
           <Text style={styles.infoText}>
-            Rendez-vous au stand à l'heure de votre créneau. Votre commande sera préparée !
+            Rends-toi au stand à l'heure de ton créneau. Ta commande sera préparée !
           </Text>
         </View>
       </Animated.View>
