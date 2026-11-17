@@ -45,7 +45,7 @@ _Dernière mise à jour : 2026-11-17 — lire d'abord « ÉTAT AU 17/11/2026 » 
 | **Serveur (Railway)** | En ligne, sert **`b430c58`** (corrections du 17/11 comprises, vérifié par `/health` le 17/11 à 11 h 36) | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit` |
 | **Paiement** | ⚠️ **Stripe en MODE TEST en production** (`sk_test_…`) : la carte 4242… passe, une vraie carte est refusée. Voulu jusqu'à la validation des stores (ADR-0012) | Stripe → bascule « mode test » ; Railway → variables |
 | **Consoles (Vercel)** | Admin, back-office et opérateur, publiés depuis `main` | « Déploiement des frontends » plus bas |
-| **iOS** | **Build 46 (1.1.3)** sur TestFlight, **envoyée à la vérification Apple le 17/11** (nouveaux visuels, notes : Dôme → Moto Cross X → « Au plus vite », carte de test). Mise à jour à distance 1.1.3 publiée le **16/11 à 22 h 09** sur `1fbdf46`. Les builds 1.1.2 et plus anciennes ne reçoivent plus les mises à jour à distance | App Store Connect |
+| **iOS** | **Build 46 (1.1.3)** sur TestFlight, **envoyée à la vérification Apple le 17/11** (nouveaux visuels, notes : Dôme → Moto Cross X → « Au plus vite », carte de test). Mise à jour à distance 1.1.3 publiée le 16/11 (`1fbdf46`), puis le **17/11** sur `7b95f7c` (corrections 1.7.39). Les builds 1.1.2 et plus anciennes ne reçoivent plus les mises à jour à distance | App Store Connect |
 | **Android** | **Clé d'importation acceptée** (17/11). **1.1.3, code de version 7** (`.aab` contrôlé : 16 ko, ni Billing ni `AD_ID`) **en examen en production**, publication gérée | Play Console → Vue d'ensemble de la publication |
 | **Connexion** | E-mail + mot de passe, Apple, Google (iOS vérifié ; Android à essayer sur la 1.1.3) | — |
 | **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels n'est pas configuré | `GET /api/v1/auth/password-reset/available` → `false` |
@@ -70,9 +70,9 @@ _Dernière mise à jour : 2026-11-17 — lire d'abord « ÉTAT AU 17/11/2026 » 
 
 1. **Sortie de la 1.1.3 sur les stores — dans cet ordre** (ADR-0012) :
    a. ✅ Corrections du 17/11 (1.7.39) poussées, CI verte, `/health` →
-      `b430c58`. Reste : **relancer la mise à jour à distance 1.1.3**
-      (accord de Rémi) : elle apporte la correction de « Au plus vite »
-      (BUG-2026-021) à la build 46.
+      `b430c58`. ✅ Mise à jour à distance 1.1.3 publiée le 17/11 sur `7b95f7c`
+      (run 44066757716, vert) : la build 46 reçoit la correction de « Au plus
+      vite » au prochain lancement.
    b. Avant l'examen : **renommer ou désactiver la buvette « Burger King »**
       de Moto Cross X (nom de marque) ; garder Moto Cross X **actif** avec une
       buvette **ouverte** (jusqu'au 31/12) ; vérifier dans App Store Connect
