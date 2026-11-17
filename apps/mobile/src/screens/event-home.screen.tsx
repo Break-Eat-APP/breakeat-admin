@@ -272,7 +272,7 @@ export function EventHomeScreen({ route, navigation }: Props) {
       {!token && (
         <View style={[styles.loginHint, { bottom: basFlottant }]}>
           <Text style={styles.loginHintText}>
-            Connectez-vous pour passer une commande
+            Connecte-toi pour passer une commande
           </Text>
           <Pressable
             onPress={() => navigation.navigate('Login', { pendingEventId: eventId })}

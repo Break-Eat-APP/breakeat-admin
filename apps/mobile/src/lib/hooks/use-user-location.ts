@@ -62,12 +62,12 @@ function getNav() {
 /** Message d'aide adapté à la plateforme quand l'accès est bloqué. */
 function deniedHelp(): string {
   if (Platform.OS !== 'web') {
-    return "L'accès à votre position est refusé.\n\nActivez la localisation pour BreakEat dans les réglages de votre téléphone, puis réessayez.";
+    return "L'accès à ta position est refusé.\n\nActive la localisation pour BreakEat dans les réglages de ton téléphone, puis réessaie.";
   }
   const ua = getNav()?.userAgent ?? '';
   if (/iPhone|iPad|iPod/i.test(ua)) {
     return [
-      'Votre navigateur a refusé l\'accès à votre position.',
+      'Ton navigateur a refusé l\'accès à ta position.',
       'Sur iPhone :',
       '1. Réglages › Confidentialité et sécurité › Service de localisation : activé.',
       '2. Plus bas, Safari › « Lorsque l\'app est active ».',
@@ -77,11 +77,11 @@ function deniedHelp(): string {
   }
   if (/Android/i.test(ua)) {
     return [
-      'Votre navigateur a refusé l\'accès à votre position.',
+      'Ton navigateur a refusé l\'accès à ta position.',
       'Sur Android : touchez le cadenas à gauche de l\'adresse › Autorisations › Localisation › Autoriser, puis rechargez la page.',
     ].join('\n');
   }
-  return "Votre navigateur a refusé l'accès à votre position.\n\nPour l'autoriser : cliquez sur l'icône cadenas (ou localisation) à gauche de la barre d'adresse, mettez « Localisation » sur Autoriser, puis rechargez la page.";
+  return "Ton navigateur a refusé l'accès à ta position.\n\nPour l'autoriser : clique sur l'icône cadenas (ou localisation) à gauche de la barre d'adresse, mets « Localisation » sur Autoriser, puis recharge la page.";
 }
 
 interface LocationStore {
@@ -127,7 +127,7 @@ const useLocationStore = create<LocationStore>((set, get) => ({
         set({ status: 'denied' });
         if (silent) return;
         if (err?.code === 1) showAlert('Localisation bloquée', deniedHelp());
-        else showAlert('Position introuvable', 'Impossible de récupérer votre position pour le moment. Réessayez, ou recherchez une ville ci-dessus.');
+        else showAlert('Position introuvable', 'Impossible de récupérer ta position pour le moment. Réessaie, ou cherche une ville ci-dessus.');
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 },
     );

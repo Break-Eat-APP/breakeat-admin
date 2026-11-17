@@ -215,8 +215,8 @@ export class ProduitsManquantsService {
       commande.dailyNumber != null ? `N° ${commande.dailyNumber}` : commande.publicOrderNumber;
     const titre = 'Produit manquant';
     const corps =
-      `Il manque ${resume.join(', ')} dans votre commande ${numero}. ` +
-      `Rendez-vous au point de retrait${comptoir ? ` ${comptoir.name}` : ''}.`;
+      `Il manque ${resume.join(', ')} dans ta commande ${numero}. ` +
+      `Rends-toi au point de retrait${comptoir ? ` ${comptoir.name}` : ''}.`;
 
     const atteintes = await this.liveActivity.pushOrderUpdate(commande.id, undefined, {
       title: titre,

@@ -65,7 +65,7 @@ export function MotDePasseOublieScreen({ navigation }: Props) {
   const demander = async () => {
     const adresse = email.trim();
     if (!adresse.includes('@')) {
-      setErreur('Indiquez votre adresse e-mail.');
+      setErreur('Indique ton adresse e-mail.');
       return;
     }
 
@@ -75,7 +75,7 @@ export function MotDePasseOublieScreen({ navigation }: Props) {
       await apiDemanderReinitialisation(adresse);
       setEtape('code');
     } catch (e) {
-      setErreur(messageServeur(e, 'Demande impossible. Réessayez dans un instant.'));
+      setErreur(messageServeur(e, 'Demande impossible. Réessaie dans un instant.'));
     } finally {
       setEnvoi(false);
     }
@@ -108,7 +108,7 @@ export function MotDePasseOublieScreen({ navigation }: Props) {
        * à la connexion et tape son nouveau mot de passe : c'est la seule façon
        * de vérifier qu'il l'a bien noté, pendant qu'il peut encore le changer.
        */
-      showAlert('Mot de passe modifié', 'Connectez-vous avec votre nouveau mot de passe.');
+      showAlert('Mot de passe modifié', 'Connecte-toi avec ton nouveau mot de passe.');
       navigation.goBack();
     } catch (e) {
       setErreur(messageServeur(e, 'Code invalide ou expiré. Demandez-en un nouveau.'));
@@ -128,8 +128,8 @@ export function MotDePasseOublieScreen({ navigation }: Props) {
           {etape === 'adresse' ? (
             <>
               <Text style={styles.explication}>
-                Indiquez l’adresse de votre compte. Si un compte existe, un code à six chiffres
-                vous y sera envoyé.
+                Indique l’adresse de ton compte. Si un compte existe, un code à six chiffres
+                t’y sera envoyé.
               </Text>
 
               <TextInput

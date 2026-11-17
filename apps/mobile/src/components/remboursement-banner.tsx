@@ -60,9 +60,9 @@ export function RemboursementBanner({
         */}
         <Text style={styles.detail}>
           {total
-            ? 'Le montant a été renvoyé sur votre moyen de paiement.'
-            : 'Une partie du montant a été renvoyée sur votre moyen de paiement.'}{' '}
-          Comptez quelques jours ouvrés, selon votre banque.
+            ? 'Le montant a été renvoyé sur ton moyen de paiement.'
+            : 'Une partie du montant a été renvoyée sur ton moyen de paiement.'}{' '}
+          Compte quelques jours ouvrés, selon ta banque.
         </Text>
       </View>
     </View>

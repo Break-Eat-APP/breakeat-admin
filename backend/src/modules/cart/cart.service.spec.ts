@@ -700,6 +700,38 @@ describe('CartService', () => {
       );
     });
 
+    it('refuse un créneau DÉJÀ PASSÉ — la liste du client ne le montre plus, le serveur non plus', async () => {
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+      (prisma.slot.findUnique as jest.Mock).mockResolvedValue({
+        eventId: EVENT_ID,
+        status: SlotStatus.OPEN,
+        supplierId: null,
+        endAt: new Date(Date.now() - 60_000),
+      });
+
+      await expect(service.choisirCreneau(CART_ID, USER_ID, 'slot-1')).rejects.toThrow(
+        'Ce créneau est déjà passé',
+      );
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('accepte un créneau encore à venir', async () => {
+      const tx = sousVerrou();
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue(mockCart());
+      (prisma.slot.findUnique as jest.Mock).mockResolvedValue({
+        eventId: EVENT_ID,
+        status: SlotStatus.OPEN,
+        supplierId: null,
+        endAt: new Date(Date.now() + 15 * 60_000),
+      });
+
+      await service.choisirCreneau(CART_ID, USER_ID, 'slot-1');
+
+      expect(tx.cart.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ selectedSlotId: 'slot-1' }) }),
+      );
+    });
+
     it('refuse le créneau d’une AUTRE buvette', async () => {
       // « Mi-temps » au comptoir Sud pour une commande passee au Nord : le
       // client se presenterait devant un stand qui n'attend rien.

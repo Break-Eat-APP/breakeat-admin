@@ -55,13 +55,21 @@ export async function assertCreneauCompatible(
 ): Promise<void> {
   const creneau = await prisma.slot.findUnique({
     where: { id: slotId },
-    select: { eventId: true, status: true, supplierId: true },
+    select: { eventId: true, status: true, supplierId: true, endAt: true },
   });
   if (!creneau || creneau.eventId !== commande.eventId) {
     throw new BadRequestException('Ce créneau n’appartient pas à cet événement.');
   }
   if (exigerOuvert && creneau.status !== SlotStatus.OPEN) {
-    throw new BadRequestException('Ce créneau vient d’être fermé. Choisissez-en un autre.');
+    throw new BadRequestException('Ce créneau vient d’être fermé. Choisis-en un autre.');
+  }
+  // UN CRÉNEAU PASSÉ NE SE CHOISIT PLUS (17/11/2026). L'app ne le propose plus
+  // depuis le 16/11 (`public-events.controller`, liste du client) ; le serveur
+  // doit le refuser aussi, sinon une liste restée ouverte sur l'écran — ou une
+  // ancienne version de l'app — réserve encore « 14:00 – 14:15 » à 20 h. Le
+  // RATTACHEMENT par le comptoir, lui, reste libre (`exigerOuvert` faux).
+  if (exigerOuvert && creneau.endAt && creneau.endAt.getTime() <= Date.now()) {
+    throw new BadRequestException('Ce créneau est déjà passé. Choisis-en un autre.');
   }
   // Un créneau rattaché à une buvette ne vaut que pour elle : sans ce contrôle,
   // on réserverait « Mi-temps » au comptoir Sud pour une commande passée au

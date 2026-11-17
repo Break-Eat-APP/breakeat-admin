@@ -151,7 +151,7 @@ export function CheckoutScreen({ navigation }: Props) {
         <PageHeader title="Récapitulatif" />
         <View style={styles.centered}>
           <Text style={styles.authTitle}>Connexion requise</Text>
-          <Text style={styles.authText}>Vous devez être connecté pour commander.</Text>
+          <Text style={styles.authText}>Connecte-toi pour commander.</Text>
           <Pressable
             style={styles.authBtn}
             onPress={() => navigation.navigate('Login', { pendingEventId: eventId ?? undefined })}
@@ -165,7 +165,7 @@ export function CheckoutScreen({ navigation }: Props) {
 
   const handleOrder = async () => {
     if (!eventId || !supplierId || items.length === 0) {
-      showAlert('Panier vide', 'Votre panier est vide.');
+      showAlert('Panier vide', 'Ton panier est vide.');
       return;
     }
 
@@ -196,9 +196,13 @@ export function CheckoutScreen({ navigation }: Props) {
       //
       // Sans cet appel, il restait dans l'application : la commande arrivait au
       // comptoir sans heure de retrait, affichée « dès que prête ».
-      if (selectedSlotId) {
-        await apiChoisirCreneau(cart.id, selectedSlotId);
-      }
+      //
+      // TOUJOURS envoyé, `null` compris (17/11/2026). `POST /carts` réutilise le
+      // panier déjà ouvert, et le serveur garde son créneau tant qu'on ne lui
+      // dit rien : un client qui choisissait « 14:00 », revenait en arrière puis
+      // prenait « Au plus vite » payait une commande… pour 14:00. `null` efface
+      // le créneau et rend sa place.
+      await apiChoisirCreneau(cart.id, selectedSlotId);
 
       // 2ter. Fidélité — applique les points APRÈS les articles (la remise est
       // plafonnée au montant du panier, qui doit donc être complet).
@@ -252,8 +256,8 @@ export function CheckoutScreen({ navigation }: Props) {
         navigation.navigate('Commandes');
         showAlert(
           'Paiement en cours de confirmation',
-          'Si vous avez payé, votre commande apparaîtra dans « Mes commandes » ' +
-            'd’un instant à l’autre. Si vous avez annulé, votre panier est intact.',
+          'Si tu as payé, ta commande apparaîtra dans « Mes commandes » ' +
+            'd’un instant à l’autre. Si tu as annulé, ton panier est intact.',
         );
         return;
       }
@@ -278,11 +282,11 @@ export function CheckoutScreen({ navigation }: Props) {
       if (msg.includes('401') || msg.includes('Session expirée')) {
         showAlert(
           'Session expirée',
-          'Reconnectez-vous pour finaliser votre commande. Votre panier est conservé.',
+          'Reconnecte-toi pour finaliser ta commande. Ton panier est conservé.',
         );
       } else {
         showAlert('Erreur', msg.includes('409')
-          ? 'Un panier est déjà ouvert. Réessayez dans 30 min.'
+          ? 'Un panier est déjà ouvert. Réessaie dans 30 min.'
           : `Impossible de passer la commande : ${msg}`);
       }
     } finally {

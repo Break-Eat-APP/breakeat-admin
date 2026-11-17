@@ -38,26 +38,26 @@ const MOTIFS: { cle: string; titre: string; icone: keyof typeof Ionicons.glyphMa
       titre: 'Un problème avec une commande',
       icone: 'bag-handle-outline',
       amorce:
-        'Numéro de commande :\nLieu et buvette :\nCe qui s’est passé :\n\n(vous le trouvez dans « Mes commandes »)',
+        'Numéro de commande :\nLieu et buvette :\nCe qui s’est passé :\n\n(tu le trouves dans « Mes commandes »)',
     },
     {
       cle: 'paiement',
       titre: 'Un problème de paiement',
       icone: 'card-outline',
       amorce:
-        'Numéro de commande :\nMontant concerné :\nCe qui s’est passé :\n\n(si vous avez été débité sans recevoir de commande, précisez-le : c’est traité en priorité)',
+        'Numéro de commande :\nMontant concerné :\nCe qui s’est passé :\n\n(si tu as été débité sans recevoir de commande, précise-le : c’est traité en priorité)',
     },
     {
       cle: 'compte',
       titre: 'Mon compte',
       icone: 'person-outline',
-      amorce: 'Ce que vous souhaitez (modification, suppression, autre) :\n',
+      amorce: 'Ce que tu souhaites (modification, suppression, autre) :\n',
     },
     {
       cle: 'autre',
       titre: 'Autre chose',
       icone: 'chatbubble-ellipses-outline',
-      amorce: 'Votre message :\n',
+      amorce: 'Ton message :\n',
     },
   ];
 
@@ -161,8 +161,8 @@ export function AideScreen({ navigation }: Props) {
 
       <ScrollView contentContainerStyle={styles.contenu} showsVerticalScrollIndicator={false}>
         <Text style={styles.intro}>
-          Un souci avec une commande, un paiement, votre compte ? Choisissez ce qui s’en approche le
-          plus : le message part avec les informations dont nous avons besoin pour vous répondre
+          Un souci avec une commande, un paiement, ton compte ? Choisis ce qui s’en approche le
+          plus : le message part avec les informations dont nous avons besoin pour te répondre
           vite.
         </Text>
 
@@ -183,9 +183,9 @@ export function AideScreen({ navigation }: Props) {
         </View>
 
         <Text style={styles.pied}>
-          Vous pouvez aussi écrire directement à {ADRESSE_SUPPORT}. Pour un problème survenu au
-          comptoir pendant un événement, le plus rapide reste de vous adresser au stand : l’équipe a
-          votre commande sous les yeux.
+          Tu peux aussi écrire directement à {ADRESSE_SUPPORT}. Pour un problème survenu au
+          comptoir pendant un événement, le plus rapide reste de t’adresser au stand : l’équipe a
+          ta commande sous les yeux.
         </Text>
 
         {/* MON COMPTE — sa propre section, séparée des motifs de contact :

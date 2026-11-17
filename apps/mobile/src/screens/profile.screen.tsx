@@ -85,7 +85,7 @@ export function ProfileScreen() {
   const handleLogout = () => {
     confirmAction(
       'Déconnexion',
-      'Voulez-vous vraiment vous déconnecter ?',
+      'Veux-tu vraiment te déconnecter ?',
       () => {
         void clearAuth();
         navigation.reset({ index: 0, routes: [{ name: 'Login', params: { defaultTab: 'login' } }] });
@@ -132,9 +132,9 @@ export function ProfileScreen() {
         </View>
       ) : (
         <View style={[styles.card, shadowCard]}>
-          <Text style={styles.guestTitle}>Vous n'êtes pas connecté</Text>
+          <Text style={styles.guestTitle}>Tu n'es pas connecté</Text>
           <Text style={styles.guestSub}>
-            Connectez-vous pour retrouver vos commandes et aller plus vite au paiement.
+            Connecte-toi pour retrouver tes commandes et aller plus vite au paiement.
           </Text>
           <Pressable style={styles.cta} onPress={() => navigation.navigate('Login')}>
             <Text style={styles.ctaText}>Se connecter / S'inscrire</Text>

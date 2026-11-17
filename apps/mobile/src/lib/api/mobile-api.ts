@@ -121,7 +121,7 @@ async function req<T>(
 
   if (res.status === 401 && token) {
     await useAuthStore.getState().clearAuth();
-    throw new ApiError(401, 'Session expirée. Reconnectez-vous pour continuer.');
+    throw new ApiError(401, 'Session expirée. Reconnecte-toi pour continuer.');
   }
 
   if (!res.ok) {

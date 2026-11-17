@@ -198,7 +198,7 @@ decrire('produits manquants (base réelle)', () => {
     });
     expect(envoisApns[0].alerte).toEqual({
       title: 'Produit manquant',
-      body: 'Il manque 1× Bière dans votre commande N° 18. Rendez-vous au point de retrait Buvette Nord.',
+      body: 'Il manque 1× Bière dans ta commande N° 18. Rends-toi au point de retrait Buvette Nord.',
     });
     // Live Activity atteinte : pas de notification en double.
     expect(envoisExpo).toHaveLength(0);

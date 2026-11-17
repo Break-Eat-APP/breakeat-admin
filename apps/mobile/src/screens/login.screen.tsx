@@ -164,7 +164,7 @@ export function LoginScreen({ navigation, route }: Props) {
       return;
     }
     if (mode === 'register' && (prenom.trim().length < 2 || nom.trim().length < 2)) {
-      showAlert('Champs requis', 'Indiquez votre prénom et votre nom.');
+      showAlert('Champs requis', 'Indique ton prénom et ton nom.');
       return;
     }
     // Le téléphone est demandé, et vérifié dans sa FORME seulement.
@@ -185,7 +185,7 @@ export function LoginScreen({ navigation, route }: Props) {
     // deux appellent désormais la même fonction.
     const telE164 = normaliserTelephone(telephone);
     if (mode === 'register' && telE164 === null) {
-      showAlert('Numéro à vérifier', 'Indiquez un numéro de téléphone valide, par exemple 06 12 34 56 78.');
+      showAlert('Numéro à vérifier', 'Indique un numéro de téléphone valide, par exemple 06 12 34 56 78.');
       return;
     }
     // L'acceptation des conditions ne se déduit PAS d'un clic sur « S'inscrire ».
@@ -197,7 +197,7 @@ export function LoginScreen({ navigation, route }: Props) {
     if (mode === 'register' && !cguAcceptees) {
       showAlert(
         'Conditions à accepter',
-        'Cochez la case pour confirmer que vous acceptez les conditions générales d’utilisation.',
+        'Coche la case pour confirmer que tu acceptes les conditions générales d’utilisation.',
       );
       return;
     }
@@ -314,7 +314,7 @@ export function LoginScreen({ navigation, route }: Props) {
     } catch (e: unknown) {
       const code = (e as { code?: string }).code;
       if (code === 'ERR_REQUEST_CANCELED') return;
-      showAlert('Connexion impossible', messageServeur(e) || 'Réessayez dans un instant.');
+      showAlert('Connexion impossible', messageServeur(e) || 'Réessaie dans un instant.');
     } finally {
       setLoading(false);
     }
@@ -351,7 +351,7 @@ export function LoginScreen({ navigation, route }: Props) {
       void requestLocation();
       proceed();
     } catch (e: unknown) {
-      showAlert('Connexion impossible', messageServeur(e) || 'Réessayez dans un instant.');
+      showAlert('Connexion impossible', messageServeur(e) || 'Réessaie dans un instant.');
     } finally {
       setLoading(false);
     }
@@ -386,7 +386,7 @@ export function LoginScreen({ navigation, route }: Props) {
 
         {/* Bandeau fidélité */}
         <View style={[styles.banner, shadowCard]}>
-          <Text style={styles.bannerTitle}>Profitez de l'événement, on s'occupe de la file d'attente.</Text>
+          <Text style={styles.bannerTitle}>Profite de l'événement, on s'occupe de la file d'attente.</Text>
           <Text style={styles.bannerSub}>Déstresse, commande &amp; déguste.</Text>
         </View>
 

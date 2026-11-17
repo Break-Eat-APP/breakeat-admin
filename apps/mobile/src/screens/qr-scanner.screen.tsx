@@ -182,7 +182,7 @@ export function QRScannerScreen({ navigation }: Props) {
       {/* Overlay */}
       <View style={styles.overlay}>
         <Text style={styles.header}>BREAK EAT</Text>
-        <Text style={styles.hint}>Scannez le QR code de votre événement</Text>
+        <Text style={styles.hint}>Scanne le QR code de ton événement</Text>
 
         {/* Viewfinder */}
         <View style={styles.viewfinder}>

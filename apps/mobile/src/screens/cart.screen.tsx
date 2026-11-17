@@ -94,7 +94,10 @@ export function CartScreen({ navigation }: Props) {
         items.map((item) => ({ productId: item.productId, quantity: item.quantity })),
       );
       // Le creneau voyage AVEC le panier : l'ardoise en herite, puis la commande.
-      if (selectedSlotId) await apiChoisirCreneau(cart.id, selectedSlotId);
+      // TOUJOURS envoyé, `null` compris (17/11/2026) : « Au plus vite » doit
+      // EFFACER un créneau choisi plus tôt sur ce même panier, que le serveur
+      // garde tant qu'on ne lui dit rien.
+      await apiChoisirCreneau(cart.id, selectedSlotId);
       const split = await apiOpenSplit(cart.id);
       navigation.navigate('Split', { code: split.code });
     } catch (e: unknown) {
@@ -139,7 +142,7 @@ export function CartScreen({ navigation }: Props) {
       {items.length === 0 ? (
         <View style={styles.centered}>
 
-          <Text style={styles.emptyTitle}>Votre panier est vide</Text>
+          <Text style={styles.emptyTitle}>Ton panier est vide</Text>
           <Text style={styles.emptyText}>Ajoutez des articles depuis le catalogue.</Text>
         </View>
       ) : (
