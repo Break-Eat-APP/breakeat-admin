@@ -30,3 +30,6 @@ ne jamais réutiliser un numéro. Une décision remplacée passe en
 | [0007](ADR-0007-icone-ios-icon-composer.md) | L'icône iOS est au format Icon Composer | 11/11/2026 | ACCEPTÉE |
 | [0008](ADR-0008-documentation-dans-brain.md) | La documentation vit dans `brain/`, pas dans un `docs/` parallèle | 11/11/2026 | ACCEPTÉE |
 | [0009](ADR-0009-points-de-retrait-rattaches-et-ouverture-automatique.md) | Points de retrait rattachés d'office ; ouverture et fermeture automatiques | 16/11/2026 | ACCEPTÉE |
+| [0010](ADR-0010-invitation-a-accepter.md) | Un compte existant rejoint un club seulement s'il accepte l'invitation | 16/11/2026 | ACCEPTÉE |
+| [0011](ADR-0011-au-plus-vite.md) | « Au plus vite » toujours proposé ; un créneau n'est jamais obligatoire | 16/11/2026 | ACCEPTÉE |
+| [0012](ADR-0012-publication-manuelle-des-stores.md) | Les stores publient à la main, et pas avant le passage de Stripe en production | 17/11/2026 | ACCEPTÉE |

@@ -1,6 +1,7 @@
 # 🗺️ Carte du code — où trouver quoi
 
 > Complément du [README](README.md). Objectif : trouver le bon fichier en 30 secondes.
+> Mise à jour : **17/11/2026** (rattachement et ouverture automatiques, invitations, « Au plus vite », comptes de tests recomptés).
 
 ---
 
@@ -15,16 +16,17 @@ Modules et à quoi ils servent :
 | Module | Rôle |
 |---|---|
 | `auth`, `users` | Connexion, JWT, comptes. **Apple/Google** : `social-identity.service.ts` vérifie le jeton (émetteur ET destinataire). **Archivés** : `common/helpers/liberation-archives.ts` — un compte archivé rend son adresse quand la personne revient, et repart d'un compte neuf. **Suppression par le client** (`DELETE /auth/me`, exigée par Apple 5.1.1(v)) : on ANONYMISE, on n'efface pas la ligne — la base refuse d'effacer un compte porteur de commandes, et les effacer retirerait leur montant de la comptabilité du club. L'adresse est libérée et `archivedEmail` reste NUL : c'est ce qui distingue une suppression d'un archivage. Deux refus : dernier administrateur de la plateforme, ou d'un club |
-| `organizations`, `groups` | Clubs, membres, groupes d'accès privé |
+| `organizations`, `groups` | Clubs, membres, groupes d'accès privé. **Invitations à accepter** (16/11, ADR-0010) : un compte existant invité reçoit une `OrganizationInvitation` (14 jours) qu'il accepte ou refuse (`POST organizations/invitations/:id/accepter|refuser`) ; le club liste et annule les siennes (`GET`/`DELETE organizations/:id/invitations`). `assertCompteDuClubSeulement` : un club ne redéfinit le mot de passe que d'un compte sans vie hors de lui (BUG-2026-017) |
 | `venues` | **Lieux** (géoloc, recherche, Flaix, plan buvettes). `public-venues.controller.ts` = endpoint app : sa `projeter()` tient à elle seule le masquage des lieux privés, le lien Flaix du moment et l'identité glissée dedans — la liste ET la fiche (`GET /public/venues/:id`, qui sert les favoris hors rayon) y passent toutes deux, car deux routes finiraient par en oublier une. Un lieu se retire de l'app par son statut `INACTIVE`, jamais par suppression : il porte des commandes payées. Un lieu qui quitte le mode PERMANENT voit son conteneur ENDORMI (`PAUSED`), et RÉVEILLÉ au retour : conservé pour l'historique, mais plus commandable par un ancien lien |
 | `common/helpers/cache-court.ts` | **Cache de quelques secondes** des lectures publiques identiques pour tous (lieux, matchs, comptages ; « À ne pas manquer » sans accès privé). Les requêtes simultanées attendent la même lecture. `CACHE_LIEUX_MS` règle la durée (15 s ; `0` éteint). Ne garde JAMAIS une réponse personnalisée. |
 | `events`, `slots` | Événements + créneaux de retrait. **L'`eventId` de l'URL est contraignant** : un créneau se lit par `{ id, eventId }` et jamais par identifiant seul, avec contrôle d'appartenance au club sur la lecture comme sur l'écriture. `public-events.controller.ts` = endpoint app ; sa route `GET /public/events/a-venir?venueIds=…` alimente « À ne pas manquer » — **déclarée AVANT `:eventId`**, sinon le `ParseUUIDPipe` la prend pour un identifiant. La règle de répartition (`max(1, 4 − lieux)`, tri par date, 6 max, pas de remplissage) est une fonction PURE : `common/helpers/a-ne-pas-manquer.ts` (+ spec). Le **nom** d'un événement est nettoyé dans les DTO (`dto/update-event.dto.spec.ts` le teste derrière le vrai pipe). **Rapport Flaix** : `lien-flaix.ts` n'accepte que `https://*.flaixlabs.com` (nom d'hôte exact) — le bouton mène à une page où le directeur tape son mot de passe. Route à part (`PATCH :id/rapport-flaix`), acceptée sur un événement TERMINÉ |
-| `suppliers`, `products`, `categories`, `stock` | Points de retrait (« buvettes »), catalogue, stock. Une **catégorie appartient à une buvette**, pas à l'organisation |
+| `suppliers`, `products`, `categories`, `stock` | Points de retrait (« buvettes »), catalogue, stock. Une **catégorie appartient à une buvette**, pas à l'organisation. Un point de retrait créé ou dupliqué **rejoint d'office les événements à venir** du club (`common/helpers/rattachement-buvettes.ts`, ADR-0009) |
+| `events/ouverture-automatique.service.ts` | **Chaque minute**, lieux BreakEat : brouillon → Actif à l'heure où la commande ouvre (points de retrait fermés → ouverts) ; à la fin → Terminé (points de retrait fermés, sauf s'ils servent ailleurs). Bascules conditionnelles. Lieux Flaix et contenant permanent exclus (ADR-0009) |
 | `orders/produits-manquants.service.ts` | Le comptoir signale ce qu'il n'a pas pu servir : la ligne porte le manque (`missing_quantity`), le client est prévenu (Live Activity, sinon notification), et le produit peut passer HS dans le même geste |
 | `cart`, `orders`, `payments`, `webhooks` | Panier → commande → paiement (Stripe). **Sur NATIF, le paiement se fait DANS l'app** (PaymentSheet `@stripe/stripe-react-native`, `createPaymentIntent`) — le client ne sort plus sur le web ; la page hébergée reste le chemin du web. Aucun numéro de carte ne traverse notre code. La commande naît du webhook `payment_intent.succeeded`, jamais de l'app |
 | `order-splits` | **Partager l'addition** : une commande composée par un hôte, réglée par plusieurs convives depuis un simple navigateur. ⚠️ **Vocabulaire** : le produit dit « partager l'addition » et **rien d'autre** — c'est le mot du bouton, de l'écran et des messages d'erreur. « Ardoise » et « tournée » sont le vocabulaire INTERNE (nom du module, commentaires, historique du manuel) et ne doivent jamais atteindre le client : il en rencontrait trois pour une seule fonction. Cartes AUTORISÉES puis encaissées d'un coup au départ de la commande. **L'envoi est une revendication** : transition atomique `OPEN → SENDING` (un seul appel l'obtient), `orderId` UNIQUE, et si la commande ne peut pas naître toutes les parts sont REMBOURSÉES (`FAILED`). Une carte refusée au milieu rouvre l'ardoise et ne libère que les articles de ce convive |
-| `pickup-points` | Comptoirs de retrait (1–4 par buvette) |
-| `common/helpers` | **Les règles partagées**, chacune écrite une fois : `requireOrgAccess` (club + rôle), `requirePorteeBuvette` (un poste épinglé n'agit que sur SA buvette), `perimetreCa` (ce qui compte dans le chiffre d'affaires — sa signature interdit d'écraser le statut), `retrait-compatible` (un créneau/comptoir appartient bien à cet événement), `jour-de-service` (jour de service à 4h, et jour calendaire du lieu), `tva`, `compte-stripe`. Une règle écrite deux fois finit corrigée une seule fois — c'est l'origine de quatre des neuf défauts P2 |
+| `pickup-points` | Comptoirs de retrait (1–4 par buvette). Un **comptoir par défaut, au nom du point de retrait**, est créé pour chaque paire événement × point de retrait qui n'en a pas (`assurerLesComptoirs`) |
+| `common/helpers` | **Les règles partagées**, chacune écrite une fois : `requireOrgAccess` (club + rôle), `requirePorteeBuvette` (un poste épinglé n'agit que sur SA buvette), `perimetreCa` (ce qui compte dans le chiffre d'affaires — sa signature interdit d'écraser le statut), `retrait-compatible` (un créneau/comptoir appartient bien à cet événement et à cette buvette ; un créneau **choisi par le client** doit être ouvert et **non terminé**), `rattachement-buvettes` (rattachement d'office et comptoir par défaut), `fenetre-commande` (`heureDOuverture` : l'heure où la commande ouvre, partagée par l'app et l'ouverture automatique), `jour-de-service` (jour de service à 4h, et jour calendaire du lieu), `tva`, `compte-stripe`. Une règle écrite deux fois finit corrigée une seule fois — c'est l'origine de quatre des neuf défauts P2 |
 | `loyalty` | Fidélité : solde par organisation, registre immuable. **Les points se RÉSERVENT avant le paiement** (`HOLD` posé par `/checkout`, converti en `REDEEM` à la création de commande, rendu par `RELEASE`) : le refus pour solde insuffisant arrive avant Stripe, jamais après. Une ronde de 5 min rend les réservations des paniers expirés |
 | `live-activity` | Live Activity iOS : client APNs + webhook Flaix signé. `construirePayloadLiveActivity` (fonction pure, testée) fabrique la charge utile ; une **alerte** n'y est posée que pour une nouvelle qui demande un geste (produit manquant), sinon la mise à jour est silencieuse ; **`peremption.ts`** place la date de péremption à la FIN du décompte (sinon une heure) — même règle que `countdownTarget` côté Swift (`apps/mobile/targets/live-activity/BreakEatOrderAttributes.swift`) |
 | `bootstrap` | Reprise de l'accès principal (route inerte sans secret) |
@@ -88,7 +90,7 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
 | `venue-discovery.screen.tsx` | **Accueil** : recherche + lieux dans 10 km + favoris + plan buvettes + **« À ne pas manquer »** (événements des lieux favoris, une seule requête serveur) | ✅ |
 | `login.screen.tsx` | Connexion / inscription (optionnelle), Apple, **Google** (`lib/connexion-google.ts` web = rien, `.native.ts` = SDK natif) | ✅ |
 | `order-history.screen.tsx`, `profile.screen.tsx` | Historique en **tickets** (numéro orange en sujet, pastilles Toutes / En cours / Récupérées + sections En cours / Terminées, ticket entier cliquable vers le suivi), profil | ✅ |
-| `flaix-order.screen.tsx`, `supplier-catalog.screen.tsx`, `cart.screen.tsx`, `slot-selector.screen.tsx`, `checkout.screen.tsx`, `order-confirmation.screen.tsx` | Parcours de commande | ✅ |
+| `flaix-order.screen.tsx`, `supplier-catalog.screen.tsx`, `cart.screen.tsx`, `slot-selector.screen.tsx`, `checkout.screen.tsx`, `order-confirmation.screen.tsx` | Parcours de commande. `slot-selector` : **« Au plus vite »** toujours en tête (`AU_PLUS_VITE` dans `store/cart.store.ts`, créneau `null`), puis les créneaux rangés par moment (`lib/sections-creneaux.ts`). `checkout` et `cart` envoient **toujours** le choix au serveur, `null` compris (ADR-0011) | ✅ |
 | `event-home.screen.tsx`, `order-tracking.screen.tsx` | Écran d'un lieu (catalogue, retrait) et suivi de commande | ✅ branchés dans `App.expo.tsx` |
 | `qr-scanner.screen.tsx` | Scan QR | ⚠️ **stubbé** dans `App.expo.tsx` — la caméra n'existe pas sur le web |
 | `split.screen.tsx` | **L'ardoise** — un écran, deux publics : l'hôte y suit sa tournée et l'envoie, le convive y coche ses articles et paie. Atteint aussi depuis un NAVIGATEUR, sans compte ni installation, via `/split/<code>` | ✅ |
@@ -149,26 +151,26 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
 
 ## Tests — où ils sont, et ce qu'ils couvrent
 
-- `backend/src/**/*.spec.ts` — 621 tests unitaires (doublures), lancés par la CI.
-- `backend/test/integration/*.int-spec.ts` — 89 tests sur une **vraie base**
+- `backend/src/**/*.spec.ts` — **79 fichiers, ~1 050 cas** (recomptés le 17/11/2026 ; doublures), lancés par la CI.
+- `backend/test/integration/*.int-spec.ts` — **25 fichiers, ~200 cas** sur une **vraie base**
   Postgres construite par `prisma migrate deploy` : c'est le seul endroit où les
   règles de suppression, les contraintes `CHECK` et les index uniques sont
   vérifiés. Lancés par la **CI** (job `integration` : Postgres 16 + migrations de production) et à la main depuis `backend/` avec `DATABASE_URL_TEST`
   (voir `brain/ENGINEERING_MANUAL.md`, phase 34).
 - `backend/scripts/api-essai-local.js` — lance l'API compilée contre cette base
   d'essai, services extérieurs neutralisés, pour voir les écrans réagir.
-- `apps/mobile/src/**/__tests__/*.test.ts` — 12 tests. **Jest mobile marche
+- `apps/mobile/src/**/__tests__/*.test.ts` — 13 fichiers, ~120 cas (logique pure : suivi, créneaux, saison, téléphone…). **Jest mobile marche
   depuis le 21/09/2026** : le préréglage React Native ne tournait pas sous pnpm,
   `transformIgnorePatterns` laisse désormais Babel transformer les modules de
   `.pnpm`. Seule la logique PURE y est testée (`lib/suivi-commande.ts`) — pas
   de rendu d'écran.
-- **Toujours aucun test dans admin, opérateur et back-office.**
+- Consoles : `apps/admin` (2 fichiers, ~25 cas), `apps/operator` (3 fichiers, ~30 cas), `apps/backoffice` (1 fichier, 12 cas) — session, renouvellement, numéro au comptoir, transitions. Pas de test d'écran.
 
 ## Un parcours de bout en bout (exemple : passer commande)
 
 1. Mobile — `venue-discovery` : le client cherche/choisit un lieu (`apiSearchVenues` → `GET /public/venues`).
-2. Mobile — parcours : catalogue (`supplier-catalog`) → panier (`cart.store`) → créneau (`slot-selector`) → `checkout` (`apiCreateCart` + `apiDemoCheckout`).
-3. Backend — `cart` / `orders` créent la commande, `notifications` envoie un push par statut.
+2. Mobile — parcours : catalogue (`supplier-catalog`) → panier (`cart.store`) → créneau ou « Au plus vite » (`slot-selector`) → `checkout` (`apiCreateCart`, `apiRemplacerArticles`, `apiChoisirCreneau`, `apiCheckout`, feuille de paiement Stripe native).
+3. Backend — le webhook Stripe `payment_intent.succeeded` crée la commande (`orders`) ; « prête » prévient le client (Live Activity, sinon notification).
 4. Operator — le board reçoit la commande en temps réel (`realtime`), la buvette prépare, passe « prête ».
 5. Mobile — `order-confirmation` / `order-tracking` : le client voit « prête » + le **plan des buvettes** pour aller récupérer.
 

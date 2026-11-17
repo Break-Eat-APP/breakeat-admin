@@ -28,7 +28,7 @@ pnpm workspaces. Cinq applications + un package partagé :
 3. **`../REPRISE.md`** (racine) — l'état courant : ce qui est fait, ce qui bloque, ce qui reste. **Toujours à jour, lu en premier à chaque session.**
 4. `../brain/ARCHITECTURE.md` + `../brain/DOMAIN_MODEL.md` — les règles d'archi et le modèle métier.
 5. `../brain/ENGINEERING_MANUAL.md` — notice technique avec références de code.
-6. `../CHANGELOG.md` + `../brain/TASK_SUMMARY.md` — l'historique des phases (quoi a été livré, quand, pourquoi).
+6. `../CHANGELOG.md` + `../brain/taches/` (avant le 11/11/2026 : `../brain/TASK_SUMMARY.md`) — l'historique (quoi a été livré, quand, pourquoi). Les règles : `../CLAUDE.md` ; les décisions : `../brain/DECISIONS/` ; les bugs : `../brain/BUGS_ET_INCIDENTS.md`.
 7. `../phases de DEV/` — les specs d'origine de chaque phase (.docx).
 
 ## 4. Lancer le projet en local (Windows)

@@ -404,6 +404,13 @@ Ce guide sert à **remonter d'un symptôme à sa cause** sans connaître le code
 | Une alerte ne s'affiche pas sur le web | \`Alert.alert\` ne fait rien sur le web : utiliser \`lib/alert.ts\` | manuel |
 | Commande payée qui n'arrive nulle part | phase 29 : stock, compte Stripe, retour de paiement, poste opérateur | manuel, phase 29 |
 | Réglages Break Eat absents de la fiche d'un match | normal sur un lieu Flaix (\`venue.flaixEnabled\`) | CHANGELOG 1.6.0 |
+| Un événement d'un lieu BreakEat ne s'ouvre pas tout seul | il n'est pas en BROUILLON (en pause ou annulé : jamais rouvert), il n'a aucun point de retrait, ou c'est un lieu Flaix / un contenant permanent ; journaux Railway « Ouverture automatique » | ADR-0009, CHANGELOG 1.7.35 |
+| Un point de retrait s'est fermé (ou ouvert) « tout seul » | son statut est GLOBAL : la fin d'un événement le ferme s'il ne sert aucun autre événement en cours ; l'ouverture d'un événement l'ouvre partout | ADR-0009 |
+| « Au plus vite » choisi, mais la commande porte un créneau | app sans la correction 1.7.39 (mise à jour à distance non reçue) | CHANGELOG 1.7.39, BUG-2026-021 |
+| Un équipier invité ne voit pas le club | invitation EN ATTENTE : il doit l'accepter (console \`/invitations\`, accueil du poste opérateur) ; 14 jours | ADR-0010, CHANGELOG 1.7.27 |
+| App Store : captures refusées « dimensions non valides » | l'onglet « écran moyen » veut 1206 × 2622 ou 1179 × 2556 ; images grisées = héritées d'une autre taille | CHANGELOG 1.7.40 |
+| Google Play : « problèmes de règles » (Billing, 16 ko) | ils viennent d'une ANCIENNE version publiée ; contrôler l'\`.aab\` (bibliothèques alignées 16 ko, ni Billing ni \`AD_ID\`) | \`brain/taches/2026-11-17-soumission-stores-1.1.3.md\` |
+| Une vraie carte refusée au paiement | Stripe encore en MODE TEST en production | ADR-0012, REPRISE |
 `;
 
 const DOCUMENTS = `

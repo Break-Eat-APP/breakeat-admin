@@ -1,6 +1,8 @@
 # Architecture de BreakEat — l'état réel
 
-> **Réécrit le 11/11/2026 à partir du code** (gouvernance, étape 3). La
+> **Mis à jour le 17/11/2026** (rattachement et ouverture automatiques des
+> points de retrait, invitations à accepter, « Au plus vite », tâches
+> planifiées). **Réécrit le 11/11/2026 à partir du code** (gouvernance, étape 3). La
 > version précédente (01/06/2026) décrivait l'intention de départ : elle est
 > dans l'historique Git. Ici, ce qui tourne vraiment. En cas de doute, **le
 > code fait foi** — et ce document se corrige.
@@ -68,8 +70,8 @@ L'**entrée réelle** de l'app mobile est `apps/mobile/App.expo.tsx`
 
 | Domaine | Modules |
 |---|---|
-| Comptes et accès | `auth` (e-mail + mot de passe, Apple, Google, jetons de rafraîchissement, mot de passe oublié), `users`, `organizations`, `groups`, `backoffice` (super admin), `bootstrap` |
-| Lieux et programmation | `venues`, `events`, `suppliers` (buvettes), `pickup-points`, `slots` (créneaux BreakEat), `categories`, `products`, `stock` |
+| Comptes et accès | `auth` (e-mail + mot de passe, Apple, Google, jetons de rafraîchissement, mot de passe oublié), `users`, `organizations` (membres, **invitations à accepter** depuis le 16/11 — [ADR-0010](DECISIONS/ADR-0010-invitation-a-accepter.md)), `groups`, `backoffice` (super admin), `bootstrap` |
+| Lieux et programmation | `venues`, `events` (dont l'**ouverture et la fermeture automatiques**, `ouverture-automatique.service.ts`), `suppliers` (les buvettes, appelées **« points de retrait »** dans la console depuis le 16/11), `pickup-points` (les **comptoirs de retrait**), `slots` (créneaux BreakEat), `categories`, `products`, `stock`. Le rattachement automatique buvette ↔ événement vit dans `common/helpers/rattachement-buvettes.ts` ([ADR-0009](DECISIONS/ADR-0009-points-de-retrait-rattaches-et-ouverture-automatique.md)) |
 | Commande | `cart`, `orders` (machine à états, produits manquants), `order-splits` (« partager l'addition »), `payments` (Stripe), `webhooks` |
 | Temps réel et notifications | `realtime` (Socket.IO, file `RealtimeOutbox`, adaptateur Redis), `live-activity` (APNs + webhooks Flaix), `notifications` (Expo Push, campagnes programmées, cloche) |
 | Flaix | `flaix` (rapports, décisions — le « cœur décisionnel » est un stub sans appelant, voir REPRISE) |
@@ -85,6 +87,22 @@ créée (`PAID`), stock retenu, créneau réservé → comptoir (`apps/operator`
 la fait avancer : `ACCEPTED → PREPARING → READY → PICKED_UP → COMPLETED`.
 La machine à états est dans `brain/ORDER_STATE_MACHINE.md` et
 `orders/order-state-machine.service.ts`.
+
+**Le moment du retrait** : un créneau du club, ou **« Au plus vite »**
+(aucun créneau, la commande est préparée dès que possible —
+[ADR-0011](DECISIONS/ADR-0011-au-plus-vite.md)). Le choix est envoyé au
+serveur à chaque paiement (`PATCH /carts/:id/creneau`, `null` compris) ; le
+serveur refuse un créneau fermé, passé, d'un autre événement ou d'une autre
+buvette (`common/helpers/retrait-compatible.ts`). Le **comptoir de retrait**
+est obligatoire : chaque point de retrait rattaché à un événement en reçoit
+un par défaut, à son nom.
+
+**Avant la commande, l'ouverture** (lieux sans Flaix, ADR-0009) : un
+événement en brouillon passe **Actif** à l'heure où la commande ouvre
+(`Venue.ordersOpenAt`), ses points de retrait fermés s'ouvrent ; à l'heure de
+fin, il passe **Terminé** et ses points de retrait se ferment, sauf s'ils
+servent encore ailleurs. « Terminé » n'empêche que les **nouvelles**
+commandes : celles déjà payées restent au comptoir.
 
 **Chaque transition** (`orders.service.ts`, `transition`) écrit, dans **une
 seule transaction** : le statut, une ligne `orderAuditTrail`, les annonces
@@ -120,6 +138,25 @@ par REST. Contrats : `brain/REALTIME_CONTRACTS.md`.
   dans le club — BUG-2026-011 pour les lieux Flaix).
 - Rattrapage de l'annonce « prête » chaque minute (`@Cron`).
 
+### 4.5 Les tâches planifiées (`@Cron`, dans le serveur)
+
+Chacune est **rattrapable** (une minute ratée se refait à la suivante) et
+**sûre à plusieurs instances** (bascules conditionnelles ou bail).
+
+| Tâche | Fréquence | Fichier |
+|---|---|---|
+| Ouverture / fermeture automatiques des événements et de leurs points de retrait | chaque minute | `events/ouverture-automatique.service.ts` |
+| Rattrapage de l'annonce « prête » (Live Activity, notification) | chaque minute | `live-activity/live-activity.service.ts` |
+| Campagnes programmées des clubs | chaque minute | `notifications/scheduled-push.service.ts` |
+| Rejeu des annonces temps réel non parties (`RealtimeOutbox`) | chaque minute | `realtime/outbox.service.ts` |
+| Purge des annonces temps réel anciennes | chaque jour à 4 h | `realtime/outbox.service.ts` |
+| Retrait des accès perdus : sort des salons temps réel les sockets d'un équipier écarté | chaque minute | `realtime/realtime.gateway.ts` |
+| « Partager l'addition » : envois interrompus remboursés, l'addition rouverte | toutes les 5 min | `order-splits/order-splits.service.ts` |
+| Fidélité : points réservés par un panier expiré, rendus | toutes les 5 min | `loyalty/loyalty.service.ts` |
+
+Hors serveur, dans GitHub Actions : sauvegarde de nuit, essai de restauration
+mensuel, audit des dépendances, mise à jour à distance (lancée à la main).
+
 ---
 
 ## 5. Les données
@@ -132,8 +169,11 @@ réel par la CI avant les tests d'intégration.
 
 Modèles centraux : `Organization` (le club) → `Venue` (le lieu) → `Event`
 (le match, ou le « contenant permanent » d'un lieu ouvert en continu) →
-`Supplier` (la buvette) → `Product` / `Stock` ; `Cart` → `Order` →
-`OrderItem`, `Payment`, `OrderAuditTrail` ; `LiveActivity`, `PushToken`,
+`Supplier` (la buvette, « point de retrait » dans la console ; reliée aux
+événements par `EventSupplier`) → `Product` / `Stock` ; `PickupPoint` (le
+comptoir de retrait) et `Slot` (le créneau) ; `Cart` → `Order` →
+`OrderItem`, `Payment`, `OrderAuditTrail` ; `OrganizationMember` et
+`OrganizationInvitation` (16/11) ; `LiveActivity`, `PushToken`,
 `ScheduledPush`, `UserNotification` ; `RealtimeOutbox` ; `Frequentation` ;
 `LoyaltyAccount`. Le modèle métier est détaillé dans `brain/DOMAIN_MODEL.md`.
 

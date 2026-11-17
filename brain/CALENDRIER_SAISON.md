@@ -4,6 +4,13 @@
 fixe l'intention, les décisions de forme, le vocabulaire à tenir, et la seule
 question qui reste ouverte.
 
+> **État au 17/11/2026** — développé depuis (CHANGELOG, phase 70, puis 1.7.25 :
+> grille de 2 colonnes, grands blasons ; 1.7.28 : « Prochain événement dans
+> N jours » dans l'en-tête du lieu). Sur un **lieu BreakEat**, l'événement
+> passe désormais **Actif tout seul** à l'heure où la commande ouvre, et
+> **Terminé** à sa fin (ADR-0009) : la tuile « commande ouverte » suit sans
+> geste du club. Sur un lieu Flaix, rien ne change.
+
 Référence visuelle de départ : l'application de l'ASM Clermont Auvergne, dont
 trois idées avaient été retenues — le logo de l'adversaire à la place du numéro
 du jour, le choix entre calendrier et liste, et le décompte.

@@ -5,6 +5,71 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.40] — 2026-11-17 — Versions 1.1.3 soumises à Apple et Google ; documentation de gouvernance à jour
+
+- **App Store** : build 46 (1.1.3) jointe à la version, six nouveaux visuels,
+  nouveautés en français et en anglais, notes pour le vérificateur (Dôme →
+  Moto Cross X → « Au plus vite », carte de test), envoyée en vérification. La
+  mise à jour à distance 1.1.3 était partie la veille (`1fbdf46`).
+- **Google Play** : la **clé d'importation est enfin acceptée** (demandée le
+  09/11). Build Android 1.1.3 (code de version **7**), contrôlée avant envoi :
+  alignement 16 ko des 52 bibliothèques natives, aucune bibliothèque Billing,
+  aucune permission `AD_ID`. Elle règle les deux « problèmes de règles » de
+  l'ancienne version (code 4). Sécurité des données refaite d'après le code ;
+  fiche (icône 512, bannière, six captures) ; **publication gérée** activée ;
+  production 1.1.3 en examen.
+- **Pourquoi publier à la main** : la production encaisse en **mode test
+  Stripe** — rien ne sort avant le passage en production
+  ([ADR-0012](brain/DECISIONS/ADR-0012-publication-manuelle-des-stores.md)).
+- **Documentation remise à jour pour l'audit Codex** : REPRISE (« ÉTAT AU
+  17/11 »), architecture (tâches planifiées, ouverture automatique,
+  invitations, « Au plus vite »), modèle métier, machine à états, sécurité,
+  déploiement, stratégie de tests, carte du code, registre des bugs
+  (BUG-2026-020 à 028), fiches de décision **0010** (invitation à accepter),
+  **0011** (« Au plus vite ») et **0012** (publication manuelle), comptes rendus
+  `brain/taches/2026-11-16-ouverture-automatique-points-de-retrait.md`,
+  `2026-11-17-soumission-stores-1.1.3.md`, `2026-11-17-relecture-avant-audit.md`,
+  document Word des phases régénéré.
+
+`~ REPRISE.md`, `~ brain/…`, `~ GUIDE_DEVELOPPEMENT/…`, `+ brain/DECISIONS/ADR-0010…0012`,
+`+ brain/taches/…` — aucun code.
+
+---
+
+## [1.7.39] — 2026-11-17 — « Au plus vite » efface vraiment l'ancien créneau ; un créneau passé refusé par le serveur ; le client tutoyé partout
+
+Relecture du code des derniers jours avant l'audit Codex
+(`brain/taches/2026-11-17-relecture-avant-audit.md`).
+
+- **« Au plus vite » après un créneau (BUG-2026-021)** : `POST /carts`
+  réutilise le panier déjà ouvert, et le serveur garde son créneau tant qu'on
+  ne lui dit rien. L'app n'envoyait le choix **que s'il y avait un créneau** :
+  un client qui prenait « 14:00 », revenait en arrière puis choisissait « Au
+  plus vite » payait une commande… pour 14:00. Le choix est désormais
+  **toujours** envoyé, `null` compris, au paiement comme au partage de
+  l'addition : le serveur efface le créneau et en rend la place.
+- **Un créneau passé refusé par le serveur (BUG-2026-020)** : la liste du
+  client ne les montre plus depuis le 16/11, mais une liste restée ouverte
+  ou une ancienne version de l'app pouvait encore réserver « 14:00 – 14:15 » à
+  20 h. `assertCreneauCompatible` refuse désormais un créneau terminé quand
+  c'est un **choix du client** (le rattachement par le comptoir reste libre).
+- **Le client tutoyé partout (BUG-2026-025)** : il restait du vouvoiement sur
+  la connexion (« Profitez de l'événement »), le paiement, le panier, le
+  profil, l'aide, le mot de passe oublié, la localisation, le scan, le bandeau
+  de remboursement, et dans la notification « produit manquant » (serveur).
+  Les textes de **permission iOS** (`app.config.js`) restent à corriger :
+  ils demandent une build native.
+
+`~ apps/mobile/src/screens/{checkout,cart,login,profile,aide,mot-de-passe-oublie,event-home,qr-scanner}.screen.tsx`,
+`~ apps/mobile/src/{components/remboursement-banner.tsx,lib/api/mobile-api.ts,lib/hooks/use-user-location.ts}`,
+`~ backend/src/common/helpers/retrait-compatible.ts`,
+`~ backend/src/modules/cart/cart.service.spec.ts` (+ 2 tests),
+`~ backend/src/modules/orders/produits-manquants.service.ts`,
+`~ backend/test/integration/produits-manquants.int-spec.ts`.
+Côté app : **mise à jour à distance 1.1.3 à relancer** (avec l'accord de Rémi).
+
+---
+
 ## [1.7.38] — 2026-11-16 — « Au plus vite » toujours proposé ; la pastille du lieu enfin décollée
 
 - **« Au plus vite »** (Rémi) : l'écran des créneaux ne proposait que les

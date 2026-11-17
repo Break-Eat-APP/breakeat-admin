@@ -12,67 +12,87 @@
 > | Comment le code est-il organisé ? | `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md` |
 > | Pourquoi cette décision technique ? | `brain/ENGINEERING_MANUAL.md` |
 > | Quel était le plan, phase par phase ? | `brain/ROADMAP.md` (0→10 planifiées, 11→22 reconstituées, index 24→73 puis versions) |
-> | Résumé d'une session de travail | `brain/TASK_SUMMARY.md` (le plus récent en haut) |
-> | Dernier audit | `brain/audits/AUDIT_2026-11-09_dernieres-modifications.md` |
+> | Résumé d'une tâche importante | `brain/taches/` (comptes rendus datés, depuis le 11/11) ; avant : `brain/TASK_SUMMARY.md` |
+> | Les règles qui ne se discutent pas | **`CLAUDE.md`** (racine) |
+> | Pourquoi telle décision ? Quels bugs connus ? | `brain/DECISIONS/` · `brain/BUGS_ET_INCIDENTS.md` |
+> | Dernier audit | `brain/audits/AUDIT_2026-11-11_codex-notification-prete.md` ; relecture avant audit : `brain/taches/2026-11-17-relecture-avant-audit.md` |
 > | État complet du dépôt, dette, tests (septembre) | `brain/audits/AUDIT_2026-09-18_etat-du-depot.md` |
 > | Ordre de construction initial (phases 1→19) | `brain/archives/DEVELOPMENT_LOG.md` — historique, non tenu au-delà |
 >
-> Les 4 documents vivants sont `CHANGELOG.md`, `brain/ENGINEERING_MANUAL.md`,
-> `brain/TASK_SUMMARY.md` et ce fichier. Le git complète.
+> Les documents vivants sont ce fichier, `CHANGELOG.md`, `brain/BUGS_ET_INCIDENTS.md`,
+> `brain/DECISIONS/` et `brain/taches/` (gouvernance du 11/11, `CLAUDE.md`). Le git complète.
 
-_Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2026 » ci-dessous. Les notes de mise à jour précédentes sont gardées en fin de fichier (« Historique des mises à jour »)._
+_Dernière mise à jour : 2026-11-17 — lire d'abord « ÉTAT AU 17/11/2026 » ci-dessous. Les notes de mise à jour précédentes sont gardées en fin de fichier (« Historique des mises à jour »)._
 
-## 🟢 ÉTAT AU 09/11/2026 (soir) — LIRE D'ABORD
+## 🟢 ÉTAT AU 17/11/2026 — LIRE D'ABORD
 
-> Cette section remplace « État au 06/09 » plus bas, gardé pour l'historique.
-> Le détail de chaque livraison est dans `CHANGELOG.md` ; le pourquoi des
-> décisions dans `brain/ENGINEERING_MANUAL.md` ; où vit le code dans
-> `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md` ; **toutes les phases et versions,
-> et la méthode pour remonter à la cause d'un bug, dans
-> `GUIDE_DEVELOPPEMENT/PHASES_DE_DEVELOPPEMENT.docx`** (régénéré par
-> `GUIDE_DEVELOPPEMENT/generer-phases-docx.js`). Dernier audit :
-> `brain/audits/AUDIT_2026-11-09_dernieres-modifications.md`.
+> Cette section remplace « État au 09/11 » (son tableau « ce qui a changé du
+> 03 au 09/11 » est dans l'historique Git). Le détail de chaque livraison est
+> dans `CHANGELOG.md` (jusqu'à **1.7.40**) ; les règles dans `CLAUDE.md` ; les
+> décisions dans `brain/DECISIONS/` (**0001 à 0012**) ; les bugs dans
+> `brain/BUGS_ET_INCIDENTS.md` (**jusqu'à BUG-2026-029**) ; les comptes rendus
+> dans `brain/taches/` ; où vit le code dans
+> `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md` ; toutes les phases dans
+> `GUIDE_DEVELOPPEMENT/PHASES_DE_DEVELOPPEMENT.docx` (régénéré par
+> `generer-phases-docx.js`). Dernière relecture avant audit :
+> `brain/taches/2026-11-17-relecture-avant-audit.md`.
 
 ### Ce qui tourne
 
 | | État | Comment le vérifier |
 |---|---|---|
-| **CI GitHub** | ✅ **verte** sur `main` (7 jobs : Build, Tests, Tests d'intégration, Export web, TypeScript, Lint) — elle était ROUGE du 06/11 au 09/11 sans que personne ne la lise | `https://github.com/Break-Eat-APP/breakeat-admin/actions`, ou l'API `commits/<sha>/check-runs` (dépôt public) |
-| **Serveur (Railway)** | En ligne, sert `acf6187` (le code serveur le plus récent) | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit`, à comparer à `git log -1 origin/main` |
-| **Consoles (Vercel)** | Admin, back-office et opérateur, publiés depuis `main` | Voir « Déploiement des frontends » plus bas |
-| **iOS** | **Build 44** (`f446939`, **version 1.1.2**) sur TestFlight le 11/11 — **l'icône est enfin nette, validée par Rémi sur son iPhone** (format Icon Composer, effets « verre » d'iOS 26 coupés : voir « L'icône iOS » dans les pièges). Mise à jour à distance 1.1.2 publiée le 11/11 (`5c993f4` : clavier, bouton « Signaler », encoches, « prête » durable). ⚠️ Les builds 41 à 43 (1.1.0 / 1.1.1) ne reçoivent plus les mises à jour à distance. La **build 45** (12/11) est une build de **contrôle** des versions forcées des dépendances : réussie, **pas envoyée** sur TestFlight. Pour la vérification Apple : **la 44**. **13/11** : image du lieu à sa forme partout + plan des buvettes depuis le détail de commande et l'en-tête du lieu (CHANGELOG 1.7.23) — JavaScript seul, **mise à jour à distance à lancer** | App Store Connect → TestFlight |
-| **Android** | **Build 41 compilée** (mise à jour Expo 57.0.32 + mises à jour à distance). **Aucun envoi possible sur Google Play** avant que Google confirme la nouvelle clé d'importation (demandée le 09/11) | Play Console → Intégrité de l'application |
-| **Connexion** | E-mail + mot de passe, Apple, Google (iOS vérifié ; Android : clients OAuth créés, pas encore essayé) | — |
+| **CI GitHub** | ✅ **verte** sur `main` jusqu'à `1fbdf46` (7 jobs). Seul passage rouge de la semaine : `f569b60` (BUG-2026-026, corrigé au commit suivant) | `https://github.com/Break-Eat-APP/breakeat-admin/actions`, ou l'API `commits/<sha>/check-runs` (dépôt public) |
+| **Serveur (Railway)** | En ligne, sert `7ce410e` — le dernier commit qui touche `backend/` avant les corrections du 17/11 (1.7.39, à pousser) | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit` |
+| **Paiement** | ⚠️ **Stripe en MODE TEST en production** (`sk_test_…`) : la carte 4242… passe, une vraie carte est refusée. Voulu jusqu'à la validation des stores (ADR-0012) | Stripe → bascule « mode test » ; Railway → variables |
+| **Consoles (Vercel)** | Admin, back-office et opérateur, publiés depuis `main` | « Déploiement des frontends » plus bas |
+| **iOS** | **Build 46 (1.1.3)** sur TestFlight, **envoyée à la vérification Apple le 17/11** (nouveaux visuels, notes : Dôme → Moto Cross X → « Au plus vite », carte de test). Mise à jour à distance 1.1.3 publiée le **16/11 à 22 h 09** sur `1fbdf46`. Les builds 1.1.2 et plus anciennes ne reçoivent plus les mises à jour à distance | App Store Connect |
+| **Android** | **Clé d'importation acceptée** (17/11). **1.1.3, code de version 7** (`.aab` contrôlé : 16 ko, ni Billing ni `AD_ID`) **en examen en production**, publication gérée | Play Console → Vue d'ensemble de la publication |
+| **Connexion** | E-mail + mot de passe, Apple, Google (iOS vérifié ; Android à essayer sur la 1.1.3) | — |
 | **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels n'est pas configuré | `GET /api/v1/auth/password-reset/available` → `false` |
 
-### Ce qui a changé du 03 au 09/11
+### Ce qui a changé du 10 au 17/11
 
 | Date | Quoi | Où lire |
 |---|---|---|
-| 05/11 | « Mes commandes » en **tickets** : numéro en orange, pastilles Toutes / En cours / Récupérées + sections | CHANGELOG 1.6.0 |
-| 06/11 | **« À ne pas manquer »** : événements des lieux **favoris** (1 → 3, 2 → 2 chacun, 3+ → 1 chacun, 6 max), route `GET /public/events/a-venir` ; favoris gardés sur l'appareil | CHANGELOG 1.6.0 |
-| 06/11 | Courriels signés « BreakEat » | CHANGELOG 1.6.0 |
-| 06/11 | **Fiche d'un événement Flaix** : lien, adversaire, blason, affiche éditables ; aucune configuration Break Eat proposée ; erreurs de dates en français | CHANGELOG 1.6.0 |
-| 09/11 | **Renommer un événement** depuis sa fiche | CHANGELOG 1.6.1 |
-| 09/11 | **Notifications rangées par date** | CHANGELOG 1.6.2 |
-| 09/11 | **Décompte dans la Live Activity** + **aperçu** super admin | CHANGELOG 1.7.0 |
-| 09/11 | Build 38 ; clé Google Play protégée ; fichier Firebase branché | CHANGELOG 1.7.1 |
-| 09/11 | **CI remise au vert** ; canaux Play remis dans le bon sens ; clé d'importation Android : réinitialisation demandée ; mise à jour Expo vérifiée (CI + build 39) ; audit ; fichier Word des phases | CHANGELOG 1.7.2 |
-| 09/11 | **Ticket d'après la maquette**, « Noter » et « Récupérées » corrigés, **icône vectorielle `#FD4000`** — dans la prochaine build | CHANGELOG 1.7.3 |
+| 11/11 | « Ta commande est prête » sonne, durable et sans doublon ; icône iOS Icon Composer (1.1.2) ; **gouvernance dans le dépôt** (`CLAUDE.md`, `brain/DECISIONS/`, registre des bugs, comptes rendus) ; sauvegarde de nuit restaurée pour de vrai | CHANGELOG 1.7.14 → 1.7.19 |
+| 12/11 | Failles des dépendances 62 → 4 (assumées) ; TVA dans le détail de commande ; le lieu et son image sur le ticket | 1.7.20 → 1.7.22 |
+| 13/11 | Image du lieu à sa forme, sans fond ; plan des buvettes depuis la commande | 1.7.23, 1.7.24 |
+| 16/11 | Calendrier en 2 colonnes ; « Prochain événement dans N jours » | 1.7.25, 1.7.28 |
+| 16/11 | **Sécurité** : test croisé entre organisations, prise de compte fermée (BUG-2026-017, SEV-1), **invitation à accepter** (ADR-0010) | 1.7.26, 1.7.27, `brain/taches/2026-11-16-test-croise-organisations.md` |
+| 16/11 | Écrans de commande tutoyés ; créneaux rangés par moment ; partager l'addition par un vrai lien ; suivi remis à zéro 1 min après le retrait ; Live Activity « prête » resserrée (**version 1.1.3**, native) | 1.7.29 → 1.7.32 |
+| 16/11 | Console : « **point de retrait** » au lieu de « fournisseur », menu « **Configuration** » ; adversaire modifiable sur un lieu BreakEat | 1.7.33, 1.7.34 |
+| 16/11 | **Points de retrait rattachés d'office ; ouverture et fermeture automatiques ; un comptoir par défaut** ; plus de créneau passé proposé (ADR-0009) | 1.7.35, 1.7.36, `brain/taches/2026-11-16-ouverture-automatique-points-de-retrait.md` |
+| 16/11 | « **Au plus vite** » toujours proposé (ADR-0011) ; pastille de l'en-tête décollée | 1.7.37, 1.7.38 |
+| 17/11 | Relecture avant audit : « Au plus vite » efface l'ancien créneau, créneau passé refusé par le serveur, client tutoyé partout | 1.7.39 |
+| 17/11 | **1.1.3 soumise à Apple et Google**, publication manuelle (ADR-0012) | 1.7.40, `brain/taches/2026-11-17-soumission-stores-1.1.3.md` |
 
 ### Ce qui reste — dans l'ordre
 
-1. **Essayer la build 41 sur iPhone** : ouverture, connexion Apple
-   et Google, notifications par date, puis Profil → Outils super admin →
-   Aperçu de la Live Activity (décompte de 3 minutes, puis bascule sur
-   l'heure de retrait). Personne n'a encore VU le décompte.
-2. ✅ **Mise à jour Expo 57.0.32 fusionnée** (`b15a626`, demande de fusion
-   #4) après CI verte, build iOS 39 et build Android `c9d56be3`. Sur un
-   poste : `pnpm install --frozen-lockfile`. L'export web peut échouer sur le
-   poste OneDrive (environnement) : la CI fait foi.
-3. ✅ **Défauts de « Mes commandes » corrigés** (audit, constats 2 et 3), et
-   **ticket redessiné d'après la maquette de Rémi**, **icône vectorielle**
-   (`#FD4000`) — tout cela attend la **prochaine build iOS** (CHANGELOG 1.7.3).
+1. **Sortie de la 1.1.3 sur les stores — dans cet ordre** (ADR-0012) :
+   a. **Pousser les corrections du 17/11** (1.7.39), lire la CI, vérifier
+      `/health` → `commit`, puis **relancer la mise à jour à distance 1.1.3**
+      (accord de Rémi) : elle apporte la correction de « Au plus vite »
+      (BUG-2026-021) à la build 46.
+   b. Avant l'examen : **renommer ou désactiver la buvette « Burger King »**
+      de Moto Cross X (nom de marque) ; garder Moto Cross X **actif** avec une
+      buvette **ouverte** (jusqu'au 31/12) ; vérifier dans App Store Connect
+      que la version est en **« Publier manuellement »**.
+   c. Attendre les validations Apple et Google (1 à 7 jours). Répondre à un
+      refus avec les journaux et les captures, pas par hypothèse.
+   d. **Passer Stripe en production** : Rémi pose sur Railway
+      `STRIPE_SECRET_KEY` (`sk_live_…`), la clé publiable live et le secret du
+      **webhook live** (`whsec_…`, nouveau point d'arrivée en mode live) —
+      jamais dans une conversation ; chaque club refait son **« Encaissement »**
+      (Stripe Connect) en mode live ; Apple Pay en live ; un **vrai paiement**
+      de quelques euros, vérifié dans Stripe (« Tentatives récentes » du
+      webhook) et les journaux Railway, puis remboursé.
+   e. **Rémi publie** : App Store (« Publier cette version ») et Google Play
+      (« Publier les modifications »).
+2. **Essayer la 1.1.3 sur Android** (lien de test interne, ou après sortie) :
+   connexion Google, paiement, notification « prête ».
+3. **À la prochaine build native (1.1.4)** : textes de permission iOS au
+   tutoiement (`app.config.js`, BUG-2026-025) ; monter `version` avant la
+   build (ADR-0005).
 4. **Passer le dépôt GitHub en privé** (décision de Rémi) — audit, constat 1.
    **Reporté par Rémi le 11/11.** Avant de le faire : (a) ✅ fait le 11/11 —
    la CI ne tourne plus sur les commits de documentation seule — mesuré le
@@ -172,25 +192,18 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 7. **Données de production** — à faire par Rémi dans l'admin : renommer
    l'événement « test » ; deux matchs du Vélodrome ont nom et adversaire
    inversés ; l'Aréna et les Spartiates n'ont aucun match programmé.
-8. **Revue Apple 1.1.0** — compte de revue au nom de Rémi (identifiants dans
-   App Store Connect, jamais dans le dépôt). Notes : Flaix est un logiciel
-   de **la même société** ; l'app vend des **biens physiques** (3.1.3(e)).
-9. **Android sur le Play Store** :
-   - **Clé d'importation** : Play attendait `B4:0E:…:32:4A` (éditeur
-     précédent, introuvable) ; EAS signe avec
-     `F8:C8:BD:86:29:3F:1C:1E:9F:AB:04:F0:E7:B3:3A:DB:33:77:D0:08` (créée par
-     BreakEat le 21/08/2026). **Réinitialisation demandée par Rémi le 09/11**
-     avec le certificat de la clé EAS ; attendre l'e-mail de Google (~48 h).
-     Le client OAuth « BreakEat Android — import » a été passé sur `F8:C8…` ;
-   - ✅ deux clients OAuth Android (signature Play `C6:53…`, importation) ;
-   - ✅ canaux : `beta` → test **interne**, `production` → production en
-     **brouillon** ;
-   - **Firebase** : app Android `com.shapper.breakeat` dans le projet
-     `482274786646`, `google-services.json` en variable EAS de type fichier
-     `GOOGLE_SERVICES_JSON`, clé FCM V1 dans EAS ;
-   - **Compte de service Google Play** (pour `eas submit`) : clé JSON dans
-     `apps/mobile/google-play-service-account.json`, ignorée par git. Le
-     PREMIER envoi se fait de toute façon à la main dans la Play Console.
+8. **Revue Apple** — compte de revue au nom de Rémi (identifiants dans
+   App Store Connect et la Play Console, **jamais** dans le dépôt). Notes : Flaix est un
+   logiciel de **la même société** ; l'app vend des **biens physiques**
+   (3.1.3(e)) ; parcours Dôme → Moto Cross X → « Au plus vite » ; carte de test.
+   Texte complet : `brain/livrables/stores/fiche-stores.md` (hors dépôt).
+9. **Android — ce qui reste** : essai sur un vrai téléphone (point 2). Pour
+   mémoire : clé d'importation `F8:C8:BD:86:29:3F:1C:1E:9F:AB:04:F0:E7:B3:3A:DB:33:77:D0:08`
+   (EAS, créée le 21/08/2026), **acceptée par Google le 17/11** ; canaux
+   `beta` → test interne, `production` → production en brouillon ; Firebase
+   `com.shapper.breakeat` (projet `482274786646`, `GOOGLE_SERVICES_JSON` en
+   variable EAS) ; compte de service Play dans
+   `apps/mobile/google-play-service-account.json`, ignoré par git.
 10. **Favoris entre appareils** — sur le téléphone seulement aujourd'hui.
 11. Petits points de l'audit : cœur écrasé pendant le premier chargement des
     favoris ; actions GitHub en Node 20 à monter ; compilation de l'admin
@@ -198,6 +211,28 @@ _Dernière mise à jour : 2026-11-09 (soir) — lire d'abord « ÉTAT AU 09/11/2
 
 ### Pièges du moment
 
+- **Vocabulaire de la console (16/11)** : « point de retrait » = la **buvette**
+  (`Supplier`) ; « comptoir de retrait » = le **`PickupPoint`** où l'on
+  récupère. Un point de retrait se crée **seulement** dans Configuration →
+  Points de retrait, rejoint d'office les événements à venir, et se
+  **désactive à la main, événement par événement** (ADR-0009).
+- **Un lieu BreakEat s'ouvre et se ferme tout seul** (chaque minute) : un
+  événement en **brouillon** passe Actif à l'heure où la commande ouvre ; un
+  club qui veut garder un événement fermé le laisse… en **pause** ou
+  **annulé**, pas en brouillon. Le statut d'un point de retrait est
+  **global** : l'ouvrir pour un événement l'ouvre partout.
+- **« Au plus vite » = aucun créneau** (ADR-0011). Le comptoir reçoit des
+  commandes sans heure : il les sert dans l'ordre. Un créneau terminé n'est
+  plus proposé ni accepté — le créneau « Mi-temps » de Moto Cross X a une fin
+  au 31/12, c'est pour cela qu'il reste visible.
+- **Paiement en mode test en production** jusqu'à la sortie des stores :
+  ne rien publier avant le passage de Stripe en production (ADR-0012, point 1
+  ci-dessus).
+- **Stores** : Google Play a la **publication gérée** — ce qui est validé
+  attend le clic de Rémi. App Store : les captures se déposent dans l'onglet
+  « iPhone avec Dynamic Island (écran moyen) » en **1206 × 2622** (les
+  1320 × 2868 y sont refusées) ; des images **grisées** sont héritées d'une
+  autre taille et ne se suppriment pas là.
 - **Créer un lieu = back-office → Organisations → « + Nouveau lieu »** (lieu + accès du
   responsable en un écran). **Toute la programmation** (événements, liens Flaix, adversaires,
   photo, fidélité…) se fait dans le **tableau de bord du lieu** ; le super admin y entre par
@@ -474,14 +509,14 @@ un correctif pour un défaut qu'on n'arrive pas à voir.
 | **P2** charge réelle | 25 000 destinataires validés en écriture ≠ 10 000 clients connectés qui commandent. Aucune affirmation de capacité tant que ce n'est pas mesuré |
 | **P3-1 / P3-2** | dépendances et plugin ESLint Next — cosmétique |
 
-## 🔓 SUJETS OUVERTS — à reprendre (liste tenue au 09/11/2026)
+## 🔓 SUJETS OUVERTS — à reprendre (liste tenue au 17/11/2026)
 
 Ce qui a été décidé mais pas fait, ou fait mais pas encore éprouvé. **Tenir
 cette liste à jour : elle est le premier endroit à relire en reprenant.**
 
 | Sujet | Où on en est | Ce qui manque |
 |---|---|---|
-| **Sauvegarde nocturne** | Script `backend/scripts/sauvegarde.js` écrit et vérifié ; destination validée par le client | Un stockage SÉPARÉ de Railway + la planification. Rien ne tourne aujourd'hui |
+| **Sauvegarde nocturne** | ✅ Automatisée le 25/10 (GitHub Actions, chiffrée) ; **restauration réelle réussie le 11/11** depuis un artefact de nuit (BUG-2026-015), essai relancé le 1er de chaque mois | Un stockage SÉPARÉ de Railway et de GitHub reste conseillé |
 | **Apple Pay** | Retiré proprement de l'app (phase 40) | Créer un identifiant marchand `merchant.com.breakeat.app` À PART, son certificat Stripe, puis reposer `APPLE_MERCHANT_ID`. ⚠️ Ne JAMAIS activer le certificat de `merchant.com.shapper.breakeat` : ça révoquerait celui de l'app publiée |
 | **Sécurité, points 4 et 5** | Les trois premiers verrous sont posés (phase 42) | Verrouillage temporaire après plusieurs échecs de connexion, et confirmation d'adresse e-mail |
 | **Remboursements** | ✅ **Bouclés le 01/10 (phase 55).** `charge.refunded` est traité : la commande passe en `REFUNDED` ou `PARTIALLY_REFUNDED`, recalculé depuis TOUTES ses lignes de paiement (une addition partagée en compte une par convive). 7 tests unitaires + 7 sur base réelle. L'ardoise, elle, rembourse depuis le 30/09 | À éprouver sur la cible : un remboursement réel en mode test Stripe. La mécanique, elle, est en place et testée |
@@ -493,7 +528,10 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Passerelle d'accès Flaix** | ⏸️ **Gelée le 10/11 par Rémi** — spécifiée seulement (cahier des charges Flaix, section D) | Feu vert de Rémi, choix D1 seul ou D1 puis D2, route et clé de test côté Flaix. Rien à coder d'ici là |
 | **Liens Flaix** | Saisis depuis la liste des événements (toute la saison d'un coup) **ou** depuis la fiche d'un match, même terminé (06/11) | Les coller à la main, un par match, tant que Flaix ne les pousse pas |
 | **Envoi EAS** | L'envoi automatique restait en file depuis les builds 19-21 | Toujours `eas submit --platform ios --profile beta --id <build>` à la main — c'est ainsi que la build 37 est partie le 06/11 |
-| **Build iOS 37** (1.1.0) | Sur TestFlight depuis le 06/11 | À essayer sur un vrai téléphone : tickets de « Mes commandes », « À ne pas manquer » avec des favoris, connexion Google |
+| **Sortie 1.1.3 (iOS build 46, Android code 7)** | En examen chez Apple et Google depuis le 17/11, publication manuelle (ADR-0012) | Renommer la buvette « Burger King » ; relancer la mise à jour à distance (1.7.39) ; puis Stripe en production ; puis Rémi publie. Détail : « Ce qui reste », point 1 |
+| **Stripe en production** | ⚠️ Production en **mode test** | Clés live + webhook live sur Railway (Rémi), « Encaissement » refait en live par chaque club, Apple Pay live, un vrai paiement vérifié. AVANT toute publication sur les stores |
+| **Ouverture automatique (ADR-0009)** | En ligne depuis le 16/11 (`7ce410e`) | À observer sur un vrai événement d'un lieu BreakEat : journaux Railway « Ouverture automatique : … » à l'heure d'ouverture, « Fermeture automatique : … » à la fin |
+| **Messages partagés personnel / client** | Le client est tutoyé dans l'app (1.7.39) ; certains messages du serveur servent aussi les consoles (compte archivé, code de réinitialisation, courriels) et restent vouvoyés | Trancher avec Rémi : un message par public, ou tutoiement partout |
 | **Audit — les 5 P1** | ✅ Corrigés le 30/09 (phase 53) et migrations passées sur la base cible le 01/10 | — |
 | **Audit — second passage (phase 55)** | ✅ Corrigés le 01/10 : l'envoi d'ardoise interrompu ne reste plus bloqué en SENDING (lien écrit dans la transaction + ronde de rattrapage qui rembourse), `charge.refunded` est enfin traité (le bandeau bleu de l'app pouvait s'afficher, rien n'écrivait jamais `REFUNDED`), et le contenant dormant disparaît aussi des LECTURES publiques | — |
 | **CI — premier passage** | Poussé le 06/10 avec l'accord du propriétaire. Les builds ont été vérifiés AVANT le push : backend (`nest build`), app client web (`expo export`), admin, operator et back-office (`next build`) — tous verts | **Lire le résultat de la CI** dans l'onglet Actions (job `integration` : sa première exécution réelle). Je n'ai pas pu le lire depuis la session : la lecture de l'état GitHub a été refusée par le garde-fou. Il faut autoriser `gh` dans les permissions pour que je le fasse |
@@ -507,8 +545,8 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **⚖️ Mentions légales et confidentialité** | ✅ Écran « Informations légales » dans l'app, textes dans `documents-legaux/` | **Ajouter Brevo** à la politique de confidentialité §5 le jour où les courriels sont activés |
 | **Dette : `visites`** | L'API calcule encore les passages | Plus aucun écran ne les affiche. À retirer si rien ne les reprend |
 | **Dette : PDF en base** | Contrats en `BYTEA`, 10 Mo max | Tenable à ce volume. À déplacer vers un stockage objet si les clubs en déposent beaucoup |
-| **Courriels (Brevo)** | Code prêt, fonction masquée : `MAIL_*` absents de Railway | Compte Brevo + DNS de `breakeatapp.com` + trois variables, par Rémi. Voir « État au 09/11 » |
-| **Android — Play Store** | Compile (APK `b2337b52`, 03/11) | Compte de service Play, Firebase + FCM V1, deux clients OAuth Android. Voir « État au 09/11 » |
+| **Courriels (Brevo)** | Code prêt, fonction masquée : `MAIL_*` absents de Railway | Compte Brevo + DNS de `breakeatapp.com` + trois variables, par Rémi. Voir « Ce qui reste », point 6 |
+| **Android — Play Store** | ✅ Clé d'importation acceptée, 1.1.3 (code 7) en examen (17/11) | Essai sur un vrai téléphone Android (connexion Google, paiement, « prête ») |
 | **Favoris entre appareils** | Gardés sur le téléphone depuis le 06/11 | Synchronisation serveur — demande un compte |
 
 ---

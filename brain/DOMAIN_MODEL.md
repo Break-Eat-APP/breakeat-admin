@@ -1,6 +1,7 @@
 # BREAK EAT Domain Model
 
-Version: V1 source of truth
+Version: V1 source of truth — updated 17/11/2026 (automatic opening, default
+pickup points, invitations, « Au plus vite »). In case of doubt, `backend/prisma/schema.prisma` wins.
 
 ## Core Entities
 
@@ -89,6 +90,13 @@ Required fields:
 - status
 - activeFeatureFlags
 
+Status: `DRAFT` → `ACTIVE` ⇄ `PAUSED` → `ENDED`, or `CANCELLED`. On a BreakEat
+venue (not Flaix, not the permanent container), **the server moves it
+automatically** every minute: `DRAFT` (with at least one attached supplier) →
+`ACTIVE` when ordering opens (`Venue.ordersOpenAt` on the event day, or its
+start if earlier); `ACTIVE`/`PAUSED` → `ENDED` at `endAt` (ADR-0009). `ENDED`
+only stops NEW orders; paid orders stay at the counter.
+
 ### Supplier
 
 Represents a food, drink or merchandise operator.
@@ -101,6 +109,14 @@ Required fields:
 - name
 - status
 - preparationZone
+
+Called **« point de retrait »** in the venue console since 16/11/2026. Status:
+`OPEN`, `CLOSED`, `PAUSED`, `OFFLINE` — **global**, not per event. Linked to
+events through `EventSupplier`: attached **automatically** when either the
+event or the supplier is created (OFFLINE excluded); detached (« désactivé »)
+by hand, per event, and never re-attached by automation. Opened with its
+event (only if `CLOSED`), closed at the event's end unless still used by
+another running event or a permanent container (ADR-0009).
 
 ### PickupPoint
 
@@ -115,6 +131,20 @@ Required fields:
 - supplierId optional
 - name
 - status
+
+Called **« comptoir de retrait »** in the console. Required to pay. Each
+event × supplier pair gets **one default pickup point named after the
+supplier** when it has no active one (permanent container excluded); the
+console only adds more (up to 4) for a large stand.
+
+### OrganizationInvitation (16/11/2026)
+
+A pending invitation for an **existing account** to join an organization
+(ADR-0010). Fields: id, userId, organizationId, orgRole, supplierId optional,
+invitedById, expiresAt (14 days), createdAt. Unique on
+`userId + organizationId` (re-inviting replaces it). Accepting creates the
+`OrganizationMember` and deletes the invitation in one transaction; refusing
+or expiry deletes it. UUID keys.
 
 ### Category
 
@@ -169,6 +199,11 @@ Required fields:
 - selectedSlotId optional
 - totals
 - expiresAt
+
+`selectedSlotId = null` means **« Au plus vite »**: prepared as soon as
+possible (ADR-0011). The app always sends the choice before paying or
+sharing the bill, `null` included, so an earlier slot is cleared and its
+place released. The slot cannot change once checkout has started.
 
 ### Order
 
@@ -237,6 +272,12 @@ Required fields:
 
 `source` must indicate whether the slot came from manual config, default rules or Flaix.
 
+A **customer** can only choose a slot that is `OPEN`, **not over**
+(`endAt > now`), of the same event, and of the same supplier when it has one
+(`assertCreneauCompatible`). The public list hides finished slots. A counter
+or Flaix may still attach an order to a slot it has just closed. Slots are
+**never shown** for a Flaix venue (Flaix owns them).
+
 ### LoyaltyAccount
 
 A customer's point balance **with one club**. Phase 20.
@@ -295,6 +336,9 @@ Rules:
 - One order belongs to one event.
 - One order can contain products from multiple suppliers only if the multi-vendor flag is enabled.
 - One order must have one customer-facing pickup point.
+- One supplier belongs to one organization (one club) and is attached to its
+  events through `EventSupplier`.
+- One account has at most one pending invitation per organization.
 - One customer has at most one loyalty account per organization.
 - One loyalty account has many loyalty transactions.
 - One order produces at most one EARN and one REDEEM transaction.

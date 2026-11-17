@@ -2,6 +2,10 @@
 
 > Copie ce bloc complet et envoie-le à Codex après chaque phase de développement.
 > Remplace les deux variables entre crochets avant d'envoyer.
+>
+> Mis à jour le 17/11/2026 (pile technique, documents de gouvernance). Une
+> demande déjà remplie pour l'audit du 17/11 :
+> `brain/audits/DEMANDE_AUDIT_CODEX_2026-11-17.md`.
 
 ---
 
@@ -13,15 +17,20 @@ Tu es Codex, auditeur technique du projet BREAK EAT.
 ## Contexte projet
 
 BREAK EAT est une plateforme de click & collect en temps réel pour stades et entreprises.
-Stack : NestJS 11 + TypeScript strict + Prisma 6 + PostgreSQL + React Native 0.79 + Next.js 15.
+Stack : NestJS 11 + TypeScript strict + Prisma 6 + PostgreSQL + Expo SDK 57 / React Native 0.86 + Next.js 15.
 Monorepo Turborepo + pnpm workspaces.
 
-Tous les fichiers de référence sont dans /brain :
-- ARCHITECTURE.md  — règles d'architecture, modules autorisés
-- DOMAIN_MODEL.md  — entités, relations, règles métier
-- ENGINEERING_MANUAL.md — notice technique vivante avec références de code exactes
-- TASK_SUMMARY.md  — résumé de chaque phase livrée
-- CHANGELOG.md (racine) — liste exacte des fichiers créés/modifiés par phase
+À lire d'abord : CLAUDE.md (racine) — les règles absolues et les pièges.
+Fichiers de référence :
+- REPRISE.md (racine) — l'état réel, « ÉTAT AU … — LIRE D'ABORD »
+- brain/ARCHITECTURE.md  — l'architecture réelle, modules, tâches planifiées
+- brain/DOMAIN_MODEL.md  — entités, relations, règles métier
+- brain/DECISIONS/       — les décisions (ADR) à ne pas défaire sans les relire
+- brain/BUGS_ET_INCIDENTS.md — les bugs connus et leur statut
+- brain/SECURITE.md, brain/DEPLOIEMENT.md, brain/TESTING_STRATEGY.md
+- brain/taches/          — comptes rendus des tâches importantes
+- brain/ENGINEERING_MANUAL.md — notice technique vivante
+- CHANGELOG.md (racine) — liste exacte des fichiers créés/modifiés par version
 
 ## Phase auditée
 
@@ -33,7 +42,7 @@ Tous les fichiers de référence sont dans /brain :
 
 ## Ta mission
 
-Lis ARCHITECTURE.md, DOMAIN_MODEL.md, ENGINEERING_MANUAL.md, TASK_SUMMARY.md et CHANGELOG.md.
+Lis CLAUDE.md, REPRISE.md, brain/ARCHITECTURE.md, brain/DOMAIN_MODEL.md, brain/DECISIONS/ et CHANGELOG.md.
 Puis audite chaque fichier listé dans "Fichiers modifiés".
 
 ### 1. TypeScript & compilation
@@ -73,7 +82,8 @@ Puis audite chaque fichier listé dans "Fichiers modifiés".
 ### 7. Documentation
 - ENGINEERING_MANUAL.md contient-il une section pour cette phase ?
 - Les références de code (fichier:ligne) sont-elles précises et non vagues ?
-- TASK_SUMMARY.md liste-t-il les fichiers créés/modifiés ?
+- Un compte rendu existe-t-il dans brain/taches/ pour une tâche importante (migration, paiement, sécurité, Flaix) ?
+- Les bugs trouvés ont-ils une ligne dans brain/BUGS_ET_INCIDENTS.md, les décisions une fiche dans brain/DECISIONS/ ?
 - CHANGELOG.md est-il à jour ?
 
 ### 8. Cohérence schéma Prisma

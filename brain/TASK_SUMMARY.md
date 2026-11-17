@@ -2,6 +2,13 @@
 
 This file must be updated after every implementation task.
 
+> **Depuis le 11/11/2026, ce journal n'est plus tenu** (gouvernance,
+> `brain/AGENTS.md`). Les comptes rendus des tâches importantes vivent dans
+> **`brain/taches/`** — derniers en date : `2026-11-16-test-croise-organisations.md`,
+> `2026-11-16-ouverture-automatique-points-de-retrait.md`,
+> `2026-11-17-relecture-avant-audit.md`, `2026-11-17-soumission-stores-1.1.3.md`.
+> Chaque livraison reste dans `CHANGELOG.md`.
+
 ---
 
 ## [2026-11-09] Mises à jour à distance, et l'audit charge / lien Flaix

@@ -1,6 +1,8 @@
 # Sécurité — ce qui est en place, vérifié dans le code, et ce qui reste
 
-> Ouvert le 11/11/2026 (gouvernance, étape 4). Chaque contrôle « en place » a
+> Ouvert le 11/11/2026 (gouvernance, étape 4) ; **mis à jour le 17/11/2026**
+> (test croisé entre organisations, invitations, créneaux, transport,
+> paiement en mode test). Chaque contrôle « en place » a
 > été **vérifié dans le code** à cette date, avec le fichier qui l'applique.
 > Un contrôle qu'on ne peut pas constater depuis le dépôt est marqué
 > **À VÉRIFIER**. L'historique des chantiers sécurité : `REPRISE.md`
@@ -24,6 +26,7 @@
 
 | Contrôle | Comment | Où |
 |---|---|---|
+| Transport | **HTTPS seul** : les builds de l'app pointent `https://…/api/v1` (`apps/mobile/eas.json`) ; le serveur **redirige le HTTP** (301, constaté le 17/11/2026). Seule exception : l'adresse du poste de développement, dans les builds de développement | `apps/mobile/src/lib/config/env.ts`, Railway |
 | Mots de passe | **argon2** | `modules/auth`, `modules/organizations`, `modules/bootstrap` |
 | Sessions | Jeton d'accès court + **jeton de renouvellement haché en base, avec rotation** (un jeton déjà utilisé est refusé) | `modules/auth/auth.service.ts`, modèle `RefreshToken` |
 | Connexion Apple / Google | Jetons d'identité vérifiés par les clés publiques du fournisseur | `modules/auth/social-identity.service.ts` |
@@ -41,6 +44,8 @@
 | Documents des clubs | PDF seulement, **10 Mo** au plus, borne posée dans l'intercepteur | `modules/documents/` |
 | Isolation entre organisations | **Revue route par route le 16/11/2026** (~220 routes) : ressources relues avec l'organisation ou rattachées par leur parent. Deux défauts corrigés (BUG-2026-017, 018). Détail : `brain/taches/2026-11-16-test-croise-organisations.md` | services, `common/helpers/require-org-access.ts` |
 | Invitations | Un club n'ajoute plus un compte existant d'office : **invitation à accepter** (14 jours), aucun droit avant acceptation ; réinitialisation de mot de passe limitée aux comptes créés par le club (16/11/2026) | `modules/organizations/organizations.service.ts` |
+| Créneaux | Le **comptoir** ne rattache une commande qu'à un créneau du **même événement et de la même buvette** (BUG-2026-018) ; le **client** ne choisit qu'un créneau **ouvert et non terminé** (BUG-2026-020) | `common/helpers/retrait-compatible.ts`, `orders.service.ts`, `cart.service.ts` |
+| Comptoirs de retrait | Le comptoir choisi doit être du même lieu, et de l'événement / de la buvette s'il y est rattaché | `common/helpers/retrait-compatible.ts` |
 | Traçabilité | Chaque transition de commande dans `OrderAuditTrail` | `modules/orders/orders.service.ts` |
 | Dépendances | Versions verrouillées (`pnpm-lock.yaml`), installation `--frozen-lockfile` en CI | `.github/workflows/ci.yml` |
 | Failles connues | `pnpm audit` des dépendances de production chaque lundi et à chaque changement du verrouillage ; **rouge** si faille élevée ou critique (aucune mise à jour automatique) | `.github/workflows/audit-dependances.yml` (11/11/2026) |
@@ -54,10 +59,14 @@
 | **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels (Brevo) n'est pas configuré | P2 — dépend de Brevo |
 | **Alertes Dependabot de GitHub** (un clic : Settings → Code security → Dependabot alerts) | En plus de l'audit hebdomadaire, alerte par e-mail | P3 — à activer par Rémi |
 | **Dépôt privé** | Code et documents internes lisibles par tous | Décision de Rémi, reportée (voir REPRISE) |
-| **Isolation entre organisations — test croisé systématique** (le lieu A tente de lire le lieu B, route par route) | Les contrôles existent et ont des tests, mais pas de balayage complet | P2 || **Test d'intégration croisé en CI** (deux clubs, chaque route, sur base réelle) | La revue du 16/11 est faite à la main ; un test garderait la règle | P3 |
+| ~~Isolation entre organisations — test croisé systématique~~ | ✅ **Fait le 16/11/2026** à la lecture du code, route par route (voir « En place ») | — |
+| **Test d'intégration croisé en CI** (deux clubs, chaque route, sur base réelle) | La revue du 16/11 est faite à la main ; un test garderait la règle | P3 |
+| **Passage de Stripe en production** | La production encaisse en **mode test** (voulu pour la vérification des stores, ADR-0012). Les clés live (`sk_live_…`, clé publiable live, secret du webhook live) sont posées **par Rémi** sur Railway, jamais dans le dépôt ni dans une conversation ; les clés de test sont ensuite retirées | P1 — avant toute publication sur les stores |
 
 ## À VÉRIFIER (hors du dépôt)
 
+- **Stripe** : mode test ou live, et le webhook pointé vers la production
+  (Stripe → Développeurs → Webhooks → « Tentatives récentes »).
 - **Sentry** est-il configuré en production (`SENTRY_DSN_BACKEND`,
   `SENTRY_DSN_MOBILE`) ? Railway → Variables ; Expo → Secrets.
 - **Redis** en production (`REDIS_URL`) : sans lui, la limitation est par

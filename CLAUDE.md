@@ -105,6 +105,10 @@ build — puis le rendu réel quand c'est visible (aperçu local, captures).
 | **BreakEat** (l'app, en un mot) | — ; **Break Eat** (deux mots) reste la société (SAS BREAK EAT APP) dans les textes légaux : ne pas « harmoniser » |
 | Le client est **tutoyé** dans l'app (« Ta commande est prête ») | — |
 
+Dans la **console** (depuis le 16/11/2026) : « **point de retrait** » = la
+buvette (`Supplier`) ; « **comptoir de retrait** » = le `PickupPoint` où l'on
+récupère. Jamais « fournisseur » devant un club.
+
 Trois moments distincts : le lien du match (le club), **l'ouverture de la
 commande** (BreakEat, `Venue.ordersOpenAt`, par lieu), les créneaux de retrait
 (**Flaix** — ne jamais les afficher, ils changent sans qu'on l'apprenne).
@@ -168,6 +172,13 @@ l'accord de Rémi.
   d'un dégradé, et le B paraissait flou. Pour la changer : refaire
   `Assets/b.png` (1024, fond transparent), garder `icon.json`, monter `version`,
   nouvelle build. Détail dans `REPRISE.md` (« L'icône iOS »).
+- **Les lieux BreakEat s'ouvrent et se ferment seuls** (chaque minute,
+  `events/ouverture-automatique.service.ts`, ADR-0009) et les points de
+  retrait se rattachent **à la naissance** seulement : ne jamais ajouter
+  d'automatisme qui repasse sur une désactivation manuelle.
+- **« Au plus vite » = créneau `null`, et `null` s'envoie** au serveur
+  (`apiChoisirCreneau(cart.id, selectedSlotId)`, toujours) : sinon le panier
+  réutilisé garde l'ancien créneau (BUG-2026-021, ADR-0011).
 - **Le poste de développement a peu de mémoire** (6 Go, souvent < 600 Mo
   libres) : lancer Jest avec `-i` et `NODE_OPTIONS=--max-old-space-size=1000`,
   tester fichier par fichier ; la suite complète tourne en CI.

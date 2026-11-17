@@ -24,7 +24,8 @@ migration comme sûre.
 | **backend** | Railway, automatique à chaque envoi sur `main` qui touche `backend/**` (ou `railway.json`, `nixpacks.toml`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`) | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit` = `git log -1 --format=%h origin/main` |
 | admin, back-office, operator, mobile web | Intégration Git de Vercel, automatique | Panneau Deployments de Vercel |
 | **app iOS** | À la main (EAS), voir plus bas | TestFlight |
-| app Android | Bloquée : clé d'importation Google Play en attente (BUG-2026-013) | Play Console |
+| **app Android** | À la main (EAS, `.aab`), puis dépôt dans la Play Console ; clé d'importation acceptée le 17/11 | Play Console → Vue d'ensemble de la publication |
+| **sortie sur les stores** | **Rémi, à la main**, après validation (App Store : publication manuelle ; Google Play : publication gérée) et **jamais avant le passage de Stripe en production** ([ADR-0012](DECISIONS/ADR-0012-publication-manuelle-des-stores.md)) | Fiche publique des stores |
 | **mise à jour à distance** | À la main, workflow GitHub | Run vert sur GitHub |
 
 **`railway.json` fait autorité** pour le démarrage du serveur :
@@ -85,7 +86,29 @@ message, plateforme `all`. **Pas depuis le poste** (2 à 3 Go nécessaires). Le
 téléphone la reçoit au lancement et l'applique au suivant (fermer et rouvrir
 l'app, parfois deux fois).
 
-Au 11/11/2026 : **version 1.1.2, build 44** sur TestFlight.
+**Android** (même code, même version) :
+
+```
+cd apps/mobile
+npx eas-cli build --platform android --profile beta
+```
+
+Le profil `beta` produit un **`.aab`** signé avec la clé d'importation EAS
+(`F8:C8:BD:86:…:D0:08`). Avant de le déposer : vérifier l'alignement 16 ko des
+bibliothèques natives, l'absence de Google Play Billing et de la permission
+`AD_ID` (contrôle fait le 17/11, `brain/taches/2026-11-17-soumission-stores-1.1.3.md`).
+Dépôt : Play Console → Tests internes ou Production → modifier la version →
+déposer l'`.aab` → notes de version entre `<fr-FR>` et `</fr-FR>` (500
+caractères au plus) → envoyer pour examen.
+
+**Les captures App Store** : onglet « iPhone avec Dynamic Island (écran
+moyen) », **1206 × 2622** ou 1179 × 2556 (les 1320 × 2868 y sont refusées).
+Google Play : 1080 × 1920, bannière 1024 × 500, icône 512 × 512.
+
+Au 17/11/2026 : **version 1.1.3** — iOS **build 46** en vérification chez
+Apple ; Android **code de version 7** en examen chez Google ; mise à jour à
+distance 1.1.3 publiée le 16/11 (`1fbdf46`), à relancer après les corrections
+du 17/11.
 
 ## Les sauvegardes
 
@@ -120,6 +143,7 @@ pg_restore --clean --if-exists --no-owner --dbname="<adresse>" restauration.dump
 | consoles web | Vercel → Deployments → « Promote » d'un déploiement précédent | — |
 | mise à jour à distance | Republier la version précédente (`eas update:republish`) ou publier un correctif | Les téléphones l'appliquent au lancement suivant |
 | build iOS | TestFlight : faire tester la build précédente ; App Store : soumettre une nouvelle version | Pas de retour arrière instantané sur l'App Store |
+| version Android | Play Console : arrêter le déploiement progressif, ou publier une version au code supérieur | Un code de version ne redescend jamais |
 | données | Restauration d'une sauvegarde (ci-dessus) | En dernier recours : tout ce qui a été écrit depuis est perdu |
 
 ## Avant et après une mise en production

@@ -63,7 +63,8 @@ information qui les contredit a tort :
 | [`REPRISE.md`](REPRISE.md) | **Où en est-on, que faire ensuite ?** |
 | [`CHANGELOG.md`](CHANGELOG.md) | Qu'a-t-on livré, quand, et pourquoi ? |
 | [`brain/ENGINEERING_MANUAL.md`](brain/ENGINEERING_MANUAL.md) | Pourquoi cette décision technique ? (avec les références de code) |
-| [`brain/TASK_SUMMARY.md`](brain/TASK_SUMMARY.md) | Ce qu'a fait chaque session de travail |
+| [`brain/taches/`](brain/taches/) | Les comptes rendus des tâches importantes (depuis le 11/11/2026 ; avant : `brain/TASK_SUMMARY.md`) |
+| [`CLAUDE.md`](CLAUDE.md) · [`brain/DECISIONS/`](brain/DECISIONS/README.md) · [`brain/BUGS_ET_INCIDENTS.md`](brain/BUGS_ET_INCIDENTS.md) | Les règles permanentes · les décisions · les bugs connus |
 
 Les audits sont dans [`brain/audits/`](brain/audits/), et les documents
 dépassés (`DEVELOPMENT_LOG.md`, `BLOC_6_0_SETUP_GUIDE.md`, les premières

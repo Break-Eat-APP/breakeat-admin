@@ -8390,3 +8390,70 @@ Couper une lecture lente coûte un « réessayer ». Couper une écriture coûte
 une commande en double.
 
 ---
+
+## Ce que les journées du 11 au 17/11/2026 ont laissé ici
+
+Le détail est dans `CHANGELOG.md` (1.7.14 → 1.7.40), les décisions dans
+`brain/DECISIONS/` (ADR-0009 à 0012), les comptes rendus dans `brain/taches/`.
+Ce qui suit est ce qu'il faut retenir pour ne pas refaire les mêmes erreurs.
+
+### 1. Un automatisme ne joue qu'à la naissance
+
+Le rattachement d'office des points de retrait (ADR-0009) se fait quand
+l'événement ou le point de retrait **naît**, jamais ensuite. Un automatisme
+qui repasserait chaque minute défairait la désactivation manuelle d'un club,
+et le club croirait que sa console ne marche pas. Règle : un geste humain
+n'est jamais écrasé par une tâche planifiée.
+
+### 2. Une bascule planifiée est conditionnelle
+
+`updateMany({ where: { id, status: <attendu> } })`, puis on ne continue que si
+`count > 0`. C'est ce qui rend l'ouverture automatique sûre à plusieurs
+instances, et ce qui respecte un club qui a changé le statut entre la lecture
+et l'écriture. Un `update` sur l'identifiant seul écraserait son choix.
+
+### 3. Le « rien » doit voyager aussi
+
+« Au plus vite » est l'absence de créneau. L'app n'envoyait le créneau au
+serveur **que s'il existait** : le serveur, qui réutilise le panier ouvert,
+gardait l'ancien (BUG-2026-021, trouvé à la relecture du 17/11). Quand un
+état serveur persiste d'un passage à l'autre, l'absence de choix est un choix
+qu'il faut transmettre (`null`), pas un appel qu'on saute.
+
+### 4. Ce que l'écran cache, le serveur le refuse
+
+La liste des créneaux du client a cessé de montrer les créneaux passés le
+16/11 ; le serveur les acceptait encore le 17/11 (BUG-2026-020). Une liste
+restée ouverte, une ancienne version de l'app ou un appel direct suffisent.
+Même règle que les droits : masquer n'est pas protéger (`CLAUDE.md` § 2,
+règle 5).
+
+### 5. Le consentement est le seul contrôle qui ne dépend pas du club
+
+Un club pouvait faire entrer chez lui n'importe quel compte existant, puis
+en redéfinir le mot de passe (BUG-2026-017, SEV-1). Le contrôle de rôle était
+juste — dans CE club ; la faille était entre deux clubs. D'où l'invitation à
+accepter (ADR-0010) : un test croisé « le club A agit sur le club B » se fait
+route par route, pas seulement rôle par rôle.
+
+### 6. Une marge dans une rangée qui passe à la ligne
+
+Sur iPhone, la marge posée sur un enfant d'une rangée `flexWrap` n'était pas
+appliquée : la pastille touchait l'image (deux livraisons pour la décoller,
+BUG-2026-029). L'écart se porte par le **conteneur** (`marginTop`, `gap`).
+
+### 7. Un store juge aussi la version d'avant
+
+Les « problèmes de règles » de Google Play (Billing 8, pages de 16 ko) et la
+Sécurité des données venaient de la version publiée par l'éditeur précédent
+(code 4). Avant d'envoyer une build : **contrôler l'`.aab`** (manifeste,
+bibliothèques natives, dex) plutôt que supposer ; déclarer ce que le code
+collecte **après l'avoir lu**, pas de mémoire.
+
+### 8. Rien ne sort tant qu'on ne peut pas payer pour de vrai
+
+La production encaisse en mode test pendant la vérification des stores :
+publication manuelle des deux côtés (ADR-0012), Stripe en production avant
+le clic.
+
+---

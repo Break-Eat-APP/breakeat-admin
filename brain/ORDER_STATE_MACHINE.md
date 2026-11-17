@@ -73,7 +73,7 @@ Recommended V1 flow:
 3. client confirms payment;
 4. Stripe webhook confirms success;
 5. backend creates order transactionally;
-6. backend decrements stock and assigns slot;
+6. backend decrements stock and assigns slot (if any — no slot means « Au plus vite », ADR-0011);
 7. backend commits;
 8. backend emits realtime `new_order`.
 
@@ -126,8 +126,11 @@ All operator actions must write to the audit trail.
 
 Allowed customer actions:
 
-- create cart;
-- select slot;
+- create cart (the event must be `ACTIVE` and the supplier `OPEN` — on a
+  BreakEat venue both open automatically, ADR-0009);
+- select slot, or « Au plus vite » (no slot). A finished, closed, foreign-event
+  or foreign-supplier slot is refused; the choice is frozen once checkout
+  starts (17/11/2026);
 - pay;
 - retry payment;
 - view order status;

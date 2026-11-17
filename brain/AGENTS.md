@@ -17,7 +17,7 @@ s'il pense qu'elle est fausse, il le **dit** à Rémi au lieu de la changer.
 | Qui | Rôle réel | Limites |
 |---|---|---|
 | **Rémi** | Décide du produit et des règles métier ; valide les déploiements, les mises à jour à distance, les builds ; détient tous les accès (Railway, Stripe, Vercel, Apple, Google, Expo, GitHub) | — |
-| **Claude Code** | Agent principal : diagnostic, conception, implémentation, tests, documentation, builds et envois TestFlight à la demande | Ne voit aucun tableau de bord (Railway, Stripe, Vercel) : **demande les journaux** ; ne saisit jamais d'identifiant ; ne publie rien sans l'accord de Rémi |
+| **Claude Code** | Agent principal : diagnostic, conception, implémentation, tests, documentation, builds et envois TestFlight à la demande ; **guide** Rémi dans App Store Connect et la Play Console (textes, visuels, déclarations vérifiées dans le code, contrôle des `.aab`) | Ne voit aucun tableau de bord (Railway, Stripe, Vercel, stores) : **demande les journaux ou une capture** ; ne saisit jamais d'identifiant ; n'accepte aucun contrat à la place de Rémi ; ne publie rien sans son accord |
 | **Codex** | **Audits** : relecture du code et des changements récents, rapports datés (`AUDIT_*.md`) | Ne modifie pas le code ; ses rapports se rangent dans `brain/audits/` avec la réponse de Claude (corrigé / écarté / assumé, et pourquoi) |
 | **Cursor** | Pas utilisé à ce jour | S'il l'est : mêmes règles, et jamais sur les mêmes fichiers qu'un autre agent en même temps |
 | **Développeur Flaix** | Construit côté Flaix ce que décrit `brain/FLAIX_FLUX_EVENEMENTS_CAHIER_DES_CHARGES.md` (dossier PDF : `brain/livrables/`) | N'a pas accès à ce dépôt à ce jour |
