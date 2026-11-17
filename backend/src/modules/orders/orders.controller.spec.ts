@@ -20,10 +20,11 @@ describe('OrdersController — qui peut faire avancer une commande', () => {
   let controller: OrdersController;
   let prisma: {
     order: { findUnique: jest.Mock };
+    event: { findUnique: jest.Mock };
     user: { findUnique: jest.Mock };
     organizationMember: { findUnique: jest.Mock };
   };
-  let orders: { transition: jest.Mock };
+  let orders: { transition: jest.Mock; findActiveByEvent: jest.Mock };
   let manquants: { signaler: jest.Mock };
 
   const ORDER = 'order-nord';
@@ -37,10 +38,14 @@ describe('OrdersController — qui peut faire avancer une commande', () => {
       order: {
         findUnique: jest.fn().mockResolvedValue({ organizationId: ORG, supplierId: NORD }),
       },
+      event: { findUnique: jest.fn().mockResolvedValue({ organizationId: ORG }) },
       user: { findUnique: jest.fn().mockResolvedValue({ globalRole: GlobalRole.CUSTOMER }) },
       organizationMember: { findUnique: jest.fn() },
     };
-    orders = { transition: jest.fn().mockResolvedValue({ id: ORDER }) };
+    orders = {
+      transition: jest.fn().mockResolvedValue({ id: ORDER }),
+      findActiveByEvent: jest.fn().mockResolvedValue([]),
+    };
     manquants = { signaler: jest.fn().mockResolvedValue({ id: ORDER }) };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -60,6 +65,30 @@ describe('OrdersController — qui peut faire avancer une commande', () => {
 
   const membre = (orgRole: OrgRole, supplierId: string | null = null) =>
     prisma.organizationMember.findUnique.mockResolvedValue({ orgRole, supplierId });
+
+  describe('GET event/:eventId/active — l’épinglage en lecture (audit Codex du 17/11)', () => {
+    const EVENT = '11111111-1111-4111-8111-111111111111';
+
+    it('un poste épinglé à Nord ne lit que Nord', async () => {
+      membre(OrgRole.OPERATOR, NORD);
+      await controller.findActiveByEvent(EVENT, utilisateur);
+      expect(orders.findActiveByEvent).toHaveBeenCalledWith(EVENT, NORD);
+    });
+
+    it('un membre sans buvette lit tout l’événement', async () => {
+      membre(OrgRole.ORG_ADMIN, null);
+      await controller.findActiveByEvent(EVENT, utilisateur);
+      expect(orders.findActiveByEvent).toHaveBeenCalledWith(EVENT, undefined);
+    });
+
+    it('refuse un non-membre', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue(null);
+      await expect(controller.findActiveByEvent(EVENT, utilisateur)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(orders.findActiveByEvent).not.toHaveBeenCalled();
+    });
+  });
 
   it('laisse passer une opératrice épinglée à LA buvette de la commande', async () => {
     membre(OrgRole.OPERATOR, NORD);

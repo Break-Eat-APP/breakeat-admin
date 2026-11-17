@@ -206,14 +206,19 @@ export class OrdersController {
    * GET /api/v1/orders/event/:eventId/active
    * Returns all non-terminal orders for an event.
    * Caller must be a member of the event's organization.
+   *
+   * L'ÉPINGLAGE S'APPLIQUE ICI AUSSI (audit Codex du 17/11/2026). Le tableau
+   * le faisait, pas cette route : un poste rattaché à la buvette Nord lisait,
+   * par appel direct, les commandes et les lignes de toutes les buvettes de
+   * l'événement. Aucun écran ne s'en sert, mais un jeton valide suffisait.
    */
   @Get('event/:eventId/active')
   async findActiveByEvent(
     @Param('eventId', ParseUUIDPipe) eventId: string,
     @CurrentUser() user: JwtPayload,
   ) {
-    await this.assertOperatorAccess(eventId, user.sub);
-    return this.ordersService.findActiveByEvent(eventId);
+    const buvetteEpinglee = await this.assertOperatorAccess(eventId, user.sub);
+    return this.ordersService.findActiveByEvent(eventId, buvetteEpinglee ?? undefined);
   }
 
   /**
@@ -388,13 +393,14 @@ export class OrdersController {
   /**
    * Verifies the caller is a member of the organization that owns the event.
    */
-  private async assertOperatorAccess(eventId: string, userId: string): Promise<void> {
+  /** Rend la buvette à laquelle l'appelant est épinglé (`null` : aucune, ou super admin). */
+  private async assertOperatorAccess(eventId: string, userId: string): Promise<string | null> {
     const event = await this.prisma.event.findUnique({
       where: { id: eventId },
       select: { organizationId: true },
     });
     if (!event) throw new NotFoundException('Event not found');
-    await this.assertOrgMember(event.organizationId, userId);
+    return this.assertOrgMember(event.organizationId, userId);
   }
 
   /**
@@ -445,14 +451,14 @@ export class OrdersController {
     }
   }
 
-  private async assertOrgMember(organizationId: string, userId: string): Promise<void> {
+  private async assertOrgMember(organizationId: string, userId: string): Promise<string | null> {
     // Le super admin entre partout (décision de Rémi, 10/11) — lu en base, comme
     // `requireOrgAccess` : un rôle retiré prend effet tout de suite.
     const appelant = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { globalRole: true },
     });
-    if (appelant?.globalRole === GlobalRole.SUPER_ADMIN) return;
+    if (appelant?.globalRole === GlobalRole.SUPER_ADMIN) return null;
 
     const membership = await this.prisma.organizationMember.findUnique({
       where: { userId_organizationId: { userId, organizationId } },
@@ -460,5 +466,6 @@ export class OrdersController {
     if (!membership) {
       throw new ForbiddenException('You are not a member of this organization');
     }
+    return membership.supplierId ?? null;
   }
 }

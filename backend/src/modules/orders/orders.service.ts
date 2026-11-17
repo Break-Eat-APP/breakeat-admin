@@ -1009,10 +1009,12 @@ export class OrdersService {
    * Returns all active orders for an event (excludes COMPLETED and CANCELLED).
    * Used by the operator dashboard snapshot endpoint.
    */
-  async findActiveByEvent(eventId: string): Promise<Order[]> {
+  async findActiveByEvent(eventId: string, supplierId?: string): Promise<Order[]> {
     return this.prisma.order.findMany({
       where: {
         eventId,
+        // Un poste épinglé ne lit que SA buvette (audit Codex du 17/11/2026).
+        ...(supplierId ? { supplierId } : {}),
         status: {
           notIn: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
         },

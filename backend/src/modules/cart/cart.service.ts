@@ -12,6 +12,7 @@ import {
   PickupPointStatus,
   ProductStatus,
   SupplierStatus,
+  type Prisma,
 } from '@prisma/client';
 import {
   CompteStripeIndisponible,
@@ -138,6 +139,34 @@ export interface CheckoutResponse {
   amountCents: number;
   currency: string;
   status: CartStatus;
+}
+
+/** Le contenu sur lequel un montant de paiement a été calculé. */
+interface PanierAttendu {
+  lignes: { id: string; productId: string; quantity: number }[];
+  redeemedPoints: number;
+  selectedSlotId: string | null;
+  pickupPointId: string | null;
+}
+
+/** Le panier relu sous verrou est-il exactement celui qui a été chiffré ? */
+function memeContenu(
+  actuel: Omit<PanierAttendu, 'lignes'> & { items: PanierAttendu['lignes'] },
+  attendu: PanierAttendu,
+): boolean {
+  if (
+    actuel.redeemedPoints !== attendu.redeemedPoints ||
+    actuel.selectedSlotId !== attendu.selectedSlotId ||
+    actuel.pickupPointId !== attendu.pickupPointId ||
+    actuel.items.length !== attendu.lignes.length
+  ) {
+    return false;
+  }
+  const parId = new Map(attendu.lignes.map((l) => [l.id, l]));
+  return actuel.items.every((it) => {
+    const l = parId.get(it.id);
+    return !!l && l.productId === it.productId && l.quantity === it.quantity;
+  });
 }
 
 @Injectable()
@@ -315,12 +344,14 @@ export class CartService {
       );
     }
 
-    await this.prisma.cart.update({
-      where: { id: cartId },
-      data: {
-        ...(dto.pickupPointId !== undefined && { pickupPointId: dto.pickupPointId }),
-      },
-    });
+    await this.modifierSiOuvert(cartId, (tx) =>
+      tx.cart.update({
+        where: { id: cartId },
+        data: {
+          ...(dto.pickupPointId !== undefined && { pickupPointId: dto.pickupPointId }),
+        },
+      }),
+    );
 
     return this.computeView(cartId);
   }
@@ -350,20 +381,22 @@ export class CartService {
       (dejaAuPanier?.quantity ?? 0) + dto.quantity,
     );
 
-    await this.prisma.cartItem.upsert({
-      where: {
-        cartId_productId: { cartId, productId: dto.productId },
-      },
-      create: {
-        cartId,
-        productId: dto.productId,
-        quantity: dto.quantity,
-      },
-      update: {
-        // Increment when the product is already in the cart
-        quantity: { increment: dto.quantity },
-      },
-    });
+    await this.modifierSiOuvert(cartId, (tx) =>
+      tx.cartItem.upsert({
+        where: {
+          cartId_productId: { cartId, productId: dto.productId },
+        },
+        create: {
+          cartId,
+          productId: dto.productId,
+          quantity: dto.quantity,
+        },
+        update: {
+          // Increment when the product is already in the cart
+          quantity: { increment: dto.quantity },
+        },
+      }),
+    );
 
     this.logger.log(`Cart item added: cart=${cartId} product=${dto.productId} +${dto.quantity}`);
     return this.computeView(cartId);
@@ -433,7 +466,7 @@ export class CartService {
     // reprendra sur le contenu réel.
     await this.rendreLaRetenueDeStock(cartId);
 
-    await this.prisma.$transaction(async (tx) => {
+    await this.modifierSiOuvert(cartId, async (tx) => {
       await tx.cartItem.deleteMany({
         where: { cartId, productId: { notIn: [...vus] } },
       });
@@ -477,10 +510,12 @@ export class CartService {
 
     await this.verifierStockDisponible(item.productId, cart.pickupPointId, dto.quantity);
 
-    await this.prisma.cartItem.update({
-      where: { id: itemId },
-      data: { quantity: dto.quantity },
-    });
+    await this.modifierSiOuvert(cartId, (tx) =>
+      tx.cartItem.update({
+        where: { id: itemId },
+        data: { quantity: dto.quantity },
+      }),
+    );
 
     return this.computeView(cartId);
   }
@@ -489,9 +524,11 @@ export class CartService {
     const cart = await this.requireOwnership(cartId, userId);
     this.requireEditable(cart.status);
 
-    const result = await this.prisma.cartItem.deleteMany({
-      where: { id: itemId, cartId },
-    });
+    const result = await this.modifierSiOuvert(cartId, (tx) =>
+      tx.cartItem.deleteMany({
+        where: { id: itemId, cartId },
+      }),
+    );
     if (result.count === 0) throw new NotFoundException('Cart item not found');
 
     return this.computeView(cartId);
@@ -775,6 +812,14 @@ export class CartService {
       id: it.id,
       priceSnapshotCents: it.unitPriceCents,
     }));
+    // Ce sur quoi le montant envoyé à Stripe a été calculé : relu et comparé
+    // sous verrou au moment de figer (audit Codex du 17/11/2026).
+    const attendu: PanierAttendu = {
+      lignes: view.items.map((it) => ({ id: it.id, productId: it.productId, quantity: it.quantity })),
+      redeemedPoints: cart.redeemedPoints,
+      selectedSlotId: cart.selectedSlotId,
+      pickupPointId: cart.pickupPointId,
+    };
 
     // ─── Stripe call (idempotent by cartId) ────────────────────
     // Performed BEFORE any DB mutation. If it throws, the cart stays OPEN
@@ -837,7 +882,7 @@ export class CartService {
         existingIntentId: cart.paymentIntentId,
       });
 
-      await this.figerEtEngager(cart.id, frozenPrices, intention.id);
+      await this.figerEtEngager(cart.id, frozenPrices, intention.id, attendu);
       this.logger.log(`Checkout: cart=${cart.id} → feuille native, ${view.totalCents}¢`);
 
       return {
@@ -883,7 +928,7 @@ export class CartService {
       url: session.url ?? '',
     };
 
-    await this.figerEtEngager(cart.id, frozenPrices, intent.id);
+    await this.figerEtEngager(cart.id, frozenPrices, intent.id, attendu);
 
     this.logger.log(`Checkout: cart=${cart.id} → page Stripe, ${intent.amount}¢`);
 
@@ -916,19 +961,80 @@ export class CartService {
     cartId: string,
     prixFiges: { id: string; priceSnapshotCents: number }[],
     paymentIntentId: string,
+    attendu: PanierAttendu,
   ): Promise<void> {
-    await this.prisma.$transaction([
-      ...prixFiges.map((fp) =>
-        this.prisma.cartItem.update({
+    /**
+     * LE PANIER FIGÉ EST CELUI QUI A ÉTÉ CHIFFRÉ (audit Codex du 17/11/2026).
+     *
+     * Entre le calcul du total et ce point, Stripe a été appelé — plusieurs
+     * centaines de millisecondes pendant lesquelles le panier restait OUVERT.
+     * Une modification arrivée là (double appui sur « Payer », second
+     * appareil) changeait les lignes sans changer le montant : le webhook
+     * refusait ensuite la commande, et le client était débité sans commande.
+     *
+     * On verrouille la ligne, on relit, on compare. Différent : on ne fige
+     * rien, on rend ce qui vient d'être retenu, et le client recommence —
+     * rien n'a été débité, la feuille de paiement ne s'est pas ouverte.
+     */
+    const identique = await this.prisma.$transaction(async (tx) => {
+      await tx.cart.updateMany({
+        where: { id: cartId, status: { in: [CartStatus.OPEN, CartStatus.CHECKOUT_PENDING] } },
+        data: { updatedAt: new Date() },
+      });
+      const actuel = await tx.cart.findUniqueOrThrow({
+        where: { id: cartId },
+        select: {
+          redeemedPoints: true,
+          selectedSlotId: true,
+          pickupPointId: true,
+          items: { select: { id: true, productId: true, quantity: true } },
+        },
+      });
+      if (!memeContenu(actuel, attendu)) return false;
+
+      for (const fp of prixFiges) {
+        await tx.cartItem.update({
           where: { id: fp.id },
           data: { priceSnapshotCents: fp.priceSnapshotCents },
-        }),
-      ),
-      this.prisma.cart.update({
+        });
+      }
+      await tx.cart.update({
         where: { id: cartId },
         data: { status: CartStatus.CHECKOUT_PENDING, paymentIntentId },
-      }),
-    ]);
+      });
+      return true;
+    });
+
+    if (identique) return;
+
+    // L'intention reste attachée au panier : la prochaine tentative la
+    // reprend et l'ajuste au nouveau montant (`existingIntentId`), au lieu
+    // d'en rouvrir une sous la même clé d'idempotence — refusée par Stripe
+    // pour un montant différent.
+    await this.prisma.cart.update({ where: { id: cartId }, data: { paymentIntentId } });
+    await this.loyaltyService.releaseHoldForCart(cartId).catch(() => undefined);
+    // Ce qui a été RETENU, c'est le contenu chiffré — pas le contenu modifié.
+    // Chaque marque est reprise sous condition : une modification concurrente
+    // qui l'aurait déjà rendue (`remplacerLesArticles`, `choisirCreneau`) ne
+    // la fait pas rendre deux fois.
+    const stock = await this.prisma.cart.updateMany({
+      where: { id: cartId, stockReservedAt: { not: null } },
+      data: { stockReservedAt: null },
+    });
+    if (stock.count > 0) {
+      await rendreLeStock(this.prisma, attendu.pickupPointId, attendu.lignes);
+    }
+    if (attendu.selectedSlotId) {
+      const place = await this.prisma.cart.updateMany({
+        where: { id: cartId, selectedSlotId: attendu.selectedSlotId, slotReservedAt: { not: null } },
+        data: { slotReservedAt: null },
+      });
+      if (place.count > 0) await this.slotsService.libererUnePlace(attendu.selectedSlotId);
+    }
+    this.logger.warn(`Panier ${cartId} modifié pendant le paiement : rien n'est figé, tout est rendu.`);
+    throw new ConflictException(
+      'Ton panier a changé pendant le paiement. Vérifie-le et recommence — rien n’a été débité.',
+    );
   }
 
   /**
@@ -964,7 +1070,9 @@ export class CartService {
       }
     }
 
-    await this.prisma.cart.update({ where: { id: cartId }, data: { redeemedPoints: points } });
+    await this.modifierSiOuvert(cartId, (tx) =>
+      tx.cart.update({ where: { id: cartId }, data: { redeemedPoints: points } }),
+    );
     return this.computeView(cartId);
   }
 
@@ -1246,6 +1354,38 @@ export class CartService {
     if (status !== CartStatus.OPEN) {
       throw new BadRequestException(`Cart is ${status} and cannot be modified`);
     }
+  }
+
+  /**
+   * ÉCRIT SUR LE PANIER SEULEMENT S'IL EST ENCORE OUVERT — sous verrou (audit
+   * Codex du 17/11/2026).
+   *
+   * `requireEditable` lit le statut AVANT d'écrire : une modification lue
+   * « ouvert » pouvait s'écrire APRÈS que le paiement eut figé le panier. Le
+   * montant envoyé à Stripe ne correspondait plus aux lignes, le webhook
+   * refusait la commande — et le client était débité sans commande.
+   *
+   * Ici la ligne du panier est verrouillée par une écriture conditionnelle
+   * (`status = OPEN`) dans la même transaction que la modification : elle
+   * attend un paiement qui fige en même temps, puis refuse s'il est passé.
+   * L'autre moitié de la règle est dans `figerEtEngager`, qui compare.
+   */
+  private async modifierSiOuvert<T>(
+    cartId: string,
+    ecrire: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      const verrou = await tx.cart.updateMany({
+        where: { id: cartId, status: CartStatus.OPEN },
+        data: { updatedAt: new Date() },
+      });
+      if (verrou.count === 0) {
+        throw new BadRequestException(
+          'Ton paiement est en cours : le panier ne se modifie plus.',
+        );
+      }
+      return ecrire(tx);
+    });
   }
 
   /**

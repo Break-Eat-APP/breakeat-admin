@@ -406,6 +406,7 @@ describe('OrganizationsService', () => {
       });
       (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(null);
       (prisma.organizationMember.create as jest.Mock).mockResolvedValue({ id: 'member-1' });
+      (prisma.organizationInvitation.deleteMany as jest.Mock).mockResolvedValue({ count: 1 });
 
       await service.accepterInvitation(TARGET_ID, INVITATION_ID);
 
@@ -418,7 +419,29 @@ describe('OrganizationsService', () => {
       expect(cree).toEqual({
         userId: TARGET_ID, organizationId: ORG_ID, orgRole: OrgRole.OPERATOR, supplierId: 'buvette-1',
       });
-      expect(prisma.organizationInvitation.delete).toHaveBeenCalledWith({ where: { id: INVITATION_ID } });
+      // Consommée DANS la transaction, à condition de n'avoir ni changé ni expiré.
+      const conso = (prisma.organizationInvitation.deleteMany as jest.Mock).mock.calls[0][0].where;
+      expect(conso).toEqual(
+        expect.objectContaining({
+          id: INVITATION_ID, userId: TARGET_ID, orgRole: OrgRole.OPERATOR, supplierId: 'buvette-1',
+        }),
+      );
+      expect(conso.expiresAt.gt).toBeInstanceOf(Date);
+    });
+
+    it('réémise ou expirée PENDANT l’acceptation : rien n’est créé (audit Codex du 17/11)', async () => {
+      (prisma.organizationInvitation.findFirst as jest.Mock).mockResolvedValue({
+        id: INVITATION_ID, userId: TARGET_ID, organizationId: ORG_ID,
+        orgRole: OrgRole.OPERATOR, supplierId: null,
+        expiresAt: new Date(Date.now() + 60_000),
+      });
+      // Le club vient de la réémettre avec un autre rôle : la ligne a changé.
+      (prisma.organizationInvitation.deleteMany as jest.Mock).mockResolvedValue({ count: 0 });
+
+      await expect(service.accepterInvitation(TARGET_ID, INVITATION_ID)).rejects.toThrow(
+        ConflictException,
+      );
+      expect(prisma.organizationMember.create).not.toHaveBeenCalled();
     });
 
     it('l invitation d un autre compte reste introuvable', async () => {

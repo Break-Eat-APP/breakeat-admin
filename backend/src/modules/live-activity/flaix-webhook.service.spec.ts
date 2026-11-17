@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
-import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
 import { createHmac } from 'crypto';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
@@ -31,7 +31,7 @@ function makePayload(over: Partial<FlaixWebhookPayload> = {}): FlaixWebhookPaylo
 describe('FlaixWebhookService', () => {
   let service: FlaixWebhookService;
   let prisma: {
-    flaixWebhookEvent: { create: jest.Mock; update: jest.Mock };
+    flaixWebhookEvent: { create: jest.Mock; update: jest.Mock; updateMany: jest.Mock; findUnique: jest.Mock };
     order: { findUnique: jest.Mock };
     slot: { findUnique: jest.Mock };
     pickupPoint: { findUnique: jest.Mock };
@@ -40,7 +40,12 @@ describe('FlaixWebhookService', () => {
 
   beforeEach(async () => {
     prisma = {
-      flaixWebhookEvent: { create: jest.fn().mockResolvedValue({}), update: jest.fn().mockResolvedValue({}) },
+      flaixWebhookEvent: {
+        create: jest.fn().mockResolvedValue({}),
+        update: jest.fn().mockResolvedValue({}),
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+        findUnique: jest.fn().mockResolvedValue({ processedAt: new Date() }),
+      },
       // La commande porte son événement, son lieu et sa buvette : c'est contre
       // eux que les identifiants envoyés par Flaix sont vérifiés.
       order: {
@@ -160,6 +165,35 @@ describe('FlaixWebhookService', () => {
 
       expect(res.duplicate).toBe(true);
       // Le point critique : aucune seconde mise à jour de Live Activity.
+      expect(liveActivity.applyOperationalUpdate).not.toHaveBeenCalled();
+    });
+
+    const doublon = () =>
+      new Prisma.PrismaClientKnownRequestError('duplicate', { code: 'P2002', clientVersion: 'test' });
+
+    it('REPREND un événement reçu puis tombé en erreur (audit Codex du 17/11)', async () => {
+      prisma.flaixWebhookEvent.create.mockRejectedValueOnce(doublon());
+      // L'événement porte une erreur : cette livraison le reprend.
+      prisma.flaixWebhookEvent.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      const res = await service.handle(makePayload());
+
+      expect(res.duplicate).toBe(false);
+      expect(prisma.flaixWebhookEvent.updateMany).toHaveBeenCalledWith({
+        where: { eventId: 'evt-1', processedAt: null, error: { not: null } },
+        data: { error: null },
+      });
+      expect(liveActivity.applyOperationalUpdate).toHaveBeenCalledTimes(1);
+      expect(prisma.flaixWebhookEvent.update).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ processedAt: expect.any(Date) }) }),
+      );
+    });
+
+    it('un événement EN COURS ailleurs n’est pas déclaré traité : 409, Flaix réessaiera', async () => {
+      prisma.flaixWebhookEvent.create.mockRejectedValueOnce(doublon());
+      prisma.flaixWebhookEvent.findUnique.mockResolvedValueOnce({ processedAt: null });
+
+      await expect(service.handle(makePayload())).rejects.toBeInstanceOf(ConflictException);
       expect(liveActivity.applyOperationalUpdate).not.toHaveBeenCalled();
     });
 

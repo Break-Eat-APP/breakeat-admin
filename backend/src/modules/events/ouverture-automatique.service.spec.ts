@@ -14,6 +14,9 @@ describe('OuvertureAutomatiqueService', () => {
   const OUVERTURE = new Date('2026-11-21T07:00:00Z'); // 08:00 à Paris
 
   function service(prisma: Record<string, unknown>) {
+    // La transaction des doublures rejoue le rappel sur le même client : les
+    // écritures restent observables, et une erreur dans le rappel remonte.
+    prisma.$transaction = jest.fn(async (cb: (tx: unknown) => unknown) => cb(prisma));
     return new OuvertureAutomatiqueService(prisma as unknown as PrismaService);
   }
 
@@ -86,6 +89,31 @@ describe('OuvertureAutomatiqueService', () => {
       expect(filtre.endAt).toEqual({ gt: maintenant });
     });
 
+    it('événement et points de retrait basculent dans UNE transaction (audit Codex du 17/11)', async () => {
+      const prisma = prismaOuverture();
+
+      await service(prisma).ouvrir(new Date(OUVERTURE.getTime() + 60_000));
+
+      expect((prisma as unknown as { $transaction: jest.Mock }).$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('une panne sur un événement n’arrête pas les autres, et il reste à reprendre', async () => {
+      const autre = { ...evenement, id: 'match', name: 'Match' };
+      const prisma = prismaOuverture();
+      prisma.event.findMany.mockResolvedValue([evenement, autre]);
+      // La base coupe pendant l'ouverture des points de retrait du concert.
+      prisma.supplier.updateMany
+        .mockRejectedValueOnce(new Error('connexion perdue'))
+        .mockResolvedValueOnce({ count: 2 });
+
+      const n = await service(prisma).ouvrir(new Date(OUVERTURE.getTime() + 60_000));
+
+      // Le concert n'est PAS compté : sa transaction est annulée, il reste en
+      // brouillon pour la minute suivante. Le match, lui, est ouvert.
+      expect(n).toBe(1);
+      expect(prisma.event.updateMany).toHaveBeenCalledTimes(2);
+    });
+
     it('un événement qui commence AVANT l’heure d’ouverture ouvre à son début', async () => {
       const tot = { ...evenement, startAt: new Date('2026-11-21T06:00:00Z') }; // 07:00 à Paris
       const prisma = prismaOuverture();
@@ -125,6 +153,15 @@ describe('OuvertureAutomatiqueService', () => {
         where: { id: { in: ['nord', 'sud'] }, status: SupplierStatus.OPEN },
         data: { status: SupplierStatus.CLOSED },
       });
+    });
+
+    it('une panne pendant la fermeture des points de retrait : rien n’est compté, repris plus tard', async () => {
+      const prisma = prismaFermeture();
+      prisma.supplier.updateMany.mockRejectedValueOnce(new Error('connexion perdue'));
+
+      const n = await service(prisma).fermer(FIN);
+
+      expect(n).toBe(0);
     });
 
     it('un point de retrait qui sert encore un autre événement reste ouvert', async () => {

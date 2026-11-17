@@ -98,20 +98,26 @@ export class EventsService {
       throw new BadRequestException(FIN_AVANT_DEBUT);
     }
 
-    const event = await this.prisma.event.create({
-      data: {
-        organizationId,
-        venueId: dto.venueId,
-        name: dto.name,
-        startAt: new Date(dto.startAt),
-        endAt: new Date(dto.endAt),
-        activeFeatureFlags: (dto.activeFeatureFlags ?? {}) as object,
-      },
+    // L'ÉVÉNEMENT, SES POINTS DE RETRAIT ET SES COMPTOIRS NAISSENT ENSEMBLE
+    // (audit Codex du 17/11/2026). Écrits en deux temps, une erreur après la
+    // création laissait un événement incomplet en base, et le club, recevant
+    // une erreur, en créait un second en réessayant.
+    const { event, rattaches } = await this.prisma.$transaction(async (tx) => {
+      const event = await tx.event.create({
+        data: {
+          organizationId,
+          venueId: dto.venueId,
+          name: dto.name,
+          startAt: new Date(dto.startAt),
+          endAt: new Date(dto.endAt),
+          activeFeatureFlags: (dto.activeFeatureFlags ?? {}) as object,
+        },
+      });
+      // Tous les points de retrait du club, d'office (16/11/2026) : la
+      // désactivation, au besoin, se fait ensuite sur la fiche de l'événement.
+      const rattaches = await rattacherLesPointsDeRetrait(tx, event.id, organizationId);
+      return { event, rattaches };
     });
-
-    // Tous les points de retrait du club, d'office (16/11/2026) : la
-    // désactivation, au besoin, se fait ensuite sur la fiche de l'événement.
-    const rattaches = await rattacherLesPointsDeRetrait(this.prisma, event.id, organizationId);
     this.logger.log(
       `Event created: ${event.id} ("${event.name}") in org ${organizationId} — ${rattaches} point(s) de retrait rattaché(s)`,
     );

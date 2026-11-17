@@ -677,6 +677,25 @@ export class OrganizationsService {
     }
 
     const membre = await this.prisma.$transaction(async (tx) => {
+      // L'INVITATION EST CONSOMMÉE EN PREMIER, ET TELLE QU'ELLE A ÉTÉ LUE
+      // (audit Codex du 17/11/2026). Lue avant la transaction, elle pouvait
+      // expirer entre-temps, ou être réémise par le club avec un autre rôle :
+      // on aurait accepté l'ancienne et effacé la nouvelle. Ici, elle ne
+      // disparaît que si elle n'a pas bougé et n'a pas expiré ; sinon, rien.
+      const consommee = await tx.organizationInvitation.deleteMany({
+        where: {
+          id: invitation.id,
+          userId,
+          orgRole: invitation.orgRole,
+          supplierId: invitation.supplierId,
+          expiresAt: { equals: invitation.expiresAt, gt: new Date() },
+        },
+      });
+      if (consommee.count === 0) {
+        throw new ConflictException(
+          'Cette invitation vient de changer ou d’expirer. Rouvrez la page pour voir la nouvelle.',
+        );
+      }
       const deja = await tx.organizationMember.findUnique({
         where: { userId_organizationId: { userId, organizationId: invitation.organizationId } },
       });
@@ -690,7 +709,6 @@ export class OrganizationsService {
             supplierId: invitation.supplierId,
           },
         }));
-      await tx.organizationInvitation.delete({ where: { id: invitation.id } });
       return cree;
     });
     this.logger.log(`Invitation acceptée : user ${userId} → org ${invitation.organizationId}`);

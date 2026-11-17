@@ -90,6 +90,28 @@ describe('EventsService', () => {
   // ─── create ─────────────────────────────────────────────────
 
   describe('create', () => {
+    beforeEach(() => {
+      // L'événement et ses rattachements naissent dans UNE transaction (17/11).
+      (prisma.$transaction as jest.Mock).mockImplementation(async (cb: (tx: unknown) => unknown) =>
+        cb(prisma),
+      );
+    });
+
+    it('crée l’événement et ses rattachements dans une seule transaction (audit Codex du 17/11)', async () => {
+      (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
+      (prisma.venue.findFirst as jest.Mock).mockResolvedValue({ id: VENUE_ID });
+      (prisma.event.create as jest.Mock).mockResolvedValue(mockEvent());
+
+      await service.create(ORG_ID, USER_ID, {
+        venueId: VENUE_ID,
+        name: 'Test Event',
+        startAt: '2026-06-01T09:00:00Z',
+        endAt: '2026-06-01T18:00:00Z',
+      });
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
     it('creates an event when caller is ORG_ADMIN and venue belongs to org', async () => {
       (prisma.organizationMember.findUnique as jest.Mock).mockResolvedValue(mockMember());
       (prisma.venue.findFirst as jest.Mock).mockResolvedValue({ id: VENUE_ID });

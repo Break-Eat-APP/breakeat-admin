@@ -1,5 +1,11 @@
-import { EventStatus, PickupPointStatus, SupplierStatus } from '@prisma/client';
+import { EventStatus, PickupPointStatus, SupplierStatus, type Prisma } from '@prisma/client';
 import type { PrismaService } from '../../database/prisma.service';
+
+/**
+ * Le client ou la transaction en cours : l'événement, ses rattachements et ses
+ * comptoirs naissent ensemble (audit Codex du 17/11/2026).
+ */
+type Client = PrismaService | Prisma.TransactionClient;
 
 /**
  * LE RATTACHEMENT AUTOMATIQUE DES POINTS DE RETRAIT (règle de Rémi, 16/11/2026).
@@ -27,7 +33,7 @@ const ECARTES: SupplierStatus[] = [SupplierStatus.OFFLINE];
 
 /** Un événement qui naît reçoit tous les points de retrait du club. */
 export async function rattacherLesPointsDeRetrait(
-  prisma: PrismaService,
+  prisma: Client,
   eventId: string,
   organizationId: string,
 ): Promise<number> {
@@ -46,7 +52,7 @@ export async function rattacherLesPointsDeRetrait(
 
 /** Un point de retrait qui naît rejoint tous les événements à venir du club. */
 export async function rattacherAuxEvenements(
-  prisma: PrismaService,
+  prisma: Client,
   supplierId: string,
   organizationId: string,
   maintenant: Date = new Date(),
@@ -82,7 +88,7 @@ export async function rattacherAuxEvenements(
  * Rend le nombre de comptoirs créés.
  */
 export async function assurerLesComptoirs(
-  prisma: PrismaService,
+  prisma: Client,
   eventIds: string[],
   supplierIds: string[],
 ): Promise<number> {

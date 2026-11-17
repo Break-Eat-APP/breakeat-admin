@@ -1,4 +1,10 @@
-import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { Prisma } from '@prisma/client';
@@ -134,9 +140,18 @@ export class FlaixWebhookService {
   /**
    * Traite un événement Flaix.
    *
-   * Renvoie `{ duplicate: true }` si l'événement a déjà été reçu : Flaix peut
+   * Renvoie `{ duplicate: true }` si l'événement a déjà été TRAITÉ : Flaix peut
    * réémettre (retry, doublon réseau) et NE DOIT PAS provoquer une seconde
    * mise à jour. On répond quand même 200 pour que Flaix cesse de réessayer.
+   *
+   * UN ÉVÉNEMENT EN ÉCHEC SE REPREND (audit Codex du 17/11/2026). Reçu une
+   * première fois puis tombé en erreur (APNs indisponible…), il était ensuite
+   * pris pour un doublon : Flaix réémettait, on répondait « déjà traité », et
+   * la mise à jour — « ta commande est prête » compris — était perdue. Désormais :
+   *  - traité → doublon, 200 ;
+   *  - en échec → repris par UNE seule livraison (bascule conditionnelle qui
+   *    efface l'erreur), les autres attendent ;
+   *  - en cours ailleurs → 409 : Flaix réessaiera, sans qu'on lui dise « traité ».
    */
   async handle(payload: FlaixWebhookPayload): Promise<{ duplicate: boolean }> {
     // L'insertion joue le rôle de verrou : l'unicité de `eventId` fait échouer
@@ -151,11 +166,27 @@ export class FlaixWebhookService {
         },
       });
     } catch (err) {
-      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-        this.logger.log(`Événement Flaix ${payload.eventId} déjà traité — ignoré`);
-        return { duplicate: true };
+      if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) {
+        throw err;
       }
-      throw err;
+      const repris = await this.prisma.flaixWebhookEvent.updateMany({
+        where: { eventId: payload.eventId, processedAt: null, error: { not: null } },
+        data: { error: null },
+      });
+      if (repris.count === 0) {
+        const existant = await this.prisma.flaixWebhookEvent.findUnique({
+          where: { eventId: payload.eventId },
+          select: { processedAt: true },
+        });
+        if (existant?.processedAt) {
+          this.logger.log(`Événement Flaix ${payload.eventId} déjà traité — ignoré`);
+          return { duplicate: true };
+        }
+        throw new ConflictException(
+          `Événement Flaix ${payload.eventId} en cours de traitement — à réessayer`,
+        );
+      }
+      this.logger.warn(`Événement Flaix ${payload.eventId} : reprise après un échec`);
     }
 
     try {

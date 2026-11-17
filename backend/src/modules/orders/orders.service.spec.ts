@@ -1257,6 +1257,15 @@ describe('OrdersService', () => {
       expect(callArg.include).toEqual({ items: true });
     });
 
+    it('un poste épinglé : filtre sur SA buvette', async () => {
+      (prisma.order.findMany as jest.Mock).mockResolvedValue([]);
+
+      await service.findActiveByEvent(EVENT_ID, 'sup-nord');
+
+      const callArg = (prisma.order.findMany as jest.Mock).mock.calls[0][0];
+      expect(callArg.where.supplierId).toBe('sup-nord');
+    });
+
     it('orders results by createdAt asc (oldest first in queue)', async () => {
       (prisma.order.findMany as jest.Mock).mockResolvedValue([]);
 

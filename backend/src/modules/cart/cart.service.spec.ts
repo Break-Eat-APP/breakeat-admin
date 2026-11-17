@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -133,6 +134,9 @@ describe('CartService', () => {
               findUnique: jest.fn(),
               create: jest.fn(),
               update: jest.fn(),
+              // Le verrou des modifications et du gel (audit Codex du 17/11).
+              updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+              findUniqueOrThrow: jest.fn(),
             },
             cartItem: {
               findFirst: jest.fn(),
@@ -165,6 +169,8 @@ describe('CartService', () => {
             },
             // checkout freezes prices via $transaction([update, update, …])
             $transaction: jest.fn().mockResolvedValue([]),
+            // La retenue de stock (UPDATE conditionnel) : une ligne retenue.
+            $executeRaw: jest.fn().mockResolvedValue(1),
           },
         },
         {
@@ -202,6 +208,15 @@ describe('CartService', () => {
 
     service = module.get(CartService);
     prisma = module.get(PrismaService);
+    // Les transactions INTERACTIVES (verrou des modifications, gel du panier)
+    // rejouent leur rappel sur la même doublure ; la forme tableau rend [].
+    (prisma.$transaction as jest.Mock).mockImplementation(async (arg: unknown) =>
+      typeof arg === 'function' ? (arg as (tx: unknown) => unknown)(prisma) : [],
+    );
+    // Le gel relit le panier sous verrou : par défaut, le même que `findUnique`.
+    (prisma.cart.findUniqueOrThrow as jest.Mock).mockImplementation((args: unknown) =>
+      (prisma.cart.findUnique as jest.Mock)(args),
+    );
     groups = module.get(GroupsService);
   });
 
@@ -446,7 +461,7 @@ describe('CartService', () => {
       // transactionnel pour retirer puis reposer les lignes ensemble.
       const tx = {
         cartItem: { deleteMany: jest.fn(), upsert: jest.fn() },
-        cart: { update: jest.fn() },
+        cart: { update: jest.fn(), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
       };
       (prisma.$transaction as jest.Mock).mockImplementation(
         async (cb: (c: unknown) => unknown) => cb(tx),
@@ -559,6 +574,22 @@ describe('CartService', () => {
   });
 
   describe('addItem', () => {
+    it('REFUSE d’écrire si le paiement a figé le panier entre-temps (audit Codex du 17/11)', async () => {
+      (prisma.cart.findUnique as jest.Mock).mockResolvedValue({ ...mockCart(), items: [] });
+      (prisma.product.findUnique as jest.Mock).mockResolvedValue(mockProduct());
+      (prisma.stock.findFirst as jest.Mock).mockResolvedValue(mockStock(50));
+      (prisma.cartItem as unknown as { findUnique: jest.Mock }).findUnique = jest
+        .fn()
+        .mockResolvedValue(null);
+      // Lu « ouvert », mais le verrou ne trouve plus de panier ouvert.
+      (prisma.cart.updateMany as jest.Mock).mockResolvedValue({ count: 0 });
+
+      await expect(
+        service.addItem(CART_ID, USER_ID, { productId: PRODUCT_ID, quantity: 1 }),
+      ).rejects.toThrow('Ton paiement est en cours');
+      expect(prisma.cartItem.upsert).not.toHaveBeenCalled();
+    });
+
     it('rejects when caller does not own the cart', async () => {
       (prisma.cart.findUnique as jest.Mock).mockResolvedValue({
         ...mockCart(),
@@ -1046,12 +1077,36 @@ describe('CartService', () => {
 
       await service.checkout(CART_ID, USER_ID, 'native');
 
-      const ecritures = (prisma.$transaction as jest.Mock).mock.calls[0][0];
       expect(prisma.cart.update).toHaveBeenCalledWith({
         where: { id: CART_ID },
         data: { status: CartStatus.CHECKOUT_PENDING, paymentIntentId: 'pi_natif' },
       });
-      expect(ecritures.length).toBeGreaterThan(0);
+      expect(prisma.cartItem.update).toHaveBeenCalled();
+    });
+
+    it('REFUSE de figer un panier modifié pendant l’appel à Stripe (audit Codex du 17/11)', async () => {
+      setupValidCheckout();
+      // Relu sous verrou au moment de figer : une quantité a changé depuis
+      // le calcul du montant (double appui sur « Payer », second appareil).
+      (prisma.cart.findUniqueOrThrow as jest.Mock).mockResolvedValue({
+        ...mockCart(),
+        items: [{ id: ITEM_ID, productId: PRODUCT_ID, quantity: 5 }],
+      });
+
+      await expect(service.checkout(CART_ID, USER_ID, 'native')).rejects.toThrow(
+        ConflictException,
+      );
+      // Rien n'est figé : le panier n'est pas passé en attente de paiement…
+      expect(prisma.cart.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status: CartStatus.CHECKOUT_PENDING }),
+        }),
+      );
+      // …mais l'intention reste attachée, pour être reprise au bon montant.
+      expect(prisma.cart.update).toHaveBeenCalledWith({
+        where: { id: CART_ID },
+        data: { paymentIntentId: 'pi_natif' },
+      });
     });
 
     it('sans cle publiable, retombe sur la page hebergee plutot que d’echouer', async () => {
@@ -1144,7 +1199,6 @@ describe('CartService', () => {
         payment_intent: 'pi_test',
       });
       const txSpy = (prisma as unknown as { $transaction: jest.Mock }).$transaction;
-      txSpy.mockResolvedValueOnce([]);
 
       await service.checkout(CART_ID, USER_ID);
 
@@ -1161,14 +1215,11 @@ describe('CartService', () => {
        * sans distinguer aurait fait echouer ce test a chaque ajout de
        * retenue, pour une raison qui n'a rien a voir avec ce qu'il protege.
        */
-      const appelsGel = txSpy.mock.calls
-        .map((args, i) => ({ args, i }))
-        .filter(({ args }) => Array.isArray(args[0]));
-      expect(appelsGel).toHaveLength(1);
-
+      // Depuis le 17/11, le gel est lui aussi une transaction INTERACTIVE (il
+      // relit et compare le panier sous verrou) : c'est la DERNIÈRE, après Stripe.
+      const dernier = txSpy.mock.invocationCallOrder[txSpy.mock.invocationCallOrder.length - 1];
       const stripeOrder = stripe.createHostedCheckout.mock.invocationCallOrder[0];
-      const gelOrder = txSpy.mock.invocationCallOrder[appelsGel[0].i];
-      expect(stripeOrder).toBeLessThan(gelOrder);
+      expect(stripeOrder).toBeLessThan(dernier);
       expect(prisma.cartItem.update).toHaveBeenCalledWith(
         expect.objectContaining({ data: { priceSnapshotCents: 800 } }),
       );

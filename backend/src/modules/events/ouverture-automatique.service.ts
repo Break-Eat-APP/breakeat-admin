@@ -38,6 +38,14 @@ import { heureDOuverture } from '../../common/helpers/fenetre-commande';
  * Chaque bascule est CONDITIONNELLE (`updateMany` sur le statut attendu) :
  * plusieurs serveurs qui tournent la même minute ne font la transition qu'une
  * fois, et un club qui a changé le statut entre-temps n'est pas écrasé.
+ *
+ * L'ÉVÉNEMENT ET SES POINTS DE RETRAIT BASCULENT ENSEMBLE (audit Codex du
+ * 17/11/2026). Ils s'écrivaient en deux temps : une coupure de la base entre
+ * les deux laissait un événement « Actif » aux points de retrait fermés —
+ * affiché ouvert, impossible à commander — et la minute suivante ne le
+ * reprenait plus (il n'était plus en brouillon). Les deux écritures sont
+ * désormais dans UNE transaction : tout passe, ou rien, et la minute suivante
+ * recommence. Une erreur sur un événement n'arrête plus les autres.
  */
 @Injectable()
 export class OuvertureAutomatiqueService {
@@ -86,20 +94,30 @@ export class OuvertureAutomatiqueService {
       );
       if (maintenant.getTime() < ouverture.getTime()) continue;
 
-      const bascule = await this.prisma.event.updateMany({
-        where: { id: ev.id, status: EventStatus.DRAFT },
-        data: { status: EventStatus.ACTIVE },
-      });
-      if (bascule.count === 0) continue;
-      ouverts += 1;
-
-      const buvettes = await this.prisma.supplier.updateMany({
-        where: { id: { in: ev.eventSuppliers.map((s) => s.supplierId) }, status: SupplierStatus.CLOSED },
-        data: { status: SupplierStatus.OPEN },
-      });
-      this.logger.log(
-        `Ouverture automatique : « ${ev.name} » (${ev.id}) actif, ${buvettes.count} point(s) de retrait ouvert(s)`,
-      );
+      try {
+        const buvettes = await this.prisma.$transaction(async (tx) => {
+          const bascule = await tx.event.updateMany({
+            where: { id: ev.id, status: EventStatus.DRAFT },
+            data: { status: EventStatus.ACTIVE },
+          });
+          if (bascule.count === 0) return null; // déjà basculé, par un autre ou par le club
+          return tx.supplier.updateMany({
+            where: { id: { in: ev.eventSuppliers.map((s) => s.supplierId) }, status: SupplierStatus.CLOSED },
+            data: { status: SupplierStatus.OPEN },
+          });
+        });
+        if (!buvettes) continue;
+        ouverts += 1;
+        this.logger.log(
+          `Ouverture automatique : « ${ev.name} » (${ev.id}) actif, ${buvettes.count} point(s) de retrait ouvert(s)`,
+        );
+      } catch (e: unknown) {
+        // Rien n'a été écrit pour CET événement : il reste en brouillon et
+        // sera repris à la minute suivante. Les autres continuent.
+        this.logger.error(
+          `Ouverture automatique de « ${ev.name} » (${ev.id}) reportée : ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
     }
     return ouverts;
   }
@@ -118,39 +136,49 @@ export class OuvertureAutomatiqueService {
 
     let fermes = 0;
     for (const ev of finis) {
-      const bascule = await this.prisma.event.updateMany({
-        where: { id: ev.id, status: ev.status },
-        data: { status: EventStatus.ENDED },
-      });
-      if (bascule.count === 0) continue;
-      fermes += 1;
+      try {
+        const buvettes = await this.prisma.$transaction(async (tx) => {
+          const bascule = await tx.event.updateMany({
+            where: { id: ev.id, status: ev.status },
+            data: { status: EventStatus.ENDED },
+          });
+          if (bascule.count === 0) return null;
 
-      const ids = ev.eventSuppliers.map((s) => s.supplierId);
-      if (ids.length === 0) continue;
-      // Les points de retrait qui servent ENCORE autre chose restent ouverts :
-      // un autre événement en cours, ou le service continu d'un lieu.
-      const encoreUtiles = await this.prisma.eventSupplier.findMany({
-        where: {
-          supplierId: { in: ids },
-          eventId: { not: ev.id },
-          event: {
-            status: EventStatus.ACTIVE,
-            OR: [{ isPermanentContainer: true }, { endAt: { gt: maintenant } }],
-          },
-        },
-        select: { supplierId: true },
-      });
-      const garder = new Set(encoreUtiles.map((e) => e.supplierId));
-      const aFermer = ids.filter((id) => !garder.has(id));
-      const buvettes = aFermer.length
-        ? await this.prisma.supplier.updateMany({
-            where: { id: { in: aFermer }, status: SupplierStatus.OPEN },
-            data: { status: SupplierStatus.CLOSED },
-          })
-        : { count: 0 };
-      this.logger.log(
-        `Fermeture automatique : « ${ev.name} » (${ev.id}) terminé, ${buvettes.count} point(s) de retrait fermé(s)`,
-      );
+          const ids = ev.eventSuppliers.map((s) => s.supplierId);
+          if (ids.length === 0) return { count: 0 };
+          // Les points de retrait qui servent ENCORE autre chose restent ouverts :
+          // un autre événement en cours, ou le service continu d'un lieu.
+          const encoreUtiles = await tx.eventSupplier.findMany({
+            where: {
+              supplierId: { in: ids },
+              eventId: { not: ev.id },
+              event: {
+                status: EventStatus.ACTIVE,
+                OR: [{ isPermanentContainer: true }, { endAt: { gt: maintenant } }],
+              },
+            },
+            select: { supplierId: true },
+          });
+          const garder = new Set(encoreUtiles.map((e) => e.supplierId));
+          const aFermer = ids.filter((id) => !garder.has(id));
+          return aFermer.length
+            ? tx.supplier.updateMany({
+                where: { id: { in: aFermer }, status: SupplierStatus.OPEN },
+                data: { status: SupplierStatus.CLOSED },
+              })
+            : { count: 0 };
+        });
+        if (!buvettes) continue;
+        fermes += 1;
+        this.logger.log(
+          `Fermeture automatique : « ${ev.name} » (${ev.id}) terminé, ${buvettes.count} point(s) de retrait fermé(s)`,
+        );
+      } catch (e: unknown) {
+        // Rien n'a été écrit pour CET événement : repris à la minute suivante.
+        this.logger.error(
+          `Fermeture automatique de « ${ev.name} » (${ev.id}) reportée : ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
     }
     return fermes;
   }
