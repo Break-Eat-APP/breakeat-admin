@@ -41,8 +41,8 @@ _Dernière mise à jour : 2026-11-17 — lire d'abord « ÉTAT AU 17/11/2026 » 
 
 | | État | Comment le vérifier |
 |---|---|---|
-| **CI GitHub** | ✅ **verte** sur `main` jusqu'à `b430c58` (17/11, 6 jobs). Seul passage rouge de la semaine : `f569b60` (BUG-2026-026, corrigé au commit suivant) | `https://github.com/Break-Eat-APP/breakeat-admin/actions`, ou l'API `commits/<sha>/check-runs` (dépôt public) |
-| **Serveur (Railway)** | En ligne, sert **`b430c58`** (corrections du 17/11 comprises, vérifié par `/health` le 17/11 à 11 h 36) | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit` |
+| **CI GitHub** | ✅ **verte** sur `main` jusqu'à `2a0b199` (17/11, 6 jobs). Seul passage rouge de la semaine : `f569b60` (BUG-2026-026, corrigé au commit suivant) | `https://github.com/Break-Eat-APP/breakeat-admin/actions`, ou l'API `commits/<sha>/check-runs` (dépôt public) |
+| **Serveur (Railway)** | En ligne, sert **`2a0b199`** (corrections des audits Codex, 1.7.41, comprises ; CI verte, vérifié par `/health` le 17/11 à 13 h 05) | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit` |
 | **Paiement** | ⚠️ **Stripe en MODE TEST en production** (`sk_test_…`) : la carte 4242… passe, une vraie carte est refusée. Voulu jusqu'à la validation des stores (ADR-0012) | Stripe → bascule « mode test » ; Railway → variables |
 | **Consoles (Vercel)** | Admin, back-office et opérateur, publiés depuis `main` | « Déploiement des frontends » plus bas |
 | **iOS** | **Build 46 (1.1.3)** sur TestFlight, **envoyée à la vérification Apple le 17/11** (nouveaux visuels, notes : Dôme → Moto Cross X → « Au plus vite », carte de test). Mise à jour à distance 1.1.3 publiée le 16/11 (`1fbdf46`), puis le **17/11** sur `7b95f7c` (corrections 1.7.39). Les builds 1.1.2 et plus anciennes ne reçoivent plus les mises à jour à distance | App Store Connect |
