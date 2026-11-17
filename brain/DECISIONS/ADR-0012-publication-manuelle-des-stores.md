@@ -17,9 +17,8 @@ ligne d'elle-même serait visible du public avec un paiement qui ne marche pas.
 ## Décision
 1. **Apple** : publication **manuelle** de la version (App Store Connect →
    page de la version → « Publication de la version » → « Publier
-   manuellement cette version »). ⚠️ Réglage **à confirmer** par Rémi sur la
-   version 1.1.3 envoyée le 16/11 : s'il était resté sur « automatiquement »,
-   l'app sortirait dès la validation.
+   manuellement cette version »). Réglage **confirmé par Rémi le 17/11** sur la
+   version 1.1.3.
 2. **Google Play** : **publication gérée activée** (Vue d'ensemble de la
    publication). Ce que Google valide attend dans « Modifications prêtes à
    être publiées » ; c'est Rémi qui clique sur « Publier les modifications ».
