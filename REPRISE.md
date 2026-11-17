@@ -77,7 +77,9 @@ _Dernière mise à jour : 2026-11-17 — lire d'abord « ÉTAT AU 17/11/2026 » 
       17/11 (nom de marque) ; ✅ Moto Cross X vérifié par Rémi (actif, buvette
       ouverte, on va jusqu'au paiement) ; ✅ App Store Connect en **« Publier
       manuellement »** (confirmé par Rémi le 17/11).
-   c. Attendre les validations Apple et Google (1 à 7 jours). Répondre à un
+   c. ✅ **Apple a validé la 1.1.3 le 17/11** (10 h 18, statut « Pending
+      Developer Release » : elle attend le clic de Rémi). Google : en examen.
+      Attendre les validations Apple et Google (1 à 7 jours). Répondre à un
       refus avec les journaux et les captures, pas par hypothèse.
    d. **Passer Stripe en production** : Rémi pose sur Railway
       `STRIPE_SECRET_KEY` (`sk_live_…`), la clé publiable live et le secret du

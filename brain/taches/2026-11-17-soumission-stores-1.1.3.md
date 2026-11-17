@@ -24,7 +24,8 @@ rien publier tant que le paiement n'est pas en production.
 | Version 1.1.0 « À finaliser » renommée **1.1.3**, build 46 jointe | ✅ |
 | Captures : 6 visuels 1206 × 2622 (onglet « iPhone avec Dynamic Island, écran moyen ») | ✅ — les anciennes étaient héritées d'une autre taille ; les 1320 × 2868 y étaient refusées |
 | Nouveautés (FR et EN), notes pour le vérificateur (Dôme → Moto Cross X → Commander → Au plus vite, carte de test) | ✅ |
-| Envoi pour vérification | ✅ 17/11 |
+| Envoi pour vérification | ✅ 16/11 à 14 h 56 (heure du Pacifique) |
+| Vérification Apple | ✅ **validée le 17/11** — « Pending Developer Release » (attend le clic de Rémi) |
 | Publication **manuelle** | ✅ confirmée par Rémi le 17/11 (ADR-0012) |
 
 ## Android — Google Play
