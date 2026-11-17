@@ -5,6 +5,37 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.41] — 2026-11-17 — Corrections des audits Codex : paiements abandonnés libérés, panier figé tel que chiffré
+
+Deux audits Codex (`brain/audits/AUDIT_CHIRURGICAL_2026-11-17.md`,
+`AUDIT_COMPLET_CHIRURGICAL_2026-11-17.md`) ; chaque constat vérifié dans le
+code, réponse dans `brain/audits/REPONSE_AUDITS_CODEX_2026-11-17.md`.
+
+- **Paiements abandonnés (BUG-2026-030)** : un client qui fermait la feuille
+  de paiement laissait son panier « en attente » pour toujours, avec le stock
+  et la place du créneau retenus. Toutes les 5 min, un paiement en attente
+  depuis 30 min est vérifié chez Stripe : s'il peut encore aboutir, rien ;
+  sinon il est annulé, puis le panier rend points, place et stock.
+- **Panier figé = panier chiffré (BUG-2026-031)** : une modification arrivée
+  pendant l'appel à Stripe pouvait changer les lignes sans changer le
+  montant — le client était débité sans commande. Les modifications
+  s'écrivent sous verrou ; au gel, le panier est relu et comparé.
+- **Ouverture / fermeture automatiques atomiques (BUG-2026-033)**, **webhook
+  Flaix rejouable après un échec (BUG-2026-032)**, **création d'événement
+  atomique (BUG-2026-035)**, **invitation acceptée sous condition
+  (BUG-2026-036)**, **route `/orders/event/:id/active` limitée à la buvette
+  d'un poste épinglé (BUG-2026-034)**.
+- Assumés ou ouverts : Stripe en mode test jusqu'à la sortie (ADR-0012),
+  rattachement par club (ADR-0009), tableau opérateur sans pagination
+  (BUG-2026-037), capacité non mesurée.
+
+`+ backend/src/modules/cart/paiements-abandonnes.service.ts` (+ spec),
+`~ backend/src/modules/{cart/cart.service.ts,cart/cart.module.ts,events/ouverture-automatique.service.ts,events/events.service.ts,live-activity/flaix-webhook.service.ts,orders/orders.controller.ts,orders/orders.service.ts,organizations/organizations.service.ts}`,
+`~ backend/src/common/helpers/rattachement-buvettes.ts`, specs (+ 22 tests).
+Aucune migration, aucune mise à jour de l'app.
+
+---
+
 ## [1.7.40] — 2026-11-17 — Versions 1.1.3 soumises à Apple et Google ; documentation de gouvernance à jour
 
 - **App Store** : build 46 (1.1.3) jointe à la version, six nouveaux visuels,

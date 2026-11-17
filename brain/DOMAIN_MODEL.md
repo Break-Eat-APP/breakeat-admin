@@ -205,6 +205,13 @@ possible (ADR-0011). The app always sends the choice before paying or
 sharing the bill, `null` included, so an earlier slot is cleared and its
 place released. The slot cannot change once checkout has started.
 
+Every cart edit is written under a conditional lock (`status = OPEN`); at
+freeze time the cart is re-read and compared with what the amount was
+computed on (17/11/2026). A cart left in `CHECKOUT_PENDING` for **30 minutes**
+is checked with Stripe: if the payment can no longer succeed it is cancelled,
+the cart becomes `ABANDONED`, and its loyalty points, slot place and stock
+are released.
+
 ### Order
 
 Order is the critical business entity.

@@ -64,7 +64,8 @@ _Dernière mise à jour : 2026-11-17 — lire d'abord « ÉTAT AU 17/11/2026 » 
 | 16/11 | **Points de retrait rattachés d'office ; ouverture et fermeture automatiques ; un comptoir par défaut** ; plus de créneau passé proposé (ADR-0009) | 1.7.35, 1.7.36, `brain/taches/2026-11-16-ouverture-automatique-points-de-retrait.md` |
 | 16/11 | « **Au plus vite** » toujours proposé (ADR-0011) ; pastille de l'en-tête décollée | 1.7.37, 1.7.38 |
 | 17/11 | Relecture avant audit : « Au plus vite » efface l'ancien créneau, créneau passé refusé par le serveur, client tutoyé partout | 1.7.39 |
-| 17/11 | **1.1.3 soumise à Apple et Google**, publication manuelle (ADR-0012) | 1.7.40, `brain/taches/2026-11-17-soumission-stores-1.1.3.md` |
+| 17/11 | **1.1.3 soumise à Apple et Google**, publication manuelle (ADR-0012) ; **Apple l'a validée** (en attente du clic de Rémi) | 1.7.40, `brain/taches/2026-11-17-soumission-stores-1.1.3.md` |
+| 17/11 | **Deux audits Codex**, chaque constat vérifié : 7 corrections serveur (paiements abandonnés libérés, panier figé tel que chiffré, ouverture automatique et création d'événement atomiques, webhook Flaix rejouable, route opérateur épinglée, invitation sous condition) | 1.7.41, `brain/audits/REPONSE_AUDITS_CODEX_2026-11-17.md`, `brain/taches/2026-11-17-corrections-audits-codex.md` |
 
 ### Ce qui reste — dans l'ordre
 
@@ -533,6 +534,9 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Sortie 1.1.3 (iOS build 46, Android code 7)** | En examen chez Apple et Google depuis le 17/11, publication manuelle (ADR-0012) | ✅ « Burger King » supprimée, ✅ mise à jour à distance du 17/11 publiée ; reste : validations, puis Stripe en production, puis Rémi publie. Détail : « Ce qui reste », point 1 |
 | **Stripe en production** | ⚠️ Production en **mode test** | Clés live + webhook live sur Railway (Rémi), « Encaissement » refait en live par chaque club, Apple Pay live, un vrai paiement vérifié. AVANT toute publication sur les stores |
 | **Ouverture automatique (ADR-0009)** | En ligne depuis le 16/11 (`7ce410e`) | À observer sur un vrai événement d'un lieu BreakEat : journaux Railway « Ouverture automatique : … » à l'heure d'ouverture, « Fermeture automatique : … » à la fin |
+| **Capacité** (audit Codex du 17/11) | **Non certifiée** : aucun test au-delà de 500 utilisateurs / 20 tableaux. Les défauts de code relevés sont corrigés (1.7.41) | Pilote sur un lieu BreakEat, journaux sous les yeux ; puis banc de charge progressif sur une préproduction (BUG-2026-014). Tableau opérateur sans pagination (BUG-2026-037). **N'annoncer aucun chiffre de capacité au lancement** |
+| **Connexion par SMS** | Le téléphone est facultatif et **non vérifié** ; la connexion se fait par e-mail, Apple ou Google | Question produit pour Rémi : la connexion par SMS est-elle exigée ? (audit Codex, pas un défaut) |
+| **Interrupteurs de la console** | Seul « Partager l'addition » est réellement branché | Ne pas s'en servir comme coupe-circuit ; brancher module par module si besoin |
 | **Messages partagés personnel / client** | Le client est tutoyé dans l'app (1.7.39) ; certains messages du serveur servent aussi les consoles (compte archivé, code de réinitialisation, courriels) et restent vouvoyés | Trancher avec Rémi : un message par public, ou tutoiement partout |
 | **Audit — les 5 P1** | ✅ Corrigés le 30/09 (phase 53) et migrations passées sur la base cible le 01/10 | — |
 | **Audit — second passage (phase 55)** | ✅ Corrigés le 01/10 : l'envoi d'ardoise interrompu ne reste plus bloqué en SENDING (lien écrit dans la transaction + ronde de rattrapage qui rembourse), `charge.refunded` est enfin traité (le bandeau bleu de l'app pouvait s'afficher, rien n'écrivait jamais `REFUNDED`), et le contenant dormant disparaît aussi des LECTURES publiques | — |

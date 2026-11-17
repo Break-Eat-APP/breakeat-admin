@@ -97,6 +97,11 @@ buvette (`common/helpers/retrait-compatible.ts`). Le **comptoir de retrait**
 est obligatoire : chaque point de retrait rattaché à un événement en reçoit
 un par défaut, à son nom.
 
+**Le panier figé est celui qui a été chiffré** (17/11) : toute modification
+s'écrit sous verrou (`status = OPEN`), et au moment de figer, le panier est
+relu et comparé au contenu sur lequel le montant a été calculé. Un paiement
+**abandonné** rend ce qu'il retenait après 30 min (tâche planifiée, § 4.5).
+
 **Avant la commande, l'ouverture** (lieux sans Flaix, ADR-0009) : un
 événement en brouillon passe **Actif** à l'heure où la commande ouvre
 (`Venue.ordersOpenAt`), ses points de retrait fermés s'ouvrent ; à l'heure de
@@ -152,6 +157,7 @@ Chacune est **rattrapable** (une minute ratée se refait à la suivante) et
 | Purge des annonces temps réel anciennes | chaque jour à 4 h | `realtime/outbox.service.ts` |
 | Retrait des accès perdus : sort des salons temps réel les sockets d'un équipier écarté | chaque minute | `realtime/realtime.gateway.ts` |
 | « Partager l'addition » : envois interrompus remboursés, l'addition rouverte | toutes les 5 min | `order-splits/order-splits.service.ts` |
+| **Paiements abandonnés** : paniers en attente de paiement depuis 30 min — Stripe vérifié puis annulé, points / place / stock rendus (17/11) | toutes les 5 min | `cart/paiements-abandonnes.service.ts` |
 | Fidélité : points réservés par un panier expiré, rendus | toutes les 5 min | `loyalty/loyalty.service.ts` |
 
 Hors serveur, dans GitHub Actions : sauvegarde de nuit, essai de restauration
@@ -214,4 +220,8 @@ Les sécurités du serveur : [`brain/SECURITE.md`](SECURITE.md).
 - Flaix décide de ce qu'il pilote (créneaux, comptoir, « prête » sur ses
   commandes — [ADR-0002](DECISIONS/ADR-0002-operateur-flaix-dit-prete.md)).
 - Une fonctionnalité risquée passe derrière un interrupteur (`FeatureFlag`,
-  `app-settings`, `Venue.flaixEnabled`).
+  `app-settings`, `Venue.flaixEnabled`). ⚠️ **Au 17/11/2026, seul
+  `app.split.enabled` (partager l'addition) est réellement branché** ;
+  `Event.activeFeatureFlags` est stocké sans être lu, et une clé en base ne
+  coupe aucun module par elle-même (audit Codex). Ne pas compter sur l'écran
+  des interrupteurs comme coupe-circuit de production.

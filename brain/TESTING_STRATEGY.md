@@ -48,6 +48,15 @@ Required for:
 They run in CI on a real PostgreSQL after replaying every migration
 (`.github/workflows/ci.yml`, job « Tests d'integration (base reelle) »).
 
+## Capacity — not certified (Codex audit, 17/11/2026)
+
+No load test has been run beyond the first target below (500 users, 20
+dashboards). 10 000 concurrent users, 5 000 orders in an evening or 50 live
+venues are **not** demonstrated. Next: a pilot on one BreakEat venue, then a
+progressive load bench (500 → 2 000 → 5 000) on a pre-production copy
+(BUG-2026-014), measuring p95/p99, error rate, DB connections, Redis,
+socket delivery to dashboards and Stripe reconciliation.
+
 ## How tests are run on the development machine (17/11/2026)
 
 The workstation has little memory (6 GB, often < 800 MB free): run Jest file

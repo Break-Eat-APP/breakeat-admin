@@ -74,6 +74,11 @@ Recommended V1 flow:
 4. Stripe webhook confirms success;
 5. backend creates order transactionally;
 6. backend decrements stock and assigns slot (if any — no slot means « Au plus vite », ADR-0011);
+
+Before step 2, stock, slot place and loyalty points are HELD; the cart is
+frozen only if it still matches what was priced. If the customer abandons
+the payment, the hold is released after 30 minutes (once Stripe confirms the
+payment can no longer succeed, and after cancelling it) — 17/11/2026.
 7. backend commits;
 8. backend emits realtime `new_order`.
 

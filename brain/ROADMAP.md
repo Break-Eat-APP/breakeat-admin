@@ -565,6 +565,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.38 | 2026-11-16 | « Au plus vite » toujours proposé ; la pastille du lieu enfin décollée |
 | 1.7.39 | 2026-11-17 | « Au plus vite » efface l'ancien créneau ; créneau passé refusé par le serveur ; client tutoyé partout |
 | 1.7.40 | 2026-11-17 | Versions 1.1.3 soumises à Apple et Google ; documentation de gouvernance à jour |
+| 1.7.41 | 2026-11-17 | Corrections des audits Codex : paiements abandonnés libérés, panier figé tel que chiffré |
 
 ---
 

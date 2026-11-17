@@ -45,6 +45,7 @@
 | Isolation entre organisations | **Revue route par route le 16/11/2026** (~220 routes) : ressources relues avec l'organisation ou rattachées par leur parent. Deux défauts corrigés (BUG-2026-017, 018). Détail : `brain/taches/2026-11-16-test-croise-organisations.md` | services, `common/helpers/require-org-access.ts` |
 | Invitations | Un club n'ajoute plus un compte existant d'office : **invitation à accepter** (14 jours), aucun droit avant acceptation ; réinitialisation de mot de passe limitée aux comptes créés par le club (16/11/2026) | `modules/organizations/organizations.service.ts` |
 | Créneaux | Le **comptoir** ne rattache une commande qu'à un créneau du **même événement et de la même buvette** (BUG-2026-018) ; le **client** ne choisit qu'un créneau **ouvert et non terminé** (BUG-2026-020) | `common/helpers/retrait-compatible.ts`, `orders.service.ts`, `cart.service.ts` |
+| Poste épinglé à une buvette | Lecture (tableau ET `GET /orders/event/:id/active`, BUG-2026-034) et écriture limitées à SA buvette ; le serveur impose l'épinglage, quel que soit le paramètre envoyé | `orders/orders.controller.ts` |
 | Comptoirs de retrait | Le comptoir choisi doit être du même lieu, et de l'événement / de la buvette s'il y est rattaché | `common/helpers/retrait-compatible.ts` |
 | Traçabilité | Chaque transition de commande dans `OrderAuditTrail` | `modules/orders/orders.service.ts` |
 | Dépendances | Versions verrouillées (`pnpm-lock.yaml`), installation `--frozen-lockfile` en CI | `.github/workflows/ci.yml` |
