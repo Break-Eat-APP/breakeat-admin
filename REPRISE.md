@@ -73,8 +73,8 @@ _Dernière mise à jour : 2026-11-17 — lire d'abord « ÉTAT AU 17/11/2026 » 
       `b430c58`. ✅ Mise à jour à distance 1.1.3 publiée le 17/11 sur `7b95f7c`
       (run 44066757716, vert) : la build 46 reçoit la correction de « Au plus
       vite » au prochain lancement.
-   b. Avant l'examen : **renommer ou désactiver la buvette « Burger King »**
-      de Moto Cross X (nom de marque) ; garder Moto Cross X **actif** avec une
+   b. Avant l'examen : ✅ buvette « Burger King » **supprimée** par Rémi le
+      17/11 (nom de marque) ; garder Moto Cross X **actif** avec une
       buvette **ouverte** (jusqu'au 31/12) ; vérifier dans App Store Connect
       que la version est en **« Publier manuellement »**.
    c. Attendre les validations Apple et Google (1 à 7 jours). Répondre à un
@@ -528,7 +528,7 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Passerelle d'accès Flaix** | ⏸️ **Gelée le 10/11 par Rémi** — spécifiée seulement (cahier des charges Flaix, section D) | Feu vert de Rémi, choix D1 seul ou D1 puis D2, route et clé de test côté Flaix. Rien à coder d'ici là |
 | **Liens Flaix** | Saisis depuis la liste des événements (toute la saison d'un coup) **ou** depuis la fiche d'un match, même terminé (06/11) | Les coller à la main, un par match, tant que Flaix ne les pousse pas |
 | **Envoi EAS** | L'envoi automatique restait en file depuis les builds 19-21 | Toujours `eas submit --platform ios --profile beta --id <build>` à la main — c'est ainsi que la build 37 est partie le 06/11 |
-| **Sortie 1.1.3 (iOS build 46, Android code 7)** | En examen chez Apple et Google depuis le 17/11, publication manuelle (ADR-0012) | Renommer la buvette « Burger King » ; relancer la mise à jour à distance (1.7.39) ; puis Stripe en production ; puis Rémi publie. Détail : « Ce qui reste », point 1 |
+| **Sortie 1.1.3 (iOS build 46, Android code 7)** | En examen chez Apple et Google depuis le 17/11, publication manuelle (ADR-0012) | ✅ « Burger King » supprimée, ✅ mise à jour à distance du 17/11 publiée ; reste : validations, puis Stripe en production, puis Rémi publie. Détail : « Ce qui reste », point 1 |
 | **Stripe en production** | ⚠️ Production en **mode test** | Clés live + webhook live sur Railway (Rémi), « Encaissement » refait en live par chaque club, Apple Pay live, un vrai paiement vérifié. AVANT toute publication sur les stores |
 | **Ouverture automatique (ADR-0009)** | En ligne depuis le 16/11 (`7ce410e`) | À observer sur un vrai événement d'un lieu BreakEat : journaux Railway « Ouverture automatique : … » à l'heure d'ouverture, « Fermeture automatique : … » à la fin |
 | **Messages partagés personnel / client** | Le client est tutoyé dans l'app (1.7.39) ; certains messages du serveur servent aussi les consoles (compte archivé, code de réinitialisation, courriels) et restent vouvoyés | Trancher avec Rémi : un message par public, ou tutoiement partout |

@@ -69,8 +69,8 @@ interne proposé, Rémi est passé directement en production).
 ## Risques restants
 - **Stripe en mode test en production** : ne rien publier avant le passage
   en production (ADR-0012).
-- La buvette « Burger King » de Moto Cross X (nom de marque) : à renommer
-  avant l'examen.
+- ✅ La buvette « Burger King » de Moto Cross X (nom de marque) a été
+  supprimée par Rémi le 17/11.
 - L'URL de la politique de confidentialité (lien de suppression du compte
   déclaré à Google) n'a pas pu être vérifiée depuis le poste (réponse 404 à
   un robot) : à ouvrir à la main.
