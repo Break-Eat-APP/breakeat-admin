@@ -203,7 +203,7 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 > versions précédentes sont dans l'historique Git). Le détail de chaque
 > livraison est dans `CHANGELOG.md` (jusqu'à **1.7.45**) ; les règles dans
 > `CLAUDE.md` ; les décisions dans `brain/DECISIONS/` (**0001 à 0016**) ; les
-> bugs dans `brain/BUGS_ET_INCIDENTS.md` (**jusqu'à BUG-2026-043**,
+> bugs dans `brain/BUGS_ET_INCIDENTS.md` (**jusqu'à BUG-2026-048**,
 > incidents jusqu'à INC-2026-004) ; les comptes rendus
 > dans `brain/taches/` ; où vit le code dans
 > `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md` ; toutes les phases dans
