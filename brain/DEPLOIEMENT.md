@@ -9,7 +9,7 @@
 
 | | Existe ? | Où |
 |---|---|---|
-| Développement | Oui | Le poste de Rémi (Windows, 6 Go de RAM : voir `CLAUDE.md` § 7) ; `GUIDE_DEVELOPPEMENT/README.md` pour lancer |
+| Développement | Oui | Le poste de Rémi (Windows, 16 Go, `C:\dev\breakeat-admin` hors OneDrive, depuis le 21/11/2026 : voir `CLAUDE.md` § 7) ; `GUIDE_DEVELOPPEMENT/README.md` pour lancer |
 | **Préproduction** | **Non** (BUG-2026-014) | Procédure prête : `GUIDE_DEVELOPPEMENT/ENVIRONNEMENT_BETA.md` |
 | Production | Oui | Railway (API + PostgreSQL), Vercel (consoles web), App Store / TestFlight |
 
@@ -27,6 +27,13 @@ migration comme sûre.
 | **app Android** | À la main (EAS, `.aab`), puis dépôt dans la Play Console ; clé d'importation acceptée le 17/11 | Play Console → Vue d'ensemble de la publication |
 | **sortie sur les stores** | **Rémi, à la main**, après validation (App Store : publication manuelle ; Google Play : publication gérée) et **jamais avant le passage de Stripe en production** ([ADR-0012](DECISIONS/ADR-0012-publication-manuelle-des-stores.md)) | Fiche publique des stores |
 | **mise à jour à distance** | À la main, workflow GitHub | Run vert sur GitHub |
+
+**Branches (gouvernance § 15.3 ; décision de Rémi du 21/11/2026)** : pas de
+branche de travail. L'agent pousse **directement sur `main`**, ce qui met en
+production : tests, typage et lint lancés en local AVANT, CI verte et
+`/health` APRÈS. Une migration écrite à la main que `pnpm db:verifier`
+n'a pas rejouée passe par une pull request. Détail et limites : `CLAUDE.md`
+§ 6.
 
 **`railway.json` fait autorité** pour le démarrage du serveur :
 `pnpm db:generate && sh scripts/migrer.sh && node dist/main`. Les migrations

@@ -47,8 +47,16 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   sa place sur l'ancien disque** : à retrouver, sinon vérifier s'il est chez
 >   EAS (`npx eas-cli credentials`) ou créer une nouvelle clé (Google Cloud,
 >   même compte de service) et désactiver l'ancienne — **avant la prochaine
->   soumission Android**. `brain/livrables/stores/fiche-stores.md` est ignoré
+>   soumission Android**. Piste : Google Cloud télécharge la clé sous un
+>   autre nom (`<projet>-<12 caractères>.json`), souvent dans le dossier
+>   Téléchargements ; la chercher par son contenu (`"type": "service_account"`).
+>   Sans elle, `eas submit` ne peut rien envoyer à Google, mais rien ne casse :
+>   l'app en ligne n'en dépend pas, et un `.aab` se dépose aussi à la main
+>   dans la Play Console. `brain/livrables/stores/fiche-stores.md` est ignoré
 >   par Git depuis `c967dbd` : il ne doit jamais être publié.
+> - **Remise en état sur le nouveau poste (21/11)** : ce qui a été refait, ce
+>   qui a été vérifié et la liste à rejouer sur un prochain poste sont dans
+>   `brain/taches/2026-11-21-remise-en-etat-nouveau-poste.md`.
 > - **Apple a validé la 1.1.3** ; Google à vérifier. **Ne pas publier avant
 >   Stripe en production** (ADR-0012).
 > - **On attend le développeur Flaix** pour E1 (les commandes Flaix qui
@@ -254,13 +262,14 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
    Règles : une clé par sens, limitée aux lieux autorisés ; des NOMBRES
    seulement vers Flaix (aucune liste de clients sans contrat de traitement
    des données) ; une panne d'un côté n'arrête jamais l'autre.
-6. **Courriels (Brevo)** — à faire par Rémi : compte Brevo, DNS de
+6. **Courriels (Brevo)** — ⏸️ **reporté, gardé ici** (Rémi, 21/11) — à faire par Rémi : compte Brevo, DNS de
    `breakeatapp.com`, `MAIL_PROVIDER=brevo` / `MAIL_API_KEY` / `MAIL_FROM`
    sur Railway. Puis vérifier `/auth/password-reset/available` = `true`, et
    ajouter Brevo à la politique de confidentialité §5 (`documents-legaux/`).
-7. **Données de production** — à faire par Rémi dans l'admin : renommer
-   l'événement « test » ; deux matchs du Vélodrome ont nom et adversaire
-   inversés ; l'Aréna et les Spartiates n'ont aucun match programmé.
+7. ✅ **Données de production — faites par Rémi le 21/11** (déclaré par
+   Rémi, pas relu en base) : l'événement « test » renommé, nom et adversaire
+   des deux matchs du Vélodrome remis dans l'ordre, des matchs programmés pour
+   l'Aréna et les Spartiates.
 8. **Revue Apple** — compte de revue au nom de Rémi (identifiants dans
    App Store Connect et la Play Console, **jamais** dans le dépôt). Notes : Flaix est un
    logiciel de **la même société** ; l'app vend des **biens physiques**
@@ -1747,6 +1756,11 @@ corepack pnpm --filter @break-eat/backoffice dev       # port 3003
 ```
 
 Docker (Postgres/Redis) doit tourner. Base = `breakeat_dev`.
+
+**Sur un poste neuf** : après `pnpm install`, lancer `pnpm db:generate` dans
+`backend/`. Sinon le client Prisma n'existe pas et 60 suites de tests sur 81
+ne compilent pas (constaté le 21/11). La liste complète d'une remise en état :
+`brain/taches/2026-11-21-remise-en-etat-nouveau-poste.md`.
 
 **Tester sur téléphone** : `eas build --profile preview --platform android` (APK, vise la production). Expo Go ne peut PAS ouvrir l'app — `react-native-vision-camera` est un module natif ; il faut un client de développement (`--profile development`).
 

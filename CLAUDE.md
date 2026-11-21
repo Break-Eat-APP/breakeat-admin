@@ -199,7 +199,10 @@ Vercel) et la CI ne vérifie **qu'après** ; donc, à chaque fois :
   à `-i` et `NODE_OPTIONS=--max-old-space-size=1000`. Le projet est cloné dans
   `C:\dev\breakeat-admin`, **hors de OneDrive** (OneDrive abîme le dossier
   `.git`).
-- `pnpm` n'est pas dans le PATH Windows : `corepack pnpm …`.
+- `pnpm` : sur le nouveau poste, `pnpm` 11.3.0 (la version de
+  `packageManager`) est dans le PATH ; `corepack pnpm …` marche aussi. Docker
+  Desktop y tourne : `pnpm db:verifier` est possible en local. `gh` n'y est
+  pas installé (21/11/2026).
 
 ---
 

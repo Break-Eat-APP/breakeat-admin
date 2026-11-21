@@ -57,12 +57,13 @@ progressive load bench (500 → 2 000 → 5 000) on a pre-production copy
 (BUG-2026-014), measuring p95/p99, error rate, DB connections, Redis,
 socket delivery to dashboards and Stripe reconciliation.
 
-## How tests are run on the development machine (17/11/2026)
+## How tests are run on the development machine (21/11/2026)
 
-The workstation has little memory (6 GB, often < 800 MB free): run Jest file
-by file, `-i`, with `NODE_OPTIONS=--max-old-space-size=1000`; type-check the
-server with `node node_modules/typescript/bin/tsc --noEmit` (heap 1300 MB).
-The full suites, the mobile type-check and the integration tests run in CI —
+Since 21/11/2026 the workstation has 16 GB: the full Jest suites can run
+locally. If memory runs short anyway, fall back to the old routine (Jest file
+by file, `-i`, `NODE_OPTIONS=--max-old-space-size=1000`; server type-check with
+`node node_modules/typescript/bin/tsc --noEmit`). Docker runs there, so
+`pnpm db:verifier` works locally. The full suites, the mobile type-check and the integration tests run in CI —
 **read the CI before saying anything is green** (`CLAUDE.md` § 2, rule 8).
 
 ## Realtime Tests
