@@ -139,7 +139,7 @@ commande** (BreakEat, `Venue.ordersOpenAt`, par lieu), les créneaux de retrait
 | **backend** | Railway, automatique sur `main` (`watchPatterns: /backend/**`) | `curl -s https://breakeat-admin-production.up.railway.app/health` → le champ `commit` doit égaler `origin/main` |
 | admin, back-office, operator, mobile web | Intégration Git de Vercel, automatique | Panneau Deployments de Vercel |
 | **app iOS / Android** (natif) | EAS : `npx eas-cli build --platform ios --profile beta`, puis `npx eas-cli submit --platform ios --profile beta --id <build>` | TestFlight |
-| **mise à jour à distance** (JavaScript de l'app) | Workflow GitHub « Mise a jour a distance » (lancé à la main ; le poste n'a pas la mémoire pour `eas update`) | Run vert sur GitHub |
+| **mise à jour à distance** (JavaScript de l'app) | Workflow GitHub « Mise a jour a distance » (lancé à la main) : **la voie normale**, même si le nouveau poste (16 Go, 21/11/2026) peut lancer `eas update` | Run vert sur GitHub |
 
 **Règle de version (`runtimeVersion` = version de l'app) :** tout changement
 **natif** (icône, permission, module natif, Live Activity, config Expo) →
