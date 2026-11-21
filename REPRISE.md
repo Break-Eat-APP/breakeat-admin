@@ -55,26 +55,28 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >      effacer l'ancien disque** tant que ce n'est pas fait.
 > - **Nouveau poste — fichiers hors Git (21/11)** : `backend\.env` et
 >   `apps\mobile\.env` recopiés de l'ancien disque vers `C:\dev\breakeat-admin`
->   (pas de `.env` à la racine : il n'existait pas). ⚠️ **Le compte de service
->   Google Play (`apps/mobile/google-play-service-account.json`) n'était PAS à
->   sa place sur l'ancien disque** : à retrouver, sinon vérifier s'il est chez
->   EAS (`npx eas-cli credentials`) ou créer une nouvelle clé (Google Cloud,
->   même compte de service) et désactiver l'ancienne — **avant la prochaine
->   soumission Android**. Piste : Google Cloud télécharge la clé sous un
->   autre nom (`<projet>-<12 caractères>.json`), souvent dans le dossier
->   Téléchargements ; la chercher par son contenu (`"type": "service_account"`).
->   **Cherchée le 21/11 sur tout `D:\Users` (l'ancien disque), par son
->   contenu : absente.** Deux autres clés de compte de service y traînent dans
->   Téléchargements, sans rapport avec Google Play : `firebase-adminsdk`
->   (projet `break-eat-app-spe-2d709`, cité nulle part dans le dépôt) et
+>   (pas de `.env` à la racine : il n'existait pas).
+>   ✅ **Le compte de service Google Play — RÉGLÉ le 21/11 : il n'a jamais
+>   existé.** La Play Console (Utilisateurs et autorisations, capture de Rémi
+>   du 21/11) ne compte que deux utilisateurs, et aucune adresse
+>   `…iam.gserviceaccount.com`. Rien non plus sur l'ancien disque (recherche
+>   par contenu dans tout `D:\Users`). **Les builds Android se déposent donc
+>   À LA MAIN** : télécharger l'`.aab` depuis EAS, puis Play Console →
+>   Tester et publier → la piste → Créer une version → importer l'`.aab`.
+>   `eas submit --platform android` échouera tant que la clé n'existe pas
+>   (`eas.json` la cite quand même). La créer plus tard reste possible
+>   (Google Cloud → compte de service → clé JSON, puis l'inviter dans la Play
+>   Console) : ce n'est pas nécessaire.
+>   Sur l'ancien disque, dans Téléchargements, deux autres clés de compte de
+>   service sans rapport avec Google Play : `firebase-adminsdk` (projet
+>   `break-eat-app-spe-2d709`, cité nulle part dans le dépôt) et
 >   `flaix-wallet` (projet `rapid-access-494820-f8`, côté Flaix). Ne pas les
->   recopier ; une clé inutile se supprime dans Google Cloud. Le dépôt
->   Android du 17/11 a pu se faire à la main : regarder dans la Play Console
->   (Utilisateurs et autorisations) si une adresse `…iam.gserviceaccount.com`
->   existe. Sinon, cette clé n'a jamais existé.
->   Sans elle, `eas submit` ne peut rien envoyer à Google, mais rien ne casse :
->   l'app en ligne n'en dépend pas, et un `.aab` se dépose aussi à la main
->   dans la Play Console. `brain/livrables/stores/fiche-stores.md` est ignoré
+>   recopier ; une clé inutile se supprime dans Google Cloud.
+>   ⚠️ **À trancher par Rémi** : le compte de l'éditeur précédent (Synertic,
+>   adresse `syn_android@…`) a **toujours accès à la Play Console**, actif et
+>   sans limite de durée. S'il n'a plus de raison d'y être, le retirer :
+>   Utilisateurs et autorisations → la flèche de sa ligne → supprimer
+>   l'accès. `brain/livrables/stores/fiche-stores.md` est ignoré
 >   par Git depuis `c967dbd` : il ne doit jamais être publié.
 > - **Remise en état sur le nouveau poste (21/11)** : ce qui a été refait, ce
 >   qui a été vérifié et la liste à rejouer sur un prochain poste sont dans
@@ -307,8 +309,8 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
    (EAS, créée le 21/08/2026), **acceptée par Google le 17/11** ; canaux
    `beta` → test interne, `production` → production en brouillon ; Firebase
    `com.shapper.breakeat` (projet `482274786646`, `GOOGLE_SERVICES_JSON` en
-   variable EAS) ; compte de service Play dans
-   `apps/mobile/google-play-service-account.json`, ignoré par git.
+   variable EAS) ; **pas de compte de service Play** (vérifié le 21/11) :
+   l'`.aab` se dépose à la main dans la Play Console.
 10. **Favoris entre appareils** — le téléphone reste l'original. Depuis la
     1.7.42, le serveur en reçoit une copie (client connecté, après la mise à
     jour de l'app), mais il ne la renvoie pas : un autre appareil ne les

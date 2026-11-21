@@ -70,7 +70,7 @@ mémoire orale. Un changement de poste est une passation.
 | Docker | Desktop installé, serveur joignable (29.9.3) |
 | `gh` | **absent** : lire la CI par l'API publique ou dans le navigateur |
 | `backend\.env`, `apps\mobile\.env` | présents |
-| `apps\mobile\google-play-service-account.json` | **absent** |
+| `apps\mobile\google-play-service-account.json` | **absent, et n'a jamais existé** (Play Console vérifiée par Rémi) |
 | `node_modules` | présent |
 | `git pull` | à jour, arbre propre |
 
@@ -94,9 +94,11 @@ ici).
 
 ## Risques restants
 
-1. **Compte de service Google Play introuvable** : sans lui, `eas submit`
-   ne peut pas envoyer une build Android à la Play Console. À régler avant la
-   prochaine soumission Android (procédure dans `REPRISE.md`).
+1. **Compte de service Google Play** — réglé le 21/11 : **il n'a jamais
+   existé** (aucun dans la Play Console, aucun sur l'ancien disque). Les
+   builds Android se déposent à la main ; `eas submit --platform android`
+   échouera tant qu'on ne le crée pas. Au passage : l'éditeur précédent
+   (Synertic) a toujours accès à la Play Console, à trancher par Rémi.
 2. **L'ancien disque, comparé à `main` le 21/11** : aucun commit non poussé.
    En revanche, une revérification Codex du 17/11 (recopiée dans
    `brain/audits/`) et un **début de correction de paiement jamais commité**
@@ -122,8 +124,9 @@ d'avoir réglé le point 2 ci-dessus.
    60 suites de tests sur 81 ne compilent pas (constaté le 21/11).
 3. Recopier les fichiers hors Git, **par clé USB ou disque, jamais par une
    conversation ni par Git** : `backend\.env`, `apps\mobile\.env`,
-   `apps\mobile\google-play-service-account.json`,
-   `brain\livrables\stores\fiche-stores.md`.
+   `brain\livrables\stores\fiche-stores.md`, et
+   `apps\mobile\google-play-service-account.json` si on l'a créé entre-temps
+   (il n'existait pas au 21/11).
 4. Recopier la mémoire de l'agent
    (`%USERPROFILE%\.claude\projects\C--dev-breakeat-admin\memory\`). Le
    nom du dossier suit le chemin du clone : un autre chemin donne un autre
