@@ -72,16 +72,14 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   Sur l'ancien disque, dans Téléchargements, deux autres clés de compte de
 >   service sans rapport avec Google Play :
 >   - `firebase-adminsdk-fbsvc@break-eat-app-spe-2d709` : une clé
->     d'administration Firebase. C'est **le type de clé qu'Expo demande pour
->     les notifications Android** (FCM V1, rangée dans EAS → Credentials →
->     Android). Le serveur envoie les notifications par Expo
->     (`expo-push.service.ts`), pas avec cette clé. **NE PAS la supprimer
->     dans Google Cloud** avant d'avoir vérifié sur expo.dev (projet →
->     Credentials → Android → `com.shapper.breakeat` → FCM V1) quel compte
->     de service EAS utilise : si c'est celui-ci, la supprimer couperait les
->     notifications Android (« Ta commande est prête »). Le poste n'en a pas
->     besoin au quotidien : ne pas la recopier, la garder en lieu sûr (pas
->     dans le dépôt).
+>     d'administration Firebase du projet **`break-eat-app-spe-2d709`
+>     (n° 1090499367641)**. Ce projet est celui d'une **ancienne app Android
+>     `com.breakeat.app`** (son `google-services.json` est aussi dans
+>     Téléchargements). **Ce n'est PAS le projet de l'app publiée
+>     `com.shapper.breakeat`** (projet n° `482274786646`, celui des
+>     identifiants Google de `eas.json`). **Ne pas l'importer dans Expo pour
+>     FCM V1** : les notifications seraient refusées. Vérifié le 21/11 :
+>     Expo n'utilise aucune clé FCM V1 (BUG-2026-042).
 >   - `flaix-wallet@rapid-access-494820-f8` : une clé Google (vraisemblablement
 >     Google Wallet) côté **Flaix**. BreakEat ne s'en sert pas. C'est au
 >     développeur Flaix de dire s'il l'utilise ; ne pas la recopier.
