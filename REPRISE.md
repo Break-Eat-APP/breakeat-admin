@@ -51,8 +51,10 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >      renvoie un conflit) et `paiements-abandonnes.service.ts` (bascule,
 >      place, stock et marques dans une transaction). Les fichiers de `main`
 >      n'ont pas bougé depuis `6f601c6` : le correctif s'applique tel quel.
->      **À reprendre avant Stripe en production**, avec ses tests. **Ne pas
->      effacer l'ancien disque** tant que ce n'est pas fait.
+>      **⏸️ EN ATTENTE (Rémi, 21/11) : le paiement passera par Flaix.** Cette
+>      correction ne vaut que pour le paiement BreakEat (Stripe) ; elle redevient
+>      nécessaire si Stripe repasse un jour en production. **Ne pas effacer
+>      l'ancien disque** tant qu'elle n'est ni reprise ni abandonnée.
 > - **Nouveau poste — fichiers hors Git (21/11)** : `backend\.env` et
 >   `apps\mobile\.env` recopiés de l'ancien disque vers `C:\dev\breakeat-admin`
 >   (pas de `.env` à la racine : il n'existait pas).
@@ -175,7 +177,17 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
       Developer Release » : elle attend le clic de Rémi). Google : en examen.
       Attendre les validations Apple et Google (1 à 7 jours). Répondre à un
       refus avec les journaux et les captures, pas par hypothèse.
-   d. **Passer Stripe en production** : Rémi pose sur Railway
+   d. ⏸️ **EN ATTENTE — décision de Rémi du 21/11 : « paiement en stand-by,
+      ça sera via Flaix ».** Stripe reste en mode test ; le paiement passera
+      par Flaix. ⚠️ **Question ouverte pour Rémi** : ADR-0012 interdit de
+      publier sur les stores AVANT Stripe en production, pour qu'aucun client
+      ne tombe sur un paiement qui refuse les vraies cartes. Les lieux Flaix
+      encaissent déjà pour de vrai, mais un lieu BreakEat sans Flaix (Moto
+      Cross X, celui des notes de revue) resterait en paiement de test.
+      Publier quand même (en fermant ces lieux au public), ou attendre ? À
+      trancher, puis mettre ADR-0012 à jour. La suite décrit le passage, s'il
+      revient :
+      **Passer Stripe en production** : Rémi pose sur Railway
       `STRIPE_SECRET_KEY` (`sk_live_…`), la clé publiable live et le secret du
       **webhook live** (`whsec_…`, nouveau point d'arrivée en mode live) —
       jamais dans une conversation ; chaque club refait son **« Encaissement »**

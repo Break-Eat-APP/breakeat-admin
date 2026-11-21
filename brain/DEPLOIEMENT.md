@@ -24,7 +24,7 @@ migration comme sûre.
 | **backend** | Railway, automatique à chaque envoi sur `main` qui touche `backend/**` (ou `railway.json`, `nixpacks.toml`, `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`) | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit` = `git log -1 --format=%h origin/main` |
 | admin, back-office, operator, mobile web | Intégration Git de Vercel, automatique | Panneau Deployments de Vercel |
 | **app iOS** | À la main (EAS), voir plus bas | TestFlight |
-| **app Android** | À la main (EAS, `.aab`), puis dépôt dans la Play Console ; clé d'importation acceptée le 17/11 | Play Console → Vue d'ensemble de la publication |
+| **app Android** | EAS construit l'`.aab` (`npx eas-cli build --platform android --profile beta`), puis **Rémi le dépose à la main** dans la Play Console. `eas submit` n'est pas utilisé pour Android : il n'existe pas de compte de service Google Play (vérifié le 21/11). Clé d'importation acceptée le 17/11 | Play Console → Vue d'ensemble de la publication |
 | **sortie sur les stores** | **Rémi, à la main**, après validation (App Store : publication manuelle ; Google Play : publication gérée) et **jamais avant le passage de Stripe en production** ([ADR-0012](DECISIONS/ADR-0012-publication-manuelle-des-stores.md)) | Fiche publique des stores |
 | **mise à jour à distance** | À la main, workflow GitHub | Run vert sur GitHub |
 
