@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { FlaixService } from './flaix.service';
 import { FlaixController } from './flaix.controller';
+import { CommandesClientFlaixService } from './commandes-client-flaix.service';
 
 /**
  * FlaixModule — the integration boundary between BREAK EAT and the Flaix AI engine.
@@ -19,7 +20,7 @@ import { FlaixController } from './flaix.controller';
 @Module({
   imports: [ConfigModule],
   controllers: [FlaixController],
-  providers: [FlaixService],
+  providers: [FlaixService, CommandesClientFlaixService],
   exports: [FlaixService],
 })
 export class FlaixModule {}

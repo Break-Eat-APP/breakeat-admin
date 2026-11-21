@@ -137,7 +137,19 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   avec l'e-mail d'un compte non vérifié laisserait n'importe qui lire les
 >   commandes d'un autre en créant un compte à son adresse. À régler avant
 >   de brancher (comptes Apple/Google seulement, ou vérification par
->   courriel, ou l'étiquette `[#breakeatId]`).
+>   courriel, ou l'étiquette `[#breakeatId]`). **Rémi, 21/11 : risque
+>   accepté pour les essais du match du 22/11** — à régler avant d'ouvrir
+>   au public.
+>   **1.7.44 (21/11) : BRANCHÉ.** « Mes commandes » montre les commandes Flaix
+>   du client (`GET /api/v1/flaix/mes-commandes`, voir CHANGELOG). Pour que
+>   ça marche : (1) Rémi pose sur Railway `FLAIX_COMMANDES_URL` (l'origine
+>   seule, `https://commande.flaix.bo.synertic.net`) et
+>   `FLAIX_COMMANDES_API_KEY` ; (2) **mise à jour à distance** de l'app (accord
+>   de Rémi), qui active AUSSI l'envoi des favoris (1.7.42, confidentialité
+>   des favoris pas encore revue). Aucune build : la 1.1.3 la reçoit (Android
+>   publié, iOS build 46). Pas de « prête » en notification ni de Live
+>   Activity : il faut le webhook E1. Le client doit avoir dans BreakEat la
+>   MÊME adresse e-mail que celle donnée à Flaix.
 > - **Étape 1 du plan Flaix (1.7.42) : SERVEUR EN LIGNE, APP PAS ENCORE.**
 >   Favoris copiés au serveur, campagnes vers « a commandé OU suit le lieu »
 >   (ADR-0013). PR [#5](https://github.com/Break-Eat-APP/breakeat-admin/pull/5)

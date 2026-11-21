@@ -179,6 +179,14 @@ export default registerAs('app', () => ({
      * jamais être accepté « par défaut » faute de configuration.
      */
     webhookSecret: process.env.FLAIX_WEBHOOK_SECRET ?? '',
+    /**
+     * Lecture des commandes Flaix d'un client, par son e-mail (21/11/2026).
+     * `commandesUrl` = l'origine de l'API Flaix (ex. `https://commande.…`),
+     * sans chemin. Les deux vides = fonction éteinte : « Mes commandes »
+     * n'affiche que les commandes BreakEat.
+     */
+    commandesUrl: process.env.FLAIX_COMMANDES_URL ?? '',
+    commandesApiKey: process.env.FLAIX_COMMANDES_API_KEY ?? '',
   },
 
   /**

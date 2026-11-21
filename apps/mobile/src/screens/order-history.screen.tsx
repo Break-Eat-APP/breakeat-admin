@@ -23,11 +23,14 @@ import {
   numeroDeCommandeNu,
   apiLienRecu,
   apiGetMyOrders,
+  apiGetMesCommandesFlaix,
   apiMarkArrived,
   formatPrice,
   formatTime,
+  type CommandeFlaix,
   type Order,
 } from '@lib/api/mobile-api';
+import { CarteCommandeFlaix } from '@components/carte-commande-flaix';
 import { NoterCommande } from '@components/noter-commande';
 import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
@@ -179,6 +182,14 @@ const STEPS: Phase[] = ['received', 'preparing', 'ready'];
  */
 const estRecuperee = (status: string): boolean => status === 'PICKED_UP' || status === 'COMPLETED';
 
+/**
+ * UNE LIGNE DE LA LISTE : une commande BreakEat, ou une commande passée dans
+ * Flaix et lue chez lui (21/11/2026). Seule la seconde porte `etatLibelle`.
+ */
+type Entree = Order | CommandeFlaix;
+const estFlaix = (e: Entree): e is CommandeFlaix => 'etatLibelle' in e;
+const ETATS_FLAIX_RECUPERES = new Set(['collected', 'picked_up', 'delivered', 'done', 'completed', 'served']);
+
 export function OrderHistoryScreen() {
   // Espace sous le contenu : la barre flottante ne doit rien recouvrir.
   // Calcule a l'execution car il depend de la zone sure de l'appareil.
@@ -187,6 +198,9 @@ export function OrderHistoryScreen() {
   const { token } = useAuthStore();
 
   const [orders, setOrders] = useState<Order[]>([]);
+  /** Les commandes passées dans Flaix : lues à part, une panne Flaix ne vide
+   *  jamais les commandes BreakEat. */
+  const [flaix, setFlaix] = useState<CommandeFlaix[]>([]);
   // Commande dont on regarde le plan — porte le plan ET le nom de la buvette,
   // pour que le titre dise devant laquelle se presenter.
   const [planAffiche, setPlanAffiche] = useState<Order | null>(null);
@@ -218,6 +232,12 @@ export function OrderHistoryScreen() {
       return;
     }
     setError(null);
+    // En parallèle, et sans jamais faire échouer l'écran : le serveur rend
+    // déjà une liste vide quand Flaix ne répond pas ; ceci couvre une
+    // version du serveur qui n'aurait pas encore la route.
+    void apiGetMesCommandesFlaix()
+      .then((r) => setFlaix(r.commandes ?? []))
+      .catch(() => undefined);
     try {
       const recues = await apiGetMyOrders();
       setOrders(recues);
@@ -252,7 +272,8 @@ export function OrderHistoryScreen() {
 
   // Suivi live : on ne sonde que s'il reste une commande en cours (économie
   // batterie/réseau — une liste 100 % terminée est figée).
-  const hasLive = orders.some((o) => isLive(o.status));
+  const hasLive = orders.some((o) => isLive(o.status)) || flaix.some((c) => c.enCours);
+  const nombreTotal = orders.length + flaix.length;
 
   /**
    * LES PASTILLES ET LES SECTIONS FONT DEUX TRAVAUX DIFFERENTS.
@@ -269,12 +290,18 @@ export function OrderHistoryScreen() {
   const [filtre, setFiltre] = useState<'toutes' | 'encours' | 'terminees'>('toutes');
 
   const sections = useMemo(() => {
-    const enCours = orders.filter((o) => isLive(o.status));
+    const enCours: Entree[] = [
+      ...flaix.filter((c) => c.enCours),
+      ...orders.filter((o) => isLive(o.status)),
+    ];
     // « Récupérées » ne garde que ce que le client a eu en main ; « Toutes »
     // montre aussi les annulées et les restituées.
-    const terminees = orders.filter(
-      (o) => !isLive(o.status) && (filtre !== 'terminees' || estRecuperee(o.status)),
-    );
+    const terminees: Entree[] = [
+      ...orders.filter((o) => !isLive(o.status) && (filtre !== 'terminees' || estRecuperee(o.status))),
+      ...flaix.filter(
+        (c) => !c.enCours && (filtre !== 'terminees' || ETATS_FLAIX_RECUPERES.has(c.etat ?? '')),
+      ),
+    ];
     const garder = (quoi: 'encours' | 'terminees') => filtre === 'toutes' || filtre === quoi;
     return [
       ...(garder('encours') && enCours.length > 0
@@ -284,7 +311,7 @@ export function OrderHistoryScreen() {
         ? [{ titre: 'Terminées', data: terminees }]
         : []),
     ];
-  }, [orders, filtre]);
+  }, [orders, flaix, filtre]);
   useEffect(() => {
     if (!token || !hasLive) return;
     const t = setInterval(() => void load(), LIVE_POLL_MS);
@@ -388,7 +415,7 @@ export function OrderHistoryScreen() {
         et le croyait absent. Un filtre qui ne rend rien le dit (« Aucune
         commande en cours. »), ce qui vaut mieux qu'un filtre introuvable.
       */}
-      {orders.length > 0 ? (
+      {nombreTotal > 0 ? (
         <View style={styles.filtres}>
           {FILTRES.map((f) => {
             const actif = filtre === f.cle;
@@ -422,18 +449,18 @@ export function OrderHistoryScreen() {
         </View>
       )}
 
-      {loading && orders.length === 0 ? (
+      {loading && nombreTotal === 0 ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={THEME.orange} />
         </View>
-      ) : error && orders.length === 0 ? (
+      ) : error && nombreTotal === 0 ? (
         <View style={styles.centered}>
           <Text style={styles.errorText}>{error}</Text>
           <Pressable style={styles.cta} onPress={() => void load()}>
             <Text style={styles.ctaText}>Réessayer</Text>
           </Pressable>
         </View>
-      ) : orders.length === 0 ? (
+      ) : nombreTotal === 0 ? (
         <View style={styles.centered}>
           <Text style={styles.emptyText}>Aucune commande pour le moment.</Text>
         </View>
@@ -451,7 +478,7 @@ export function OrderHistoryScreen() {
       ) : (
         <SectionList
           sections={sections}
-          keyExtractor={(o) => o.id}
+          keyExtractor={(e) => (estFlaix(e) ? `flaix-${e.id}` : e.id)}
           contentContainerStyle={[styles.list, { paddingBottom: espaceBas }]}
           stickySectionHeadersEnabled={false}
           refreshControl={
@@ -462,15 +489,19 @@ export function OrderHistoryScreen() {
           renderSectionHeader={({ section }) =>
             sections.length > 1 ? <Text style={styles.sectionTitre}>{section.titre}</Text> : null
           }
-          renderItem={({ item }) => (
-            <OrderCard
-              order={item}
-              onPress={() => navigation.navigate('OrderTracking', { orderId: item.id })}
-              onArrived={markArrived}
-              onPlan={setPlanAffiche}
-              onNoter={setCommandeANoter}
-            />
-          )}
+          renderItem={({ item }) =>
+            estFlaix(item) ? (
+              <CarteCommandeFlaix commande={item} />
+            ) : (
+              <OrderCard
+                order={item}
+                onPress={() => navigation.navigate('OrderTracking', { orderId: item.id })}
+                onArrived={markArrived}
+                onPlan={setPlanAffiche}
+                onNoter={setCommandeANoter}
+              />
+            )
+          }
         />
       )}
       <BuvettePlanViewer

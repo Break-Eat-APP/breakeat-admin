@@ -13,6 +13,7 @@ import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { PrismaService } from '../../database/prisma.service';
 import { GlobalRole } from '../../common/enums/role.enum';
 import { FlaixService } from './flaix.service';
+import { CommandesClientFlaixService } from './commandes-client-flaix.service';
 
 /**
  * FlaixController — read-only endpoints for operator dashboards.
@@ -31,7 +32,23 @@ export class FlaixController {
   constructor(
     private readonly flaixService: FlaixService,
     private readonly prisma: PrismaService,
+    private readonly commandesClient: CommandesClientFlaixService,
   ) {}
+
+  /**
+   * GET /api/v1/flaix/mes-commandes
+   * Les commandes Flaix du client CONNECTÉ, lues chez Flaix par son e-mail
+   * (21/11/2026). L'e-mail vient de la base, jamais de l'app : un client ne
+   * peut demander que les siennes. Voir `commandes-client-flaix.service.ts`.
+   */
+  @Get('mes-commandes')
+  async mesCommandes(@CurrentUser() user: JwtPayload) {
+    const moi = await this.prisma.user.findUnique({
+      where: { id: user.sub },
+      select: { email: true },
+    });
+    return this.commandesClient.pourEmail(moi?.email);
+  }
 
   /**
    * GET /api/v1/flaix/event/:eventId/rush-status

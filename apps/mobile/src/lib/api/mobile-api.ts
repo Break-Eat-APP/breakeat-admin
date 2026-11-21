@@ -1051,6 +1051,37 @@ export const apiGetMyOrders = () =>
 export const apiMarkArrived = (orderId: string) =>
   req<Order>(`/orders/${orderId}/arrived`, { method: 'POST' });
 
+/**
+ * Les commandes passées dans FLAIX par le client connecté (21/11/2026).
+ * Lues par le serveur chez Flaix, à la demande : Flaix reste la source de
+ * vérité, et c'est lui qui dit « prête ». `active: false` = la fonction est
+ * éteinte côté serveur. Voir `backend/src/modules/flaix/commandes-client-flaix.service.ts`.
+ */
+export interface CommandeFlaix {
+  id: string;
+  numero: string;
+  passeeLe: string;
+  lieu: string | null;
+  ville: string | null;
+  evenement: string | null;
+  pointDeRetrait: string | null;
+  retraitPrevu: string | null;
+  retraitAffiche: string | null;
+  lignes: { produit: string; quantite: number; totalTtc: number; tauxTva: number | null }[];
+  totalTtc: number;
+  devise: string;
+  etat: string | null;
+  etatLibelle: string;
+  etatDetail: string | null;
+  prete: boolean;
+  enCours: boolean;
+  lienSuivi: string | null;
+  lienRecu: string | null;
+}
+
+export const apiGetMesCommandesFlaix = () =>
+  req<{ active: boolean; commandes: CommandeFlaix[] }>('/flaix/mes-commandes');
+
 // ─── L'ardoise : composer a plusieurs, chacun regle sa part ───
 
 /** Une case a cocher : « une » biere, pas « trois bieres ». */

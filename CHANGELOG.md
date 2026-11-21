@@ -5,6 +5,36 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.44] — 2026-11-21 — Les commandes passées dans Flaix apparaissent dans « Mes commandes »
+
+- **Pourquoi** : les trois lieux en production commandent dans Flaix, et une
+  commande Flaix ne créait rien chez BreakEat. Le client ne la retrouvait pas
+  dans l'app. Rémi a un match le 22/11 et le développeur Flaix ne travaille
+  pas ce week-end : on part de ce que Flaix offre déjà, une API qui rend les
+  commandes d'un client par son e-mail.
+- **Serveur** : `GET /api/v1/flaix/mes-commandes` lit chez Flaix les
+  commandes du client connecté (e-mail lu en base, jamais envoyé par l'app),
+  puis l'état en direct des commandes des 12 dernières heures. Rien n'est
+  écrit en base : Flaix reste la source de vérité, et c'est lui qui dit
+  « prête ». Une panne Flaix rend une liste vide, jamais une erreur. Même
+  liste redemandée au plus toutes les 5 s. Éteint tant que
+  `FLAIX_COMMANDES_URL` et `FLAIX_COMMANDES_API_KEY` ne sont pas posées sur
+  Railway.
+- **App** : les commandes Flaix rejoignent « En cours » et « Terminées » :
+  lieu, match, numéro, état donné par Flaix, point et heure de retrait,
+  produits, total, boutons « Suivre ma commande » et « Reçu » (pages Flaix).
+  Elles se relisent toutes les 10 s tant qu'une commande est en cours.
+- **Limites assumées (Rémi, 21/11)** : le client est reconnu par son
+  e-mail, que BreakEat ne vérifie pas ; pas de notification « prête » ni de
+  Live Activity pour ces commandes (il faut le webhook E1 de Flaix).
+
+`+ backend/src/modules/flaix/{commandes-client-flaix.service.ts,commandes-client-flaix.service.spec.ts}` (11 tests),
+`~ backend/src/modules/flaix/{flaix.controller.ts,flaix.module.ts}`, `~ backend/src/config/app.config.ts`, `~ backend/.env.example`,
+`+ apps/mobile/src/components/carte-commande-flaix.tsx`, `~ apps/mobile/src/screens/order-history.screen.tsx`, `~ apps/mobile/src/lib/api/mobile-api.ts`.
+Aucune migration. L'app ne l'affiche qu'après une **mise à jour à distance**, qui part aussi avec l'envoi des favoris (1.7.42).
+
+---
+
 ## [1.7.43] — 2026-11-21 — « Envoyer aux clients du club » : l'envoi immédiat vise les clients, plus l'équipe
 
 - **Pourquoi** : dans le back-office, « Envoyer au club » en envoi
