@@ -48,6 +48,12 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
 >   production. **Reste : la mise à jour à distance de l'app** (workflow
 >   « Mise a jour a distance »), qui active l'envoi des favoris — après la
 >   confidentialité ci-dessous, au choix de Rémi.
+> - **Pousser sur `main` (Rémi, 21/11)** : la session cloud travaille sur une
+>   branche `claude/…` et passait par une PR que Rémi fusionnait. Rémi a choisi
+>   de revenir à l'usage d'avant : **l'agent pousse directement sur `main`**
+>   (Railway et Vercel déploient aussitôt ; la CI vérifie APRÈS — lancer les
+>   tests en local avant, et vérifier `/health` ensuite). Autorisation donnée
+>   dans cette conversation : une nouvelle session doit la redemander.
 > - **⏸️ À VOIR PLUS TARD (Rémi, 21/11) — confidentialité des favoris** : la
 >   politique du dépôt (`documents-legaux/politique-de-confidentialite.txt`)
 >   ne mentionne pas les lieux suivis (§ 2 « Données concernées », § 14
