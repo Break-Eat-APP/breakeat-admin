@@ -272,8 +272,31 @@ model User {
   pushTokens       PushToken[]
   loyaltyAccounts  LoyaltyAccount[]
   liveActivities   LiveActivity[]
+  favoriteVenues   VenueFavorite[]
 
   @@map("users")
+}
+
+/// UN LIEU MIS EN FAVORI par un client connecté (21/11/2026).
+///
+/// Le favori vit d'abord sur le téléphone (`apps/mobile/src/lib/favoris.ts`) :
+/// on parcourt les lieux sans compte, et c'est voulu. Le téléphone en envoie
+/// une COPIE ici dès que le client est connecté, pour une seule raison : qu'une
+/// campagne d'un lieu atteigne ceux qui le suivent, et pas seulement ceux qui y
+/// ont déjà commandé dans BreakEat. Un lieu Flaix n'a aucune commande BreakEat :
+/// ses campagnes ne partaient vers personne.
+model VenueFavorite {
+  userId    String   @map("user_id")
+  venueId   String   @map("venue_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  venue Venue @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@id([userId, venueId])
+  /// Le ciblage d'une campagne part du LIEU : « qui suit ce lieu ? ».
+  @@index([venueId])
+  @@map("venue_favorites")
 }
 
 /// UN CODE DE RÉINITIALISATION DE MOT DE PASSE, envoyé par courriel.
@@ -523,10 +546,11 @@ model Venue {
   createdAt              DateTime           @default(now()) @map("created_at")
   updatedAt              DateTime           @updatedAt @map("updated_at")
 
-  organization  Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization  Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   events        Event[]
   pickupPoints  PickupPoint[]
   slotTemplates SlotTemplate[]
+  favorites     VenueFavorite[]
 
   @@map("venues")
 }
@@ -728,7 +752,7 @@ model Supplier {
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
 
-  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  organization      Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   eventSuppliers    EventSupplier[]
   pickupPoints      PickupPoint[]
   categories        Category[]
@@ -737,7 +761,7 @@ model Supplier {
   carts             Cart[]
   slots             Slot[]
   /// PHASE 12.7 — operators assigned to this supplier
-  assignedOperators OrganizationMember[] @relation("OperatorAssignments")
+  assignedOperators OrganizationMember[]     @relation("OperatorAssignments")
   invitations       OrganizationInvitation[] @relation("InvitationsBuvette")
   slotTemplates     SlotTemplate[]
 

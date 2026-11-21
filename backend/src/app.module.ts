@@ -35,6 +35,7 @@ import { ClientsModule } from './modules/clients/clients.module';
 import { DocumentsModule } from './modules/documents/documents.module';
 import { FrequentationModule } from './modules/frequentation/frequentation.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { FavoritesModule } from './modules/favorites/favorites.module';
 import { LoyaltyModule } from './modules/loyalty/loyalty.module';
 import { LiveActivityModule } from './modules/live-activity/live-activity.module';
 import { BootstrapModule } from './modules/bootstrap/bootstrap.module';
@@ -104,6 +105,7 @@ import appConfig from './config/app.config';
     FrequentationModule,
     // Phase 18 — Notifications push (fondation Expo : C1/C2/C3)
     NotificationsModule,
+    FavoritesModule,
     LoyaltyModule,
     LiveActivityModule,
     BootstrapModule,

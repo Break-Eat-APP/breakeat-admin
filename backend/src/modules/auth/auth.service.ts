@@ -597,6 +597,8 @@ export class AuthService {
       this.prisma.pushToken.deleteMany({ where: { userId } }),
       this.prisma.cart.deleteMany({ where: { userId } }),
       this.prisma.userNotification.deleteMany({ where: { userId } }),
+      // Les lieux suivis disent des habitudes : ils partent avec le compte.
+      this.prisma.venueFavorite.deleteMany({ where: { userId } }),
       this.prisma.groupMember.deleteMany({ where: { userId } }),
       this.prisma.organizationMember.deleteMany({ where: { userId } }),
       this.prisma.organizationInvitation.deleteMany({ where: { userId } }),

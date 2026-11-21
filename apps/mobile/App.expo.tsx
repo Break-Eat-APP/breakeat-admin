@@ -57,6 +57,7 @@ import { OrderTrackingScreen } from '@screens/order-tracking.screen';
 import { SplitScreen } from '@screens/split.screen';
 import { useDeepLinks } from '@lib/hooks/use-deep-links';
 import { ecouterOuvertures, ecouterPush, enregistrerPush } from '@lib/push-notifications';
+import { envoyerFavoris, lireFavoris } from '@lib/favoris';
 import { signalerVisite } from '@lib/frequentation';
 import { useNotifStore } from '@store/notif.store';
 import { NotificationsScreen } from '@screens/notifications.screen';
@@ -168,6 +169,10 @@ export default function AppPreview() {
     if (!token) return;
     signalerVisite('LOGIN');
     void enregistrerPush();
+    // Les favoris posés AVANT la connexion : sans cet envoi, ils n'atteindraient
+    // le serveur qu'au prochain cœur touché, et les campagnes de ces lieux
+    // passeraient à côté du client.
+    void lireFavoris().then(envoyerFavoris);
 
     // Le compte de la cloche : lu une fois à la connexion — une annonce a pu
     // arriver téléphone éteint — puis tenu à jour par les push reçus app

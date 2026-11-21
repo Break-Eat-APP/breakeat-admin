@@ -100,7 +100,8 @@ export class ScheduledPushService {
    * Résout les jetons push cibles.
    * - orgId null → tous les utilisateurs de la plateforme (jetons enregistrés) ;
    * - orgId défini → ceux qui ont commandé dans l'org, restreints à
-   *   l'événement ou au LIEU quand l'un des deux est précisé.
+   *   l'événement ou au LIEU quand l'un des deux est précisé — ET ceux qui
+   *   suivent le lieu en favori (depuis le 21/11/2026).
    */
   async resolveAudience(
     orgId: string | null,
@@ -147,8 +148,43 @@ export class ScheduledPushService {
       select: { userId: true },
       distinct: ['userId'],
     });
-    const userIds = [...new Set(orders.map((o) => o.userId))];
+
+    // ET CEUX QUI SUIVENT LE LIEU (21/11/2026). Les commandes ne disent pas
+    // tout : un lieu piloté par Flaix n'a AUCUNE commande BreakEat — ses
+    // clients commandent dans Flaix — et ses campagnes partaient vers zéro
+    // appareil. Un client qui a mis le lieu en favori a dit qu'il voulait en
+    // entendre parler.
+    //
+    // Le lieu visé : celui de la campagne, sinon celui de l'événement, sinon
+    // tous les lieux du club. Le filtre sur l'organisation reste écrit même
+    // quand le lieu est précisé : aucun favori d'un autre club ne passe.
+    //
+    // Un événement supprimé depuis la programmation ne doit PAS élargir la
+    // campagne à tout le club : sans lieu retrouvé, aucun favori.
+    const lieuVise = venueId ?? (eventId ? await this.lieuDeLEvenement(eventId) : null);
+    const favoris =
+      eventId && !lieuVise
+        ? []
+        : await this.prisma.venueFavorite.findMany({
+            where: {
+              venue: { organizationId: orgId },
+              ...(lieuVise ? { venueId: lieuVise } : {}),
+            },
+            select: { userId: true },
+            distinct: ['userId'],
+          });
+
+    const userIds = [...new Set([...orders, ...favoris].map((o) => o.userId))];
     return { tokens: await this.pushTokens.tokensForUsers(userIds), userIds };
+  }
+
+  /** Le lieu d'un événement, ou `null` s'il a disparu depuis la programmation. */
+  private async lieuDeLEvenement(eventId: string): Promise<string | null> {
+    const event = await this.prisma.event.findUnique({
+      where: { id: eventId },
+      select: { venueId: true },
+    });
+    return event?.venueId ?? null;
   }
 
   /** Traite une entrée due : envoie le push, met à jour le statut. */
