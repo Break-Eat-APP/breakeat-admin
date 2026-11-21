@@ -79,7 +79,9 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >     `com.shapper.breakeat`** (projet n° `482274786646`, celui des
 >     identifiants Google de `eas.json`). **Ne pas l'importer dans Expo pour
 >     FCM V1** : les notifications seraient refusées. Vérifié le 21/11 :
->     Expo n'utilise aucune clé FCM V1 (BUG-2026-042).
+>     Expo n'utilise aucune clé FCM V1, et **la build Android publiée ne
+>     contient AUCUNE configuration Firebase** (lu dans l'`.aab`). Pas de
+>     notification Android possible sans nouvelle build (BUG-2026-042).
 >   - `flaix-wallet@rapid-access-494820-f8` : une clé Google (vraisemblablement
 >     Google Wallet) côté **Flaix**. BreakEat ne s'en sert pas. C'est au
 >     développeur Flaix de dire s'il l'utilise ; ne pas la recopier.
