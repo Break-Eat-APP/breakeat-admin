@@ -70,10 +70,21 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   (Google Cloud → compte de service → clé JSON, puis l'inviter dans la Play
 >   Console) : ce n'est pas nécessaire.
 >   Sur l'ancien disque, dans Téléchargements, deux autres clés de compte de
->   service sans rapport avec Google Play : `firebase-adminsdk` (projet
->   `break-eat-app-spe-2d709`, cité nulle part dans le dépôt) et
->   `flaix-wallet` (projet `rapid-access-494820-f8`, côté Flaix). Ne pas les
->   recopier ; une clé inutile se supprime dans Google Cloud.
+>   service sans rapport avec Google Play :
+>   - `firebase-adminsdk-fbsvc@break-eat-app-spe-2d709` : une clé
+>     d'administration Firebase. C'est **le type de clé qu'Expo demande pour
+>     les notifications Android** (FCM V1, rangée dans EAS → Credentials →
+>     Android). Le serveur envoie les notifications par Expo
+>     (`expo-push.service.ts`), pas avec cette clé. **NE PAS la supprimer
+>     dans Google Cloud** avant d'avoir vérifié sur expo.dev (projet →
+>     Credentials → Android → `com.shapper.breakeat` → FCM V1) quel compte
+>     de service EAS utilise : si c'est celui-ci, la supprimer couperait les
+>     notifications Android (« Ta commande est prête »). Le poste n'en a pas
+>     besoin au quotidien : ne pas la recopier, la garder en lieu sûr (pas
+>     dans le dépôt).
+>   - `flaix-wallet@rapid-access-494820-f8` : une clé Google (vraisemblablement
+>     Google Wallet) côté **Flaix**. BreakEat ne s'en sert pas. C'est au
+>     développeur Flaix de dire s'il l'utilise ; ne pas la recopier.
 >   **Tranché par Rémi le 21/11 : on garde l'accès** du compte de l'éditeur
 >   précédent (Synertic, `syn_android@…`) à la Play Console, actif et sans
 >   limite de durée. Ne pas le reproposer. `brain/livrables/stores/fiche-stores.md` est ignoré
@@ -86,15 +97,17 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   tant que certains développements ne sont pas finalisés avec son
 >   développeur Flaix. Ne jamais cliquer « Publier » (App Store) ni
 >   « Publier les modifications » (Google Play) sans son ordre.
-> - ⚠️ **GOOGLE PLAY — LA 1.1.3 EST PROBABLEMENT PUBLIQUE DEPUIS LE 21/11.**
+> - ⚠️ **GOOGLE PLAY — LA 1.1.3 EST PUBLIQUE (CONFIRMÉ le 21/11).** « Activité
+>   liée aux envois » (capture de Rémi) : envoi **13** du 17/11 (Production,
+>   Fiche, Contenu de l'application) → **« Publiée »** ; les envois 7 à 12
+>   (Contenu de l'application) avaient été refusés. Le détail ci-dessous :
 >   Le 21/11, Rémi a cliqué dans « Modifications prêtes à être publiées »
 >   (publication gérée), pensant ne faire qu'une vérification. Ensuite, la
 >   Play Console affiche « **Dernière publication le 21 novembre 2026** » et
 >   une liste vide. **La fiche publique** (lue le 21/11, sans compte) montre
 >   sous « Nouveautés » le texte de la **1.1.3** (calendrier, « Ta commande
 >   est prête », « Au plus vite », partager l'addition), avec la date du
->   17/11. **À confirmer par Rémi** : Play Console → Activité liée aux envois,
->   et Production → état de la version 7. Une version sortie en déploiement
+>   17/11. Confirmé par « Activité liée aux envois » (ci-dessus). Une version sortie en déploiement
 >   complet ne se retire pas ; on ne peut que publier une version par-dessus,
 >   ou rendre l'app indisponible (mesure lourde). Avant, la fiche publique
 >   servait déjà l'ancienne version de l'éditeur précédent (code 4) : l'app
@@ -159,7 +172,7 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 | **Paiement** | ⚠️ **Stripe en MODE TEST en production** (`sk_test_…`) : la carte 4242… passe, une vraie carte est refusée. Voulu jusqu'à la validation des stores (ADR-0012) | Stripe → bascule « mode test » ; Railway → variables |
 | **Consoles (Vercel)** | Admin, back-office et opérateur, publiés depuis `main` | « Déploiement des frontends » plus bas |
 | **iOS** | **Build 46 (1.1.3)** sur TestFlight, **envoyée à la vérification Apple le 17/11** (nouveaux visuels, notes : Dôme → Moto Cross X → « Au plus vite », carte de test). Mise à jour à distance 1.1.3 publiée le 16/11 (`1fbdf46`), puis le **17/11** sur `7b95f7c` (corrections 1.7.39). Les builds 1.1.2 et plus anciennes ne reçoivent plus les mises à jour à distance | App Store Connect |
-| **Android** | **Clé d'importation acceptée** (17/11). **1.1.3, code de version 7** (`.aab` contrôlé : 16 ko, ni Billing ni `AD_ID`) **en examen en production**, publication gérée | Play Console → Vue d'ensemble de la publication |
+| **Android** | **Clé d'importation acceptée** (17/11). **1.1.3, code de version 7** (`.aab` contrôlé : 16 ko, ni Billing ni `AD_ID`) **PUBLIÉE en production sur Google Play** (envoi 13, publiée le 21/11 par le clic de Rémi dans la publication gérée, voir la note du 21/11) | Play Console → Vue d'ensemble de la publication |
 | **Connexion** | E-mail + mot de passe, Apple, Google (iOS vérifié ; Android à essayer sur la 1.1.3) | — |
 | **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels n'est pas configuré | `GET /api/v1/auth/password-reset/available` → `false` |
 
