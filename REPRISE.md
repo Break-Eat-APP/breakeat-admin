@@ -121,16 +121,23 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   **Reçu le 21/11 : une API de LECTURE par e-mail** (Flaix,
 >   `POST …/api/public/clients/commandes`, en-tête `X-Api-Key`, corps
 >   `{ "email": … }`), qui rend les commandes d'un client. Ce n'est pas le
->   webhook E1 du cahier des charges (pas de temps réel). ⚠️ **La clé de cette
->   API a été collée dans une conversation le 21/11** : à faire régénérer par
->   le développeur Flaix, et la nouvelle clé seulement dans Railway. ⚠️
+>   webhook E1 du cahier des charges (pas de temps réel). La clé et l'e-mail
+>   de l'exemple sont ceux du développeur Flaix (Rémi, 21/11 : pas de
+>   régénération demandée) ; en production, la clé va dans Railway seulement.
+>   **Essayée le 21/11** (domaine `commande.flaix.bo.synertic.net`, pas
+>   `flaixlabs.com`) : réponse `version: 1`, client, `commandes[]`
+>   (`reference`, `jeton`, `passeeLe`, `statut`, `paiement`, `evenement`,
+>   `lieu` avec `idInterne`, `pointDeRetrait`, `retraitPrevu`, `lignes` avec
+>   TVA, `total`, `lienSuivi`, `lienRecu` PDF), et `perimetre.lieux` (la clé
+>   ne voit que 8 lieux). Le suivi d'une commande a sa propre adresse
+>   publique, `…/orders/<jeton>/status` (JSON : `status`, `status_label`,
+>   `pickup_str`), que la page Flaix interroge toutes les 5 s. ⚠️
 >   **BreakEat ne vérifie pas les adresses e-mail** (aucun champ de
 >   vérification dans le schéma ; Brevo non configuré) : interroger Flaix
 >   avec l'e-mail d'un compte non vérifié laisserait n'importe qui lire les
 >   commandes d'un autre en créant un compte à son adresse. À régler avant
 >   de brancher (comptes Apple/Google seulement, ou vérification par
->   courriel, ou l'étiquette `[#breakeatId]`). On attend un exemple de
->   réponse anonymisé.
+>   courriel, ou l'étiquette `[#breakeatId]`).
 > - **Étape 1 du plan Flaix (1.7.42) : SERVEUR EN LIGNE, APP PAS ENCORE.**
 >   Favoris copiés au serveur, campagnes vers « a commandé OU suit le lieu »
 >   (ADR-0013). PR [#5](https://github.com/Break-Eat-APP/breakeat-admin/pull/5)
