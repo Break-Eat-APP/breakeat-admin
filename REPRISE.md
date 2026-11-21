@@ -35,6 +35,14 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
 >   `git log --oneline -5`, `git stash list` sur la copie de l'ancien disque) ?
 >   Récupérer aussi les fichiers hors Git : `apps/mobile/google-play-service-account.json`,
 >   `brain/livrables/stores/fiche-stores.md`, les `.env`.
+> - **Nouveau poste — fichiers hors Git (21/11)** : `backend\.env` et
+>   `apps\mobile\.env` recopiés de l'ancien disque vers `C:\dev\breakeat-admin`
+>   (pas de `.env` à la racine : il n'existait pas). ⚠️ **Le compte de service
+>   Google Play (`apps/mobile/google-play-service-account.json`) n'était PAS à
+>   sa place sur l'ancien disque** : à retrouver, sinon vérifier s'il est chez
+>   EAS (`npx eas-cli credentials`) ou créer une nouvelle clé (Google Cloud,
+>   même compte de service) et désactiver l'ancienne — **avant la prochaine
+>   soumission Android**.
 > - **Apple a validé la 1.1.3** ; Google à vérifier. **Ne pas publier avant
 >   Stripe en production** (ADR-0012).
 > - **On attend le développeur Flaix** pour E1 (les commandes Flaix qui
