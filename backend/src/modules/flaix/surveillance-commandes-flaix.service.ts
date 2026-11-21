@@ -25,7 +25,8 @@ import {
  * ⚠️ DÉPANNAGE, PAS LE SYSTÈME DÉFINITIF (ADR-0015). La liste est en MÉMOIRE :
  *  - le client doit avoir ouvert « Mes commandes » une fois après sa commande ;
  *  - un redémarrage du serveur l'efface (reprise à la prochaine lecture) ;
- *  - un envoi raté n'est pas rejoué.
+ *  - un envoi raté (Expo injoignable, aucun appareil atteint) est retenté au
+ *    tour suivant, 3 fois au plus (22/11/2026, BUG-2026-044).
  * C'est l'inverse de la règle 3 de CLAUDE.md, assumé pour le match du 22/11.
  * Le webhook `ORDER_READY` de Flaix le remplacera.
  */
@@ -38,13 +39,22 @@ const DUREE_MAX_MS = 12 * 60 * 60 * 1000;
 const MAX_SUIVIES = 5_000;
 /** Appels simultanés vers Flaix, au plus. */
 const PAR_PAQUET = 10;
+/** Essais d'envoi de la notification « prête », au plus (un par tour). */
+const MAX_ESSAIS_ENVOI = 3;
 
 interface Suivie {
   userId: string;
   numero: string;
   pointDeRetrait: string | null;
   passeeLe: number;
+  /** Flaix a dit « prête » : il ne reste qu'à prévenir le client. */
+  prete?: boolean;
+  /** Envois déjà tentés sans succès. */
+  essais?: number;
 }
+
+/** L'issue d'un envoi : prévenu, personne à prévenir, ou à retenter. */
+type IssueEnvoi = 'envoyee' | 'personne' | 'echec';
 
 @Injectable()
 export class SurveillanceCommandesFlaixService {
@@ -115,23 +125,37 @@ export class SurveillanceCommandesFlaixService {
       this.suivies.delete(jeton);
       return;
     }
-    const e = await this.commandes.lireEtat(jeton);
-    if (!e) return; // Flaix muet : on retentera au tour suivant.
-    if (estPrete(e.etat)) {
-      // Retirée AVANT l'envoi : une notification au plus, jamais deux.
-      this.suivies.delete(jeton);
-      this.annoncees.set(jeton, maintenant.getTime());
-      await this.annoncer(s);
-      return;
+    if (!s.prete) {
+      const e = await this.commandes.lireEtat(jeton);
+      if (!e) return; // Flaix muet : on retentera au tour suivant.
+      if (estTerminal(e.etat)) {
+        this.suivies.delete(jeton);
+        return;
+      }
+      if (!estPrete(e.etat)) return;
+      s.prete = true;
     }
-    if (estTerminal(e.etat)) this.suivies.delete(jeton);
+
+    // « Prête » : on prévient. Un échec garde la commande pour le tour
+    // suivant ; un succès, ou personne à prévenir, la clôt. Un seul tour à la
+    // fois (`tourEnCours`) : jamais deux envois en parallèle pour une commande.
+    const issue = await this.annoncer(s);
+    if (issue === 'echec') {
+      s.essais = (s.essais ?? 0) + 1;
+      if (s.essais < MAX_ESSAIS_ENVOI) return;
+      this.logger.error(
+        `Commande Flaix ${s.numero} prête : notification abandonnée après ${s.essais} essais`,
+      );
+    }
+    this.suivies.delete(jeton);
+    this.annoncees.set(jeton, maintenant.getTime());
   }
 
-  private async annoncer(s: Suivie): Promise<void> {
-    if (!this.expoPush || !this.pushTokens) return;
+  private async annoncer(s: Suivie): Promise<IssueEnvoi> {
+    if (!this.expoPush || !this.pushTokens) return 'personne';
     try {
       const jetons = await this.pushTokens.tokensForUsers([s.userId]);
-      if (jetons.length === 0) return;
+      if (jetons.length === 0) return 'personne';
       const titre = 'Ta commande est prête';
       const corps =
         (s.numero ? `Commande n° ${s.numero} — ` : '') +
@@ -150,8 +174,11 @@ export class SurveillanceCommandesFlaixService {
       );
       if (resultat.invalidTokens.length > 0) await this.pushTokens.purgeInvalid(resultat.invalidTokens);
       this.logger.log(`Commande Flaix ${s.numero} prête : ${resultat.sent} appareil(s) prévenu(s)`);
+      // `send` ne lève jamais : zéro appareil atteint, c'est un échec à retenter.
+      return resultat.sent > 0 ? 'envoyee' : 'echec';
     } catch (e: unknown) {
       this.logger.error(`Commande Flaix ${s.numero} prête, notification non envoyée (${String(e)})`);
+      return 'echec';
     }
   }
 }

@@ -5,6 +5,17 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.46] — 2026-11-22 — Réponse à l'audit Codex des notifications
+
+- **« Prête » Flaix retentée** (BUG-2026-044) : un envoi raté (Expo injoignable, aucun appareil atteint) est retenté au tour suivant, 3 fois au plus ; une commande n'est marquée « annoncée » qu'une fois prévenue.
+- **L'envoi immédiat est archivé dans la cloche** comme une campagne programmée (BUG-2026-047, tranché par Rémi le 22/11).
+- **Jeton push après une déconnexion sans réseau** (BUG-2026-045) : le retrait est rejoué au démarrage suivant, par la route `POST /api/v1/push-tokens/retrait` (jeton seul, sans session).
+- **Renouvellement du jeton suivi** (BUG-2026-048).
+
+Tests : backend 84 suites / 1 198, mobile 15 / 163 ; typage, lint, compilation. **L'app n'en profite qu'après une mise à jour à distance** (à lancer par Rémi).
+
+---
+
 ## [1.7.45] — 2026-11-21 — « Ta commande est prête » pour les commandes Flaix ; réponse à l'audit Codex
 
 - **Pourquoi** : la 1.7.44 montrait l'état des commandes Flaix seulement écran

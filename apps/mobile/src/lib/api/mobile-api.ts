@@ -186,6 +186,17 @@ export async function apiRegisterPushToken(token: string, platform?: string): Pr
   });
 }
 
+/**
+ * Retire un jeton SANS session : le retrait rejoué après une déconnexion faite
+ * sans réseau (BUG-2026-045, 22/11/2026).
+ */
+export async function apiRetirerJetonPush(token: string): Promise<void> {
+  await req<{ ok: boolean }>('/push-tokens/retrait', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
+
 export async function apiUnregisterPushToken(token: string): Promise<void> {
   await req<{ ok: boolean }>('/push-tokens', {
     method: 'DELETE',

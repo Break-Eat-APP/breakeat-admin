@@ -13,9 +13,13 @@ jest.mock('expo-constants', () => ({ __esModule: true, default: {} }));
 // L'alias `@lib` n'est pas résolu par Jest ici : module virtuel.
 jest.mock(
   '@lib/api/mobile-api',
-  () => ({ apiRegisterPushToken: jest.fn(), apiUnregisterPushToken: jest.fn() }),
+  () => ({ apiRegisterPushToken: jest.fn(), apiUnregisterPushToken: jest.fn(), apiRetirerJetonPush: jest.fn() }),
   { virtual: true },
 );
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() },
+}));
 jest.mock('expo-notifications', () => ({
   setNotificationHandler: () => undefined,
   getLastNotificationResponse: () => mockGetLast(),

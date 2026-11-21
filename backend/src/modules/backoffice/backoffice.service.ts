@@ -11,6 +11,7 @@ import { perimetreCa } from '../../common/helpers/perimetre-ca';
 import { ExpoPushService } from '../notifications/expo-push.service';
 import { PushTokensService } from '../notifications/push-tokens.service';
 import { ScheduledPushService } from '../notifications/scheduled-push.service';
+import { UserNotificationsService } from '../notifications/user-notifications.service';
 import { tauxMoyenBps, type TrancheTva } from '../../common/helpers/tva';
 import { ventilationCommandes } from '../../common/helpers/ventilation-commandes';
 import { adresseTemoin, libererSlugInactif } from '../../common/helpers/liberation-archives';
@@ -66,6 +67,7 @@ export class BackofficeService {
     private readonly expoPush: ExpoPushService,
     private readonly pushTokens: PushTokensService,
     private readonly scheduledPush: ScheduledPushService,
+    private readonly userNotifications: UserNotificationsService,
   ) {}
 
   // ─── KPIs ─────────────────────────────────────────────────────
@@ -408,15 +410,32 @@ export class BackofficeService {
    */
   async sendNotification(dto: SendNotificationDto) {
     let tokens: string[];
+    let userIds: string[];
 
     if (dto.orgId) {
-      tokens = await this.scheduledPush.resolveAudience(dto.orgId, null);
+      ({ tokens, userIds } = await this.scheduledPush.destinataires(dto.orgId, null));
     } else {
       const users = await this.prisma.user.findMany({
         where: { isActive: true },
         select: { id: true },
       });
-      tokens = await this.pushTokens.tokensForUsers(users.map((u) => u.id));
+      userIds = users.map((u) => u.id);
+      tokens = await this.pushTokens.tokensForUsers(userIds);
+    }
+
+    /*
+     * ARCHIVÉ DANS LA CLOCHE, COMME UNE CAMPAGNE PROGRAMMÉE (BUG-2026-047,
+     * tranché par Rémi le 22/11/2026 : « les deux boutons font la même
+     * chose »). Avant l'envoi et sans dépendre de lui : un client qui a refusé
+     * les notifications, ou qui a balayé le message, le retrouve sur sa cloche.
+     */
+    if (userIds.length > 0) {
+      await this.userNotifications.archiver({
+        userIds,
+        organizationId: dto.orgId ?? null,
+        title: dto.title,
+        body: dto.body ?? '',
+      });
     }
 
     if (tokens.length === 0) {

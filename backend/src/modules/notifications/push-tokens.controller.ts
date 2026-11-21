@@ -34,3 +34,19 @@ export class PushTokensController {
     return this.pushTokens.unregister(user.sub, dto.token);
   }
 }
+
+/**
+ * POST /api/v1/push-tokens/retrait — retire un jeton SANS session : le retrait
+ * rejoué après une déconnexion faite sans réseau (BUG-2026-045). Voir
+ * `PushTokensService.retirerParJeton`. Sous la limitation globale.
+ */
+@Controller('push-tokens/retrait')
+export class PushTokensRetraitController {
+  constructor(private readonly pushTokens: PushTokensService) {}
+
+  @Post()
+  @HttpCode(HttpStatus.OK)
+  retirer(@Body() dto: RegisterPushTokenDto) {
+    return this.pushTokens.retirerParJeton(dto.token);
+  }
+}

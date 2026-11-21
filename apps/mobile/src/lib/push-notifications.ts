@@ -1,7 +1,18 @@
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { apiRegisterPushToken, apiUnregisterPushToken } from '@lib/api/mobile-api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  apiRegisterPushToken,
+  apiRetirerJetonPush,
+  apiUnregisterPushToken,
+} from '@lib/api/mobile-api';
+
+/**
+ * Le jeton dont le retrait a échoué à la déconnexion (réseau coupé), gardé
+ * pour être rejoué plus tard (BUG-2026-045, audit Codex du 21/11/2026).
+ */
+const CLE_RETRAIT_EN_ATTENTE = 'push:retrait-en-attente';
 
 /**
  * Les notifications push du client.
@@ -66,8 +77,59 @@ export async function enregistrerPush(): Promise<void> {
 
     await apiRegisterPushToken(data, Platform.OS);
     jetonActuel = data;
+    // Le jeton appartient désormais au compte connecté : un retrait resté en
+    // attente pour l'ancien compte ne doit SURTOUT pas le lui reprendre.
+    if ((await lireRetraitEnAttente()) === data) await effacerRetraitEnAttente();
   } catch (e: unknown) {
     console.warn('Enregistrement du jeton push échoué:', e);
+  }
+}
+
+/**
+ * Suit le renouvellement du jeton par le système (BUG-2026-048, audit Codex du
+ * 21/11/2026). Sans cela, un jeton renouvelé pendant que l'app reste ouverte
+ * n'atteignait le serveur qu'à la connexion suivante : l'ancien recevait les
+ * envois jusqu'à son rejet. Relancer l'enregistrement suffit : il redemande le
+ * jeton Expo et ne l'envoie que s'il a changé.
+ */
+export function ecouterRenouvellementJeton(): () => void {
+  if (Platform.OS === 'web') return () => undefined;
+  const abonnement = Notifications.addPushTokenListener(() => {
+    void enregistrerPush();
+  });
+  return () => abonnement.remove();
+}
+
+async function lireRetraitEnAttente(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(CLE_RETRAIT_EN_ATTENTE);
+  } catch {
+    return null;
+  }
+}
+
+async function effacerRetraitEnAttente(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(CLE_RETRAIT_EN_ATTENTE);
+  } catch {
+    // Au pire, le retrait sera tenté une fois de trop : le serveur l'accepte.
+  }
+}
+
+/**
+ * Rejoue un retrait de jeton resté en attente. Appelé quand aucun compte
+ * n'est connecté : le téléphone ne doit plus recevoir les notifications de
+ * l'ancien compte. Ne lève jamais.
+ */
+export async function rejouerRetraitEnAttente(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  const jeton = await lireRetraitEnAttente();
+  if (!jeton) return;
+  try {
+    await apiRetirerJetonPush(jeton);
+    await effacerRetraitEnAttente();
+  } catch (e: unknown) {
+    console.warn('Retrait du jeton push encore impossible, nouvel essai plus tard:', e);
   }
 }
 
@@ -164,7 +226,14 @@ export async function oublierPush(): Promise<void> {
   try {
     await apiUnregisterPushToken(jetonActuel);
   } catch (e: unknown) {
-    console.warn('Retrait du jeton push échoué:', e);
+    // Réseau coupé : le jeton resterait rattaché à l'ancien compte. On le
+    // garde pour rejouer le retrait (`rejouerRetraitEnAttente`).
+    console.warn('Retrait du jeton push échoué, il sera rejoué:', e);
+    try {
+      await AsyncStorage.setItem(CLE_RETRAIT_EN_ATTENTE, jetonActuel);
+    } catch {
+      // Mémoire indisponible : le prochain compte connecté reprendra le jeton.
+    }
   } finally {
     jetonActuel = null;
   }

@@ -6,6 +6,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { ExpoPushService } from '../notifications/expo-push.service';
 import { PushTokensService } from '../notifications/push-tokens.service';
 import { ScheduledPushService } from '../notifications/scheduled-push.service';
+import { UserNotificationsService } from '../notifications/user-notifications.service';
 
 /**
  * Unit tests for BackofficeService.
@@ -48,7 +49,9 @@ describe('BackofficeService', () => {
     list: jest.fn(),
     cancel: jest.fn(),
     resolveAudience: jest.fn(),
+    destinataires: jest.fn(),
   };
+  const userNotifications = { archiver: jest.fn().mockResolvedValue(0) };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -91,6 +94,7 @@ describe('BackofficeService', () => {
         { provide: ExpoPushService, useValue: expoPush },
         { provide: PushTokensService, useValue: pushTokens },
         { provide: ScheduledPushService, useValue: scheduledPush },
+        { provide: UserNotificationsService, useValue: userNotifications },
       ],
     }).compile();
 
@@ -594,11 +598,14 @@ describe('BackofficeService', () => {
     });
 
     it('un club : ses clients, calculés comme une campagne (commandes OU favoris)', async () => {
-      scheduledPush.resolveAudience.mockResolvedValue(['client-1', 'client-2']);
+      scheduledPush.destinataires.mockResolvedValue({
+        tokens: ['client-1', 'client-2'],
+        userIds: ['u1', 'u2'],
+      });
 
       const r = await service.sendNotification({ orgId: 'org-1', title: 'Match ce soir' });
 
-      expect(scheduledPush.resolveAudience).toHaveBeenCalledWith('org-1', null);
+      expect(scheduledPush.destinataires).toHaveBeenCalledWith('org-1', null);
       expect(expoPush.send.mock.calls[0][0].map((m: { to: string }) => m.to)).toEqual([
         'client-1',
         'client-2',
@@ -607,14 +614,49 @@ describe('BackofficeService', () => {
     });
 
     it('un club : son équipe n’est plus visée en tant que telle', async () => {
-      scheduledPush.resolveAudience.mockResolvedValue([]);
+      scheduledPush.destinataires.mockResolvedValue({ tokens: [], userIds: [] });
       await service.sendNotification({ orgId: 'org-1', title: 'Match ce soir' });
       expect(prisma.organizationMember.findMany).not.toHaveBeenCalled();
     });
 
-    it('un club sans aucun client : rien ne part, et on le dit', async () => {
-      scheduledPush.resolveAudience.mockResolvedValue([]);
+    it('un club sans aucun client : rien ne part, rien n’est archivé, et on le dit', async () => {
+      scheduledPush.destinataires.mockResolvedValue({ tokens: [], userIds: [] });
       const r = await service.sendNotification({ orgId: 'org-1', title: 'Match ce soir' });
+      expect(expoPush.send).not.toHaveBeenCalled();
+      expect(userNotifications.archiver).not.toHaveBeenCalled();
+      expect(r).toEqual({ sent: 0, failed: 0, recipients: 0 });
+    });
+
+    // BUG-2026-047, tranché par Rémi le 22/11 : comme une campagne programmée.
+    it('archive dans la cloche AVANT l’envoi, pour tous les clients visés', async () => {
+      const ordre: string[] = [];
+      userNotifications.archiver.mockImplementation(async () => {
+        ordre.push('archive');
+        return 2;
+      });
+      expoPush.send.mockImplementation(async () => {
+        ordre.push('envoi');
+        return { sent: 1, failed: 0, invalidTokens: [] };
+      });
+      scheduledPush.destinataires.mockResolvedValue({ tokens: ['client-1'], userIds: ['u1', 'u2'] });
+
+      await service.sendNotification({ orgId: 'org-1', title: 'Happy hour', body: 'Buvette Nord' });
+
+      expect(userNotifications.archiver).toHaveBeenCalledWith({
+        userIds: ['u1', 'u2'],
+        organizationId: 'org-1',
+        title: 'Happy hour',
+        body: 'Buvette Nord',
+      });
+      expect(ordre).toEqual(['archive', 'envoi']);
+    });
+
+    it('un client sans appareil joignable retrouve quand même l’annonce dans la cloche', async () => {
+      scheduledPush.destinataires.mockResolvedValue({ tokens: [], userIds: ['u1'] });
+      const r = await service.sendNotification({ orgId: 'org-1', title: 'Happy hour' });
+      expect(userNotifications.archiver).toHaveBeenCalledWith(
+        expect.objectContaining({ userIds: ['u1'], body: '' }),
+      );
       expect(expoPush.send).not.toHaveBeenCalled();
       expect(r).toEqual({ sent: 0, failed: 0, recipients: 0 });
     });
@@ -630,7 +672,10 @@ describe('BackofficeService', () => {
         select: { id: true },
       });
       expect(pushTokens.tokensForUsers).toHaveBeenCalledWith(['u1', 'u2']);
-      expect(scheduledPush.resolveAudience).not.toHaveBeenCalled();
+      expect(scheduledPush.destinataires).not.toHaveBeenCalled();
+      expect(userNotifications.archiver).toHaveBeenCalledWith(
+        expect.objectContaining({ userIds: ['u1', 'u2'], organizationId: null }),
+      );
     });
   });
 });

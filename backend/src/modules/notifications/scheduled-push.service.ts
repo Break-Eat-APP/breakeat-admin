@@ -121,8 +121,11 @@ export class ScheduledPushService {
    *
    * Un client sans jeton (permission refusée, appareil neuf) est tout de même
    * archivé : il retrouvera l'annonce sur sa cloche à sa prochaine ouverture.
+   *
+   * Public depuis le 22/11/2026 : l'envoi IMMÉDIAT du back-office s'en sert
+   * aussi, pour archiver comme une campagne programmée (BUG-2026-047).
    */
-  private async destinataires(
+  async destinataires(
     orgId: string | null,
     eventId: string | null,
     venueId: string | null = null,

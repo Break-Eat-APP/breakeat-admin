@@ -56,7 +56,13 @@ import { OrderConfirmationScreen } from '@screens/order-confirmation.screen';
 import { OrderTrackingScreen } from '@screens/order-tracking.screen';
 import { SplitScreen } from '@screens/split.screen';
 import { useDeepLinks } from '@lib/hooks/use-deep-links';
-import { ecouterOuvertures, ecouterPush, enregistrerPush } from '@lib/push-notifications';
+import {
+  ecouterOuvertures,
+  ecouterPush,
+  ecouterRenouvellementJeton,
+  enregistrerPush,
+  rejouerRetraitEnAttente,
+} from '@lib/push-notifications';
 import { envoyerFavoris, lireFavoris } from '@lib/favoris';
 import { signalerVisite } from '@lib/frequentation';
 import { useNotifStore } from '@store/notif.store';
@@ -166,9 +172,18 @@ export default function AppPreview() {
    * définitivement.
    */
   useEffect(() => {
-    if (!token) return;
+    // Personne de connecté : un retrait de jeton raté à la déconnexion (réseau
+    // coupé) est rejoué, pour que l'appareil ne reçoive plus les annonces de
+    // l'ancien compte (BUG-2026-045).
+    if (!token) {
+      void rejouerRetraitEnAttente();
+      return;
+    }
     signalerVisite('LOGIN');
     void enregistrerPush();
+    // Un jeton renouvelé par le système pendant que l'app reste ouverte
+    // rejoint le serveur aussitôt (BUG-2026-048).
+    const arreterRenouvellement = ecouterRenouvellementJeton();
     // Les favoris posés AVANT la connexion : sans cet envoi, ils n'atteindraient
     // le serveur qu'au prochain cœur touché, et les campagnes de ces lieux
     // passeraient à côté du client.
@@ -211,6 +226,7 @@ export default function AppPreview() {
     return () => {
       arreterPush();
       arreterOuvertures();
+      arreterRenouvellement();
       auPremierPlan.remove();
       clearInterval(battement);
     };

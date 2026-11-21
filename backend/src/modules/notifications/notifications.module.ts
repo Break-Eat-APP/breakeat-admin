@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ExpoPushService } from './expo-push.service';
 import { PushTokensService } from './push-tokens.service';
-import { PushTokensController } from './push-tokens.controller';
+import { PushTokensController, PushTokensRetraitController } from './push-tokens.controller';
 import { OrderNotificationsService } from './order-notifications.service';
 import { UserNotificationsService } from './user-notifications.service';
 import { UserNotificationsController } from './user-notifications.controller';
@@ -19,7 +19,12 @@ import { ScheduledPushController } from './scheduled-push.controller';
  * C2 (push programmés) et C3 (campagne -50 % auto), qui s'appuieront dessus.
  */
 @Module({
-  controllers: [PushTokensController, ScheduledPushController, UserNotificationsController],
+  controllers: [
+    PushTokensController,
+    PushTokensRetraitController,
+    ScheduledPushController,
+    UserNotificationsController,
+  ],
   providers: [ExpoPushService, PushTokensService, OrderNotificationsService, ScheduledPushService, UserNotificationsService],
   exports: [ExpoPushService, PushTokensService, OrderNotificationsService, ScheduledPushService, UserNotificationsService],
 })

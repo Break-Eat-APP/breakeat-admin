@@ -124,11 +124,57 @@ describe('SurveillanceCommandesFlaixService', () => {
     expect(lireEtat).not.toHaveBeenCalled();
   });
 
-  it("une erreur d'envoi ne casse pas le tour", async () => {
+  it("une erreur d'envoi ne casse pas le tour, et la commande reste à prévenir", async () => {
     const { s, send } = monter({ jeton000000000001: [etat('ready')] });
     send.mockRejectedValueOnce(new Error('Expo injoignable'));
     s.surveiller('u1', [commande()]);
     await expect(s.tourner(MAINTENANT)).resolves.toBeUndefined();
+    expect(s.taille).toBe(1);
+  });
+
+  // BUG-2026-044 (audit Codex du 21/11) : un envoi raté est retenté.
+  it('retente au tour suivant un envoi raté, sans relire Flaix, puis s’arrête au succès', async () => {
+    const { s, send, lireEtat } = monter({ jeton000000000001: [etat('ready')] });
+    send
+      .mockResolvedValueOnce({ sent: 0, failed: 1, invalidTokens: [] })
+      .mockResolvedValueOnce({ sent: 1, failed: 0, invalidTokens: [] });
+    s.surveiller('u1', [commande()]);
+
+    await s.tourner(MAINTENANT);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(s.taille).toBe(1);
+
+    await s.tourner(MAINTENANT);
+    expect(send).toHaveBeenCalledTimes(2);
+    expect(lireEtat).toHaveBeenCalledTimes(1);
+    expect(s.taille).toBe(0);
+
+    await s.tourner(MAINTENANT);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+
+  it('abandonne après 3 envois ratés, et ne la remet pas en surveillance', async () => {
+    const { s, send } = monter({ jeton000000000001: [etat('ready')] });
+    send.mockResolvedValue({ sent: 0, failed: 1, invalidTokens: [] });
+    s.surveiller('u1', [commande()]);
+
+    await s.tourner(MAINTENANT);
+    await s.tourner(MAINTENANT);
+    await s.tourner(MAINTENANT);
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(s.taille).toBe(0);
+
+    s.surveiller('u1', [commande()]);
+    await s.tourner(MAINTENANT);
+    expect(send).toHaveBeenCalledTimes(3);
+  });
+
+  it('sans appareil enregistré, rien à retenter : la commande est close', async () => {
+    const { s, send, tokensForUsers } = monter({ jeton000000000001: [etat('ready')] });
+    tokensForUsers.mockResolvedValue([]);
+    s.surveiller('u1', [commande()]);
+    await s.tourner(MAINTENANT);
+    expect(send).not.toHaveBeenCalled();
     expect(s.taille).toBe(0);
   });
 

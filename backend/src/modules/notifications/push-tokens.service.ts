@@ -33,6 +33,25 @@ export class PushTokensService {
     return { ok: true };
   }
 
+  /**
+   * Retire un jeton par sa SEULE valeur, sans session (22/11/2026,
+   * BUG-2026-045, audit Codex du 21/11).
+   *
+   * Une déconnexion sans réseau laissait le jeton rattaché à l'ancien compte.
+   * Le téléphone rejoue le retrait plus tard ; il n'a alors plus de session
+   * pour dire qui il était. Le jeton Expo en tient lieu : seul l'appareil le
+   * connaît. Le pire qu'en ferait un tiers qui le devinerait : couper les
+   * notifications de cet appareil jusqu'à sa prochaine connexion. Aucune
+   * donnée n'est rendue, et la route reste sous la limitation globale.
+   */
+  async retirerParJeton(token: string) {
+    if (!ExpoPushService.isExpoPushToken(token)) {
+      throw new BadRequestException('Jeton de push Expo invalide.');
+    }
+    await this.prisma.pushToken.deleteMany({ where: { token } });
+    return { ok: true };
+  }
+
   /** Jetons d'un ensemble d'utilisateurs (pour cibler un envoi). */
   async tokensForUsers(userIds: string[]): Promise<string[]> {
     if (userIds.length === 0) return [];
