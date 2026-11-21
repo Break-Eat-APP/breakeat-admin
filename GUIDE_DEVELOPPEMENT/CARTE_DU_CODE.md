@@ -38,7 +38,7 @@ Modules et à quoi ils servent :
 | `frequentation` | Audience de l'app : un passage = un appareil dans une fenêtre de 30 min (et non une somme d'écrans vus). Seule route d'écriture ouverte aux visiteurs NON connectés. **Anonymes et connectés ne se recoupent jamais** ; « nouveau » = le premier LIEU jamais ouvert (la première ouverture, elle, est toujours sans lieu) ; découpage par **jour de service** (bascule à 4 h, heure du lieu) |
 | `stats`, `backoffice` | Analytics club + KPIs super-admin. **Le CA HT se déduit du taux de TVA figé sur chaque ligne de commande** (5,5 / 10 / 20 %), jamais d'un taux global — voir `common/helpers/tva.ts` |
 | `feature-flags`, `app-settings` | Config sans redéploiement (CMS clé/valeur) |
-| `flaix` | Intégration Flaix (API tierce — voir `brain/FLAIX_CONTRACT.md`) |
+| `flaix` | Intégration Flaix (API tierce — voir `brain/FLAIX_CONTRACT.md`). **`commandes-client-flaix.service.ts`** (21/11, 1.7.44) : lit chez Flaix les commandes du client connecté par son e-mail, plus l'état en direct, pour « Mes commandes » (`GET /flaix/mes-commandes`, ADR-0015). Rien en base ; éteint sans `FLAIX_COMMANDES_URL` / `FLAIX_COMMANDES_API_KEY` |
 
 **Endpoints que l'app mobile consomme** (pas d'auth requise) : `GET /public/venues`, `GET /public/events/:id`, `GET /public/events/:id/suppliers/:sid/products`, `GET /public/events/:id/slots`, `GET /public/order-splits/:code` (+ `/claim`, pour un convive **sans compte**). Puis avec auth : `/carts`, `/orders`, `/order-splits`.
 
@@ -90,7 +90,7 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
 |---|---|---|
 | `venue-discovery.screen.tsx` | **Accueil** : recherche + lieux dans 10 km + favoris + plan buvettes + **« À ne pas manquer »** (événements des lieux favoris, une seule requête serveur) | ✅ |
 | `login.screen.tsx` | Connexion / inscription (optionnelle), Apple, **Google** (`lib/connexion-google.ts` web = rien, `.native.ts` = SDK natif) | ✅ |
-| `order-history.screen.tsx`, `profile.screen.tsx` | Historique en **tickets** (numéro orange en sujet, pastilles Toutes / En cours / Récupérées + sections En cours / Terminées, ticket entier cliquable vers le suivi), profil | ✅ |
+| `order-history.screen.tsx`, `profile.screen.tsx` | Historique en **tickets** (numéro orange en sujet, pastilles Toutes / En cours / Récupérées + sections En cours / Terminées, ticket entier cliquable vers le suivi), profil. Depuis le 21/11 (1.7.44), les **commandes Flaix** s'y mêlent, dessinées par `components/carte-commande-flaix.tsx` (état Flaix, « Suivre ma commande », « Reçu » ; ni arrivée, ni note, ni plan) | ✅ |
 | `flaix-order.screen.tsx`, `supplier-catalog.screen.tsx`, `cart.screen.tsx`, `slot-selector.screen.tsx`, `checkout.screen.tsx`, `order-confirmation.screen.tsx` | Parcours de commande. `slot-selector` : **« Au plus vite »** toujours en tête (`AU_PLUS_VITE` dans `store/cart.store.ts`, créneau `null`), puis les créneaux rangés par moment (`lib/sections-creneaux.ts`). `checkout` et `cart` envoient **toujours** le choix au serveur, `null` compris (ADR-0011) | ✅ |
 | `event-home.screen.tsx`, `order-tracking.screen.tsx` | Écran d'un lieu (catalogue, retrait) et suivi de commande | ✅ branchés dans `App.expo.tsx` |
 | `qr-scanner.screen.tsx` | Scan QR | ⚠️ **stubbé** dans `App.expo.tsx` — la caméra n'existe pas sur le web |

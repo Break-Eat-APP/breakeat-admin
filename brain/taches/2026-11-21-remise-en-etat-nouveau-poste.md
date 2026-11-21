@@ -118,7 +118,8 @@ d'avoir réglé le point 2 ci-dessus.
 ## Suite — la liste à rejouer sur un prochain poste
 
 1. Installer Git, Node (≥ 22.13), Docker Desktop. `corepack enable` (ou
-   `npm i -g pnpm@11.3.0`). Si besoin, `gh`.
+   `npm i -g pnpm@11.3.0`). Si besoin, `gh`. Pour régénérer
+   `PHASES_DE_DEVELOPPEMENT.docx` : `npm install -g docx` (fait le 21/11).
 2. Cloner **hors de OneDrive** (`C:\dev\breakeat-admin`), puis `pnpm install`,
    puis **`pnpm db:generate` dans `backend/`** : sans client Prisma généré,
    60 suites de tests sur 81 ne compilent pas (constaté le 21/11).

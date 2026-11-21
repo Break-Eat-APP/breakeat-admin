@@ -5,6 +5,16 @@
 pourra-t-on supprimer des fonctionnalités devenues inutiles ou en doublon ?
 **Complète** : `brain/FLAIX_CONTRACT.md`, qui reste la source de vérité.
 
+> **Mise à jour du 21/11/2026 — ce qui a bougé depuis.**
+> - **Flaix encaisse** (ADR-0001), et le paiement BreakEat par Stripe est mis
+>   en attente (ADR-0014).
+> - **Les commandes Flaix apparaissent dans « Mes commandes »**, mais BreakEat
+>   les **LIT** chez Flaix, à la demande, par l'e-mail du client. Il ne les
+>   enregistre pas (ADR-0015, 1.7.44). La règle de ce document tient : Flaix
+>   décide et dit « prête » ; BreakEat affiche.
+> - Il manque toujours le flux **poussé** par Flaix (E1) pour la
+>   notification « prête », la Live Activity, la note et la fidélité.
+
 ---
 
 ## La réponse courte

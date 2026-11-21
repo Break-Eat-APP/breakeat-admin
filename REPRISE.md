@@ -184,10 +184,10 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 
 > Cette section remplace « État au 17/11 » et « État au 09/11 » (leurs
 > versions précédentes sont dans l'historique Git). Le détail de chaque
-> livraison est dans `CHANGELOG.md` (jusqu'à **1.7.43**) ; les règles dans
-> `CLAUDE.md` ; les décisions dans `brain/DECISIONS/` (**0001 à 0013**) ; les
-> bugs dans `brain/BUGS_ET_INCIDENTS.md` (**jusqu'à BUG-2026-038**,
-> incidents jusqu'à INC-2026-003) ; les comptes rendus
+> livraison est dans `CHANGELOG.md` (jusqu'à **1.7.44**) ; les règles dans
+> `CLAUDE.md` ; les décisions dans `brain/DECISIONS/` (**0001 à 0016**) ; les
+> bugs dans `brain/BUGS_ET_INCIDENTS.md` (**jusqu'à BUG-2026-040**,
+> incidents jusqu'à INC-2026-004) ; les comptes rendus
 > dans `brain/taches/` ; où vit le code dans
 > `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md` ; toutes les phases dans
 > `GUIDE_DEVELOPPEMENT/PHASES_DE_DEVELOPPEMENT.docx` (régénéré par
@@ -225,11 +225,25 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 | 17/11 | **1.1.3 soumise à Apple et Google**, publication manuelle (ADR-0012) ; **Apple l'a validée** (en attente du clic de Rémi) | 1.7.40, `brain/taches/2026-11-17-soumission-stores-1.1.3.md` |
 | 17/11 | **Deux audits Codex**, chaque constat vérifié : 7 corrections serveur (paiements abandonnés libérés, panier figé tel que chiffré, ouverture automatique et création d'événement atomiques, webhook Flaix rejouable, route opérateur épinglée, invitation sous condition) | 1.7.41, `brain/audits/REPONSE_AUDITS_CODEX_2026-11-17.md`, `brain/taches/2026-11-17-corrections-audits-codex.md` |
 | 21/11 | **Favoris copiés au serveur, campagnes vers « a commandé OU suit le lieu »** (étape 1 du plan Flaix, ADR-0013) ; l'envoi immédiat du back-office vise les clients, plus l'équipe (BUG-2026-038). Serveur en ligne, app à mettre à jour | 1.7.42, 1.7.43, `brain/taches/2026-11-21-favoris-serveur-campagnes.md` |
-| 21/11 | Nouveau poste de développement ; l'agent pousse directement sur `main` (CLAUDE.md § 6) ; la session locale seule travaille sur le dépôt | note du 21/11 ci-dessus |
+| 21/11 | Nouveau poste de développement ; l'agent pousse directement sur `main` (ADR-0016) ; la session locale seule travaille sur le dépôt ; ancien disque comparé à `main` | note du 21/11 ci-dessus, `brain/taches/2026-11-21-remise-en-etat-nouveau-poste.md` |
+| 21/11 | **Paiement via Flaix**, Stripe BreakEat en attente (ADR-0014) ; **1.1.3 sortie sur Google Play** sans ordre de sortie (INC-2026-004) | ADR-0012 (à reprendre) |
+| 21/11 | **Les commandes Flaix dans « Mes commandes »**, lues chez Flaix par l'e-mail (ADR-0015, BUG-2026-039 accepté pour les essais) ; mise à jour à distance publiée (`9e82b1b`) | 1.7.44, `brain/taches/2026-11-21-commandes-flaix-mes-commandes.md` |
 
 ### Ce qui reste — dans l'ordre
 
-1. **Sortie de la 1.1.3 sur les stores — dans cet ordre** (ADR-0012) :
+0. **Le match du 22/11 (Marseille vs Chamonix, Palais Omnisports, lieu
+   Flaix 71, commande ouverte à 08h30)** : dès 08h30, Rémi passe une commande
+   d'essai depuis l'app (e-mail de son compte), puis ouvre « Mes commandes ».
+   Si rien n'apparaît : interroger l'API Flaix avec cette adresse, pour savoir
+   si le problème vient de Flaix (lieu hors de la clé, variables Railway) ou
+   de l'app (mise à jour pas encore appliquée : fermer et rouvrir l'app).
+   Ensuite : demander au développeur Flaix la liste des états, le webhook
+   `ORDER_READY` et `[#breakeatId]` (cahier des charges, E1).
+1. **Sortie de la 1.1.3 sur les stores** — ⚠️ **Google Play : SORTIE le 21/11**
+   (INC-2026-004). **App Store : en attente, rien ne sort sans l'ordre de
+   Rémi** (règle rappelée le 21/11). Stripe en attente (ADR-0014) :
+   **ADR-0012 est à reprendre**. Le plan d'origine, gardé pour mémoire
+   (ADR-0012) :
    a. ✅ Corrections du 17/11 (1.7.39) poussées, CI verte, `/health` →
       `b430c58`. ✅ Mise à jour à distance 1.1.3 publiée le 17/11 sur `7b95f7c`
       (run 44066757716, vert) : la build 46 reçoit la correction de « Au plus
@@ -281,7 +295,10 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
    sans identifiant (API publique) ; (c) vérifier Railway et Vercel au premier
    envoi. Marche à suivre : Settings → General → Danger Zone → Change
    repository visibility.
-5. **Le flux des commandes Flaix — côté développeur Flaix.** Une commande
+5. **Le flux des commandes Flaix — côté développeur Flaix.** ✅ **En partie
+   depuis le 21/11 (1.7.44)** : « Mes commandes » LIT les commandes Flaix par
+   l'e-mail du client (ADR-0015). Le reste de ce point vaut toujours pour le
+   flux poussé (E1). Une commande
    passée dans Flaix ne crée rien chez BreakEat ; la Live Activity, la note,
    la fidélité et « Je suis arrivé » en dépendent, et les trois lieux en
    production sont en Flaix. Quand le flux arrive : y brancher la Live

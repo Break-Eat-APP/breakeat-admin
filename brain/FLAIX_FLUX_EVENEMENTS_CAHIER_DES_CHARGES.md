@@ -286,6 +286,21 @@ inutiles : **B, E1, E2 et E3 suffisent.**
 
 #### E1 — Les commandes Flaix remontent dans BreakEat (à construire par Flaix)
 
+> **Où on en est au 21/11/2026.** Flaix a livré une **API de lecture** :
+> `POST /api/public/clients/commandes` (clé `X-Api-Key`, corps `{ email }`),
+> qui rend les commandes d'un client, plus l'adresse publique de suivi
+> `GET /api/public/orders/<jeton>/status`. BreakEat s'en sert depuis la
+> 1.7.44 pour afficher les commandes Flaix dans « Mes commandes » (ADR-0015).
+> **Ce qui manque encore, et pourquoi** :
+> 1. **La liste complète des états** (`statut` de la liste, `status` du
+>    suivi). BreakEat doit savoir lesquels terminent une commande.
+> 2. **Le webhook ci-dessous**, au minimum `ORDER_READY`, avec le `jeton`
+>    comme `flaixOrderId`. Sans lui, pas de notification « Ta commande est
+>    prête » ni de Live Activity : BreakEat n'apprend l'état que quand
+>    l'écran le demande.
+> 3. **L'étiquette `[#breakeatId]`**. Aujourd'hui, le client est reconnu par
+>    son e-mail, que BreakEat ne vérifie pas (BUG-2026-039).
+
 C'est le point le plus important de tout ce document. Aujourd'hui, **une
 commande passée dans Flaix ne crée rien chez BreakEat**. Tout ce que l'app
 sait déjà faire avec une commande en dépend :

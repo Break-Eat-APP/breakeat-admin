@@ -47,6 +47,19 @@ Une fois Stripe en production et stable, la publication automatique après
 validation peut redevenir acceptable pour les versions mineures — décision à
 reprendre avec Rémi, pas à prendre par défaut.
 
+## Mise à jour du 21/11/2026 — à reprendre avec Rémi
+- **Google Play** : la 1.1.3 est **sortie** le 21/11 (envoi 13 « Publiée »)
+  par un clic sur « Publier les modifications » pendant une vérification
+  (INC-2026-004). Elle ne se retire pas. **App Store** : toujours en attente
+  du clic de Rémi.
+- **Stripe** : le passage en production est mis en attente, le paiement passe
+  par Flaix (ADR-0014). La condition du point 3 n'a donc plus d'échéance.
+- **Règle de Rémi, rappelée le 21/11** : rien ne sort sur les stores tant que
+  les développements avec son développeur Flaix ne sont pas finalisés.
+- **À trancher** : publier l'App Store en fermant au public les lieux sans
+  Flaix (encore en paiement de test), ou attendre. Le statut de cette ADR
+  changera selon la réponse.
+
 ## Où elle vit
 Pas dans le code : dans les réglages des consoles (App Store Connect, Play
 Console). Les profils d'envoi sont dans `apps/mobile/eas.json` (`submit` :
