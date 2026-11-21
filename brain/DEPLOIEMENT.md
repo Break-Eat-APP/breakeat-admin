@@ -35,6 +35,32 @@ production : tests, typage et lint lancés en local AVANT, CI verte et
 n'a pas rejouée passe par une pull request. Détail et limites : `CLAUDE.md`
 § 6.
 
+**Ce que Rémi valide, et ce qui part seul (21/11/2026)** :
+
+| Action | Accord de Rémi ? | Comment il contrôle |
+|---|---|---|
+| Pousser du code sur `main` (serveur, consoles) | **Non** : c'est l'accord donné une fois pour toutes le 21/11. Railway et Vercel déploient seuls | Le compte rendu de l'agent (commit, tests lancés) ; GitHub → Commits et Actions (CI) ; `/health` |
+| Pousser de la documentation seule | Non | Idem. Railway ne redéploie pas (`watchPatterns`), la CI ne tourne pas |
+| Mise à jour à distance de l'app | **Oui, à chaque fois** | C'est Rémi qui lance le workflow, ou l'agent sur son accord écrit |
+| Build native (EAS), soumission aux stores | **Oui, à chaque fois** | EAS, TestFlight, Play Console |
+| Publication sur les stores | **Rémi la fait lui-même** (ADR-0012) | — |
+| Stripe en mode live | **Oui** : Rémi pose les clés lui-même sur Railway | Stripe, Railway |
+
+Avant le 21/11, la validation passait par la **pull request** que Rémi
+fusionnait. Pour retrouver un point d'arrêt avant chaque envoi, il y a deux
+moyens : revenir aux pull requests (une ligne à changer dans `CLAUDE.md` § 6),
+ou régler Claude Code pour qu'il **demande avant chaque `git push`** (règle
+« ask » dans `.claude/settings.json`). La seconde garde l'envoi direct, avec un
+clic de Rémi à chaque fois.
+
+**Ce qui repasse par l'examen d'Apple et de Google** : toute **nouvelle build
+native** (nouvelle `version` ou nouveau numéro de build) envoyée sur les
+stores, soit un examen de 1 à 7 jours de chaque côté. Sur Android, les pistes
+de test ont leur propre examen, plus court. Une **mise à jour à distance**
+(JavaScript seul) ne passe par aucun examen. Une build native qui ne change
+qu'un détail (les textes de permission de la 1.1.4) coûte donc deux examens :
+on la regroupe avec le prochain vrai changement natif.
+
 **`railway.json` fait autorité** pour le démarrage du serveur :
 `pnpm db:generate && sh scripts/migrer.sh && node dist/main`. Les migrations
 s'appliquent **au démarrage** ; `/health` sert de sonde.

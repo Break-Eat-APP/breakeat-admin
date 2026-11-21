@@ -188,7 +188,12 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
    connexion Google, paiement, notification « prête ».
 3. **À la prochaine build native (1.1.4)** : textes de permission iOS au
    tutoiement (`app.config.js`, BUG-2026-025) ; monter `version` avant la
-   build (ADR-0005).
+   build (ADR-0005). **Conseillé le 21/11 : pas de build pour ce seul motif** (à confirmer
+   par Rémi) : une
+   build native repasse par l'examen d'Apple ET de Google (1 à 7 jours
+   chacun), et il faut builder les DEUX plateformes, sinon un Android resté en
+   1.1.3 ne reçoit plus les mises à jour à distance écrites pour la 1.1.4. On
+   l'attache au prochain vrai changement natif, après la sortie de la 1.1.3.
 4. **Passer le dépôt GitHub en privé** (décision de Rémi) — audit, constat 1.
    **Reporté par Rémi le 11/11.** Avant de le faire : (a) ✅ fait le 11/11 —
    la CI ne tourne plus sur les commits de documentation seule — mesuré le
