@@ -72,11 +72,9 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   `break-eat-app-spe-2d709`, cité nulle part dans le dépôt) et
 >   `flaix-wallet` (projet `rapid-access-494820-f8`, côté Flaix). Ne pas les
 >   recopier ; une clé inutile se supprime dans Google Cloud.
->   ⚠️ **À trancher par Rémi** : le compte de l'éditeur précédent (Synertic,
->   adresse `syn_android@…`) a **toujours accès à la Play Console**, actif et
->   sans limite de durée. S'il n'a plus de raison d'y être, le retirer :
->   Utilisateurs et autorisations → la flèche de sa ligne → supprimer
->   l'accès. `brain/livrables/stores/fiche-stores.md` est ignoré
+>   **Tranché par Rémi le 21/11 : on garde l'accès** du compte de l'éditeur
+>   précédent (Synertic, `syn_android@…`) à la Play Console, actif et sans
+>   limite de durée. Ne pas le reproposer. `brain/livrables/stores/fiche-stores.md` est ignoré
 >   par Git depuis `c967dbd` : il ne doit jamais être publié.
 > - **Remise en état sur le nouveau poste (21/11)** : ce qui a été refait, ce
 >   qui a été vérifié et la liste à rejouer sur un prochain poste sont dans

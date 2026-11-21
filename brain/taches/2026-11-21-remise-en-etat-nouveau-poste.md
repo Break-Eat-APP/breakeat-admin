@@ -98,7 +98,7 @@ ici).
    existé** (aucun dans la Play Console, aucun sur l'ancien disque). Les
    builds Android se déposent à la main ; `eas submit --platform android`
    échouera tant qu'on ne le crée pas. Au passage : l'éditeur précédent
-   (Synertic) a toujours accès à la Play Console, à trancher par Rémi.
+   (Synertic) a toujours accès à la Play Console ; Rémi le garde (21/11).
 2. **L'ancien disque, comparé à `main` le 21/11** : aucun commit non poussé.
    En revanche, une revérification Codex du 17/11 (recopiée dans
    `brain/audits/`) et un **début de correction de paiement jamais commité**
