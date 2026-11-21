@@ -15,9 +15,14 @@ describe('ScheduledPushService — le ciblage', () => {
   const LIEU = 'aaaaaaaa-1111-4111-8111-111111111111';
   const AUTRE_LIEU = 'bbbbbbbb-2222-4222-8222-222222222222';
 
-  function monter(lieuDuClub: string | null = LIEU) {
+  function monter(
+    lieuDuClub: string | null = LIEU,
+    suiveurs: { userId: string }[] = [],
+    lieuDeLEvenement: string | null = LIEU,
+  ) {
     const create = jest.fn().mockResolvedValue({ id: 'push-1' });
     const findMany = jest.fn().mockResolvedValue([{ userId: 'u1' }, { userId: 'u2' }]);
+    const favoris = jest.fn().mockResolvedValue(suiveurs);
     const prisma = {
       user: { findUnique: jest.fn().mockResolvedValue({ globalRole: 'SUPER_ADMIN' }) },
       venue: {
@@ -25,7 +30,13 @@ describe('ScheduledPushService — le ciblage', () => {
         // remonte pas.
         findFirst: jest.fn().mockResolvedValue(lieuDuClub ? { id: lieuDuClub } : null),
       },
-      event: { findFirst: jest.fn().mockResolvedValue({ id: 'ev-1' }) },
+      event: {
+        findFirst: jest.fn().mockResolvedValue({ id: 'ev-1' }),
+        findUnique: jest
+          .fn()
+          .mockResolvedValue(lieuDeLEvenement ? { venueId: lieuDeLEvenement } : null),
+      },
+      venueFavorite: { findMany: favoris },
       scheduledPush: { create },
       order: { findMany },
       pushToken: { findMany: jest.fn().mockResolvedValue([]) },
@@ -40,7 +51,7 @@ describe('ScheduledPushService — le ciblage', () => {
       pushTokens as never,
       {} as never,
     );
-    return { service, create, findMany, prisma };
+    return { service, create, findMany, favoris, pushTokens, prisma };
   }
 
   const campagne = {
@@ -87,6 +98,55 @@ describe('ScheduledPushService — le ciblage', () => {
       const where = findMany.mock.calls[0][0].where;
       expect(where.organizationId).toBe(ORG);
       expect(where.venueId).toBeUndefined();
+    });
+
+    describe('et ceux qui suivent le lieu (favoris, 21/11)', () => {
+      // Un lieu piloté par Flaix n'a aucune commande BreakEat : sans les
+      // favoris, ses campagnes partaient vers zéro appareil.
+      it('ajoutent les clients qui ont le lieu en favori, sans doublon', async () => {
+        const { service, pushTokens } = monter(LIEU, [{ userId: 'u2' }, { userId: 'u3' }]);
+        const { userIds } = await service['destinataires'](ORG, null, LIEU);
+
+        expect(userIds.sort()).toEqual(['u1', 'u2', 'u3']);
+        expect(pushTokens.tokensForUsers).toHaveBeenCalledWith(
+          expect.arrayContaining(['u1', 'u2', 'u3']),
+        );
+      });
+
+      it('atteignent un lieu sans AUCUNE commande BreakEat (cas Flaix)', async () => {
+        const { service, findMany } = monter(LIEU, [{ userId: 'fan' }]);
+        findMany.mockResolvedValueOnce([]);
+        const { userIds } = await service['destinataires'](ORG, null, LIEU);
+        expect(userIds).toEqual(['fan']);
+      });
+
+      it('restent dans le lieu visé, et toujours dans le club', async () => {
+        const { service, favoris } = monter();
+        await service['destinataires'](ORG, null, LIEU);
+        expect(favoris.mock.calls[0][0].where).toEqual({
+          venue: { organizationId: ORG },
+          venueId: LIEU,
+        });
+      });
+
+      it('couvrent tous les lieux du club quand aucun n’est visé', async () => {
+        const { service, favoris } = monter();
+        await service['destinataires'](ORG, null, null);
+        expect(favoris.mock.calls[0][0].where).toEqual({ venue: { organizationId: ORG } });
+      });
+
+      it('pour un événement, suivent le lieu de l’événement', async () => {
+        const { service, favoris } = monter(LIEU, [], AUTRE_LIEU);
+        await service['destinataires'](ORG, 'ev-1', null);
+        expect(favoris.mock.calls[0][0].where.venueId).toBe(AUTRE_LIEU);
+      });
+
+      it('un événement disparu n’élargit PAS la campagne à tout le club', async () => {
+        const { service, favoris } = monter(LIEU, [{ userId: 'fan' }], null);
+        const { userIds } = await service['destinataires'](ORG, 'ev-disparu', null);
+        expect(favoris).not.toHaveBeenCalled();
+        expect(userIds).not.toContain('fan');
+      });
     });
 
     it('sans organisation, c’est la diffusion plateforme — réservée au back-office', async () => {

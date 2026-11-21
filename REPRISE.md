@@ -22,9 +22,41 @@
 > Les documents vivants sont ce fichier, `CHANGELOG.md`, `brain/BUGS_ET_INCIDENTS.md`,
 > `brain/DECISIONS/` et `brain/taches/` (gouvernance du 11/11, `CLAUDE.md`). Le git complète.
 
-_Dernière mise à jour : 2026-11-17 — lire d'abord « ÉTAT AU 17/11/2026 » ci-dessous. Les notes de mise à jour précédentes sont gardées en fin de fichier (« Historique des mises à jour »)._
+_Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » ci-dessous, et la note du 21/11 en tête de cette section. Les notes de mise à jour précédentes sont gardées en fin de fichier (« Historique des mises à jour »)._
 
 ## 🟢 ÉTAT AU 17/11/2026 — LIRE D'ABORD
+
+> **NOTE DU 21/11/2026 — à lire avant le reste.**
+> - **Nouveau poste de Rémi** (16 Go de mémoire, Ryzen 7 ; l'ancien est hors
+>   service, son disque est lisible en USB). GitHub `main` s'arrête au
+>   **17/11, `6f601c6`** : rien n'a été poussé depuis. **À vérifier avant tout
+>   nouveau travail sur le poste** : l'ancien disque contient-il des commits ou
+>   des fichiers modifiés du 18-19/11 non poussés (`git status`,
+>   `git log --oneline -5`, `git stash list` sur la copie de l'ancien disque) ?
+>   Récupérer aussi les fichiers hors Git : `apps/mobile/google-play-service-account.json`,
+>   `brain/livrables/stores/fiche-stores.md`, les `.env`.
+> - **Apple a validé la 1.1.3** ; Google à vérifier. **Ne pas publier avant
+>   Stripe en production** (ADR-0012).
+> - **On attend le développeur Flaix** pour E1 (les commandes Flaix qui
+>   remontent chez BreakEat).
+> - **Étape 1 du plan Flaix faite dans le code (1.7.42), PAS EN LIGNE** :
+>   favoris copiés au serveur, campagnes vers « a commandé OU suit le lieu »
+>   (ADR-0013). Sur la branche `claude/sharp-shannon-4ljkff`. Avant la mise en
+>   ligne : accord de Rémi pour `main` ; CI verte (la migration
+>   `20261121_lieux_favoris` n'a été rejouée que sur PostgreSQL 16 en local) ;
+>   **serveur déployé AVANT** la mise à jour à distance de l'app ; politique
+>   de confidentialité et déclarations des stores complétées (lieux suivis).
+> - **⏸️ À VOIR PLUS TARD (Rémi, 21/11) — confidentialité des favoris** : la
+>   politique du dépôt (`documents-legaux/politique-de-confidentialite.txt`)
+>   ne mentionne pas les lieux suivis (§ 2 « Données concernées », § 14
+>   « Suppression du compte »). Rémi pense l'avoir déjà fait : **comparer
+>   avec la version en ligne** (site, stores). S'il manque : deux phrases à
+>   ajouter, et les déclarations Apple « Confidentialité de l'app » et Google
+>   « Sécurité des données » à compléter. Conseillé avant la mise à jour à
+>   distance qui active l'envoi des favoris.
+> - **BUG-2026-038, à trancher par Rémi** : « Envoyer au club » en envoi
+>   immédiat du back-office atteint l'**équipe** du club, l'envoi programmé
+>   atteint ses **clients**.
 
 > Cette section remplace « État au 09/11 » (son tableau « ce qui a changé du
 > 03 au 09/11 » est dans l'historique Git). Le détail de chaque livraison est
@@ -148,13 +180,14 @@ _Dernière mise à jour : 2026-11-17 — lire d'abord « ÉTAT AU 17/11/2026 » 
    Flaix seulement. Il faut DEUX API, une par sens : Flaix construit E1 (ses
    commandes remontent chez BreakEat), BreakEat construit E2 (chiffres de
    l'app lus par Flaix) et E3 (campagnes et apparence pilotées depuis Flaix).
-   ⚠️ **Aujourd'hui, une campagne lancée par un lieu Flaix n'atteint
-   personne** : `scheduled-push.service.ts` (`destinataires`) cible les
+   ⚠️ **Jusqu'au 21/11, une campagne lancée par un lieu Flaix n'atteignait
+   personne** (corrigé dans le code en 1.7.42, pas encore en ligne — voir la
+   note du 21/11) : `scheduled-push.service.ts` (`destinataires`) cible les
    clients qui ont une `Order` dans le club, et les commandes Flaix n'en
    créent pas ; les favoris vivent sur le téléphone, le serveur ne les
    connaît pas. Correctif possible sans Flaix (≈ 1 jour) : remonter les
-   favoris au serveur et cibler « a commandé OU a mis en favori ». Pas
-   lancé : attendre le feu vert de Rémi.
+   favoris au serveur et cibler « a commandé OU a mis en favori ». ✅ Fait
+   dans le code le 21/11 (1.7.42), pas encore en ligne.
    **LE PLAN DE DÉVELOPPEMENT DES API FLAIX ↔ BREAKEAT** (validé par Rémi le
    10/11, **à lancer APRÈS son point avec son développeur** — rien avant) :
    0. **Le point avec le développeur Flaix**, cahier des charges en main
@@ -163,9 +196,11 @@ _Dernière mise à jour : 2026-11-17 — lire d'abord « ÉTAT AU 17/11/2026 » 
       `[#breakeatId]`), ses dates, une adresse de préproduction, et les clés
       de test **par canal sûr**. Trancher : le responsable de lieu travaille-
       t-il dans Flaix seulement (alors D devient inutile) ?
-   1. **BreakEat, sans attendre Flaix (≈ 1 j)** : favoris remontés au
-      serveur, campagnes ciblant « a commandé OU favori ». Débloque les
-      campagnes des lieux Flaix pour les supporters.
+   1. ✅ **FAIT DANS LE CODE le 21/11 (1.7.42), pas en ligne** — BreakEat,
+      sans attendre Flaix : favoris remontés au serveur, campagnes ciblant
+      « a commandé OU favori » (ADR-0013,
+      `brain/taches/2026-11-21-favoris-serveur-campagnes.md`). Débloque les
+      campagnes des lieux Flaix pour les supporters connectés.
    ⚖️ **« Qui dit prête » — TRANCHÉ par Rémi le 11/11 : l'opérateur, À LA
       MAIN, dans Flaix.** Pour une commande Flaix, `ORDER_READY` FAIT FOI et
       doit sonner tout de suite. La garde actuelle de `statutAffiche`
@@ -526,7 +561,7 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Parrainage** | Partage de lien et QR en place (phase 44) | Trancher l'économie : points de fidélité, remise portée par le club, ou rien. La récompense sortirait de ta poche — les produits appartiennent aux buvettes |
 | **Notifications** | Cloche corrigée (phase 52), build 21 envoyé | À ÉPROUVER en vrai : envoyer une campagne, app en arrière-plan, puis relire les journaux Railway (`Push token enregistré…`, `Expo push: N envoyés…`) |
 | **Lien calendrier Flaix (option A)** | ⏸️ En attente du point de Rémi avec son développeur (10/11). A maintenant, B aussi, C en option | ⛔ Écran Saison sans bouton « Commander » pour un lieu en continu : à corriger AVANT de basculer un lieu. Plus la case « Message d'information ». Détail dans « Ce qui reste », point 5 |
-| **Campagnes des lieux Flaix** | ⚠️ N'atteignent personne (aucune `Order` BreakEat sur un lieu Flaix, favoris gardés sur le téléphone) | Favoris au serveur + cible « a commandé OU favori » (≈ 1 jour), puis E1 côté Flaix. En attente du feu vert de Rémi |
+| **Campagnes des lieux Flaix** | ⚠️ N'atteignent personne (aucune `Order` BreakEat sur un lieu Flaix, favoris gardés sur le téléphone) | ✅ Favoris au serveur + cible « a commandé OU favori » **faits dans le code le 21/11 (1.7.42, ADR-0013), pas encore en ligne** ; puis E1 côté Flaix. Reste : BUG-2026-038 (envoi immédiat du back-office) |
 | **Gouvernance technique** (document `BRAT_EAT_MASTER_ENGINEERING_GOVERNANCE.md`, 11/11) | ✅ **Intégrée le 11/11, en 5 commits** : `CLAUDE.md` (racine) ; `brain/BUGS_ET_INCIDENTS.md` ; `brain/DECISIONS/` (ADR 0001 à 0008) ; `brain/ARCHITECTURE.md` et `brain/AGENTS.md` réécrits depuis le code ; `brain/taches/` (modèle + premier compte rendu) ; `brain/SECURITE.md` ; `brain/DEPLOIEMENT.md` ; audits de la racine → `brain/audits/`, documents dépassés → `brain/archives/`. Tout reste dans `brain/` (ADR-0008) | Hors documentation, conseillé : dépôt privé (reporté), préproduction, Railway qui attend la CI, Dependabot. ✅ Restauration depuis une sauvegarde de nuit réussie le 11/11 (essai mensuel automatique) |
 | **Passerelle d'accès Flaix** | ⏸️ **Gelée le 10/11 par Rémi** — spécifiée seulement (cahier des charges Flaix, section D) | Feu vert de Rémi, choix D1 seul ou D1 puis D2, route et clé de test côté Flaix. Rien à coder d'ici là |
 | **Liens Flaix** | Saisis depuis la liste des événements (toute la saison d'un coup) **ou** depuis la fiche d'un match, même terminé (06/11) | Les coller à la main, un par match, tant que Flaix ne les pousse pas |

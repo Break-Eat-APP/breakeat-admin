@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiRemplacerFavoris } from '@lib/api/mobile-api';
+import { useAuthStore } from '@store/auth.store';
 
 /**
  * LES LIEUX FAVORIS, GARDÉS D'UNE OUVERTURE À L'AUTRE.
@@ -24,6 +26,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * Le stockage local garde donc la fonction utilisable pour tout le monde. La
  * synchronisation entre appareils reste à faire, et se posera le jour où un
  * client en aura deux.
+ *
+ * ── UNE COPIE SUR LE SERVEUR, QUAND LE CLIENT EST CONNECTÉ (21/11/2026) ──
+ *
+ * L'original reste ici. Le serveur en reçoit une copie pour une seule raison :
+ * qu'une campagne d'un lieu atteigne ceux qui le suivent. Un lieu piloté par
+ * Flaix n'a aucune commande BreakEat, et ses campagnes partaient vers zéro
+ * appareil. La copie part à chaque enregistrement et à chaque connexion
+ * (`App.expo.tsx`) : un cœur posé avant de se connecter arrive donc aussi.
  *
  * ── CE QU'ON GARDE, ET POURQUOI PAS PLUS ─────────────────────────────
  *
@@ -77,11 +87,31 @@ export async function lireFavoris(): Promise<LieuFavori[]> {
   }
 }
 
-/** Enregistre la liste. Un échec se journalise et ne remonte pas à l'écran. */
+/**
+ * Enregistre la liste, puis en envoie la copie au serveur si le client est
+ * connecté. Un échec se journalise et ne remonte pas à l'écran.
+ */
 export async function ecrireFavoris(favoris: readonly LieuFavori[]): Promise<void> {
   try {
     await AsyncStorage.setItem(CLE, JSON.stringify(favoris));
   } catch (e: unknown) {
     console.warn('Favoris non enregistrés :', e);
+  }
+  await envoyerFavoris(favoris);
+}
+
+/**
+ * Envoie la liste au serveur — seulement pour un client connecté.
+ *
+ * NE LÈVE JAMAIS : la copie serveur ne sert qu'aux campagnes. Un réseau coupé
+ * ne doit ni bloquer le cœur, ni faire perdre le favori sur le téléphone ; la
+ * liste entière repart au prochain enregistrement ou à la prochaine connexion.
+ */
+export async function envoyerFavoris(favoris: readonly LieuFavori[]): Promise<void> {
+  if (!useAuthStore.getState().token) return;
+  try {
+    await apiRemplacerFavoris(favoris.map((f) => f.id));
+  } catch (e: unknown) {
+    console.warn('Favoris non copiés sur le serveur :', e);
   }
 }

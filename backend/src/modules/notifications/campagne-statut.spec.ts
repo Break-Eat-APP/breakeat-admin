@@ -43,6 +43,8 @@ describe('ScheduledPushService — le statut dit la vérité', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       order: { findMany: jest.fn().mockResolvedValue([{ userId: 'u1' }]) },
+      // Les suiveurs du lieu (favoris, 21/11) : aucun ici, le sujet est le statut.
+      venueFavorite: { findMany: jest.fn().mockResolvedValue([]) },
       pushToken: { findMany: jest.fn().mockResolvedValue([]) },
     } as unknown as PrismaService;
 

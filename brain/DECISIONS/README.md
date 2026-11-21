@@ -33,3 +33,4 @@ ne jamais réutiliser un numéro. Une décision remplacée passe en
 | [0010](ADR-0010-invitation-a-accepter.md) | Un compte existant rejoint un club seulement s'il accepte l'invitation | 16/11/2026 | ACCEPTÉE |
 | [0011](ADR-0011-au-plus-vite.md) | « Au plus vite » toujours proposé ; un créneau n'est jamais obligatoire | 16/11/2026 | ACCEPTÉE |
 | [0012](ADR-0012-publication-manuelle-des-stores.md) | Les stores publient à la main, et pas avant le passage de Stripe en production | 17/11/2026 | ACCEPTÉE |
+| [0013](ADR-0013-campagnes-vers-ceux-qui-suivent-le-lieu.md) | Une campagne atteint ceux qui ont commandé OU qui suivent le lieu ; les favoris sont copiés au serveur | 21/11/2026 | ACCEPTÉE |

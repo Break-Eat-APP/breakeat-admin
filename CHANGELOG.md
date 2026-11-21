@@ -5,6 +5,38 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.42] — 2026-11-21 — Les campagnes atteignent ceux qui suivent le lieu : favoris copiés au serveur
+
+- **Pourquoi** : une campagne d'un club ou d'un lieu ne visait que ses clients
+  ayant une commande BreakEat. Les trois lieux en production sont pilotés par
+  Flaix, dont les commandes ne créent rien chez BreakEat : leurs campagnes
+  partaient vers **zéro appareil** (BUG-2026-011). Étape 1 du plan des API
+  Flaix ↔ BreakEat, faisable sans le développeur Flaix.
+- **Favoris copiés au serveur** : le téléphone reste l'original (on parcourt
+  toujours sans compte). Client connecté : sa liste entière part au serveur
+  à chaque changement et à chaque connexion (`PUT /api/v1/favorite-venues`),
+  qui la remplace — rejouable, un envoi perdu est rattrapé par le suivant.
+- **Ciblage « a commandé OU suit le lieu »** : lieu visé, sinon lieu du
+  match, sinon tous les lieux du club ; jamais un favori d'un autre club ;
+  un match supprimé n'élargit pas la campagne
+  ([ADR-0013](brain/DECISIONS/ADR-0013-campagnes-vers-ceux-qui-suivent-le-lieu.md)).
+- **Suppression de compte** : les favoris partent avec lui.
+- **Constaté, non modifié** : « Envoyer au club » en envoi **immédiat** du
+  back-office atteint l'équipe du club, pas ses clients (BUG-2026-038, à
+  trancher).
+
+`+ backend/prisma/migrations/20261121_lieux_favoris/` (table neuve, UUID),
+`+ backend/src/modules/favorites/` (module, route, service + spec),
+`+ backend/test/integration/favoris-campagne.int-spec.ts`,
+`+ apps/mobile/src/lib/__tests__/favoris.test.ts`,
+`~ backend/{prisma/schema.prisma,src/app.module.ts,src/modules/notifications/scheduled-push.service.ts,src/modules/auth/auth.service.ts}` (+ specs),
+`~ apps/mobile/{src/lib/favoris.ts,src/lib/api/mobile-api.ts,App.expo.tsx}`.
+Une migration ; une mise à jour à distance de l'app (JavaScript seulement),
+**après** le déploiement du serveur. Compte rendu :
+`brain/taches/2026-11-21-favoris-serveur-campagnes.md`.
+
+---
+
 ## [1.7.41] — 2026-11-17 — Corrections des audits Codex : paiements abandonnés libérés, panier figé tel que chiffré
 
 Deux audits Codex (`brain/audits/AUDIT_CHIRURGICAL_2026-11-17.md`,

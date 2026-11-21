@@ -57,6 +57,7 @@ describe('AuthService — suppression de compte par son titulaire', () => {
       pushToken: { deleteMany: jest.fn() },
       cart: { deleteMany: jest.fn() },
       userNotification: { deleteMany: jest.fn() },
+      venueFavorite: { deleteMany: jest.fn() },
       groupMember: { deleteMany: jest.fn() },
       // Les COMMENTAIRES de note sont effaces, les etoiles restent.
       orderRating: { updateMany: jest.fn() },
@@ -128,6 +129,8 @@ describe('AuthService — suppression de compte par son titulaire', () => {
     expect(prisma.pushToken.deleteMany).toHaveBeenCalledWith({ where: { userId: MOI } });
     expect(prisma.cart.deleteMany).toHaveBeenCalledWith({ where: { userId: MOI } });
     expect(prisma.userNotification.deleteMany).toHaveBeenCalledWith({ where: { userId: MOI } });
+    // Les lieux suivis (favoris, 21/11) disent des habitudes.
+    expect(prisma.venueFavorite.deleteMany).toHaveBeenCalledWith({ where: { userId: MOI } });
     expect(prisma.organizationMember.deleteMany).toHaveBeenCalledWith({ where: { userId: MOI } });
     expect(prisma.organizationInvitation.deleteMany).toHaveBeenCalledWith({ where: { userId: MOI } });
   });

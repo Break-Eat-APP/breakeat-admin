@@ -193,6 +193,18 @@ export async function apiUnregisterPushToken(token: string): Promise<void> {
   });
 }
 
+// ─── Lieux favoris (copie serveur, 21/11/2026) ────────────────────────────────────
+// Le téléphone fait foi : il envoie SA liste entière, le serveur s'y aligne. Sert
+// au ciblage des campagnes (« a commandé OU suit ce lieu »), voir
+// `backend/src/modules/favorites/favorites.service.ts`.
+
+export async function apiRemplacerFavoris(venueIds: readonly string[]): Promise<void> {
+  await req<{ venueIds: string[] }>('/favorite-venues', {
+    method: 'PUT',
+    body: JSON.stringify({ venueIds }),
+  });
+}
+
 // ─── « Apparence de l'app » (config white-label éditée côté dashboard) ───────────
 
 export interface AppCardAction {
