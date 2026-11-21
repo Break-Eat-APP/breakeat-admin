@@ -46,6 +46,14 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
 >   `20261121_lieux_favoris` n'a été rejouée que sur PostgreSQL 16 en local) ;
 >   **serveur déployé AVANT** la mise à jour à distance de l'app ; politique
 >   de confidentialité et déclarations des stores complétées (lieux suivis).
+> - **⏸️ À VOIR PLUS TARD (Rémi, 21/11) — confidentialité des favoris** : la
+>   politique du dépôt (`documents-legaux/politique-de-confidentialite.txt`)
+>   ne mentionne pas les lieux suivis (§ 2 « Données concernées », § 14
+>   « Suppression du compte »). Rémi pense l'avoir déjà fait : **comparer
+>   avec la version en ligne** (site, stores). S'il manque : deux phrases à
+>   ajouter, et les déclarations Apple « Confidentialité de l'app » et Google
+>   « Sécurité des données » à compléter. Conseillé avant la mise à jour à
+>   distance qui active l'envoi des favoris.
 > - **BUG-2026-038, à trancher par Rémi** : « Envoyer au club » en envoi
 >   immédiat du back-office atteint l'**équipe** du club, l'envoi programmé
 >   atteint ses **clients**.
