@@ -193,9 +193,12 @@ Vercel) et la CI ne vérifie **qu'après** ; donc, à chaque fois :
 - **« Au plus vite » = créneau `null`, et `null` s'envoie** au serveur
   (`apiChoisirCreneau(cart.id, selectedSlotId)`, toujours) : sinon le panier
   réutilisé garde l'ancien créneau (BUG-2026-021, ADR-0011).
-- **Le poste de développement a peu de mémoire** (6 Go, souvent < 600 Mo
-  libres) : lancer Jest avec `-i` et `NODE_OPTIONS=--max-old-space-size=1000`,
-  tester fichier par fichier ; la suite complète tourne en CI.
+- **Le poste de développement** : depuis le 21/11/2026, un nouveau PC
+  (16 Go, Ryzen 7 ; l'ancien, à 6 Go, est hors service). La suite Jest
+  complète peut tourner en local ; si la mémoire manque malgré tout, revenir
+  à `-i` et `NODE_OPTIONS=--max-old-space-size=1000`. Le projet est cloné dans
+  `C:\dev\breakeat-admin`, **hors de OneDrive** (OneDrive abîme le dossier
+  `.git`).
 - `pnpm` n'est pas dans le PATH Windows : `corepack pnpm …`.
 
 ---
