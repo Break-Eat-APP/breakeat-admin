@@ -2,9 +2,9 @@
 
 - **Date :** 21/11/2026
 - **Agent / développeur :** Claude Code (session cloud), à la demande de Rémi
-- **Commit(s) :** branche `claude/sharp-shannon-4ljkff` (voir `git log`) — **pas encore sur `main`**
+- **Commit(s) :** `93bbab4`, `bb1fa7a` ; fusion `108b02a` (PR #5, 21/11)
 - **Bug / décision liés :** BUG-2026-011 (corrigé dans le code), BUG-2026-038 (ouvert), ADR-0013
-- **Statut :** TERMINÉ dans le code ; **PAS EN LIGNE** (attend l'accord de Rémi pour `main`, puis une mise à jour à distance de l'app)
+- **Statut :** PARTIEL — **serveur en ligne** (21/11) ; **mise à jour à distance de l'app à lancer**
 
 ## Objectif
 Étape 1 du plan des API Flaix ↔ BreakEat (validé le 10/11) : qu'une campagne
@@ -85,7 +85,13 @@ CHANGELOG 1.7.42, ROADMAP, BUGS (011, 038), ADR-0013, REPRISE.
   le serveur AVANT la mise à jour à distance**.
 
 ## Déploiement
-Rien n'est en ligne. Ordre prévu, avec l'accord de Rémi :
+- 21/11 : PR #5 ouverte, CI verte (6 contrôles, dont « Appliquer les migrations »
+  et la suite d'intégration sur PostgreSQL 18). **Fusionnée par Rémi**
+  (`108b02a`). Railway a déployé : **`/health` → `commit` = `108b02a`**, lu par
+  Rémi (la session cloud ne joint pas Railway). La migration est donc appliquée.
+- Reste : la mise à jour à distance de l'app.
+
+Ordre suivi, avec l'accord de Rémi :
 1. fusion dans `main` → Railway déploie le serveur et applique la migration ;
    vérifier `/health` (`commit` = `origin/main`) ;
 2. puis mise à jour à distance de l'app (workflow « Mise a jour a distance ») :

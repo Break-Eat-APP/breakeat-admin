@@ -395,27 +395,29 @@ export class BackofficeService {
 
   /**
    * Envoie une notification push immédiate à tous les utilisateurs de la
-   * plateforme, ou uniquement aux membres d'une organisation si orgId est fourni.
+   * plateforme, ou aux CLIENTS d'un club si orgId est fourni.
    * Purge automatiquement les jetons rejetés par Expo (DeviceNotRegistered).
+   *
+   * LES CLIENTS DU CLUB, PAS SON ÉQUIPE (BUG-2026-038, tranché par Rémi le
+   * 21/11/2026). « Envoyer au club » visait les membres de l'organisation —
+   * gérants, opérateurs — alors que le même choix, PROGRAMMÉ, atteignait les
+   * clients. Un bouton, deux publics. Le public est désormais celui d'une
+   * campagne du club, calculé au même endroit (`ScheduledPushService`) : a
+   * commandé OU suit un de ses lieux (ADR-0013). Un seul endroit décide qui
+   * est « le club », sinon les deux chemins redivergeraient.
    */
   async sendNotification(dto: SendNotificationDto) {
-    let userIds: string[];
+    let tokens: string[];
 
     if (dto.orgId) {
-      const members = await this.prisma.organizationMember.findMany({
-        where: { organizationId: dto.orgId },
-        select: { userId: true },
-      });
-      userIds = members.map((m) => m.userId);
+      tokens = await this.scheduledPush.resolveAudience(dto.orgId, null);
     } else {
       const users = await this.prisma.user.findMany({
         where: { isActive: true },
         select: { id: true },
       });
-      userIds = users.map((u) => u.id);
+      tokens = await this.pushTokens.tokensForUsers(users.map((u) => u.id));
     }
-
-    const tokens = await this.pushTokens.tokensForUsers(userIds);
 
     if (tokens.length === 0) {
       this.logger.log('[backoffice] sendNotification: aucun jeton enregistré pour la cible');

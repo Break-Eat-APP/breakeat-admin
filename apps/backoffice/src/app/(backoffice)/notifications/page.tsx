@@ -108,7 +108,7 @@ export default function NotificationsPage() {
             letterSpacing: -0.6,
           }}>Notifications push</h1>
         <p style={{ fontSize: 14.5, color: BRAND.grey, margin: '7px 0 0', lineHeight: 1.5 }}>
-          Envoie immédiat ou programmé vers tous les utilisateurs ou un club spécifique.
+          Envoi immédiat ou programmé vers tous les utilisateurs, ou vers les clients d'un club : ceux qui y ont commandé ou qui suivent un de ses lieux.
         </p>
       </header>
 
@@ -122,7 +122,7 @@ export default function NotificationsPage() {
           {nowTitle.trim() && <Preview title={nowTitle} body={nowBody} />}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button type="submit" disabled={sendMut.isPending || !nowTitle.trim()} style={primaryBtn}>
-              {sendMut.isPending ? 'Envoi…' : nowOrgId ? 'Envoyer au club' : 'Envoyer à tous'}
+              {sendMut.isPending ? 'Envoi…' : nowOrgId ? 'Envoyer aux clients du club' : 'Envoyer à tous'}
             </button>
             {nowError && <span style={errText}>{nowError}</span>}
           </div>
@@ -212,7 +212,7 @@ function TargetField({ orgs, value, onChange }: { orgs: OrgListItem[]; value: st
       <span style={labelStyle}>Destinataires</span>
       <select value={value} onChange={(e) => onChange(e.target.value)} style={inputStyle}>
         <option value="">Tous les utilisateurs de l'app</option>
-        {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+        {orgs.map((o) => <option key={o.id} value={o.id}>Clients de {o.name}</option>)}
       </select>
     </label>
   );

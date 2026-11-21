@@ -21,7 +21,14 @@ describe('BackofficeService', () => {
   let prisma: {
     order: { aggregate: jest.Mock; count: jest.Mock };
     orderItem: { groupBy: jest.Mock };
-    user: { count: jest.Mock; findUnique: jest.Mock; update: jest.Mock; delete: jest.Mock };
+    user: {
+      count: jest.Mock;
+      findUnique: jest.Mock;
+      update: jest.Mock;
+      delete: jest.Mock;
+      findMany: jest.Mock;
+    };
+    organizationMember: { findMany: jest.Mock };
     organization: {
       count: jest.Mock;
       findMany: jest.Mock;
@@ -34,7 +41,17 @@ describe('BackofficeService', () => {
     $transaction: jest.Mock;
   };
 
+  const expoPush = { send: jest.fn() };
+  const pushTokens = { tokensForUsers: jest.fn(), purgeInvalid: jest.fn() };
+  const scheduledPush = {
+    schedule: jest.fn(),
+    list: jest.fn(),
+    cancel: jest.fn(),
+    resolveAudience: jest.fn(),
+  };
+
   beforeEach(async () => {
+    jest.clearAllMocks();
     prisma = {
       order: { aggregate: jest.fn(), count: jest.fn() },
       // La ventilation TVA lit les lignes de commande groupees par taux.
@@ -44,7 +61,14 @@ describe('BackofficeService', () => {
           { vatRateBps: 1000, _sum: { lineTotalCents: 11_000 } },
         ]),
       },
-      user: { count: jest.fn(), findUnique: jest.fn(), update: jest.fn(), delete: jest.fn() },
+      user: {
+        count: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
+        delete: jest.fn(),
+        findMany: jest.fn(),
+      },
+      organizationMember: { findMany: jest.fn() },
       organization: {
         count: jest.fn(),
         findMany: jest.fn(),
@@ -64,9 +88,9 @@ describe('BackofficeService', () => {
         // Configured reporting VAT rate = 10% (resto sur place).
         // Notifications push : injectées par le service mais non sollicitées par
         // les cas testés ici (KPIs + CRUD org) → mocks vides suffisants pour la DI.
-        { provide: ExpoPushService, useValue: { send: jest.fn() } },
-        { provide: PushTokensService, useValue: { tokensForUsers: jest.fn(), purgeInvalid: jest.fn() } },
-        { provide: ScheduledPushService, useValue: { schedule: jest.fn(), list: jest.fn(), cancel: jest.fn() } },
+        { provide: ExpoPushService, useValue: expoPush },
+        { provide: PushTokensService, useValue: pushTokens },
+        { provide: ScheduledPushService, useValue: scheduledPush },
       ],
     }).compile();
 
@@ -558,6 +582,55 @@ describe('BackofficeService', () => {
       await expect(service.deleteOrganization('inconnue', NOM)).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+  /**
+   * « Envoyer au club » vise les CLIENTS du club, plus son équipe
+   * (BUG-2026-038, tranché par Rémi le 21/11/2026).
+   */
+  describe('sendNotification — le public', () => {
+    beforeEach(() => {
+      expoPush.send.mockResolvedValue({ sent: 2, failed: 0, invalidTokens: [] });
+    });
+
+    it('un club : ses clients, calculés comme une campagne (commandes OU favoris)', async () => {
+      scheduledPush.resolveAudience.mockResolvedValue(['client-1', 'client-2']);
+
+      const r = await service.sendNotification({ orgId: 'org-1', title: 'Match ce soir' });
+
+      expect(scheduledPush.resolveAudience).toHaveBeenCalledWith('org-1', null);
+      expect(expoPush.send.mock.calls[0][0].map((m: { to: string }) => m.to)).toEqual([
+        'client-1',
+        'client-2',
+      ]);
+      expect(r.recipients).toBe(2);
+    });
+
+    it('un club : son équipe n’est plus visée en tant que telle', async () => {
+      scheduledPush.resolveAudience.mockResolvedValue([]);
+      await service.sendNotification({ orgId: 'org-1', title: 'Match ce soir' });
+      expect(prisma.organizationMember.findMany).not.toHaveBeenCalled();
+    });
+
+    it('un club sans aucun client : rien ne part, et on le dit', async () => {
+      scheduledPush.resolveAudience.mockResolvedValue([]);
+      const r = await service.sendNotification({ orgId: 'org-1', title: 'Match ce soir' });
+      expect(expoPush.send).not.toHaveBeenCalled();
+      expect(r).toEqual({ sent: 0, failed: 0, recipients: 0 });
+    });
+
+    it('sans club : tous les comptes actifs, comme avant', async () => {
+      prisma.user.findMany.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
+      pushTokens.tokensForUsers.mockResolvedValue(['j1', 'j2']);
+
+      await service.sendNotification({ title: 'Annonce' });
+
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        where: { isActive: true },
+        select: { id: true },
+      });
+      expect(pushTokens.tokensForUsers).toHaveBeenCalledWith(['u1', 'u2']);
+      expect(scheduledPush.resolveAudience).not.toHaveBeenCalled();
     });
   });
 });
