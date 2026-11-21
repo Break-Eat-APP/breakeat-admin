@@ -52,8 +52,8 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
 >   branche `claude/…` et passait par une PR que Rémi fusionnait. Rémi a choisi
 >   de revenir à l'usage d'avant : **l'agent pousse directement sur `main`**
 >   (Railway et Vercel déploient aussitôt ; la CI vérifie APRÈS — lancer les
->   tests en local avant, et vérifier `/health` ensuite). Autorisation donnée
->   dans cette conversation : une nouvelle session doit la redemander.
+>   tests en local avant, et vérifier `/health` ensuite). Écrit dans
+>   `CLAUDE.md` § 6 le 21/11 (avec les garde-fous) : vaut pour toute session.
 > - **⏸️ À VOIR PLUS TARD (Rémi, 21/11) — confidentialité des favoris** : la
 >   politique du dépôt (`documents-legaux/politique-de-confidentialite.txt`)
 >   ne mentionne pas les lieux suivis (§ 2 « Données concernées », § 14

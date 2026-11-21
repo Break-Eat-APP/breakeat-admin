@@ -151,6 +151,20 @@ plus les mises à jour à distance.
 Ne jamais déployer en production ni publier une mise à jour à distance sans
 l'accord de Rémi.
 
+**Pousser sur `main` — autorisé (décision de Rémi, 21/11/2026).** L'agent,
+en session locale comme dans le cloud, pousse **directement sur `main`**,
+sans pull request à fusionner par Rémi. Ce push met en production (Railway,
+Vercel) et la CI ne vérifie **qu'après** ; donc, à chaque fois :
+1. **avant** : tests, typage et lint des parties touchées, réellement lancés
+   en local ; une migration écrite à la main passe par `pnpm db:verifier`
+   (Docker) — sans Docker, passer par une pull request pour que la CI la
+   rejoue AVANT `main` ;
+2. **après** : CI verte sur `main`, puis `/health` → `commit` = `origin/main`
+   (si la session ne joint pas Railway, demander la valeur à Rémi) ;
+3. ce n'est **pas** un accord pour la mise à jour à distance de l'app, une
+   build, une soumission aux stores ou le passage de Stripe en mode live :
+   ceux-là se demandent à chaque fois.
+
 ---
 
 ## 7. Pièges techniques déjà payés
