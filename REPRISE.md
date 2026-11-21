@@ -147,9 +147,16 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   `FLAIX_COMMANDES_API_KEY` ; (2) **mise à jour à distance** de l'app (accord
 >   de Rémi), qui active AUSSI l'envoi des favoris (1.7.42, confidentialité
 >   des favoris pas encore revue). Aucune build : la 1.1.3 la reçoit (Android
->   publié, iOS build 46). Pas de « prête » en notification ni de Live
->   Activity : il faut le webhook E1. Le client doit avoir dans BreakEat la
->   MÊME adresse e-mail que celle donnée à Flaix.
+>   publié, iOS build 46). Le client doit avoir dans BreakEat la
+>   MÊME adresse e-mail que celle donnée à Flaix (le lien de commande la
+>   remplit par `mail=[#mail]`).
+>   **1.7.45 (21/11, serveur seul) : « Ta commande est prête » arrive aussi
+>   pour une commande Flaix.** Le serveur surveille les commandes en cours
+>   (état lu chez Flaix toutes les 15 s). Condition : le client a ouvert
+>   « Mes commandes » une fois après sa commande. La liste est en mémoire :
+>   un redémarrage du serveur pendant le match la vide jusqu'à la lecture
+>   suivante (ADR-0015). Toujours pas de Live Activity. Audit Codex du 21/11
+>   rangé avec sa réponse dans `brain/audits/`.
 > - **Étape 1 du plan Flaix (1.7.42) : SERVEUR EN LIGNE, APP PAS ENCORE.**
 >   Favoris copiés au serveur, campagnes vers « a commandé OU suit le lieu »
 >   (ADR-0013). PR [#5](https://github.com/Break-Eat-APP/breakeat-admin/pull/5)
@@ -184,9 +191,9 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 
 > Cette section remplace « État au 17/11 » et « État au 09/11 » (leurs
 > versions précédentes sont dans l'historique Git). Le détail de chaque
-> livraison est dans `CHANGELOG.md` (jusqu'à **1.7.44**) ; les règles dans
+> livraison est dans `CHANGELOG.md` (jusqu'à **1.7.45**) ; les règles dans
 > `CLAUDE.md` ; les décisions dans `brain/DECISIONS/` (**0001 à 0016**) ; les
-> bugs dans `brain/BUGS_ET_INCIDENTS.md` (**jusqu'à BUG-2026-040**,
+> bugs dans `brain/BUGS_ET_INCIDENTS.md` (**jusqu'à BUG-2026-041**,
 > incidents jusqu'à INC-2026-004) ; les comptes rendus
 > dans `brain/taches/` ; où vit le code dans
 > `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md` ; toutes les phases dans

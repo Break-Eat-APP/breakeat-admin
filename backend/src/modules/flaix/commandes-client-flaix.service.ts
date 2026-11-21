@@ -19,8 +19,8 @@ import { ConfigService } from '@nestjs/config';
  *  - le client est reconnu par son ADRESSE E-MAIL, que BreakEat ne vérifie
  *    pas ; à remplacer par l'étiquette `[#breakeatId]` ou une vérification ;
  *  - l'état en direct est lu à la demande (quand l'écran se recharge), pas
- *    poussé : aucune notification « prête » ni Live Activity pour ces
- *    commandes.
+ *    poussé. La notification « prête » passe par une surveillance en mémoire
+ *    (`surveillance-commandes-flaix.service.ts`) ; pas de Live Activity.
  *
  * UNE PANNE FLAIX N'ARRÊTE JAMAIS BREAKEAT : toute erreur rend une liste vide
  * et un journal, jamais une exception vers l'app.
@@ -30,6 +30,10 @@ import { ConfigService } from '@nestjs/config';
 const DELAI_MS = 5_000;
 /** Une même liste n'est redemandée à Flaix qu'au-delà de ce délai. */
 const CACHE_MS = 5_000;
+/** Commandes rendues à l'app, au plus (les plus récentes). */
+const MAX_COMMANDES = 50;
+/** Lectures d'état en direct par liste, au plus (les plus récentes en cours). */
+const MAX_LECTURES_ETAT = 5;
 /** Au-delà, une commande n'est plus « en cours », quel que soit son état. */
 const FENETRE_EN_COURS_MS = 12 * 60 * 60 * 1000;
 /** États de suivi Flaix qui terminent une commande. */
@@ -85,7 +89,30 @@ export interface CommandeFlaix {
 export interface ReponseCommandesFlaix {
   /** false = la fonction est éteinte (variables absentes) : rien à afficher. */
   active: boolean;
+  /**
+   * true = Flaix n'a pas répondu : la liste vide ne veut PAS dire « aucune
+   * commande » (audit Codex du 21/11, P2). L'app ne le lit pas encore.
+   */
+  indisponible?: boolean;
   commandes: CommandeFlaix[];
+}
+
+/**
+ * L'origine Flaix configurée, si elle est sûre : HTTPS, sans identifiants,
+ * sans chemin. Sinon chaîne vide, et la fonction s'éteint : la clé et
+ * l'e-mail ne partent jamais en clair (audit Codex du 21/11, P2).
+ */
+function origineSure(brute: string, logger: Logger): string {
+  const v = brute.trim();
+  if (v === '') return '';
+  try {
+    const u = new URL(v);
+    if (u.protocol === 'https:' && !u.username && !u.password) return u.origin;
+  } catch {
+    /* refusée ci-dessous */
+  }
+  logger.error('FLAIX_COMMANDES_URL refusée : une origine https:// est attendue. Commandes Flaix éteintes.');
+  return '';
 }
 
 /* Forme de la réponse Flaix — lue défensivement : tout champ peut manquer. */
@@ -132,7 +159,7 @@ export class CommandesClientFlaixService {
   private readonly cache = new Map<string, { a: number; valeur: CommandeFlaix[] }>();
 
   constructor(config: ConfigService) {
-    this.origine = (config.get<string>('app.flaix.commandesUrl') ?? '').replace(/\/+$/, '');
+    this.origine = origineSure(config.get<string>('app.flaix.commandesUrl') ?? '', this.logger);
     this.cle = config.get<string>('app.flaix.commandesApiKey') ?? '';
   }
 
@@ -158,24 +185,32 @@ export class CommandesClientFlaixService {
       });
       if (!res.ok) {
         this.logger.warn(`Commandes Flaix : réponse ${res.status}`);
-        return { active: true, commandes: [] };
+        return { active: true, indisponible: true, commandes: [] };
       }
       const corps = (await res.json()) as { commandes?: unknown };
       brutes = Array.isArray(corps?.commandes) ? (corps.commandes as CommandeBrute[]) : [];
     } catch (e: unknown) {
       this.logger.warn(`Commandes Flaix injoignables : ${String(e)}`);
-      return { active: true, commandes: [] };
+      return { active: true, indisponible: true, commandes: [] };
     }
 
+    // Les plus récentes d'abord, et pas plus de MAX_COMMANDES (audit Codex du
+    // 21/11, P2 : rien ne bornait la liste ni les lectures d'état).
     const commandes = brutes
       .map((b) => this.convertir(b, maintenant))
-      .filter((c): c is CommandeFlaix => c !== null);
+      .filter((c): c is CommandeFlaix => c !== null)
+      .sort((a, b) => new Date(b.passeeLe).getTime() - new Date(a.passeeLe).getTime())
+      .slice(0, MAX_COMMANDES);
 
     // L'état en direct, seulement pour les commandes récentes : c'est lui qui
     // dit « prête ». Les anciennes gardent le statut de la liste.
-    await Promise.all(commandes.filter((c) => c.enCours).map((c) => this.lireSuivi(c, maintenant)));
+    await Promise.all(
+      commandes
+        .filter((c) => c.enCours)
+        .slice(0, MAX_LECTURES_ETAT)
+        .map((c) => this.lireSuivi(c)),
+    );
 
-    commandes.sort((a, b) => b.passeeLe.localeCompare(a.passeeLe));
     this.cache.set(cleCache, { a: maintenant.getTime(), valeur: commandes });
     if (this.cache.size > 5_000) this.cache.clear();
     return { active: true, commandes };
@@ -230,23 +265,52 @@ export class CommandesClientFlaixService {
     }
   }
 
-  private async lireSuivi(c: CommandeFlaix, maintenant: Date): Promise<void> {
+  /**
+   * L'état en direct d'une commande, par son jeton. Null si Flaix ne répond
+   * pas, ou répond sans état : l'appelant garde alors ce qu'il savait.
+   */
+  async lireEtat(jeton: string): Promise<EtatFlaix | null> {
+    if (!this.active || !/^[A-Za-z0-9_-]{8,128}$/.test(jeton)) return null;
     try {
-      const res = await fetch(`${this.origine}/api/public/orders/${encodeURIComponent(c.id)}/status`, {
+      const res = await fetch(`${this.origine}/api/public/orders/${encodeURIComponent(jeton)}/status`, {
         signal: AbortSignal.timeout(DELAI_MS),
       });
-      if (!res.ok) return;
+      if (!res.ok) return null;
       const s = (await res.json()) as SuiviBrut;
       const etat = texte(s.status);
-      if (!etat) return;
-      c.etat = etat;
-      c.etatLibelle = texte(s.status_label) ?? c.etatLibelle;
-      c.etatDetail = texte(s.status_hint);
-      c.retraitAffiche = texte(s.pickup_str);
-      c.prete = etat === 'ready';
-      c.enCours = !ETATS_TERMINAUX.has(etat);
+      if (!etat) return null;
+      return {
+        etat,
+        libelle: texte(s.status_label),
+        detail: texte(s.status_hint),
+        retraitAffiche: texte(s.pickup_str),
+      };
     } catch (e: unknown) {
-      this.logger.warn(`Suivi Flaix ${c.numero} illisible (${String(e)}) à ${maintenant.toISOString()}`);
+      this.logger.warn(`Suivi Flaix ${jeton.slice(0, 6)}… illisible (${String(e)})`);
+      return null;
     }
   }
+
+  private async lireSuivi(c: CommandeFlaix): Promise<void> {
+    const e = await this.lireEtat(c.id);
+    if (!e) return;
+    c.etat = e.etat;
+    c.etatLibelle = e.libelle ?? c.etatLibelle;
+    c.etatDetail = e.detail;
+    c.retraitAffiche = e.retraitAffiche;
+    c.prete = estPrete(e.etat);
+    c.enCours = !estTerminal(e.etat);
+  }
 }
+
+export interface EtatFlaix {
+  etat: string;
+  libelle: string | null;
+  detail: string | null;
+  retraitAffiche: string | null;
+}
+
+/** L'état de suivi Flaix qui veut dire « prête ». */
+export const estPrete = (etat: string): boolean => etat === 'ready';
+/** Les états de suivi Flaix qui terminent une commande. */
+export const estTerminal = (etat: string): boolean => ETATS_TERMINAUX.has(etat);

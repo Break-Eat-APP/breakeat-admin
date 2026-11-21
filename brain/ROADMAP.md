@@ -569,6 +569,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.42 | 2026-11-21 | Les campagnes atteignent ceux qui suivent le lieu : favoris copiés au serveur |
 | 1.7.43 | 2026-11-21 | « Envoyer aux clients du club » : l'envoi immédiat du back-office vise les clients, plus l'équipe |
 | 1.7.44 | 2026-11-21 | Les commandes passées dans Flaix apparaissent dans « Mes commandes » (lecture par e-mail) |
+| 1.7.45 | 2026-11-21 | « Ta commande est prête » pour les commandes Flaix (surveillance en mémoire) ; réponse à l'audit Codex |
 
 ---
 

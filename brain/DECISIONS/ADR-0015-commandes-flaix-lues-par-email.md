@@ -35,12 +35,24 @@ suivi par commande.
 - Le lien de commande remplit `mail=[#mail]` avec l'e-mail du compte : la
   commande passée depuis l'app porte la bonne adresse.
 
+## Complément du 21/11 au soir (1.7.45) — la notification « prête »
+Décidé par Rémi (« Oui, fais-le »). Chaque lecture de « Mes commandes » fait
+retenir au serveur les commandes Flaix en cours du client. Toutes les 15 s,
+il lit leur état chez Flaix. Au passage à « prête », il envoie la même
+notification qu'une commande BreakEat, **une fois**.
+**Écart assumé à la règle 3 de `CLAUDE.md`** : la liste est en mémoire, pas en
+base. Un redémarrage du serveur l'efface (reprise à la lecture suivante de
+« Mes commandes »), et un envoi raté n'est pas rejoué. Le client doit avoir
+ouvert « Mes commandes » une fois après sa commande. Le webhook `ORDER_READY`
+de Flaix remplacera ce dépannage.
+
 ## Ce que ça coûte
 - **L'e-mail n'est pas vérifié par BreakEat** (BUG-2026-039). Risque accepté
   par Rémi pour les essais. À corriger avant l'ouverture au public.
-- Pas de notification « prête », pas de Live Activity, pas de « Je suis
-  arrivé », de note, de fidélité ni de campagne « a commandé » pour ces
-  commandes : tout cela demande que Flaix pousse ses changements (E1).
+- Pas de Live Activity, pas de « Je suis arrivé », de note, de fidélité ni de
+  campagne « a commandé » pour ces commandes : tout cela demande que Flaix
+  pousse ses changements (E1). La notification « prête » passe par le
+  dépannage du complément ci-dessus.
 - Chaque écran ouvert interroge Flaix toutes les 10 s (liste gardée 5 s par
   client). Assez pour des essais, pas pour un soir de grande affluence.
 

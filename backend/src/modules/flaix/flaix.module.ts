@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { FlaixService } from './flaix.service';
 import { FlaixController } from './flaix.controller';
 import { CommandesClientFlaixService } from './commandes-client-flaix.service';
+import { SurveillanceCommandesFlaixService } from './surveillance-commandes-flaix.service';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 /**
  * FlaixModule — the integration boundary between BREAK EAT and the Flaix AI engine.
@@ -18,9 +20,9 @@ import { CommandesClientFlaixService } from './commandes-client-flaix.service';
  *   FLAIX_API_KEY — API key for authentication (optional)
  */
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, NotificationsModule],
   controllers: [FlaixController],
-  providers: [FlaixService, CommandesClientFlaixService],
+  providers: [FlaixService, CommandesClientFlaixService, SurveillanceCommandesFlaixService],
   exports: [FlaixService],
 })
 export class FlaixModule {}

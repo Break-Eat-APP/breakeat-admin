@@ -14,6 +14,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { GlobalRole } from '../../common/enums/role.enum';
 import { FlaixService } from './flaix.service';
 import { CommandesClientFlaixService } from './commandes-client-flaix.service';
+import { SurveillanceCommandesFlaixService } from './surveillance-commandes-flaix.service';
 
 /**
  * FlaixController — read-only endpoints for operator dashboards.
@@ -33,6 +34,7 @@ export class FlaixController {
     private readonly flaixService: FlaixService,
     private readonly prisma: PrismaService,
     private readonly commandesClient: CommandesClientFlaixService,
+    private readonly surveillance: SurveillanceCommandesFlaixService,
   ) {}
 
   /**
@@ -47,7 +49,10 @@ export class FlaixController {
       where: { id: user.sub },
       select: { email: true },
     });
-    return this.commandesClient.pourEmail(moi?.email);
+    const reponse = await this.commandesClient.pourEmail(moi?.email);
+    // Les commandes en cours sont surveillées pour « Ta commande est prête ».
+    this.surveillance.surveiller(user.sub, reponse.commandes);
+    return reponse;
   }
 
   /**

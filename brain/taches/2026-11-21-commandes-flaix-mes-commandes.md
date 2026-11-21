@@ -92,6 +92,18 @@ de Rémi**. Elle active aussi l'envoi des favoris (1.7.42). Aucune build.
 Retirer `FLAIX_COMMANDES_API_KEY` sur Railway éteint tout : la route rend
 `active: false` et une liste vide, l'app n'affiche plus rien de Flaix.
 
+## Complément 1.7.45 (21/11 au soir)
+- **Notification « prête »** par une surveillance en mémoire
+  (`surveillance-commandes-flaix.service.ts`, 9 tests). Essayée contre la
+  vraie API Flaix : la commande de test 1003 est surveillée, lue « en
+  attente », et aucune notification n'est partie. Le serveur compilé
+  démarre, et la route est bien branchée.
+- **Audit Codex** : origine `https://` imposée, liste et lectures bornées,
+  `indisponible` renvoyé (réponse dans `brain/audits/`).
+- Tests : backend 83 suites, 1 190 tests ✅ ; typage, lint et compilation ✅.
+- **Pas fait** : envoyer une vraie notification de bout en bout. Il faudrait
+  qu'une commande Flaix passe « prête » ; ce sera l'essai du 22/11.
+
 ## Suite
 Demander au développeur Flaix : la liste des états, le webhook « prête »
 (E1), et l'étiquette `[#breakeatId]`.

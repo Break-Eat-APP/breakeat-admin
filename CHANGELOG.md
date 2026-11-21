@@ -5,6 +5,34 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.45] — 2026-11-21 — « Ta commande est prête » pour les commandes Flaix ; réponse à l'audit Codex
+
+- **Pourquoi** : la 1.7.44 montrait l'état des commandes Flaix seulement écran
+  ouvert. Téléphone en poche, le client n'était pas prévenu, car Flaix ne
+  signale pas encore le passage à « prête » (webhook E1). Décidé par Rémi la
+  veille du match du 22/11.
+- **Surveillance** (`surveillance-commandes-flaix.service.ts`) : chaque lecture
+  de « Mes commandes » fait retenir au serveur les commandes Flaix en cours du
+  client. Toutes les 15 s, il lit leur état chez Flaix (par paquets de 10).
+  Au passage à « prête », il envoie la notification d'une commande BreakEat
+  (« Ta commande est prête — Commande n° … », toucher ouvre « Mes
+  commandes »), une fois. Il oublie une commande récupérée, annulée ou
+  vieille de 12 h.
+  **Dépannage assumé (ADR-0015)** : la liste est en mémoire. Un redémarrage
+  l'efface, un envoi raté n'est pas rejoué, et le client doit avoir ouvert
+  « Mes commandes » une fois après sa commande.
+- **Audit Codex du 21/11** (`brain/audits/AUDIT_CODEX_COMMANDES_FLAIX_2026-11-21.md`,
+  réponse à côté) : l'origine Flaix doit être en `https://` sans
+  identifiants, sinon la fonction s'éteint ; 50 commandes et 5 lectures
+  d'état au plus par liste ; `indisponible: true` quand Flaix ne répond pas
+  (l'app ne le lit pas encore, BUG-2026-041).
+
+`+ backend/src/modules/flaix/{surveillance-commandes-flaix.service.ts,surveillance-commandes-flaix.service.spec.ts}` (9 tests),
+`~ backend/src/modules/flaix/{commandes-client-flaix.service.ts,commandes-client-flaix.service.spec.ts,flaix.controller.ts,flaix.module.ts}` (+ 5 tests).
+Serveur seulement : ni migration, ni mise à jour de l'app.
+
+---
+
 ## [1.7.44] — 2026-11-21 — Les commandes passées dans Flaix apparaissent dans « Mes commandes »
 
 - **Pourquoi** : les trois lieux en production commandent dans Flaix, et une

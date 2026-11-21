@@ -116,14 +116,46 @@ describe('CommandesClientFlaixService', () => {
     fetchMock.mockRejectedValueOnce(new Error('délai dépassé'));
     await expect(service().pourEmail('client@exemple.fr', MAINTENANT)).resolves.toEqual({
       active: true,
+      indisponible: true,
       commandes: [],
     });
+  });
+
+  it.each(['http://commande.flaix.test', 'https://moi:secret@commande.flaix.test', 'pas une adresse'])(
+    "s'éteint avec une origine non sûre (%s) : rien ne part en clair",
+    async (url) => {
+      const r = await service(url).pourEmail('client@exemple.fr', MAINTENANT);
+      expect(r).toEqual({ active: false, commandes: [] });
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("garde l'origine seule quand l'adresse configurée porte un chemin", async () => {
+    fetchMock.mockResolvedValueOnce(reponse({ commandes: [] }));
+    await service(`${ORIGINE}/api/`).pourEmail('client@exemple.fr', MAINTENANT);
+    expect(fetchMock.mock.calls[0][0]).toBe(`${ORIGINE}/api/public/clients/commandes`);
+  });
+
+  it("borne la liste à 50 commandes et les lectures d'état à 5", async () => {
+    const nombreuses = Array.from({ length: 60 }, (_, i) =>
+      commandeBrute({
+        jeton: `jeton${String(i).padStart(8, '0')}`,
+        passeeLe: new Date(MAINTENANT.getTime() - (i + 1) * 60_000).toISOString(),
+      }),
+    );
+    fetchMock.mockResolvedValueOnce(reponse({ commandes: nombreuses }));
+    fetchMock.mockResolvedValue(reponse({ status: 'queued', status_label: 'En attente' }));
+    const r = await service().pourEmail('client@exemple.fr', MAINTENANT);
+    expect(r.commandes).toHaveLength(50);
+    expect(r.commandes[0].id).toBe('jeton00000000');
+    expect(fetchMock).toHaveBeenCalledTimes(1 + 5);
   });
 
   it('une réponse en erreur rend une liste vide', async () => {
     fetchMock.mockResolvedValueOnce(reponse({ erreur: 'clé refusée' }, 401));
     const r = await service().pourEmail('client@exemple.fr', MAINTENANT);
     expect(r.commandes).toEqual([]);
+    expect(r.indisponible).toBe(true);
   });
 
   it("un suivi illisible garde le statut de la liste", async () => {
