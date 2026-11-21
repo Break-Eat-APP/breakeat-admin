@@ -81,8 +81,28 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 > - **Remise en état sur le nouveau poste (21/11)** : ce qui a été refait, ce
 >   qui a été vérifié et la liste à rejouer sur un prochain poste sont dans
 >   `brain/taches/2026-11-21-remise-en-etat-nouveau-poste.md`.
-> - **Apple a validé la 1.1.3** ; Google à vérifier. **Ne pas publier avant
->   Stripe en production** (ADR-0012).
+> - **Apple a validé la 1.1.3** et attend toujours le clic de Rémi.
+>   **Règle de Rémi (rappelée le 21/11)** : **rien ne sort sur les stores**
+>   tant que certains développements ne sont pas finalisés avec son
+>   développeur Flaix. Ne jamais cliquer « Publier » (App Store) ni
+>   « Publier les modifications » (Google Play) sans son ordre.
+> - ⚠️ **GOOGLE PLAY — LA 1.1.3 EST PROBABLEMENT PUBLIQUE DEPUIS LE 21/11.**
+>   Le 21/11, Rémi a cliqué dans « Modifications prêtes à être publiées »
+>   (publication gérée), pensant ne faire qu'une vérification. Ensuite, la
+>   Play Console affiche « **Dernière publication le 21 novembre 2026** » et
+>   une liste vide. **La fiche publique** (lue le 21/11, sans compte) montre
+>   sous « Nouveautés » le texte de la **1.1.3** (calendrier, « Ta commande
+>   est prête », « Au plus vite », partager l'addition), avec la date du
+>   17/11. **À confirmer par Rémi** : Play Console → Activité liée aux envois,
+>   et Production → état de la version 7. Une version sortie en déploiement
+>   complet ne se retire pas ; on ne peut que publier une version par-dessus,
+>   ou rendre l'app indisponible (mesure lourde). Avant, la fiche publique
+>   servait déjà l'ancienne version de l'éditeur précédent (code 4) : l'app
+>   n'était pas absente des stores. À noter aussi : la fiche publique dit
+>   « **Aucune donnée collectée** », alors que l'app collecte au moins
+>   l'e-mail (la déclaration refaite le 17/11, BUG-2026-028, n'apparaît
+>   pas) : à vérifier dans Play Console → Contenu de l'application →
+>   Sécurité des données.
 > - **On attend le développeur Flaix** pour E1 (les commandes Flaix qui
 >   remontent chez BreakEat).
 > - **Étape 1 du plan Flaix (1.7.42) : SERVEUR EN LIGNE, APP PAS ENCORE.**
