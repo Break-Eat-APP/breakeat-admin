@@ -108,3 +108,9 @@ sauvegardes/
 
 # Fichiers de verrou d’Office (Word ouvert sur un .docx du dépôt)
 ~$*
+
+# La fiche des stores (`brain/livrables/stores/`) : textes de revue Apple et
+# Google, parfois avec les informations du compte de revue. Elle vit sur le
+# poste de Remi, JAMAIS dans ce depot public (ajoute le 21/11/2026, apres la
+# reprise sur un nouveau poste ou le dossier apparaissait en « non suivi »).
+brain/livrables/stores/
