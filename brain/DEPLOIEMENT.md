@@ -51,7 +51,8 @@ fusionnait. Pour retrouver un point d'arrêt avant chaque envoi, il y a deux
 moyens : revenir aux pull requests (une ligne à changer dans `CLAUDE.md` § 6),
 ou régler Claude Code pour qu'il **demande avant chaque `git push`** (règle
 « ask » dans `.claude/settings.json`). La seconde garde l'envoi direct, avec un
-clic de Rémi à chaque fois.
+clic de Rémi à chaque fois. **Rémi a choisi le 21/11 de rester en direct,
+sans clic** : ne pas le lui reproposer.
 
 **Ce qui repasse par l'examen d'Apple et de Google** : toute **nouvelle build
 native** (nouvelle `version` ou nouveau numéro de build) envoyée sur les
