@@ -84,8 +84,11 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >     `com.breakeat.app`), posé le nouveau `google-services.json` sur Expo
 >     (variable fichier `GOOGLE_SERVICES_JSON`, projet `break-eat`, preview +
 >     production) et une **nouvelle clé FCM V1** de ce projet (Expo →
->     Credentials → Android, importée le 21/11 à 22h57). **Reste : une
->     nouvelle build Android**, sur son accord. Le projet Google `482274786646`
+>     Credentials → Android, importée le 21/11 à 22h57). **Build Android
+>     1.1.3 (code 8) faite le 21/11 (EAS `e2619785`)**, version gardée en
+>     1.1.3 (ADR-0005, exception), Firebase contrôlé dans l'`.aab`. Reste : la
+>     déposer en tests internes, l'essayer, puis la production sur ordre de
+>     Rémi. Le projet Google `482274786646`
 >     ne sert qu'aux identifiants de connexion Google (`eas.json`).
 >   - `flaix-wallet@rapid-access-494820-f8` : une clé Google (vraisemblablement
 >     Google Wallet) côté **Flaix**. BreakEat ne s'en sert pas. C'est au
