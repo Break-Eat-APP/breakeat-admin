@@ -118,6 +118,19 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   Sécurité des données.
 > - **On attend le développeur Flaix** pour E1 (les commandes Flaix qui
 >   remontent chez BreakEat).
+>   **Reçu le 21/11 : une API de LECTURE par e-mail** (Flaix,
+>   `POST …/api/public/clients/commandes`, en-tête `X-Api-Key`, corps
+>   `{ "email": … }`), qui rend les commandes d'un client. Ce n'est pas le
+>   webhook E1 du cahier des charges (pas de temps réel). ⚠️ **La clé de cette
+>   API a été collée dans une conversation le 21/11** : à faire régénérer par
+>   le développeur Flaix, et la nouvelle clé seulement dans Railway. ⚠️
+>   **BreakEat ne vérifie pas les adresses e-mail** (aucun champ de
+>   vérification dans le schéma ; Brevo non configuré) : interroger Flaix
+>   avec l'e-mail d'un compte non vérifié laisserait n'importe qui lire les
+>   commandes d'un autre en créant un compte à son adresse. À régler avant
+>   de brancher (comptes Apple/Google seulement, ou vérification par
+>   courriel, ou l'étiquette `[#breakeatId]`). On attend un exemple de
+>   réponse anonymisé.
 > - **Étape 1 du plan Flaix (1.7.42) : SERVEUR EN LIGNE, APP PAS ENCORE.**
 >   Favoris copiés au serveur, campagnes vers « a commandé OU suit le lieu »
 >   (ADR-0013). PR [#5](https://github.com/Break-Eat-APP/breakeat-admin/pull/5)
