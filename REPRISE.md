@@ -71,17 +71,22 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   Console) : ce n'est pas nécessaire.
 >   Sur l'ancien disque, dans Téléchargements, deux autres clés de compte de
 >   service sans rapport avec Google Play :
->   - `firebase-adminsdk-fbsvc@break-eat-app-spe-2d709` : une clé
->     d'administration Firebase du projet **`break-eat-app-spe-2d709`
->     (n° 1090499367641)**. Ce projet est celui d'une **ancienne app Android
->     `com.breakeat.app`** (son `google-services.json` est aussi dans
->     Téléchargements). **Ce n'est PAS le projet de l'app publiée
->     `com.shapper.breakeat`** (projet n° `482274786646`, celui des
->     identifiants Google de `eas.json`). **Ne pas l'importer dans Expo pour
->     FCM V1** : les notifications seraient refusées. Vérifié le 21/11 :
->     Expo n'utilise aucune clé FCM V1, et **la build Android publiée ne
->     contient AUCUNE configuration Firebase** (lu dans l'`.aab`). Pas de
->     notification Android possible sans nouvelle build (BUG-2026-042).
+>   - `firebase-adminsdk-fbsvc@break-eat-app-spe-2d709` (fichier
+>     `…-b1ee40cc95.json`, du 01/06) : une ANCIENNE clé d'administration du
+>     projet Firebase **`break-eat-app-spe-2d709` (n° 1090499367641)**, le
+>     projet de Rémi. Ne pas la recopier ; elle peut être supprimée dans
+>     Google Cloud (une NOUVELLE clé du même projet sert désormais, voir
+>     ci-dessous).
+>   - **Notifications Android — remises en place le 21/11 (BUG-2026-042)** :
+>     la build Android publiée ne contenait AUCUNE configuration Firebase (lu
+>     dans l'`.aab`). Rémi a ajouté `com.shapper.breakeat` au projet
+>     `break-eat-app-spe-2d709` (qui ne connaissait que l'ancienne
+>     `com.breakeat.app`), posé le nouveau `google-services.json` sur Expo
+>     (variable fichier `GOOGLE_SERVICES_JSON`, projet `break-eat`, preview +
+>     production) et une **nouvelle clé FCM V1** de ce projet (Expo →
+>     Credentials → Android, importée le 21/11 à 22h57). **Reste : une
+>     nouvelle build Android**, sur son accord. Le projet Google `482274786646`
+>     ne sert qu'aux identifiants de connexion Google (`eas.json`).
 >   - `flaix-wallet@rapid-access-494820-f8` : une clé Google (vraisemblablement
 >     Google Wallet) côté **Flaix**. BreakEat ne s'en sert pas. C'est au
 >     développeur Flaix de dire s'il l'utilise ; ne pas la recopier.
