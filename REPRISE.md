@@ -22,19 +22,24 @@
 > Les documents vivants sont ce fichier, `CHANGELOG.md`, `brain/BUGS_ET_INCIDENTS.md`,
 > `brain/DECISIONS/` et `brain/taches/` (gouvernance du 11/11, `CLAUDE.md`). Le git complète.
 
-_Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » ci-dessous, et la note du 21/11 en tête de cette section. Les notes de mise à jour précédentes sont gardées en fin de fichier (« Historique des mises à jour »)._
+_Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » ci-dessous, à commencer par la note du 21/11. Les notes de mise à jour précédentes sont gardées en fin de fichier (« Historique des mises à jour »)._
 
-## 🟢 ÉTAT AU 17/11/2026 — LIRE D'ABORD
+## 🟢 ÉTAT AU 21/11/2026 — LIRE D'ABORD
 
 > **NOTE DU 21/11/2026 — à lire avant le reste.**
+> - **Qui travaille sur le dépôt (Rémi, 21/11, soir)** : désormais **la
+>   session locale seule**, sur le nouveau poste (`C:\dev\breakeat-admin`).
+>   La session cloud ne pousse plus rien. La branche
+>   `origin/claude/sharp-shannon-4ljkff` est fusionnée (PR #5 et #6), il n'y
+>   reste rien à reprendre.
 > - **Nouveau poste de Rémi** (16 Go de mémoire, Ryzen 7 ; l'ancien est hors
->   service, son disque est lisible en USB). GitHub `main` s'arrête au
->   **17/11, `6f601c6`** : rien n'a été poussé depuis. **À vérifier avant tout
->   nouveau travail sur le poste** : l'ancien disque contient-il des commits ou
->   des fichiers modifiés du 18-19/11 non poussés (`git status`,
->   `git log --oneline -5`, `git stash list` sur la copie de l'ancien disque) ?
->   Récupérer aussi les fichiers hors Git : `apps/mobile/google-play-service-account.json`,
->   `brain/livrables/stores/fiche-stores.md`, les `.env`.
+>   service, son disque est lisible en USB). Le dernier commit poussé depuis
+>   l'ancien poste date du **17/11 (`6f601c6`)**. Tout ce qui suit, le 21/11,
+>   vient de la session cloud (1.7.42, 1.7.43, documentation). **Reste
+>   ouvert** : l'ancien disque contient-il des commits ou des fichiers modifiés
+>   du 18-19/11 jamais poussés (`git status`, `git log --oneline -5`,
+>   `git stash list` sur la copie de l'ancien disque) ? Si oui, les comparer à
+>   `main` avant de les reprendre : ne rien écraser.
 > - **Nouveau poste — fichiers hors Git (21/11)** : `backend\.env` et
 >   `apps\mobile\.env` recopiés de l'ancien disque vers `C:\dev\breakeat-admin`
 >   (pas de `.env` à la racine : il n'existait pas). ⚠️ **Le compte de service
@@ -42,7 +47,8 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
 >   sa place sur l'ancien disque** : à retrouver, sinon vérifier s'il est chez
 >   EAS (`npx eas-cli credentials`) ou créer une nouvelle clé (Google Cloud,
 >   même compte de service) et désactiver l'ancienne — **avant la prochaine
->   soumission Android**.
+>   soumission Android**. `brain/livrables/stores/fiche-stores.md` est ignoré
+>   par Git depuis `c967dbd` : il ne doit jamais être publié.
 > - **Apple a validé la 1.1.3** ; Google à vérifier. **Ne pas publier avant
 >   Stripe en production** (ADR-0012).
 > - **On attend le développeur Flaix** pour E1 (les commandes Flaix qui
@@ -56,12 +62,12 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
 >   production. **Reste : la mise à jour à distance de l'app** (workflow
 >   « Mise a jour a distance »), qui active l'envoi des favoris — après la
 >   confidentialité ci-dessous, au choix de Rémi.
-> - **Pousser sur `main` (Rémi, 21/11)** : la session cloud travaille sur une
->   branche `claude/…` et passait par une PR que Rémi fusionnait. Rémi a choisi
->   de revenir à l'usage d'avant : **l'agent pousse directement sur `main`**
->   (Railway et Vercel déploient aussitôt ; la CI vérifie APRÈS — lancer les
->   tests en local avant, et vérifier `/health` ensuite). Écrit dans
->   `CLAUDE.md` § 6 le 21/11 (avec les garde-fous) : vaut pour toute session.
+> - **Pousser sur `main` (Rémi, 21/11)** : la session cloud travaillait sur
+>   une branche `claude/…` et passait par une PR que Rémi fusionnait. Rémi a
+>   choisi de revenir à l'usage d'avant : **l'agent pousse directement sur
+>   `main`** (Railway et Vercel déploient aussitôt ; la CI vérifie APRÈS :
+>   lancer les tests en local avant, et vérifier `/health` ensuite). Écrit
+>   dans `CLAUDE.md` § 6 le 21/11, avec les garde-fous.
 > - **⏸️ À VOIR PLUS TARD (Rémi, 21/11) — confidentialité des favoris** : la
 >   politique du dépôt (`documents-legaux/politique-de-confidentialite.txt`)
 >   ne mentionne pas les lieux suivis (§ 2 « Données concernées », § 14
@@ -71,16 +77,20 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
 >   « Sécurité des données » à compléter. Conseillé avant la mise à jour à
 >   distance qui active l'envoi des favoris.
 > - **BUG-2026-038 — tranché par Rémi le 21/11 : les clients seulement.**
->   Corrigé dans le code (1.7.43, **pas encore en ligne**) : « Envoyer aux
+>   **1.7.43, serveur en ligne** (PR #6 fusionnée, `95310f1` ; CI verte, 6
+>   jobs ; `/health` → `95310f1` lu le 21/11 à 17 h 40 UTC) : « Envoyer aux
 >   clients du club » (envoi immédiat du back-office) prend le même public que
 >   l'envoi programmé — a commandé OU suit un lieu du club. L'équipe du club
->   n'est plus visée en tant que telle.
+>   n'est plus visée en tant que telle. Le libellé du back-office (Vercel)
+>   n'a pas été vérifié en ligne. Comme pour la 1.7.42, les clients qui
+>   suivent un lieu ne sont atteints qu'une fois l'app mise à jour.
 
-> Cette section remplace « État au 09/11 » (son tableau « ce qui a changé du
-> 03 au 09/11 » est dans l'historique Git). Le détail de chaque livraison est
-> dans `CHANGELOG.md` (jusqu'à **1.7.40**) ; les règles dans `CLAUDE.md` ; les
-> décisions dans `brain/DECISIONS/` (**0001 à 0012**) ; les bugs dans
-> `brain/BUGS_ET_INCIDENTS.md` (**jusqu'à BUG-2026-029**) ; les comptes rendus
+> Cette section remplace « État au 17/11 » et « État au 09/11 » (leurs
+> versions précédentes sont dans l'historique Git). Le détail de chaque
+> livraison est dans `CHANGELOG.md` (jusqu'à **1.7.43**) ; les règles dans
+> `CLAUDE.md` ; les décisions dans `brain/DECISIONS/` (**0001 à 0013**) ; les
+> bugs dans `brain/BUGS_ET_INCIDENTS.md` (**jusqu'à BUG-2026-038**,
+> incidents jusqu'à INC-2026-003) ; les comptes rendus
 > dans `brain/taches/` ; où vit le code dans
 > `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md` ; toutes les phases dans
 > `GUIDE_DEVELOPPEMENT/PHASES_DE_DEVELOPPEMENT.docx` (régénéré par
@@ -91,8 +101,9 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
 
 | | État | Comment le vérifier |
 |---|---|---|
-| **CI GitHub** | ✅ **verte** sur `main` jusqu'à `2a0b199` (17/11, 6 jobs). Seul passage rouge de la semaine : `f569b60` (BUG-2026-026, corrigé au commit suivant) | `https://github.com/Break-Eat-APP/breakeat-admin/actions`, ou l'API `commits/<sha>/check-runs` (dépôt public) |
-| **Serveur (Railway)** | En ligne, sert **`2a0b199`** (corrections des audits Codex, 1.7.41, comprises ; CI verte, vérifié par `/health` le 17/11 à 13 h 05) | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit` |
+| **CI GitHub** | ✅ **verte** sur `main` jusqu'à `95310f1` (21/11, 6 jobs : build, tests, intégration sur base réelle, TypeScript, lint, export web). Les commits suivants ne touchent que la documentation : la CI ne tourne pas pour eux | `https://github.com/Break-Eat-APP/breakeat-admin/actions`, ou l'API `commits/<sha>/check-runs` (dépôt public) |
+| **Serveur (Railway)** | En ligne, sert **`95310f1`** (1.7.42 favoris et migration `20261121_lieux_favoris`, 1.7.43 envoi immédiat aux clients ; vérifié par `/health` le 21/11 à 17 h 40 UTC). Un commit de documentation seule ne redéploie pas (`watchPatterns: /backend/**`) : `/health` peut rester en retard sur `origin/main` sans que rien ne cloche | `curl -s https://breakeat-admin-production.up.railway.app/health` → `commit` |
+| **App (mise à jour à distance)** | La dernière est celle du 17/11 (`7b95f7c`) : **l'app n'envoie pas encore les favoris au serveur** (1.7.42). À lancer au choix de Rémi, après la confidentialité des favoris | GitHub → Actions → « Mise a jour a distance » |
 | **Paiement** | ⚠️ **Stripe en MODE TEST en production** (`sk_test_…`) : la carte 4242… passe, une vraie carte est refusée. Voulu jusqu'à la validation des stores (ADR-0012) | Stripe → bascule « mode test » ; Railway → variables |
 | **Consoles (Vercel)** | Admin, back-office et opérateur, publiés depuis `main` | « Déploiement des frontends » plus bas |
 | **iOS** | **Build 46 (1.1.3)** sur TestFlight, **envoyée à la vérification Apple le 17/11** (nouveaux visuels, notes : Dôme → Moto Cross X → « Au plus vite », carte de test). Mise à jour à distance 1.1.3 publiée le 16/11 (`1fbdf46`), puis le **17/11** sur `7b95f7c` (corrections 1.7.39). Les builds 1.1.2 et plus anciennes ne reçoivent plus les mises à jour à distance | App Store Connect |
@@ -100,7 +111,7 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
 | **Connexion** | E-mail + mot de passe, Apple, Google (iOS vérifié ; Android à essayer sur la 1.1.3) | — |
 | **Mot de passe oublié** | Code prêt, **masqué** tant que l'envoi de courriels n'est pas configuré | `GET /api/v1/auth/password-reset/available` → `false` |
 
-### Ce qui a changé du 10 au 17/11
+### Ce qui a changé du 10 au 21/11
 
 | Date | Quoi | Où lire |
 |---|---|---|
@@ -116,6 +127,8 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
 | 17/11 | Relecture avant audit : « Au plus vite » efface l'ancien créneau, créneau passé refusé par le serveur, client tutoyé partout | 1.7.39 |
 | 17/11 | **1.1.3 soumise à Apple et Google**, publication manuelle (ADR-0012) ; **Apple l'a validée** (en attente du clic de Rémi) | 1.7.40, `brain/taches/2026-11-17-soumission-stores-1.1.3.md` |
 | 17/11 | **Deux audits Codex**, chaque constat vérifié : 7 corrections serveur (paiements abandonnés libérés, panier figé tel que chiffré, ouverture automatique et création d'événement atomiques, webhook Flaix rejouable, route opérateur épinglée, invitation sous condition) | 1.7.41, `brain/audits/REPONSE_AUDITS_CODEX_2026-11-17.md`, `brain/taches/2026-11-17-corrections-audits-codex.md` |
+| 21/11 | **Favoris copiés au serveur, campagnes vers « a commandé OU suit le lieu »** (étape 1 du plan Flaix, ADR-0013) ; l'envoi immédiat du back-office vise les clients, plus l'équipe (BUG-2026-038). Serveur en ligne, app à mettre à jour | 1.7.42, 1.7.43, `brain/taches/2026-11-21-favoris-serveur-campagnes.md` |
+| 21/11 | Nouveau poste de développement ; l'agent pousse directement sur `main` (CLAUDE.md § 6) ; la session locale seule travaille sur le dépôt | note du 21/11 ci-dessus |
 
 ### Ce qui reste — dans l'ordre
 
@@ -260,7 +273,10 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
    `com.shapper.breakeat` (projet `482274786646`, `GOOGLE_SERVICES_JSON` en
    variable EAS) ; compte de service Play dans
    `apps/mobile/google-play-service-account.json`, ignoré par git.
-10. **Favoris entre appareils** — sur le téléphone seulement aujourd'hui.
+10. **Favoris entre appareils** — le téléphone reste l'original. Depuis la
+    1.7.42, le serveur en reçoit une copie (client connecté, après la mise à
+    jour de l'app), mais il ne la renvoie pas : un autre appareil ne les
+    retrouve pas encore.
 11. Petits points de l'audit : cœur écrasé pendant le premier chargement des
     favoris ; actions GitHub en Node 20 à monter ; compilation de l'admin
     à surveiller sur la CI.
@@ -305,14 +321,22 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
   n'est jamais en cache. Audit : `brain/audits/AUDIT_2026-11-09_chirurgical-charge-flaix.md`.
 - **Mises à jour à distance (EAS Update)** depuis la build 41 : **se publient depuis GitHub**
   (Actions → « Mise a jour a distance » → Run workflow), PAS depuis le poste : la préparation
-  du paquet iOS demande 2 à 3 Go, le poste n'en a que 0,6 de libre (« out of memory » le 09/11).
+  du paquet iOS demande 2 à 3 Go, et l'ancien poste n'en avait que 0,6 de libre (« out of
+  memory » le 09/11). Le nouveau poste (16 Go) pourrait sans doute le faire, mais ce n'est pas
+  essayé : le workflow reste le seul chemin.
   Prérequis : le secret `EXPO_TOKEN` dans le dépôt. Les réglages (serveur, Google) sont repris
   du profil `beta` d'`eas.json`, jamais retapés. **Tout changement natif** (icône, écran
   d'ouverture, permission, module natif, Live Activity) → **monter `version`** dans
   `app.config.js` avant la build, sinon la mise à jour partirait vers des builds qui n'ont
   pas le code natif attendu.
-- **La page Flaix intégrée accepte le HTTPS hors de Flaix et l'annonce** (« Paiement sur
-  … ») : à constater lors d'un vrai paiement avant le 22/11.
+- **La page Flaix intégrée accepte le HTTPS hors de Flaix et l'annonce** (bandeau « Paiement
+  sur <domaine> » avec cadenas, `apps/mobile/src/lib/navigation-flaix.ts`, audit du 09/11,
+  constat 1). **Pas encore constaté sur un vrai paiement**, d'après la documentation (point F
+  de l'audit, confié à Rémi ; échéance d'origine : le 22/11). À faire sur l'iPhone (build 46) :
+  ouvrir un lieu Flaix, aller jusqu'au paiement, payer (c'est Flaix qui encaisse, en vrai : un
+  petit montant). Si un bandeau « Paiement sur … » apparaît, Flaix redirige vers son
+  prestataire, et le paiement doit aboutir. Sans bandeau, Flaix encaisse chez lui. Si le
+  paiement est bloqué ou que la page reste blanche, envoyer une capture et l'heure exacte.
 - **Lire la CI après CHAQUE poussée.** Elle a été rouge trois jours sans que
   personne ne la regarde. Sans connexion GitHub, l'API publique répond
   (60 lectures par heure).
@@ -320,14 +344,19 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 17/11/2026 » 
   et se vérifie en `TZ=UTC` : la CI tourne en UTC, le poste à Paris.
 - **Traduire un message d'erreur = chercher qui l'attend**, y compris dans
   `backend/test/integration/` (base réelle, lancés par la CI seulement).
-- **Le poste de développement n'est pas la référence pour l'export web** :
+- **La CI Linux reste la référence pour l'export web** : sur l'ancien poste,
   OneDrive et le magasin pnpm local (`UNKNOWN: stat`, `unable to open
-  database file`) y font échouer des choses qui passent sur la CI Linux.
+  database file`) faisaient échouer des choses qui passaient sur la CI. Le
+  nouveau poste est hors de OneDrive (`C:\dev\breakeat-admin`) ; l'export web
+  n'y a pas encore été essayé.
 - **Une route Nest littérale se déclare AVANT `:id`** (`a-venir` avant
   `:eventId`).
 - **`eas submit` se lance à la main** après chaque build iOS
   (`eas submit --platform ios --profile beta --id <build>`).
-- **Machine à 6 Go de RAM** : `tsc`, `eslint` et `jest` séparément.
+- **Mémoire du poste** : le nouveau poste a 16 Go (21/11), la suite Jest
+  complète peut tourner. Si la mémoire manque malgré tout : `tsc`, `eslint` et
+  `jest` séparément, `-i` et `NODE_OPTIONS=--max-old-space-size=1000`
+  (CLAUDE.md § 7).
 - **La fiche d'un événement lit `venue.flaixEnabled`** : sur un lieu Flaix,
   ses réglages Break Eat sont masqués exprès.
 - **`liens-commande-flaix.tsx` n'existe plus que dans l'admin** (la copie du
@@ -579,7 +608,7 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Parrainage** | Partage de lien et QR en place (phase 44) | Trancher l'économie : points de fidélité, remise portée par le club, ou rien. La récompense sortirait de ta poche — les produits appartiennent aux buvettes |
 | **Notifications** | Cloche corrigée (phase 52), build 21 envoyé | À ÉPROUVER en vrai : envoyer une campagne, app en arrière-plan, puis relire les journaux Railway (`Push token enregistré…`, `Expo push: N envoyés…`) |
 | **Lien calendrier Flaix (option A)** | ⏸️ En attente du point de Rémi avec son développeur (10/11). A maintenant, B aussi, C en option | ⛔ Écran Saison sans bouton « Commander » pour un lieu en continu : à corriger AVANT de basculer un lieu. Plus la case « Message d'information ». Détail dans « Ce qui reste », point 5 |
-| **Campagnes des lieux Flaix** | ⚠️ N'atteignent personne (aucune `Order` BreakEat sur un lieu Flaix, favoris gardés sur le téléphone) | ✅ Favoris au serveur + cible « a commandé OU favori » **serveur en ligne le 21/11 (1.7.42, `108b02a`, ADR-0013) ; mise à jour à distance de l'app à lancer** ; puis E1 côté Flaix. L'envoi immédiat du back-office suit (BUG-2026-038, 1.7.43, pas encore en ligne) |
+| **Campagnes des lieux Flaix** | ⚠️ N'atteignent personne (aucune `Order` BreakEat sur un lieu Flaix, favoris gardés sur le téléphone) | ✅ Favoris au serveur + cible « a commandé OU favori » **serveur en ligne le 21/11 (1.7.42, `108b02a`, ADR-0013) ; mise à jour à distance de l'app à lancer** ; puis E1 côté Flaix. L'envoi immédiat du back-office suit (BUG-2026-038, 1.7.43, serveur en ligne le 21/11, `95310f1`) |
 | **Gouvernance technique** (document `BRAT_EAT_MASTER_ENGINEERING_GOVERNANCE.md`, 11/11) | ✅ **Intégrée le 11/11, en 5 commits** : `CLAUDE.md` (racine) ; `brain/BUGS_ET_INCIDENTS.md` ; `brain/DECISIONS/` (ADR 0001 à 0008) ; `brain/ARCHITECTURE.md` et `brain/AGENTS.md` réécrits depuis le code ; `brain/taches/` (modèle + premier compte rendu) ; `brain/SECURITE.md` ; `brain/DEPLOIEMENT.md` ; audits de la racine → `brain/audits/`, documents dépassés → `brain/archives/`. Tout reste dans `brain/` (ADR-0008) | Hors documentation, conseillé : dépôt privé (reporté), préproduction, Railway qui attend la CI, Dependabot. ✅ Restauration depuis une sauvegarde de nuit réussie le 11/11 (essai mensuel automatique) |
 | **Passerelle d'accès Flaix** | ⏸️ **Gelée le 10/11 par Rémi** — spécifiée seulement (cahier des charges Flaix, section D) | Feu vert de Rémi, choix D1 seul ou D1 puis D2, route et clé de test côté Flaix. Rien à coder d'ici là |
 | **Liens Flaix** | Saisis depuis la liste des événements (toute la saison d'un coup) **ou** depuis la fiche d'un match, même terminé (06/11) | Les coller à la main, un par match, tant que Flaix ne les pousse pas |
@@ -606,7 +635,7 @@ cette liste à jour : elle est le premier endroit à relire en reprenant.**
 | **Dette : PDF en base** | Contrats en `BYTEA`, 10 Mo max | Tenable à ce volume. À déplacer vers un stockage objet si les clubs en déposent beaucoup |
 | **Courriels (Brevo)** | Code prêt, fonction masquée : `MAIL_*` absents de Railway | Compte Brevo + DNS de `breakeatapp.com` + trois variables, par Rémi. Voir « Ce qui reste », point 6 |
 | **Android — Play Store** | ✅ Clé d'importation acceptée, 1.1.3 (code 7) en examen (17/11) | Essai sur un vrai téléphone Android (connexion Google, paiement, « prête ») |
-| **Favoris entre appareils** | Gardés sur le téléphone depuis le 06/11 | Synchronisation serveur — demande un compte |
+| **Favoris entre appareils** | Gardés sur le téléphone depuis le 06/11 ; **copiés au serveur** depuis la 1.7.42 (client connecté, une fois l'app mise à jour) | Relire la copie du serveur sur un autre appareil (le serveur ne la renvoie pas encore) |
 
 ---
 
@@ -621,7 +650,7 @@ match touché s'écrit en entier dans la carte du bas, avec le bouton.
 
 Vérifié en faisant tourner l'app (bundle web + fausse API locale) : le ruban,
 le repli en initiales, le choix d'un match, « Commande ouverte », « La commande
-ouvre à 8 h le jour du match », et le lieu dont la suite n'est pas programmée.
+ouvre à 08:00 le jour du match », et le lieu dont la suite n'est pas programmée.
 
 ### Ce qui reste à faire, dans l'ordre
 
