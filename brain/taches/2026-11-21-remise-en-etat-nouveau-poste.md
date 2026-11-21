@@ -97,8 +97,12 @@ ici).
 1. **Compte de service Google Play introuvable** : sans lui, `eas submit`
    ne peut pas envoyer une build Android à la Play Console. À régler avant la
    prochaine soumission Android (procédure dans `REPRISE.md`).
-2. **L'ancien disque n'a pas été comparé à `main`** : des commits ou des
-   fichiers modifiés du 18-19/11 jamais poussés peuvent y rester.
+2. **L'ancien disque, comparé à `main` le 21/11** : aucun commit non poussé.
+   En revanche, une revérification Codex du 17/11 (recopiée dans
+   `brain/audits/`) et un **début de correction de paiement jamais commité**
+   (`cart.service.ts`, `paiements-abandonnes.service.ts`) y sont restés. À
+   reprendre avant Stripe en production (voir `REPRISE.md`, note du 21/11).
+   La clé Google Play n'y est pas.
 3. **`gh` absent** : sans connexion GitHub, l'agent lit la CI par l'API
    publique (60 lectures par heure). Ce ne sera plus possible quand le dépôt
    passera en privé.

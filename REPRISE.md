@@ -35,11 +35,24 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 > - **Nouveau poste de Rémi** (16 Go de mémoire, Ryzen 7 ; l'ancien est hors
 >   service, son disque est lisible en USB). Le dernier commit poussé depuis
 >   l'ancien poste date du **17/11 (`6f601c6`)**. Tout ce qui suit, le 21/11,
->   vient de la session cloud (1.7.42, 1.7.43, documentation). **Reste
->   ouvert** : l'ancien disque contient-il des commits ou des fichiers modifiés
->   du 18-19/11 jamais poussés (`git status`, `git log --oneline -5`,
->   `git stash list` sur la copie de l'ancien disque) ? Si oui, les comparer à
->   `main` avant de les reprendre : ne rien écraser.
+>   vient de la session cloud (1.7.42, 1.7.43, documentation).
+>   **Ancien disque vérifié le 21/11** (`D:\Users\notta\OneDrive\Bureau\Break Eat APP`,
+>   en lecture seule) : `HEAD` = `6f601c6`, **aucun commit non poussé, rien
+>   de remis de côté**. Mais **trois fichiers jamais commités** :
+>   1. `brain/audits/REVERIFICATION_CORRECTIONS_2026-11-17.md` — une
+>      **revérification Codex** des corrections du 17/11 (verdict : 6 et 7
+>      bons, 1 à 4 améliorés mais avec des courses restantes ; P1 verrou du
+>      gel du panier non contrôlé, P2 libération après abandon non atomique,
+>      P2 webhook Flaix « en cours » sans bail, P2 fermeture concurrente d'une
+>      buvette). **Recopiée dans `brain/audits/` le 21/11** ; sa réponse reste
+>      à écrire.
+>   2. et 3. un **début de correction de P1 et du premier P2**, NON commité,
+>      sans test : `cart.service.ts` (`figerEtEngager` vérifie son verrou et
+>      renvoie un conflit) et `paiements-abandonnes.service.ts` (bascule,
+>      place, stock et marques dans une transaction). Les fichiers de `main`
+>      n'ont pas bougé depuis `6f601c6` : le correctif s'applique tel quel.
+>      **À reprendre avant Stripe en production**, avec ses tests. **Ne pas
+>      effacer l'ancien disque** tant que ce n'est pas fait.
 > - **Nouveau poste — fichiers hors Git (21/11)** : `backend\.env` et
 >   `apps\mobile\.env` recopiés de l'ancien disque vers `C:\dev\breakeat-admin`
 >   (pas de `.env` à la racine : il n'existait pas). ⚠️ **Le compte de service
@@ -50,6 +63,15 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   soumission Android**. Piste : Google Cloud télécharge la clé sous un
 >   autre nom (`<projet>-<12 caractères>.json`), souvent dans le dossier
 >   Téléchargements ; la chercher par son contenu (`"type": "service_account"`).
+>   **Cherchée le 21/11 sur tout `D:\Users` (l'ancien disque), par son
+>   contenu : absente.** Deux autres clés de compte de service y traînent dans
+>   Téléchargements, sans rapport avec Google Play : `firebase-adminsdk`
+>   (projet `break-eat-app-spe-2d709`, cité nulle part dans le dépôt) et
+>   `flaix-wallet` (projet `rapid-access-494820-f8`, côté Flaix). Ne pas les
+>   recopier ; une clé inutile se supprime dans Google Cloud. Le dépôt
+>   Android du 17/11 a pu se faire à la main : regarder dans la Play Console
+>   (Utilisateurs et autorisations) si une adresse `…iam.gserviceaccount.com`
+>   existe. Sinon, cette clé n'a jamais existé.
 >   Sans elle, `eas submit` ne peut rien envoyer à Google, mais rien ne casse :
 >   l'app en ligne n'en dépend pas, et un `.aab` se dépose aussi à la main
 >   dans la Play Console. `brain/livrables/stores/fiche-stores.md` est ignoré
