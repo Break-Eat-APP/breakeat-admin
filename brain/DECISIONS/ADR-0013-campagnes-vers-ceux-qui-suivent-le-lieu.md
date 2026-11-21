@@ -36,6 +36,10 @@ autre signal d'intérêt, vivaient uniquement sur le téléphone.
 - Un favori d'un autre club ne passe jamais : le filtre sur l'organisation est
   écrit même quand le lieu est précisé.
 - La suppression d'un compte efface ses favoris.
+- **Le même public pour l'envoi immédiat du back-office** (« Envoyer aux
+  clients du club », 21/11, BUG-2026-038, tranché par Rémi) : il visait
+  l'équipe du club ; il prend désormais `ScheduledPushService.resolveAudience`.
+  Un seul endroit décide qui sont « les clients du club ».
 
 ## Pourquoi
 C'est le seul moyen, sans Flaix, de faire arriver une campagne d'un lieu Flaix
@@ -70,4 +74,5 @@ le suivant.
 - `backend/src/modules/favorites/` (route, service)
 - `backend/prisma/migrations/20261121_lieux_favoris/` (table `venue_favorites`)
 - `backend/src/modules/auth/auth.service.ts` (`supprimerMonCompte`)
+- `backend/src/modules/backoffice/backoffice.service.ts` (`sendNotification`)
 - `apps/mobile/src/lib/favoris.ts` (`envoyerFavoris`), `apps/mobile/App.expo.tsx` (envoi à la connexion)

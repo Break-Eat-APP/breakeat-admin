@@ -11,7 +11,10 @@ export class SendNotificationDto {
   @MaxLength(500)
   body?: string;
 
-  /** Si renseigné, envoie uniquement aux membres de cette organisation. */
+  /**
+   * Si renseigné, envoie aux CLIENTS de ce club (a commandé OU suit un de ses
+   * lieux) — plus à son équipe depuis le 21/11/2026 (BUG-2026-038).
+   */
   @IsUUID()
   @IsOptional()
   orgId?: string;

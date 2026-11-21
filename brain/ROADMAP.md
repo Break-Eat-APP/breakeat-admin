@@ -567,6 +567,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.40 | 2026-11-17 | Versions 1.1.3 soumises à Apple et Google ; documentation de gouvernance à jour |
 | 1.7.41 | 2026-11-17 | Corrections des audits Codex : paiements abandonnés libérés, panier figé tel que chiffré |
 | 1.7.42 | 2026-11-21 | Les campagnes atteignent ceux qui suivent le lieu : favoris copiés au serveur |
+| 1.7.43 | 2026-11-21 | « Envoyer aux clients du club » : l'envoi immédiat du back-office vise les clients, plus l'équipe |
 
 ---
 

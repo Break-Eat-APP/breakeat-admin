@@ -5,6 +5,26 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.43] — 2026-11-21 — « Envoyer aux clients du club » : l'envoi immédiat vise les clients, plus l'équipe
+
+- **Pourquoi** : dans le back-office, « Envoyer au club » en envoi
+  **immédiat** atteignait les **membres de l'équipe** du club (gérants,
+  opérateurs), alors que le même choix **programmé** atteignait ses
+  **clients**. Un bouton, deux publics (BUG-2026-038). Tranché par Rémi : les
+  clients seulement.
+- L'envoi immédiat prend désormais le public d'une campagne du club,
+  calculé au même endroit (`ScheduledPushService.resolveAudience`) : a
+  commandé OU suit un de ses lieux (ADR-0013). « Tous les utilisateurs »
+  ne change pas.
+- Libellés du back-office : « Clients de … » dans la liste, « Envoyer aux
+  clients du club » sur le bouton.
+
+`~ backend/src/modules/backoffice/{backoffice.service.ts,backoffice.service.spec.ts,dto/send-notification.dto.ts}` (+ 4 tests),
+`~ apps/backoffice/src/app/(backoffice)/notifications/page.tsx`.
+Aucune migration, aucune mise à jour de l'app.
+
+---
+
 ## [1.7.42] — 2026-11-21 — Les campagnes atteignent ceux qui suivent le lieu : favoris copiés au serveur
 
 - **Pourquoi** : une campagne d'un club ou d'un lieu ne visait que ses clients
