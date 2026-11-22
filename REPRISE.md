@@ -167,6 +167,14 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   un redémarrage du serveur pendant le match la vide jusqu'à la lecture
 >   suivante (ADR-0015). Toujours pas de Live Activity. Audit Codex du 21/11
 >   rangé avec sa réponse dans `brain/audits/`.
+>   **1.7.46 (22/11) : réponse à l'audit Codex des notifications** — « prête »
+>   Flaix retentée 3 fois, envoi immédiat archivé dans la cloche (choix de
+>   Rémi), retrait du jeton rejoué après une déconnexion sans réseau
+>   (`POST /push-tokens/retrait`), renouvellement du jeton suivi. Serveur en
+>   ligne : CI verte et `/health` → `8e05edc` (22/11). La première poussée
+>   (`16ab2df`) avait cassé la CI : le banc d'intégration n'était pas à jour.
+>   La production n'a pas été touchée, et la leçon est dans `CLAUDE.md` § 7.
+>   **Reste : la mise à jour à distance de l'app** (jeton push), par Rémi.
 > - **Étape 1 du plan Flaix (1.7.42) : SERVEUR EN LIGNE, APP PAS ENCORE.**
 >   Favoris copiés au serveur, campagnes vers « a commandé OU suit le lieu »
 >   (ADR-0013). PR [#5](https://github.com/Break-Eat-APP/breakeat-admin/pull/5)
