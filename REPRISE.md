@@ -165,6 +165,13 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   publié, iOS build 46). Le client doit avoir dans BreakEat la
 >   MÊME adresse e-mail que celle donnée à Flaix (le lien de commande la
 >   remplit par `mail=[#mail]`).
+>   ✅ **VÉRIFIÉ EN VRAI le 22/11 à 14h48 (Android, capture de Rémi)** : la
+>   commande Flaix **n° 1002** (Stade Marie-Marvingt, Concert Rock 2027,
+>   Buvette L, 11,80 €) apparaît dans « Mes commandes » avec l'état « Prête »
+>   et le badge « en direct ». Une commande passée sous un autre nom/e-mail
+>   (#1001, « Blue Stack ») n'apparaît pas, comme prévu. ⚠️ Le texte d'état
+>   vient de Flaix et **vouvoie** (« Présentez-vous au point de retrait. ») :
+>   à remplacer par un texte BreakEat au tutoiement (CLAUDE.md § 4).
 >   **1.7.45 (21/11, serveur seul) : « Ta commande est prête » arrive aussi
 >   pour une commande Flaix.** Le serveur surveille les commandes en cours
 >   (état lu chez Flaix toutes les 15 s). Condition : le client a ouvert
