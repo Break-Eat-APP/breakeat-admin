@@ -104,6 +104,37 @@ describe('déconnexion sans réseau', () => {
   });
 });
 
+describe('course entre le retrait rejoué et un nouveau compte (vérification Codex du 22/11)', () => {
+  it('l’enregistrement attend le retrait en route : il n’est jamais défait par lui', async () => {
+    mockStockage.set(CLE, JETON);
+    const ordre: string[] = [];
+    let terminerRetrait: () => void = () => undefined;
+    mockRetirer.mockImplementation(
+      () =>
+        new Promise<void>((r) => {
+          terminerRetrait = () => {
+            ordre.push('retrait');
+            r();
+          };
+        }),
+    );
+    mockRegister.mockImplementation(async () => {
+      ordre.push('enregistrement');
+    });
+
+    const retrait = rejouerRetraitEnAttente();
+    await new Promise<void>((r) => setImmediate(() => r()));
+    const enregistrement = enregistrerPush();
+    await new Promise<void>((r) => setImmediate(() => r()));
+    expect(mockRegister).not.toHaveBeenCalled();
+
+    terminerRetrait();
+    await Promise.all([retrait, enregistrement]);
+    expect(ordre).toEqual(['retrait', 'enregistrement']);
+    expect(mockStockage.has(CLE)).toBe(false);
+  });
+});
+
 describe('renouvellement du jeton', () => {
   it('réenregistre le nouveau jeton dès que le système le renouvelle', async () => {
     await enregistrerPush();

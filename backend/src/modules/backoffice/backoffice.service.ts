@@ -409,19 +409,10 @@ export class BackofficeService {
    * est « le club », sinon les deux chemins redivergeraient.
    */
   async sendNotification(dto: SendNotificationDto) {
-    let tokens: string[];
-    let userIds: string[];
-
-    if (dto.orgId) {
-      ({ tokens, userIds } = await this.scheduledPush.destinataires(dto.orgId, null));
-    } else {
-      const users = await this.prisma.user.findMany({
-        where: { isActive: true },
-        select: { id: true },
-      });
-      userIds = users.map((u) => u.id);
-      tokens = await this.pushTokens.tokensForUsers(userIds);
-    }
+    // Le public d'une campagne, calculé à UN SEUL endroit pour l'immédiat et
+    // le programmé : les clients d'un club, ou tous les comptes actifs
+    // (vérification Codex du 22/11/2026).
+    const { tokens, userIds } = await this.scheduledPush.destinataires(dto.orgId ?? null, null);
 
     /*
      * ARCHIVÉ DANS LA CLOCHE, COMME UNE CAMPAGNE PROGRAMMÉE (BUG-2026-047,

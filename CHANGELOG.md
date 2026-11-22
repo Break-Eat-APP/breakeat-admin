@@ -5,6 +5,15 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.47] — 2026-11-22 — Réponse à la vérification Codex des notifications
+
+- **Jeton push** : l'enregistrement d'un compte attend qu'un retrait rejoué en route soit terminé. Sans cela, un retrait parti avant la connexion mais arrivé après pouvait retirer au nouveau compte le jeton qu'il venait de prendre.
+- **« À tous »** : l'envoi immédiat et l'envoi programmé calculent leur public au même endroit. Ce public, ce sont tous les comptes actifs, archivés dans la cloche et prévenus sur leurs appareils. Le programmé ne retenait que les comptes ayant un appareil, comptes désactivés compris.
+
+Tests : backend 84 suites / 1 198, intégration 26 / 212 (PostgreSQL 18 et Redis 7 dans Docker), mobile 15 / 164 ; typage complet, lint, compilation. La partie jeton attend la mise à jour à distance de l'app.
+
+---
+
 ## [1.7.46] — 2026-11-22 — Réponse à l'audit Codex des notifications
 
 - **« Prête » Flaix retentée** (BUG-2026-044) : un envoi raté (Expo injoignable, aucun appareil atteint) est retenté au tour suivant, 3 fois au plus ; une commande n'est marquée « annoncée » qu'une fois prévenue.

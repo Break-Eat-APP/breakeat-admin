@@ -24,7 +24,10 @@ describe('ScheduledPushService — le ciblage', () => {
     const findMany = jest.fn().mockResolvedValue([{ userId: 'u1' }, { userId: 'u2' }]);
     const favoris = jest.fn().mockResolvedValue(suiveurs);
     const prisma = {
-      user: { findUnique: jest.fn().mockResolvedValue({ globalRole: 'SUPER_ADMIN' }) },
+      user: {
+        findUnique: jest.fn().mockResolvedValue({ globalRole: 'SUPER_ADMIN' }),
+        findMany: jest.fn().mockResolvedValue([{ id: 'actif-1' }, { id: 'actif-2' }]),
+      },
       venue: {
         // `findFirst` filtre sur l'organisation : un lieu d'un autre club ne
         // remonte pas.
@@ -152,9 +155,16 @@ describe('ScheduledPushService — le ciblage', () => {
     it('sans organisation, c’est la diffusion plateforme — réservée au back-office', async () => {
       // Le super-admin garde ce pouvoir : s'adresser à tous les porteurs de
       // l'application, tous clubs confondus.
-      const { service, prisma } = monter();
-      await service.resolveAudience(null, null);
-      expect(prisma.pushToken.findMany).toHaveBeenCalled();
+      const { service, prisma, pushTokens } = monter();
+      const { userIds } = await service.destinataires(null, null);
+      // Tous les comptes ACTIFS (vérification Codex du 22/11) : le même public
+      // que l'envoi immédiat « à tous ».
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        where: { isActive: true },
+        select: { id: true },
+      });
+      expect(userIds).toEqual(['actif-1', 'actif-2']);
+      expect(pushTokens.tokensForUsers).toHaveBeenCalledWith(['actif-1', 'actif-2']);
     });
   });
 });

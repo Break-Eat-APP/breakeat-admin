@@ -661,18 +661,13 @@ describe('BackofficeService', () => {
       expect(r).toEqual({ sent: 0, failed: 0, recipients: 0 });
     });
 
-    it('sans club : tous les comptes actifs, comme avant', async () => {
-      prisma.user.findMany.mockResolvedValue([{ id: 'u1' }, { id: 'u2' }]);
-      pushTokens.tokensForUsers.mockResolvedValue(['j1', 'j2']);
+    it('sans club : le public « à tous » d’une campagne, calculé au même endroit', async () => {
+      scheduledPush.destinataires.mockResolvedValue({ tokens: ['j1', 'j2'], userIds: ['u1', 'u2'] });
 
       await service.sendNotification({ title: 'Annonce' });
 
-      expect(prisma.user.findMany).toHaveBeenCalledWith({
-        where: { isActive: true },
-        select: { id: true },
-      });
-      expect(pushTokens.tokensForUsers).toHaveBeenCalledWith(['u1', 'u2']);
-      expect(scheduledPush.destinataires).not.toHaveBeenCalled();
+      expect(scheduledPush.destinataires).toHaveBeenCalledWith(null, null);
+      expect(expoPush.send.mock.calls[0][0].map((m: { to: string }) => m.to)).toEqual(['j1', 'j2']);
       expect(userNotifications.archiver).toHaveBeenCalledWith(
         expect.objectContaining({ userIds: ['u1', 'u2'], organizationId: null }),
       );

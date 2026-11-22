@@ -174,7 +174,7 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   ligne : CI verte et `/health` → `8e05edc` (22/11). La première poussée
 >   (`16ab2df`) avait cassé la CI : le banc d'intégration n'était pas à jour.
 >   La production n'a pas été touchée, et la leçon est dans `CLAUDE.md` § 7.
->   **Reste : la mise à jour à distance de l'app** (jeton push), par Rémi.
+>   **1.7.47 (22/11)** : réponse à la vérification Codex (course du retrait de jeton corrigée, public « à tous » unifié : tous les comptes actifs). **Reste : la mise à jour à distance de l'app** (jeton push), par Rémi.
 > - **Étape 1 du plan Flaix (1.7.42) : SERVEUR EN LIGNE, APP PAS ENCORE.**
 >   Favoris copiés au serveur, campagnes vers « a commandé OU suit le lieu »
 >   (ADR-0013). PR [#5](https://github.com/Break-Eat-APP/breakeat-admin/pull/5)

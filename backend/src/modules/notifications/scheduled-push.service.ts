@@ -131,12 +131,18 @@ export class ScheduledPushService {
     venueId: string | null = null,
   ): Promise<{ tokens: string[]; userIds: string[] }> {
     if (orgId === null) {
-      // Diffusion plateforme : on ne connaît que les appareils enregistrés.
-      const rows = await this.prisma.pushToken.findMany({ select: { token: true, userId: true } });
-      return {
-        tokens: rows.map((r) => r.token),
-        userIds: [...new Set(rows.map((r) => r.userId))],
-      };
+      // Diffusion plateforme : TOUS LES COMPTES ACTIFS (22/11/2026,
+      // vérification Codex). Ce chemin ne retenait que les comptes ayant un
+      // appareil enregistré — y compris des comptes désactivés —, quand
+      // l'envoi immédiat visait les comptes actifs : deux publics pour le même
+      // « à tous ». Un compte actif sans appareil retrouve l'annonce dans sa
+      // cloche ; un compte désactivé ne reçoit plus rien.
+      const actifs = await this.prisma.user.findMany({
+        where: { isActive: true },
+        select: { id: true },
+      });
+      const userIds = actifs.map((u) => u.id);
+      return { tokens: await this.pushTokens.tokensForUsers(userIds), userIds };
     }
     // Segmenter PAR LIEU : un club qui tient plusieurs adresses n'a aucune
     // raison d'annoncer une soirée au Vélodrome aux clients de son annexe. Le

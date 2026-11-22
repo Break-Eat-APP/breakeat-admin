@@ -43,6 +43,14 @@ Notifications.setNotificationHandler({
 let jetonActuel: string | null = null;
 
 /**
+ * Le retrait rejoué en cours, s'il y en a un. L'enregistrement l'ATTEND avant
+ * d'enregistrer (vérification Codex du 22/11/2026) : sans cela, un retrait
+ * parti avant la connexion d'un nouveau compte, mais arrivé APRÈS son
+ * enregistrement, retirait au nouveau compte le jeton qu'il venait de prendre.
+ */
+let retraitEnCours: Promise<void> | null = null;
+
+/**
  * Demande la permission, obtient le jeton Expo et l'enregistre.
  *
  * Ne lève jamais : une notification est un confort. Un refus de permission, un
@@ -74,6 +82,10 @@ export async function enregistrerPush(): Promise<void> {
 
     const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
     if (!data || data === jetonActuel) return;
+
+    // Un retrait rejoué encore en route passe AVANT : sinon il arriverait
+    // après l'enregistrement et reprendrait le jeton au compte connecté.
+    if (retraitEnCours) await retraitEnCours;
 
     await apiRegisterPushToken(data, Platform.OS);
     jetonActuel = data;
@@ -123,13 +135,21 @@ async function effacerRetraitEnAttente(): Promise<void> {
  */
 export async function rejouerRetraitEnAttente(): Promise<void> {
   if (Platform.OS === 'web') return;
-  const jeton = await lireRetraitEnAttente();
-  if (!jeton) return;
+  if (retraitEnCours) return retraitEnCours;
+  retraitEnCours = (async () => {
+    const jeton = await lireRetraitEnAttente();
+    if (!jeton) return;
+    try {
+      await apiRetirerJetonPush(jeton);
+      await effacerRetraitEnAttente();
+    } catch (e: unknown) {
+      console.warn('Retrait du jeton push encore impossible, nouvel essai plus tard:', e);
+    }
+  })();
   try {
-    await apiRetirerJetonPush(jeton);
-    await effacerRetraitEnAttente();
-  } catch (e: unknown) {
-    console.warn('Retrait du jeton push encore impossible, nouvel essai plus tard:', e);
+    await retraitEnCours;
+  } finally {
+    retraitEnCours = null;
   }
 }
 
