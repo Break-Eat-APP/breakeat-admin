@@ -199,6 +199,16 @@ Vercel) et la CI ne vérifie **qu'après** ; donc, à chaque fois :
   à `-i` et `NODE_OPTIONS=--max-old-space-size=1000`. Le projet est cloné dans
   `C:\dev\breakeat-admin`, **hors de OneDrive** (OneDrive abîme le dossier
   `.git`).
+- **Le typage du serveur, c'est `pnpm run typecheck`**, pas `tsc --noEmit`
+  seul : le script vérifie AUSSI `tsconfig.tests.json`, donc
+  `test/integration/` (le banc d'essai construit les services à la main).
+  Le 22/11/2026, un argument ajouté au constructeur de `BackofficeService` a
+  passé `tsc -p tsconfig.json` en local et cassé la CI sur `main`. Avant de
+  pousser un changement de constructeur ou de service partagé, lancer aussi
+  les tests d'intégration : Docker, `postgres:18-alpine` sur le port 15432 et
+  `redis:7-alpine` sur le port 16379 (les ports 55432 et suivants sont réservés
+  par Windows), `prisma migrate deploy`, puis `pnpm test:integration` avec
+  `DATABASE_URL_TEST` et `REDIS_URL_TEST`.
 - `pnpm` : sur le nouveau poste, `pnpm` 11.3.0 (la version de
   `packageManager`) est dans le PATH ; `corepack pnpm …` marche aussi. Docker
   Desktop y tourne : `pnpm db:verifier` est possible en local. `gh` n'y est

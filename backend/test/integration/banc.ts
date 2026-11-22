@@ -35,7 +35,7 @@ export function monterServices(url: string) {
   const auth = new AuthService(prisma, users, groups as never, jwt, config, social as never);
 
   const pushTokens = { tokensForUsers: async () => [] };
-  const backoffice = new BackofficeService(prisma, {} as never, pushTokens as never, {} as never);
+  const backoffice = new BackofficeService(prisma, {} as never, pushTokens as never, {} as never, {} as never);
 
   return { prisma, users, auth, backoffice, apple };
 }
