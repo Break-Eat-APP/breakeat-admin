@@ -6,7 +6,7 @@
 > règles qui ne vivaient jusqu'ici que dans la mémoire d'un agent (11/11/2026).
 >
 > Il applique la gouvernance `BRAT_EAT_MASTER_ENGINEERING_GOVERNANCE.md`
-> (v1.0, 11/11/2026), **adaptée au dépôt** : la documentation vit dans `brain/`,
+> (v1.1, 22/11/2026 ; v1.0 du 11/11), **adaptée au dépôt** : la documentation vit dans `brain/`,
 > `REPRISE.md` et `CHANGELOG.md` — on ne crée pas de `docs/` parallèle.
 >
 > ⚠️ **Le dépôt est public** (au 11/11/2026, décision en attente). Rien ici, ni
