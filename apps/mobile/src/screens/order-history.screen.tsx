@@ -30,7 +30,6 @@ import {
   type CommandeFlaix,
   type Order,
 } from '@lib/api/mobile-api';
-import { CarteCommandeFlaix } from '@components/carte-commande-flaix';
 import { NoterCommande } from '@components/noter-commande';
 import { useAuthStore } from '@store/auth.store';
 import { showAlert } from '@lib/alert';
@@ -491,7 +490,7 @@ export function OrderHistoryScreen() {
           }
           renderItem={({ item }) =>
             estFlaix(item) ? (
-              <CarteCommandeFlaix commande={item} />
+              <TicketFlaix commande={item} />
             ) : (
               <OrderCard
                 order={item}
@@ -870,6 +869,175 @@ function OrderCard({
           (remarque de Rémi, 10/11). Une vue à part, posée avant les encoches,
           laisse celles-ci couper le liseré.
         */}
+        <View pointerEvents="none" style={styles.lisere} />
+        <View style={styles.encocheHaut} />
+        <View style={styles.encocheBas} />
+      </View>
+    </Pressable>
+  );
+}
+
+/**
+ * L'état d'une commande Flaix, traduit dans les états BreakEat : le ticket
+ * Flaix prend ainsi EXACTEMENT les couleurs, icônes et libellés d'un ticket
+ * BreakEat (demande de Rémi, 22/11 : « le même design que depuis le début »).
+ * Un état inconnu garde le libellé de Flaix, dans la teinte neutre.
+ */
+function uiFlaix(c: CommandeFlaix): StatusUi {
+  const etat = c.etat ?? '';
+  if (c.prete) return STATUS_UI.READY;
+  if (['collected', 'picked_up', 'delivered', 'done', 'completed', 'served'].includes(etat)) {
+    return STATUS_UI.PICKED_UP;
+  }
+  if (['cancelled', 'canceled', 'refunded', 'failed', 'expired'].includes(etat)) return STATUS_UI.CANCELLED;
+  if (['preparing', 'in_preparation', 'in_progress', 'cooking'].includes(etat)) return STATUS_UI.PREPARING;
+  if (['queued', 'pending', 'waiting', 'received', 'accepted', 'paid'].includes(etat) || c.enCours) {
+    return STATUS_UI.PAID;
+  }
+  return { ...FALLBACK_UI, label: c.etatLibelle };
+}
+
+async function ouvrirLienFlaix(url: string | null) {
+  if (!url) return;
+  try {
+    await Linking.openURL(url);
+  } catch {
+    showAlert('Lien indisponible', "Impossible d'ouvrir cette page pour le moment.");
+  }
+}
+
+/**
+ * LE TICKET D'UNE COMMANDE FLAIX — le MÊME que celui d'une commande BreakEat
+ * (22/11/2026). Même en-tête orange, même bulle du numéro, même état et prix à
+ * cheval, même barre, mêmes colonnes Retrait | Date, même déchirure et mêmes
+ * encoches : ce sont les styles de `OrderCard`, pas une copie.
+ *
+ * Ce qui change, parce que BreakEat ne fait que LIRE la commande chez Flaix :
+ * le ticket ouvre la page de suivi Flaix ; « Suivre ma commande » et « Voir le
+ * reçu » mènent aux pages Flaix ; pas de « Je suis arrivé », de plan ni de
+ * note (ils demandent une commande BreakEat).
+ */
+function TicketFlaix({ commande: c }: { commande: CommandeFlaix }) {
+  const cfg = uiFlaix(c);
+  const live = c.enCours;
+  const stepIndex = STEPS.indexOf(cfg.phase);
+  const retrait =
+    c.retraitAffiche ?? (c.retraitPrevu ? formatTime(c.retraitPrevu) : null) ?? 'Dès que possible';
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.carte, shadowCard, pressed && styles.pressed]}
+      onPress={() => void ouvrirLienFlaix(c.lienSuivi)}
+      accessibilityRole="button"
+      accessibilityLabel={`Commande ${c.numero} — ${cfg.label}. Toucher pour suivre.`}
+    >
+      <View style={styles.ticket}>
+        <View style={styles.entete}>
+          <View style={styles.enteteLigne}>
+            <View style={styles.enteteTextes}>
+              {c.lieu ? (
+                <Text style={styles.enteteLieu} numberOfLines={1}>
+                  {c.lieu}
+                </Text>
+              ) : null}
+              <Text style={styles.enteteNom} numberOfLines={1}>
+                {c.pointDeRetrait ?? c.evenement ?? 'Commande'}
+              </Text>
+            </View>
+            <ImageDuLieu nom={c.lieu ?? ''} hauteur={58} rayon={12} />
+          </View>
+          <View style={styles.numeroBulle}>
+            <Text style={styles.numeroPrefixe}>Commande n°</Text>
+            <Text style={styles.numeroValeur} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+              {c.numero}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.chevauchement}>
+          <View style={styles.statusSocle}>
+            <View style={[styles.statusPill, { backgroundColor: cfg.tint }]}>
+              <Ionicons name={cfg.icon} size={15} color={cfg.color} />
+              <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+            </View>
+          </View>
+          <View style={styles.prixBulle}>
+            <Text style={styles.prix}>{formatPrice(Math.round(c.totalTtc * 100))}</Text>
+          </View>
+        </View>
+
+        <View style={styles.corps}>
+          {live ? (
+            <View style={styles.barre}>
+              {STEPS.map((phase, i) => (
+                <View key={phase} style={[styles.barreSegment, stepIndex >= i && styles.barreSegmentFait]} />
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.colonnes}>
+            <View style={styles.colonne}>
+              <Ionicons name="time-outline" size={24} color={live ? cfg.color : THEME.ink} />
+              <View style={styles.colonneTexte}>
+                <Text style={styles.colonneLibelle}>Retrait</Text>
+                <Text style={[styles.colonneValeur, live && { color: cfg.color }]} numberOfLines={1}>
+                  {retrait}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.colonneSeparateur} />
+            <View style={styles.colonne}>
+              <Ionicons name="calendar-outline" size={24} color={THEME.ink} />
+              <View style={styles.colonneTexte}>
+                <Text style={styles.colonneLibelle}>Date</Text>
+                <Text style={styles.colonneValeurDate} numberOfLines={1}>
+                  {dateCourte(c.passeeLe)}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {c.lienSuivi ? (
+            <View style={styles.detail} accessibilityElementsHidden importantForAccessibility="no">
+              <Text style={styles.detailTexte}>Voir le détail de la commande</Text>
+              <Ionicons name="chevron-forward" size={16} color={THEME.orange} />
+            </View>
+          ) : null}
+        </View>
+
+        <View style={styles.dechirure}>
+          <View style={[styles.encocheCote, styles.encocheGauche]} />
+          <View style={styles.pointille}>
+            {TIRETS.map((i) => (
+              <View key={i} style={styles.tiret} />
+            ))}
+          </View>
+          <View style={[styles.encocheCote, styles.encocheDroite]} />
+        </View>
+
+        <View style={styles.actions}>
+          {live && c.lienSuivi ? (
+            <Pressable
+              style={({ pressed }) => [styles.action, styles.actionAller, pressed && styles.pressed]}
+              onPress={() => void ouvrirLienFlaix(c.lienSuivi)}
+              hitSlop={4}
+            >
+              <Ionicons name="navigate-outline" size={18} color="#fff" />
+              <Text style={[styles.actionTexte, styles.actionTexteBlanc]}>Suivre ma commande</Text>
+            </Pressable>
+          ) : null}
+          {c.lienRecu ? (
+            <Pressable
+              style={({ pressed }) => [styles.action, styles.actionRecu, pressed && styles.pressed]}
+              onPress={() => void ouvrirLienFlaix(c.lienRecu)}
+              hitSlop={4}
+            >
+              <Ionicons name="receipt-outline" size={18} color="#fff" />
+              <Text style={[styles.actionTexte, styles.actionTexteBlanc]}>Voir le reçu</Text>
+            </Pressable>
+          ) : null}
+        </View>
+
         <View pointerEvents="none" style={styles.lisere} />
         <View style={styles.encocheHaut} />
         <View style={styles.encocheBas} />

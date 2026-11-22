@@ -5,6 +5,16 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.49] — 2026-11-22 — Les commandes Flaix ont le même ticket que les commandes BreakEat
+
+- **Pourquoi** : la 1.7.44 montrait les commandes Flaix dans une carte blanche simple, faite vite avant le match. Rémi : « le même design que celui créé depuis le début ».
+- `TicketFlaix` (dans `order-history.screen.tsx`) reprend les styles du ticket BreakEat : en-tête orange (lieu, buvette), bulle du numéro, état et prix à cheval, barre de progression, colonnes Retrait | Date, déchirure et encoches. L'état Flaix est traduit dans les états BreakEat (`uiFlaix`) : mêmes libellés, couleurs et icônes. Le ticket ouvre la page de suivi Flaix ; « Suivre ma commande » et « Voir le reçu » mènent aux pages Flaix. Pas de « Je suis arrivé », de plan ni de note.
+- `- apps/mobile/src/components/carte-commande-flaix.tsx` (remplacée).
+
+Tests mobile 15 / 164, typage, lint. **Pas vu à l'écran** avant la mise à jour à distance. Visible après une mise à jour à distance.
+
+---
+
 ## [1.7.48] — 2026-11-22 — Commandes Flaix : la phrase d'état tutoie
 
 - **Pourquoi** : sur le premier essai réel (22/11, Android), la phrase sous le numéro venait de Flaix et vouvoyait (« Présentez-vous au point de retrait. »). Dans l'app, on tutoie le client (CLAUDE.md § 4).
