@@ -99,6 +99,11 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   précédent (Synertic, `syn_android@…`) à la Play Console, actif et sans
 >   limite de durée. Ne pas le reproposer. `brain/livrables/stores/fiche-stores.md` est ignoré
 >   par Git depuis `c967dbd` : il ne doit jamais être publié.
+> - **À FAIRE AVANT LE 1er FÉVRIER 2027 — Google Play : déclarer le statut
+>   de professionnel** (notification de la Play Console du 05/11 ; obligation
+>   européenne pour les vendeurs). Sans déclaration, l'app risque d'être
+>   retirée de l'Union européenne. Play Console → Paramètres → Profil de
+>   développeur.
 > - **Remise en état sur le nouveau poste (21/11)** : ce qui a été refait, ce
 >   qui a été vérifié et la liste à rejouer sur un prochain poste sont dans
 >   `brain/taches/2026-11-21-remise-en-etat-nouveau-poste.md`.
