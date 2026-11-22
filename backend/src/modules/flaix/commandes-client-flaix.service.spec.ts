@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { CommandesClientFlaixService } from './commandes-client-flaix.service';
+import { CommandesClientFlaixService, phraseEtat } from './commandes-client-flaix.service';
 
 const ORIGINE = 'https://commande.flaix.test';
 
@@ -93,6 +93,28 @@ describe('CommandesClientFlaixService', () => {
       totalTtc: 10,
     });
     expect(c.lignes).toEqual([{ produit: 'Frites', quantite: 2, totalTtc: 10, tauxTva: 10 }]);
+    // La phrase de Flaix (« Viens la chercher. ») n'est jamais reprise : la
+    // nôtre tutoie, et elle seule est montrée (22/11/2026).
+    expect(c.etatDetail).toBe('Ta commande t’attend au point de retrait.');
+  });
+
+  it('remplace la phrase de Flaix, qui vouvoie, par une phrase BreakEat au tutoiement', async () => {
+    fetchMock
+      .mockResolvedValueOnce(reponse({ commandes: [commandeBrute()] }))
+      .mockResolvedValueOnce(
+        reponse({ status: 'ready', status_label: 'Prête', status_hint: 'Présentez-vous au point de retrait.' }),
+      );
+    const r = await service().pourEmail('client@exemple.fr', MAINTENANT);
+    expect(r.commandes[0].etatDetail).toBe('Ta commande t’attend au point de retrait.');
+    expect(r.commandes[0].etatDetail).not.toMatch(/vous/i);
+  });
+
+  it.each([
+    ['queued', 'Ta commande est dans la file, on la prépare bientôt.'],
+    ['preparing', 'Ta commande est en préparation.'],
+    ['un_etat_inconnu', null],
+  ])('état Flaix « %s » → %s', (etat, attendu) => {
+    expect(phraseEtat(etat)).toBe(attendu);
   });
 
   it("ne lit pas l'état d'une commande ancienne, qui n'est plus en cours", async () => {

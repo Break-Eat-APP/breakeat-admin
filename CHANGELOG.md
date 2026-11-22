@@ -5,6 +5,15 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.48] — 2026-11-22 — Commandes Flaix : la phrase d'état tutoie
+
+- **Pourquoi** : sur le premier essai réel (22/11, Android), la phrase sous le numéro venait de Flaix et vouvoyait (« Présentez-vous au point de retrait. »). Dans l'app, on tutoie le client (CLAUDE.md § 4).
+- Le serveur ne reprend plus le texte de Flaix (`status_hint`), seulement son état, et écrit sa propre phrase : « Ta commande t'attend au point de retrait. » (prête), « Ta commande est en préparation. », « Ta commande est dans la file, on la prépare bientôt. ». Un état inconnu n'a pas de phrase. Côté serveur uniquement : pas de mise à jour de l'app.
+
+`~ backend/src/modules/flaix/commandes-client-flaix.service.ts` (+ 4 tests).
+
+---
+
 ## [1.7.47] — 2026-11-22 — Réponse à la vérification Codex des notifications
 
 - **Jeton push** : l'enregistrement d'un compte attend qu'un retrait rejoué en route soit terminé. Sans cela, un retrait parti avant la connexion mais arrivé après pouvait retirer au nouveau compte le jeton qu'il venait de prendre.

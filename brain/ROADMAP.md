@@ -572,6 +572,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.45 | 2026-11-21 | « Ta commande est prête » pour les commandes Flaix (surveillance en mémoire) ; réponse à l'audit Codex |
 | 1.7.46 | 2026-11-22 | Réponse à l'audit Codex des notifications (reprise « prête » Flaix, cloche, jeton push) |
 | 1.7.47 | 2026-11-22 | Vérification Codex : course du retrait de jeton, public « à tous » unifié |
+| 1.7.48 | 2026-11-22 | Commandes Flaix : la phrase d'état est écrite par BreakEat, au tutoiement |
 
 ---
 

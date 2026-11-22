@@ -151,6 +151,26 @@ const LIBELLES_STATUT: Record<string, string> = {
   annulee: 'Annulée',
 };
 
+/**
+ * LA PHRASE SOUS LE NUMÉRO, ÉCRITE PAR BREAKEAT (22/11/2026).
+ *
+ * Flaix envoie la sienne (`status_hint`), mais elle VOUVOIE (« Présentez-vous
+ * au point de retrait. », constaté sur un téléphone le 22/11), alors que l'app
+ * tutoie le client (CLAUDE.md § 4). On ne garde donc de Flaix que l'ÉTAT, et
+ * la phrase est la nôtre. Un état inconnu n'a pas de phrase : mieux vaut rien
+ * qu'une phrase fausse.
+ */
+export function phraseEtat(etat: string): string | null {
+  if (estPrete(etat)) return 'Ta commande t’attend au point de retrait.';
+  if (['queued', 'pending', 'waiting', 'received', 'accepted', 'paid'].includes(etat)) {
+    return 'Ta commande est dans la file, on la prépare bientôt.';
+  }
+  if (['preparing', 'in_preparation', 'in_progress', 'cooking'].includes(etat)) {
+    return 'Ta commande est en préparation.';
+  }
+  return null;
+}
+
 @Injectable()
 export class CommandesClientFlaixService {
   private readonly logger = new Logger(CommandesClientFlaixService.name);
@@ -282,7 +302,8 @@ export class CommandesClientFlaixService {
       return {
         etat,
         libelle: texte(s.status_label),
-        detail: texte(s.status_hint),
+        // Jamais le texte de Flaix, qui vouvoie : la phrase est la nôtre.
+        detail: phraseEtat(etat),
         retraitAffiche: texte(s.pickup_str),
       };
     } catch (e: unknown) {

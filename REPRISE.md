@@ -171,7 +171,7 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   et le badge « en direct ». Une commande passée sous un autre nom/e-mail
 >   (#1001, « Blue Stack ») n'apparaît pas, comme prévu. ⚠️ Le texte d'état
 >   vient de Flaix et **vouvoie** (« Présentez-vous au point de retrait. ») :
->   à remplacer par un texte BreakEat au tutoiement (CLAUDE.md § 4).
+>   **remplacé en 1.7.48** par des phrases BreakEat au tutoiement (serveur seul).
 >   **1.7.45 (21/11, serveur seul) : « Ta commande est prête » arrive aussi
 >   pour une commande Flaix.** Le serveur surveille les commandes en cours
 >   (état lu chez Flaix toutes les 15 s). Condition : le client a ouvert
