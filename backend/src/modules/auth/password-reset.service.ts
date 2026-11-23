@@ -183,7 +183,7 @@ export class PasswordResetService {
           ``,
           `Il est valable 15 minutes, et ne sert qu'une fois.`,
           ``,
-          `Si vous n'avez rien demandé, ignorez ce message : votre mot de passe`,
+          `Si tu n'as rien demandé, ignore ce message : ton mot de passe`,
           `actuel reste valable et personne n'a pu y accéder.`,
           ``,
           `— BreakEat`,
@@ -223,7 +223,7 @@ export class PasswordResetService {
 
     /** Le seul message de refus. Un code faux et une adresse inconnue sont indistinguables. */
     const refus = () =>
-      new BadRequestException('Code invalide ou expiré. Demandez-en un nouveau.');
+      new BadRequestException('Code invalide ou expiré. Demandes-en un nouveau.');
 
     const user = await this.prisma.user.findUnique({
       where: { email },
@@ -300,15 +300,15 @@ export class PasswordResetService {
     try {
       await this.courriel.envoyer({
         a: adresse,
-        sujet: 'BreakEat — votre connexion',
+        sujet: 'BreakEat — ta connexion',
         texte: [
-          `Vous avez demandé à réinitialiser votre mot de passe.`,
+          `Tu as demandé à réinitialiser ton mot de passe.`,
           ``,
           `Ce compte n'en a pas : il a été créé avec « Continuer avec Apple » ou`,
-          `« Continuer avec Google ». Utilisez le même bouton dans l'application`,
-          `pour vous reconnecter — il n'y a rien à retenir.`,
+          `« Continuer avec Google ». Utilise le même bouton dans l'application`,
+          `pour te reconnecter — il n'y a rien à retenir.`,
           ``,
-          `Si vous n'avez rien demandé, ignorez ce message.`,
+          `Si tu n'as rien demandé, ignore ce message.`,
           ``,
           `— BreakEat`,
         ].join('\n'),

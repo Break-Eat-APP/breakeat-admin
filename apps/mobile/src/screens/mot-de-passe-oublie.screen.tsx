@@ -111,7 +111,7 @@ export function MotDePasseOublieScreen({ navigation }: Props) {
       showAlert('Mot de passe modifié', 'Connecte-toi avec ton nouveau mot de passe.');
       navigation.goBack();
     } catch (e) {
-      setErreur(messageServeur(e, 'Code invalide ou expiré. Demandez-en un nouveau.'));
+      setErreur(messageServeur(e, 'Code invalide ou expiré. Demandes-en un nouveau.'));
     } finally {
       setEnvoi(false);
     }
@@ -168,6 +168,17 @@ export function MotDePasseOublieScreen({ navigation }: Props) {
                 <Text style={styles.adresse}>{email.trim()}</Text>, s’il existe un compte à cette
                 adresse. Il est valable 15 minutes.
               </Text>
+              {/* LES INDÉSIRABLES (demande de Rémi, 23/11/2026) : des clients
+                  reçoivent nos courriels en spam, malgré DKIM et DMARC. Sans ce
+                  rappel, le client croit que rien n'est parti et redemande un
+                  code, qui part au même endroit. */}
+              <View style={styles.indesirables}>
+                <Ionicons name="mail-unread-outline" size={18} color={THEME.orange} />
+                <Text style={styles.indesirablesTexte}>
+                  Rien reçu ? Pense à regarder tes <Text style={styles.adresse}>indésirables</Text> (spam),
+                  l’e-mail vient de contact@breakeatapp.com.
+                </Text>
+              </View>
 
               <TextInput
                 style={[styles.input, styles.inputCode]}
@@ -236,6 +247,15 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   corps: { padding: 20, gap: 14 },
   explication: { color: THEME.inkSoft, fontSize: 14, lineHeight: 21 },
+  indesirables: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: THEME.orangeTint,
+    borderRadius: 12,
+    padding: 12,
+  },
+  indesirablesTexte: { flex: 1, color: THEME.ink, fontSize: 13.5, lineHeight: 20 },
   adresse: { color: THEME.ink, fontWeight: '600' },
   input: {
     backgroundColor: '#fff',

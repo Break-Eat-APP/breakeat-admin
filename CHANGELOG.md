@@ -5,6 +5,16 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.51] — 2026-11-23 — Mot de passe oublié : « regarde tes indésirables », et des e-mails qui tutoient
+
+- **Pourquoi** : « Mot de passe oublié » est activé depuis le 23/11 (Brevo). Des clients reçoivent les courriels de BreakEat en indésirables, malgré DKIM et DMARC : sans rappel, le client croit que rien n'est parti. Et les deux e-mails, comme une erreur du serveur, vouvoyaient (CLAUDE.md § 4).
+- **App** : après l'envoi du code, un encart « Rien reçu ? Pense à regarder tes indésirables (spam), l'e-mail vient de contact@breakeatapp.com ». Visible après une mise à jour à distance.
+- **Serveur** : les e-mails « code de réinitialisation » et « ta connexion » (compte Apple/Google) tutoient ; « Code invalide ou expiré. Demandes-en un nouveau. ».
+
+`~ backend/src/modules/auth/password-reset.service.ts`, `~ apps/mobile/src/screens/mot-de-passe-oublie.screen.tsx`.
+
+---
+
 ## [1.7.50] — 2026-11-23 — Commande Flaix « remise » : le client lit « Récupérée »
 
 - **Pourquoi** : Flaix écrit « remise » (liste) et `delivered` / « Remise » (suivi), c'est le mot de l'opératrice sur son tableau. Le client doit lire « Récupérée » (Rémi, 23/11). Une commande remise mais pas relue en direct pouvait aussi rester classée « en cours ».
