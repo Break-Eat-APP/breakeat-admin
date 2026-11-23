@@ -123,7 +123,26 @@ describe('CommandesClientFlaixService', () => {
     );
     const r = await service().pourEmail('client@exemple.fr', MAINTENANT);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(r.commandes[0]).toMatchObject({ enCours: false, etat: null, etatLibelle: 'En attente' });
+    expect(r.commandes[0]).toMatchObject({ enCours: false, etat: 'queued', etatLibelle: 'En attente' });
+  });
+
+  // « Remise » est le mot de l'opératrice ; le client lit « Récupérée »
+  // (Rémi, 23/11/2026). Constaté chez Flaix : liste `remise`, suivi `delivered`.
+  it('une commande « remise » (liste) se lit « Récupérée », hors des commandes en cours, sans relire le suivi', async () => {
+    fetchMock.mockResolvedValueOnce(reponse({ commandes: [commandeBrute({ statut: 'remise' })] }));
+    const r = await service().pourEmail('client@exemple.fr', MAINTENANT);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(r.commandes[0]).toMatchObject({ enCours: false, etat: 'delivered', etatLibelle: 'Récupérée' });
+  });
+
+  it('le suivi « delivered / Remise » se lit « Récupérée » côté client', async () => {
+    fetchMock
+      .mockResolvedValueOnce(reponse({ commandes: [commandeBrute()] }))
+      .mockResolvedValueOnce(
+        reponse({ status: 'delivered', status_label: 'Remise', status_hint: 'Bonne dégustation !' }),
+      );
+    const r = await service().pourEmail('client@exemple.fr', MAINTENANT);
+    expect(r.commandes[0]).toMatchObject({ enCours: false, etat: 'delivered', etatLibelle: 'Récupérée' });
   });
 
   it('une commande récupérée sort des commandes en cours', async () => {

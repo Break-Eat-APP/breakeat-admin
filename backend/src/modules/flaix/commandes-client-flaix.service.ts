@@ -148,8 +148,31 @@ const LIBELLES_STATUT: Record<string, string> = {
   en_preparation: 'En préparation',
   prete: 'Prête',
   recuperee: 'Récupérée',
+  remise: 'Récupérée',
   annulee: 'Annulée',
 };
+
+/** Le statut de la LISTE Flaix (français) → l'état du SUIVI Flaix (anglais). */
+const ETAT_DE_LA_LISTE: Record<string, string> = {
+  en_attente: 'queued',
+  en_preparation: 'preparing',
+  prete: 'ready',
+  remise: 'delivered',
+  recuperee: 'delivered',
+  annulee: 'cancelled',
+  remboursee: 'refunded',
+};
+
+/**
+ * Le libellé montré au CLIENT. Flaix écrit « Remise » : c'est le mot de
+ * l'opératrice, sur son tableau. Le client lit « Récupérée » (Rémi, 23/11).
+ */
+function libelleClient(etat: string, libelleFlaix: string | null): string | null {
+  if (['delivered', 'collected', 'picked_up', 'done', 'completed', 'served'].includes(etat)) {
+    return 'Récupérée';
+  }
+  return libelleFlaix;
+}
 
 /**
  * LA PHRASE SOUS LE NUMÉRO, ÉCRITE PAR BREAKEAT (22/11/2026).
@@ -243,7 +266,10 @@ export class CommandesClientFlaixService {
     if (!id || !/^[A-Za-z0-9_-]{8,128}$/.test(id) || !passeeLe) return null;
     const statut = texte(b.statut);
     const recente = maintenant.getTime() - new Date(passeeLe).getTime() < FENETRE_EN_COURS_MS;
-    const terminale = statut !== null && ['recuperee', 'annulee', 'remboursee'].includes(statut);
+    // « remise » est le mot de l'OPÉRATRICE Flaix ; le client lit
+    // « Récupérée » (choix de Rémi, 23/11/2026).
+    const terminale =
+      statut !== null && ['remise', 'recuperee', 'annulee', 'remboursee'].includes(statut);
     const lignes = Array.isArray(b.lignes) ? (b.lignes as Record<string, unknown>[]) : [];
     return {
       id,
@@ -263,7 +289,9 @@ export class CommandesClientFlaixService {
       })),
       totalTtc: nombre(b.total?.ttc),
       devise: texte(b.total?.devise) ?? 'EUR',
-      etat: null,
+      // L'état de la liste, traduit dans le vocabulaire du suivi : une
+      // commande qu'on ne relit pas en direct garde quand même le bon ticket.
+      etat: (statut && ETAT_DE_LA_LISTE[statut]) ?? null,
       etatLibelle: (statut && LIBELLES_STATUT[statut]) ?? statut ?? 'Commande passée',
       etatDetail: null,
       prete: statut === 'prete',
@@ -316,7 +344,7 @@ export class CommandesClientFlaixService {
     const e = await this.lireEtat(c.id);
     if (!e) return;
     c.etat = e.etat;
-    c.etatLibelle = e.libelle ?? c.etatLibelle;
+    c.etatLibelle = libelleClient(e.etat, e.libelle) ?? c.etatLibelle;
     c.etatDetail = e.detail;
     c.retraitAffiche = e.retraitAffiche;
     c.prete = estPrete(e.etat);

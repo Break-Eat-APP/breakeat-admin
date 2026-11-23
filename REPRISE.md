@@ -104,6 +104,22 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   européenne pour les vendeurs). Sans déclaration, l'app risque d'être
 >   retirée de l'Union européenne. Play Console → Paramètres → Profil de
 >   développeur.
+> - **DÉCISIONS DE RÉMI DU 23/11** :
+>   - **Pas de vérification de l'e-mail par code** (stade mal couvert, spams). Le
+>     risque de BUG-2026-039 se règle par l'étiquette `[#breakeatId]`,
+>     demandée au développeur Flaix (message envoyé le 23/11). En attendant,
+>     les commandes Flaix restent lues par l'e-mail du compte.
+>   - **Brevo seulement pour « mot de passe oublié »** : Rémi a déjà un compte
+>     Brevo qui envoie depuis `contact@breakeatapp.com`. Il reste à poser
+>     sur Railway `MAIL_PROVIDER=brevo`, `MAIL_API_KEY` (clé API Brevo) et
+>     `MAIL_FROM=contact@breakeatapp.com`, puis à vérifier
+>     `/api/v1/auth/password-reset/available` = `true`, et à ajouter Brevo à
+>     la politique de confidentialité (§ 5).
+>   - **Les lieux sans Flaix passent sur Flaix** : plus aucun lieu public en
+>     paiement Stripe de test (ADR-0014).
+>   - **Note des commandes Flaix et relance d'avis** : on attend le retour du
+>     développeur Flaix (webhook) avant de les construire.
+>   - **« Remise » côté opératrice, « Récupérée » côté client** (1.7.50).
 > - **Remise en état sur le nouveau poste (21/11)** : ce qui a été refait, ce
 >   qui a été vérifié et la liste à rejouer sur un prochain poste sont dans
 >   `brain/taches/2026-11-21-remise-en-etat-nouveau-poste.md`.

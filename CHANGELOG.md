@@ -5,6 +5,15 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.50] — 2026-11-23 — Commande Flaix « remise » : le client lit « Récupérée »
+
+- **Pourquoi** : Flaix écrit « remise » (liste) et `delivered` / « Remise » (suivi), c'est le mot de l'opératrice sur son tableau. Le client doit lire « Récupérée » (Rémi, 23/11). Une commande remise mais pas relue en direct pouvait aussi rester classée « en cours ».
+- Le statut de la liste est traduit dans l'état du suivi (`remise` → `delivered`, `prete` → `ready`…) ; « remise » sort des commandes en cours ; le libellé client devient « Récupérée ». Serveur seul.
+
+`~ backend/src/modules/flaix/commandes-client-flaix.service.ts` (+ 2 tests).
+
+---
+
 ## [1.7.49] — 2026-11-22 — Les commandes Flaix ont le même ticket que les commandes BreakEat
 
 - **Pourquoi** : la 1.7.44 montrait les commandes Flaix dans une carte blanche simple, faite vite avant le match. Rémi : « le même design que celui créé depuis le début ».
