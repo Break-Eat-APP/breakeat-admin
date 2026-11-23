@@ -1,7 +1,7 @@
 # ADR-0012 — Les stores publient à la main, et pas avant le passage de Stripe en production
 
 - **Date :** 17/11/2026
-- **Statut :** ACCEPTÉE
+- **Statut :** ACCEPTÉE pour la publication manuelle ; **condition de sortie REMPLACÉE par ADR-0017** (23/11/2026)
 - **Décidée par :** Rémi (« je veux qu'il y ait un envoi manuel de ma part une
   fois validé, de la même façon que l'App Store »), instruite par Claude
 - **Liée à :** REPRISE, « ÉTAT AU 17/11/2026 » ;

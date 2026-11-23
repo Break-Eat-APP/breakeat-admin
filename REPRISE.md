@@ -105,6 +105,9 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   retirée de l'Union européenne. Play Console → Paramètres → Profil de
 >   développeur.
 > - **DÉCISIONS DE RÉMI DU 23/11** :
+>   - **Sortie sur les stores autorisée** (ADR-0017, remplace la condition de
+>     ADR-0012) : tous les lieux publics encaissent par Flaix. Rémi publie
+>     lui-même la 1.1.3 sur l'App Store.
 >   - **Pas de vérification de l'e-mail par code** (stade mal couvert, spams). Le
 >     risque de BUG-2026-039 se règle par l'étiquette `[#breakeatId]`,
 >     demandée au développeur Flaix (message envoyé le 23/11). En attendant,
@@ -242,7 +245,7 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 > Cette section remplace « État au 17/11 » et « État au 09/11 » (leurs
 > versions précédentes sont dans l'historique Git). Le détail de chaque
 > livraison est dans `CHANGELOG.md` (jusqu'à **1.7.45**) ; les règles dans
-> `CLAUDE.md` ; les décisions dans `brain/DECISIONS/` (**0001 à 0016**) ; les
+> `CLAUDE.md` ; les décisions dans `brain/DECISIONS/` (**0001 à 0017**) ; les
 > bugs dans `brain/BUGS_ET_INCIDENTS.md` (**jusqu'à BUG-2026-048**,
 > incidents jusqu'à INC-2026-004) ; les comptes rendus
 > dans `brain/taches/` ; où vit le code dans
