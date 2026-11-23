@@ -114,7 +114,11 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >     sur Railway `MAIL_PROVIDER=brevo`, `MAIL_API_KEY` (clé API Brevo) et
 >     `MAIL_FROM=contact@breakeatapp.com`, puis à vérifier
 >     `/api/v1/auth/password-reset/available` = `true`, et à ajouter Brevo à
->     la politique de confidentialité (§ 5).
+>     la politique de confidentialité (§ 5). **FAIT le 23/11** : nouvelle clé
+>     dédiée, blocage par IP désactivé pour les clés API (Railway n'a pas
+>     d'IP fixe), expéditeur `contact@breakeatapp.com` (DKIM et DMARC au vert),
+>     variables posées ; `available` = `true` à 13h34. Reste : un vrai essai
+>     de bout en bout, et Brevo dans la politique de confidentialité.
 >   - **Les lieux sans Flaix passent sur Flaix** : plus aucun lieu public en
 >     paiement Stripe de test (ADR-0014).
 >   - **Note des commandes Flaix et relance d'avis** : on attend le retour du
