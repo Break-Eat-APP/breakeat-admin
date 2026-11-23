@@ -106,8 +106,10 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   développeur.
 > - **DÉCISIONS DE RÉMI DU 23/11** :
 >   - **Sortie sur les stores autorisée** (ADR-0017, remplace la condition de
->     ADR-0012) : tous les lieux publics encaissent par Flaix. Rémi publie
->     lui-même la 1.1.3 sur l'App Store.
+>     ADR-0012) : tous les lieux publics encaissent par Flaix. **Fait : la
+>     1.1.3 est PUBLIQUE sur l'App Store le 23/11 à 16:54** (fiche publique
+>     relue : version 1.1.3, iOS 16.4 minimum) ; Google Play affiche aussi la
+>     1.1.3. Un appareil peut mettre quelques heures à la voir (cache du store).
 >   - **Pas de vérification de l'e-mail par code** (stade mal couvert, spams). Le
 >     risque de BUG-2026-039 se règle par l'étiquette `[#breakeatId]`,
 >     demandée au développeur Flaix (message envoyé le 23/11). En attendant,
