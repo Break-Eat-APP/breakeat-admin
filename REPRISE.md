@@ -110,7 +110,9 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   touchés : les iPhone restés en 1.0.10 (ils commandent par le lien Flaix,
 >   constaté par Rémi), Android. Correctif `enableSceneSupport` en **1.1.4**
 >   (`04ee098`), build iOS lancée le 24/11 vers 13 h
->   (`3a5cdade-6203-4345-9bf6-8e95a0c64a57`). Suite : TestFlight → test de
+>   (`3a5cdade-6203-4345-9bf6-8e95a0c64a57`) : **build 47 finie et envoyée à
+>   App Store Connect** (manifeste de scenes relu dans l'Info.plist de l'.ipa).
+>   Suite : TestFlight → test de
 >   Rémi sur son iPhone iOS 27 → soumission avec validation accélérée →
 >   publication par Rémi. **Ne pas inciter à mettre à jour avant la 1.1.4.**
 >   « Retirer de la vente » proposé à Rémi en attendant (à sa décision).
