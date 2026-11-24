@@ -133,6 +133,15 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   de la page de confirmation (ou `breakeat://commande-flaix/<jeton>`),
 >   `[#breakeatId]`, heure de remise (`remiseLe`), préproduction. Il a
 >   renvoyé l'API de lecture par e-mail, déjà branchée depuis le 21/11.
+>   **DÉCISION DE RÉMI (24/11) : PAS DE WEBHOOK POUR L'INSTANT** (le
+>   développeur le chiffre en avenant). On reste sur l'interrogation de
+>   `/api/public/orders/<jeton>/status` : 15 s jusqu'à « prête », 60 s
+>   jusqu'à « remise », recul automatique si Flaix sature. On demande
+>   seulement 3 réponses, sans développement : la liste des états dans
+>   l'ordre, l'adresse de la page de confirmation (contient-elle le jeton ?),
+>   l'accord sur le rythme. Ensuite, chez BreakEat : Live Activity Flaix
+>   (étapes, sans minuteur faute d'heure estimée), « Note ta commande »
+>   10 min après la remise, et la surveillance enregistrée en base.
 > - **DÉCISIONS DE RÉMI DU 23/11** :
 >   - **Sortie sur les stores autorisée** (ADR-0017, remplace la condition de
 >     ADR-0012) : tous les lieux publics encaissent par Flaix. **Fait : la
