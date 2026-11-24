@@ -14,6 +14,16 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 - **Mise à jour à distance** : le workflow accepte une « version visée » (`1.1.3`), pour **Android seulement** — les Android sont en 1.1.3, et la 1.1.4 ne change que le natif iOS. `app.config.js` lit `VERSION_VISEE`, posée par le workflow seulement.
 - ~ `apps/mobile/src/components/feuille-clavier.tsx`, `apps/mobile/app.config.js`, `.github/workflows/mise-a-jour-a-distance.yml`
 
+## [1.7.54] — 2026-11-24 — Les matchs arrivent tout seuls depuis Flaix
+
+- **Pourquoi** : chaque match était saisi deux fois, dans Flaix puis dans BreakEat, avec son lien de commande collé à la main. Le développeur Flaix a livré le flux des matchs (cahier des charges B) le 24/11. ADR-0018.
+- **Serveur** : toutes les 10 minutes, import du flux `…/api/public/lieux/<lieu>/evenements` pour chaque lieu passé à Flaix dont « l’identifiant du lieu côté Flaix » est rempli. Crée (avec les points de retrait du club), met à jour (nom, heures, lien, adversaire, affiche) et annule. Un événement saisi à la main est adopté, pas doublé. Le lien de commande garde ses étiquettes d’identité. ETag respecté. L’heure d’ouverture reste celle du lieu.
+- **Mise en service** : `FLAIX_FLUX_IMPORT=journal` par défaut, rien n’est écrit, les journaux Railway disent ce qui serait fait ; `actif` pour écrire.
+- **Base** : `events.flaix_event_id` (TEXT, identifiant extérieur), unique par lieu ; migration `20261124_evenement_flaix`, rejouée sur une base vierge (`pnpm db:verifier`).
+- **Admin** : une ligne d’aide sous « Identifiant du lieu côté Flaix ».
+- **Tests** : 18 tests de règles, 4 tests d’intégration sur base réelle ; suites complètes 1222/1222 et 216/216.
+- + `backend/src/modules/flaix/flux-matchs-flaix.ts` (+ spec), `import-matchs-flaix.service.ts`, `test/integration/import-matchs-flaix.int-spec.ts`, `prisma/migrations/20261124_evenement_flaix/` ; ~ `schema.prisma`, `flaix.module.ts`, `app.config.ts`, `.env.example`, admin `organizations/[id]/page.tsx`
+
 ## [1.7.53] — 2026-11-24 — Commande Flaix : « prête » sans passer par « Mes commandes »
 
 - **Pourquoi** : le serveur n’envoie « Ta commande est prête » que pour les commandes Flaix qu’il surveille, et il ne les apprenait qu’en lisant « Mes commandes » (ADR-0015). Un client qui payait puis rangeait son téléphone ne recevait rien.

@@ -4,6 +4,7 @@ import { FlaixService } from './flaix.service';
 import { FlaixController } from './flaix.controller';
 import { CommandesClientFlaixService } from './commandes-client-flaix.service';
 import { SurveillanceCommandesFlaixService } from './surveillance-commandes-flaix.service';
+import { ImportMatchsFlaixService } from './import-matchs-flaix.service';
 import { NotificationsModule } from '../notifications/notifications.module';
 
 /**
@@ -22,7 +23,12 @@ import { NotificationsModule } from '../notifications/notifications.module';
 @Module({
   imports: [ConfigModule, NotificationsModule],
   controllers: [FlaixController],
-  providers: [FlaixService, CommandesClientFlaixService, SurveillanceCommandesFlaixService],
+  providers: [
+    FlaixService,
+    CommandesClientFlaixService,
+    SurveillanceCommandesFlaixService,
+    ImportMatchsFlaixService,
+  ],
   exports: [FlaixService],
 })
 export class FlaixModule {}

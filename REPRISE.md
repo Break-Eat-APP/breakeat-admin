@@ -129,6 +129,21 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   version visée `1.1.3`** (nouvelle option du workflow), avec l'accord de
 >   Rémi. Ensuite, Rémi essaie sur son Android : fermer par « Plus tard »,
 >   saisir un numéro clavier ouvert, enregistrer.
+> - **1.7.54 (24/11) — IMPORT DU FLUX DES MATCHS FLAIX (ADR-0018)**, construit
+>   et testé (migration rejouée, 216/216 en intégration). Flux livré par le
+>   développeur : `https://flaix.bo.synertic.net/api/public/lieux/<lieu>/evenements`
+>   (lieu de test `guillaume-stadium`). **Mise en service, dans l'ordre** :
+>   1. pousser APRÈS le match (migration `20261124_evenement_flaix`) ;
+>   2. dans l'admin, remplir « Identifiant du lieu côté Flaix » de chaque lieu ;
+>   3. laisser `FLAIX_FLUX_IMPORT` vide (= `journal`) et lire les journaux
+>      Railway (« Flux Flaix (journal, rien écrit) ») : créations et adoptions
+>      attendues ? ;
+>   4. puis `FLAIX_FLUX_IMPORT=actif` sur Railway.
+>   **Questions au développeur** : liste des statuts (annulé reste-t-il dans la
+>   liste ?), identifiant stable (`idInterne` retenu), événements des 7
+>   derniers jours, paramètres d'identité acceptés par `commande.lien`.
+>   **À trancher par Rémi** : l'heure d'ouverture de la commande — celle du
+>   lieu chez BreakEat (actuel) ou `commande.ouvreLe` de Flaix, match par match ?
 > - **1.7.53 (24/11) — « prête » sans ouvrir « Mes commandes »** : la page de
 >   commande Flaix met elle-même la commande sous surveillance (page posée,
 >   fermeture, app en arrière-plan). **Pas encore sur les téléphones** : la

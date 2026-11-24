@@ -578,6 +578,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.51 | 2026-11-23 | Mot de passe oublié : rappel des indésirables, e-mails au tutoiement |
 | 1.7.52 | 2026-11-24 | iOS 27 : cycle de vie par scenes, build 1.1.4 (la 1.1.3 plantait au lancement) |
 | 1.7.53 | 2026-11-24 | Commande Flaix : la page de commande met la commande sous surveillance (« prête » sans ouvrir « Mes commandes ») |
+| 1.7.54 | 2026-11-24 | Import automatique du flux des matchs Flaix (ADR-0018) |
 | 1.7.55 | 2026-11-24 | Android : feuille des coordonnées sous la barre de navigation et le clavier (BUG-2026-050) |
 
 ---

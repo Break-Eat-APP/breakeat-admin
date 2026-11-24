@@ -38,3 +38,4 @@ ne jamais réutiliser un numéro. Une décision remplacée passe en
 | [0015](ADR-0015-commandes-flaix-lues-par-email.md) | Les commandes Flaix sont lues chez Flaix par l'e-mail du client, en attendant E1 | 21/11/2026 | ACCEPTÉE (provisoire) |
 | [0016](ADR-0016-l-agent-pousse-sur-main.md) | L'agent pousse directement sur `main`, sans clic de validation | 21/11/2026 | ACCEPTÉE |
 | [0017](ADR-0017-sortie-des-stores-avec-paiement-flaix.md) | Les stores peuvent publier : tous les lieux publics encaissent par Flaix | 23/11/2026 | ACCEPTÉE |
+| [0018](ADR-0018-import-du-flux-des-matchs-flaix.md) | Les matchs viennent du flux Flaix, importé toutes les 10 minutes | 24/11/2026 | ACCEPTÉE |

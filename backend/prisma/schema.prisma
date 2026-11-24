@@ -661,6 +661,14 @@ model Event {
   /// (`events/lien-flaix.ts`) : il s'affiche dans le dashboard d'un directeur,
   /// qui y saisit ses identifiants Flaix.
   flaixReportUrl       String?         @map("flaix_report_url")
+  /// L'IDENTIFIANT DE L'ÉVÉNEMENT DANS LE FLUX DES MATCHS FLAIX (24/11/2026).
+  ///
+  /// Posé par l'import automatique (`flaix/import-matchs-flaix.service.ts`) :
+  /// c'est lui qui fait reconnaître un match MODIFIÉ chez Flaix au lieu de le
+  /// recréer en double. Nul : événement saisi à la main, que l'import peut
+  /// ADOPTER s'il retrouve le même match (même lien, ou même heure à 3 h près).
+  /// Unique par lieu — Flaix numérote ses événements, pas les nôtres.
+  flaixEventId         String?         @map("flaix_event_id")
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
 
@@ -704,6 +712,7 @@ model Event {
   /// l'agrégat se contente du préfixe `venueId`, qu'il lit en parcours d'index
   /// SEUL — sans toucher au tas.
   @@index([venueId, startAt])
+  @@unique([venueId, flaixEventId])
   @@map("events")
 }
 

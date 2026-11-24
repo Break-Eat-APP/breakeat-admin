@@ -187,6 +187,15 @@ export default registerAs('app', () => ({
      */
     commandesUrl: process.env.FLAIX_COMMANDES_URL ?? '',
     commandesApiKey: process.env.FLAIX_COMMANDES_API_KEY ?? '',
+    /**
+     * Le flux des matchs Flaix, importé toutes les 10 minutes (24/11/2026,
+     * `flaix/import-matchs-flaix.service.ts`). `fluxUrl` = la base, sans le
+     * lieu (`…/api/public/lieux`) ; vide = l'adresse de production Flaix.
+     * `fluxImport` : `journal` (défaut, lit et journalise sans écrire),
+     * `actif` (écrit), `arret`.
+     */
+    fluxUrl: process.env.FLAIX_FLUX_URL ?? '',
+    fluxImport: process.env.FLAIX_FLUX_IMPORT ?? 'journal',
   },
 
   /**

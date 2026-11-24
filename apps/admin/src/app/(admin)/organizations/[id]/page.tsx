@@ -524,9 +524,14 @@ export default function OrganizationDetailPage() {
                 <input
                   value={flaixVenueId}
                   onChange={(e) => setFlaixVenueId(e.target.value)}
-                  placeholder="réf. fournie par Flaix"
+                  placeholder="ex. guillaume-stadium"
                   style={venueFieldInput}
                 />
+                <span style={{ color: BRAND.grey, fontSize: 12 }}>
+                  L’identifiant du lieu dans le flux des matchs Flaix. Rempli, les matchs de ce
+                  lieu sont créés, mis à jour et annulés automatiquement depuis Flaix, toutes les
+                  10 minutes.
+                </span>
               </div>
             )}
 
