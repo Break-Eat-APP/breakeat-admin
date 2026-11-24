@@ -260,19 +260,21 @@ model User {
   createdAt     DateTime   @default(now()) @map("created_at")
   updatedAt     DateTime   @updatedAt @map("updated_at")
 
-  memberships      OrganizationMember[]
-  invitations      OrganizationInvitation[] @relation("InvitationsRecues")
-  identities       UserIdentity[]
-  refreshTokens    RefreshToken[]
-  passwordResets   PasswordReset[]
-  carts            Cart[]
-  orders           Order[]
-  notifications    UserNotification[]
-  groupMemberships GroupMember[]
-  pushTokens       PushToken[]
-  loyaltyAccounts  LoyaltyAccount[]
-  liveActivities   LiveActivity[]
-  favoriteVenues   VenueFavorite[]
+  memberships         OrganizationMember[]
+  invitations         OrganizationInvitation[] @relation("InvitationsRecues")
+  identities          UserIdentity[]
+  refreshTokens       RefreshToken[]
+  passwordResets      PasswordReset[]
+  carts               Cart[]
+  orders              Order[]
+  notifications       UserNotification[]
+  groupMemberships    GroupMember[]
+  pushTokens          PushToken[]
+  loyaltyAccounts     LoyaltyAccount[]
+  liveActivities      LiveActivity[]
+  favoriteVenues      VenueFavorite[]
+  suivisFlaix         SuiviCommandeFlaix[]
+  liveActivitiesFlaix LiveActivityFlaix[]
 
   @@map("users")
 }
@@ -684,6 +686,7 @@ model Event {
   operatorScreens EventOperatorScreen[]
   scheduledPushes ScheduledPush[]
 
+  @@unique([venueId, flaixEventId])
   /// LES ÉVÉNEMENTS D'UN LIEU SE LISAIENT EN PARCOURANT TOUTE LA TABLE.
   ///
   /// Une clé étrangère ne crée PAS d'index — c'est l'erreur qu'on fait tous
@@ -712,7 +715,6 @@ model Event {
   /// l'agrégat se contente du préfixe `venueId`, qu'il lit en parcours d'index
   /// SEUL — sans toucher au tas.
   @@index([venueId, startAt])
-  @@unique([venueId, flaixEventId])
   @@map("events")
 }
 
@@ -2137,4 +2139,68 @@ model RealtimeOutbox {
   /// `new_order` afficherait une commande qui avance avant d'exister.
   @@index([deliveredAt, claimedUntil, sequence])
   @@map("realtime_outbox")
+}
+
+/// LE SUIVI D'UNE COMMANDE FLAIX (24/11/2026).
+///
+/// Une commande passée chez Flaix n'existe pas chez BreakEat (pas d'`Order`).
+/// Pour prévenir le client (« Ta commande est prête ») et faire avancer sa Live
+/// Activity, le serveur interroge Flaix (`/api/public/orders/<jeton>/status`)
+/// toutes les 15 s jusqu'à « prête », puis toutes les 60 s jusqu'à la remise.
+///
+/// EN BASE, ET PLUS EN MÉMOIRE : un redémarrage du serveur pendant un match
+/// effaçait la surveillance (ADR-0015). Voir
+/// `flaix/surveillance-commandes-flaix.service.ts`.
+model SuiviCommandeFlaix {
+  /// Le jeton Flaix : l'identifiant public de la commande (contrat Flaix, § 7).
+  /// C'est un droit d'accès : jamais dans un journal, jamais renvoyé à un autre client.
+  jeton            String    @id
+  userId           String    @map("user_id")
+  /// Le numéro dit au comptoir (`reference` Flaix, non unique : affichage seulement).
+  numero           String
+  pointDeRetrait   String?   @map("point_de_retrait")
+  passeeLe         DateTime  @map("passee_le")
+  /// L'état Flaix normalisé (`queued`, `preparing`, `ready`, `delivered`, `cancelled`…).
+  etat             String    @default("queued")
+  /// « Prête » annoncée (ou abandonnée après 3 essais) : plus de notification.
+  preteAnnoncee    Boolean   @default(false) @map("prete_annoncee")
+  essaisAnnonce    Int       @default(0) @map("essais_annonce")
+  /// Quand BreakEat a vu la commande « remise » (pour « Note ta commande »).
+  remiseLe         DateTime? @map("remise_le")
+  /// Remise, annulée ou expirée : plus rien à lire chez Flaix.
+  termine          Boolean   @default(false)
+  prochaineLecture DateTime  @default(now()) @map("prochaine_lecture")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activites LiveActivityFlaix[]
+
+  @@index([termine, prochaineLecture])
+  @@index([userId])
+  @@map("suivis_commandes_flaix")
+}
+
+/// LA LIVE ACTIVITY D'UNE COMMANDE FLAIX (24/11/2026).
+///
+/// Une table À PART de `LiveActivity`, qui exige une commande BreakEat : on
+/// ne touche pas à ce qui marche. Même cycle de vie, même widget.
+model LiveActivityFlaix {
+  id         String             @id @default(uuid())
+  jeton      String
+  userId     String             @map("user_id")
+  activityId String             @map("activity_id")
+  pushToken  String             @unique @map("push_token")
+  status     LiveActivityStatus @default(ACTIVE)
+  createdAt  DateTime           @default(now()) @map("created_at")
+  updatedAt  DateTime           @updatedAt @map("updated_at")
+  endedAt    DateTime?          @map("ended_at")
+
+  suivi SuiviCommandeFlaix @relation(fields: [jeton], references: [jeton], onDelete: Cascade)
+  user  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([jeton, activityId])
+  @@index([jeton, status])
+  @@index([userId])
+  @@map("live_activities_flaix")
 }

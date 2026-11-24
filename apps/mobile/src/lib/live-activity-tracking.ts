@@ -6,7 +6,13 @@ import {
   startLiveActivity,
   type LiveActivityState,
 } from '../../modules/live-activity';
-import { apiRegisterLiveActivity, apiUnregisterLiveActivity } from '@lib/api/mobile-api';
+import {
+  apiRegisterLiveActivity,
+  apiRegisterLiveActivityFlaix,
+  apiSuivreCommandeFlaix,
+  apiUnregisterLiveActivity,
+} from '@lib/api/mobile-api';
+import { jetonDeLActivite, suivreCommandeFlaix } from '@lib/suivi-commande-flaix';
 import { estUnApercu } from '@lib/apercu-live-activity';
 
 /**
@@ -37,6 +43,15 @@ export function initLiveActivityTokenSync(): void {
     // L'aperçu du super admin n'a pas de commande côté serveur : enregistrer
     // son jeton y produirait une erreur, et rien à pousser.
     if (estUnApercu(orderId)) return;
+    // Une commande FLAIX (24/11/2026) : sa propre route, le jeton à la place
+    // de l'identifiant de commande BreakEat.
+    const jeton = jetonDeLActivite(orderId);
+    if (jeton) {
+      void apiRegisterLiveActivityFlaix({ jeton, activityId, pushToken }).catch((e: unknown) => {
+        console.warn('Enregistrement du token de Live Activity Flaix échoué:', e);
+      });
+      return;
+    }
     void apiRegisterLiveActivity({ orderId, activityId, pushToken }).catch((e: unknown) => {
       // Sans token côté serveur, l'activité restera figée sur son état initial.
       console.warn('Enregistrement du token de Live Activity échoué:', e);
@@ -142,4 +157,19 @@ export async function endTrackingForFinishedOrders(
     fermees++;
   }
   return fermees;
+}
+
+/**
+ * La page de commande Flaix vient d'afficher le jeton d'une commande payée :
+ * le serveur la suit, et la Live Activity démarre (24/11/2026). Voir
+ * `lib/suivi-commande-flaix.ts`.
+ */
+export async function suivreCommandeFlaixDansLApp(jeton: string): Promise<void> {
+  const id = await suivreCommandeFlaix(jeton, {
+    suivre: apiSuivreCommandeFlaix,
+    activitesEnCours: listLiveActivities,
+    demarrer: (orderId, etat) => startLiveActivity(orderId, etat),
+    liveActivityPossible: isLiveActivitySupported,
+  });
+  if (id) initLiveActivityTokenSync();
 }

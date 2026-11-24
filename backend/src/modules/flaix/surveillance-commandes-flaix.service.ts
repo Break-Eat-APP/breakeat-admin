@@ -1,117 +1,172 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
+import { LiveActivityStatus } from '@prisma/client';
+import { PrismaService } from '../../database/prisma.service';
 import { ExpoPushService } from '../notifications/expo-push.service';
 import { PushTokensService } from '../notifications/push-tokens.service';
+import { ApnsService } from '../live-activity/apns.service';
 import {
   CommandesClientFlaixService,
   estPrete,
   estTerminal,
   type CommandeFlaix,
 } from './commandes-client-flaix.service';
+import { etatLiveActivity, statutWidget, type EtatLiveActivityFlaix } from './etat-widget-flaix';
 
 /**
- * « Ta commande est prête » pour une commande passée dans FLAIX (21/11/2026).
+ * LE SUIVI DES COMMANDES FLAIX : « Ta commande est prête » ET LA LIVE ACTIVITY.
  *
- * POURQUOI. Flaix ne prévient pas BreakEat quand l'opérateur passe une commande
- * « prête » (le webhook E1 n'existe pas encore). Sans ce service, BreakEat ne
- * l'apprenait que si l'écran « Mes commandes » du client le demandait :
- * téléphone en poche, aucune notification.
+ * Flaix ne prévient pas BreakEat quand une commande change d'état (pas de
+ * webhook, décision de Rémi du 24/11). Le serveur interroge donc l'adresse de
+ * suivi que Flaix prévoit pour cela (`/api/public/orders/<jeton>/status`,
+ * contrat § 7) : toutes les 15 s jusqu'à « prête », puis toutes les 60 s
+ * jusqu'à la remise.
  *
- * COMMENT. Chaque fois que « Mes commandes » est lu, le serveur retient les
- * commandes Flaix en cours de ce client. Toutes les 15 s, il demande leur état
- * à Flaix ; au passage à « prête », il envoie la même notification qu'une
- * commande BreakEat (toucher ouvre « Mes commandes »), UNE fois.
+ * À chaque changement :
+ *  · la Live Activity du client avance (même widget qu'une commande BreakEat) ;
+ *  · au passage à « prête », la notification part, une fois (3 essais au plus) ;
+ *  · à la remise ou à l'annulation, la Live Activity se ferme et le suivi
+ *    s'arrête ; la date de remise est gardée (« Note ta commande », à venir).
  *
- * ⚠️ DÉPANNAGE, PAS LE SYSTÈME DÉFINITIF (ADR-0015). La liste est en MÉMOIRE :
- *  - le client doit avoir ouvert « Mes commandes » une fois après sa commande ;
- *  - un redémarrage du serveur l'efface (reprise à la prochaine lecture) ;
- *  - un envoi raté (Expo injoignable, aucun appareil atteint) est retenté au
- *    tour suivant, 3 fois au plus (22/11/2026, BUG-2026-044).
- * C'est l'inverse de la règle 3 de CLAUDE.md, assumé pour le match du 22/11.
- * Le webhook `ORDER_READY` de Flaix le remplacera.
+ * D'OÙ VIENNENT LES COMMANDES SUIVIES : de « Mes commandes » (la liste lue chez
+ * Flaix) et de la page de commande dans l'app, à la fin du paiement
+ * (`POST /flaix/commandes/:jeton/suivi`).
+ *
+ * EN BASE depuis le 24/11/2026 (`SuiviCommandeFlaix`) : la version en mémoire
+ * perdait tout au redémarrage du serveur (ADR-0015).
+ *
+ * Le jeton est un droit d'accès (contrat § 7) : il ne va jamais dans un journal.
  */
 
-/** Rythme des vérifications chez Flaix. */
 const INTERVALLE_MS = 15_000;
-/** Au-delà, une commande n'est plus surveillée, quel que soit son état. */
+/** Rythme jusqu'à « prête » : c'est là que la vitesse compte. */
+const RYTHME_AVANT_PRETE_MS = 15_000;
+/** Rythme ensuite, jusqu'à la remise : une minute de retard ne gêne personne. */
+const RYTHME_APRES_PRETE_MS = 60_000;
+/** Au-delà, une commande n'est plus suivie, quel que soit son état. */
 const DUREE_MAX_MS = 12 * 60 * 60 * 1000;
-/** Garde-fou mémoire : au-delà, les nouvelles commandes ne sont pas suivies. */
-const MAX_SUIVIES = 5_000;
+/** Commandes relues par tour, au plus. */
+const PAR_TOUR = 300;
 /** Appels simultanés vers Flaix, au plus. */
 const PAR_PAQUET = 10;
 /** Essais d'envoi de la notification « prête », au plus (un par tour). */
 const MAX_ESSAIS_ENVOI = 3;
+/** Une Live Activity terminée reste visible une minute. */
+const VISIBLE_APRES_FIN_MS = 60_000;
+/** Sans nouvelle, iOS grise l'activité au bout d'une heure. */
+const PEREMPTION_MS = 60 * 60 * 1000;
 
-interface Suivie {
+type IssueEnvoi = 'envoyee' | 'personne' | 'echec';
+
+interface Suivi {
+  jeton: string;
   userId: string;
   numero: string;
   pointDeRetrait: string | null;
-  passeeLe: number;
-  /** Flaix a dit « prête » : il ne reste qu'à prévenir le client. */
-  prete?: boolean;
-  /** Envois déjà tentés sans succès. */
-  essais?: number;
+  passeeLe: Date;
+  etat: string;
+  preteAnnoncee: boolean;
+  essaisAnnonce: number;
 }
-
-/** L'issue d'un envoi : prévenu, personne à prévenir, ou à retenter. */
-type IssueEnvoi = 'envoyee' | 'personne' | 'echec';
 
 @Injectable()
 export class SurveillanceCommandesFlaixService {
   private readonly logger = new Logger(SurveillanceCommandesFlaixService.name);
-  private readonly suivies = new Map<string, Suivie>();
-  /**
-   * Les commandes déjà annoncées, et quand. Sans elles, une liste encore en
-   * cache (lue juste avant « prête ») remettrait la commande en surveillance,
-   * et le client recevrait la notification deux fois.
-   */
-  private readonly annoncees = new Map<string, number>();
   private tourEnCours = false;
 
   constructor(
+    private readonly prisma: PrismaService,
     private readonly commandes: CommandesClientFlaixService,
     @Optional() private readonly expoPush?: ExpoPushService,
     @Optional() private readonly pushTokens?: PushTokensService,
+    @Optional() private readonly apns?: ApnsService,
   ) {}
 
-  /** Combien de commandes sont surveillées (journaux, tests). */
-  get taille(): number {
-    return this.suivies.size;
-  }
-
   /**
-   * Retient les commandes en cours, pas encore prêtes, de ce client. Une
-   * commande déjà prête n'est pas retenue : le client la voit à l'écran.
+   * Met sous surveillance les commandes EN COURS de ce client. Une commande
+   * déjà prête est suivie aussi (pour sa Live Activity et sa remise), mais sa
+   * notification n'est pas renvoyée : le client la voit déjà à l'écran.
    */
-  surveiller(userId: string, commandes: CommandeFlaix[]): void {
-    for (const c of commandes) {
-      if (!c.enCours || c.prete || this.suivies.has(c.id) || this.annoncees.has(c.id)) continue;
-      if (this.suivies.size >= MAX_SUIVIES) {
-        this.logger.warn('Surveillance Flaix pleine : commande non suivie');
-        return;
-      }
-      this.suivies.set(c.id, {
+  async surveiller(userId: string, commandes: CommandeFlaix[]): Promise<void> {
+    const enCours = commandes.filter((c) => c.enCours && c.id);
+    if (enCours.length === 0) return;
+    await this.prisma.suiviCommandeFlaix.createMany({
+      data: enCours.map((c) => ({
+        jeton: c.id,
         userId,
         numero: c.numero,
         pointDeRetrait: c.pointDeRetrait,
-        passeeLe: new Date(c.passeeLe).getTime() || Date.now(),
+        passeeLe: new Date(c.passeeLe).getTime() ? new Date(c.passeeLe) : new Date(),
+        etat: c.etat ?? 'queued',
+        preteAnnoncee: c.prete,
+      })),
+      // Déjà suivie (par ce client) : rien à faire. Un jeton est unique chez Flaix.
+      skipDuplicates: true,
+    });
+  }
+
+  /**
+   * La page de commande de l'app a vu passer ce jeton (fin du paiement) : on le
+   * suit, et on rend l'état de départ de la Live Activity. 404 si la commande
+   * n'est pas (encore) dans la liste Flaix du client — l'app réessaie.
+   */
+  async suivreDepuisLApp(
+    userId: string,
+    jeton: string,
+    commandes: CommandeFlaix[],
+  ): Promise<EtatLiveActivityFlaix> {
+    const commande = commandes.find((c) => c.id === jeton);
+    if (commande) await this.surveiller(userId, [commande]);
+    const suivi = await this.prisma.suiviCommandeFlaix.findFirst({ where: { jeton, userId } });
+    // Même réponse qu'on ne la connaisse pas ou qu'elle soit à un autre : un
+    // jeton ne doit rien révéler de la commande d'un autre client.
+    if (!suivi) throw new NotFoundException('Commande introuvable pour le moment.');
+    return etatLiveActivity(suivi);
+  }
+
+  /** L'app a démarré une Live Activity pour une commande Flaix qu'elle suit. */
+  async enregistrerActivite(params: {
+    userId: string;
+    jeton: string;
+    activityId: string;
+    pushToken: string;
+  }): Promise<void> {
+    const suivi = await this.prisma.suiviCommandeFlaix.findFirst({
+      where: { jeton: params.jeton, userId: params.userId },
+      select: { jeton: true },
+    });
+    if (!suivi) throw new NotFoundException('Commande introuvable.');
+    await this.prisma.$transaction(async (tx) => {
+      // Un même jeton push ne vise qu'une activité : une ancienne ligne qui le
+      // porterait encore ferait échouer l'unicité.
+      await tx.liveActivityFlaix.deleteMany({
+        where: { pushToken: params.pushToken, NOT: { jeton: params.jeton, activityId: params.activityId } },
       });
-    }
+      await tx.liveActivityFlaix.upsert({
+        where: { jeton_activityId: { jeton: params.jeton, activityId: params.activityId } },
+        update: { pushToken: params.pushToken, status: LiveActivityStatus.ACTIVE, endedAt: null },
+        create: {
+          jeton: params.jeton,
+          userId: params.userId,
+          activityId: params.activityId,
+          pushToken: params.pushToken,
+        },
+      });
+    });
   }
 
   @Interval(INTERVALLE_MS)
   async tourner(maintenant: Date = new Date()): Promise<void> {
-    for (const [jeton, a] of this.annoncees) {
-      if (maintenant.getTime() - a > DUREE_MAX_MS) this.annoncees.delete(jeton);
-    }
-    if (this.tourEnCours || this.suivies.size === 0) return;
+    if (this.tourEnCours) return;
     this.tourEnCours = true;
     try {
-      const entrees = [...this.suivies.entries()];
-      for (let i = 0; i < entrees.length; i += PAR_PAQUET) {
-        await Promise.all(
-          entrees.slice(i, i + PAR_PAQUET).map(([jeton, s]) => this.verifier(jeton, s, maintenant)),
-        );
+      const dus = await this.prisma.suiviCommandeFlaix.findMany({
+        where: { termine: false, prochaineLecture: { lte: maintenant } },
+        orderBy: { prochaineLecture: 'asc' },
+        take: PAR_TOUR,
+      });
+      for (let i = 0; i < dus.length; i += PAR_PAQUET) {
+        await Promise.all(dus.slice(i, i + PAR_PAQUET).map((s) => this.verifier(s, maintenant)));
       }
     } catch (e: unknown) {
       this.logger.error(`Surveillance Flaix : tour interrompu (${String(e)})`);
@@ -120,38 +175,112 @@ export class SurveillanceCommandesFlaixService {
     }
   }
 
-  private async verifier(jeton: string, s: Suivie, maintenant: Date): Promise<void> {
-    if (maintenant.getTime() - s.passeeLe > DUREE_MAX_MS) {
-      this.suivies.delete(jeton);
-      return;
-    }
-    if (!s.prete) {
-      const e = await this.commandes.lireEtat(jeton);
-      if (!e) return; // Flaix muet : on retentera au tour suivant.
-      if (estTerminal(e.etat)) {
-        this.suivies.delete(jeton);
+  private async verifier(s: Suivi, maintenant: Date): Promise<void> {
+    try {
+      if (maintenant.getTime() - s.passeeLe.getTime() > DUREE_MAX_MS) {
+        await this.prisma.suiviCommandeFlaix.update({ where: { jeton: s.jeton }, data: { termine: true } });
+        await this.fermerActivites(s.jeton);
         return;
       }
-      if (!estPrete(e.etat)) return;
-      s.prete = true;
-    }
 
-    // « Prête » : on prévient. Un échec garde la commande pour le tour
-    // suivant ; un succès, ou personne à prévenir, la clôt. Un seul tour à la
-    // fois (`tourEnCours`) : jamais deux envois en parallèle pour une commande.
-    const issue = await this.annoncer(s);
-    if (issue === 'echec') {
-      s.essais = (s.essais ?? 0) + 1;
-      if (s.essais < MAX_ESSAIS_ENVOI) return;
-      this.logger.error(
-        `Commande Flaix ${s.numero} prête : notification abandonnée après ${s.essais} essais`,
-      );
+      const lu = await this.commandes.lireEtat(s.jeton);
+      if (!lu) {
+        // Flaix muet : on retentera au rythme habituel.
+        await this.prisma.suiviCommandeFlaix.update({
+          where: { jeton: s.jeton },
+          data: { prochaineLecture: new Date(maintenant.getTime() + RYTHME_AVANT_PRETE_MS) },
+        });
+        return;
+      }
+
+      const etat = lu.etat;
+      const widget = statutWidget(etat);
+      const fini = estTerminal(etat) || widget === 'COLLECTED' || widget === 'CANCELLED';
+      const prete = estPrete(etat);
+
+      let preteAnnoncee = s.preteAnnoncee;
+      let essaisAnnonce = s.essaisAnnonce;
+      if (prete && !preteAnnoncee) {
+        const issue = await this.annoncer(s);
+        if (issue === 'echec') {
+          essaisAnnonce += 1;
+          if (essaisAnnonce >= MAX_ESSAIS_ENVOI) {
+            preteAnnoncee = true;
+            this.logger.error(
+              `Commande Flaix ${s.numero} prête : notification abandonnée après ${essaisAnnonce} essais`,
+            );
+          }
+        } else {
+          preteAnnoncee = true;
+        }
+      }
+
+      // Une annonce « prête » encore à retenter garde le rythme rapide : le
+      // client attend sa notification maintenant, pas dans une minute.
+      const rythme = preteAnnoncee ? RYTHME_APRES_PRETE_MS : RYTHME_AVANT_PRETE_MS;
+      await this.prisma.suiviCommandeFlaix.update({
+        where: { jeton: s.jeton },
+        data: {
+          etat,
+          preteAnnoncee,
+          essaisAnnonce,
+          termine: fini,
+          ...(widget === 'COLLECTED' ? { remiseLe: maintenant } : {}),
+          prochaineLecture: new Date(maintenant.getTime() + rythme),
+        },
+      });
+
+      if (etat !== s.etat) await this.pousserActivites({ ...s, etat }, maintenant);
+      if (fini) await this.fermerActivites(s.jeton);
+    } catch (e: unknown) {
+      this.logger.error(`Surveillance Flaix : commande ${s.numero} non vérifiée (${String(e)})`);
     }
-    this.suivies.delete(jeton);
-    this.annoncees.set(jeton, maintenant.getTime());
   }
 
-  private async annoncer(s: Suivie): Promise<IssueEnvoi> {
+  /** Fait avancer les Live Activities de cette commande. */
+  private async pousserActivites(s: Suivi, maintenant: Date): Promise<void> {
+    if (!this.apns) return;
+    const activites = await this.prisma.liveActivityFlaix.findMany({
+      where: { jeton: s.jeton, status: LiveActivityStatus.ACTIVE },
+    });
+    if (activites.length === 0) return;
+
+    const etat = etatLiveActivity(s, maintenant);
+    const finale = etat.status === 'COLLECTED' || etat.status === 'CANCELLED';
+    for (const a of activites) {
+      const r = await this.apns.sendLiveActivityUpdate(
+        a.pushToken,
+        finale ? 'end' : 'update',
+        etat as unknown as Record<string, unknown>,
+        finale
+          ? { dismissalDate: new Date(maintenant.getTime() + VISIBLE_APRES_FIN_MS) }
+          : { staleDate: new Date(maintenant.getTime() + PEREMPTION_MS) },
+      );
+      if (r.ok && finale) {
+        await this.prisma.liveActivityFlaix.update({
+          where: { id: a.id },
+          data: { status: LiveActivityStatus.ENDED, endedAt: maintenant },
+        });
+      } else if (!r.ok && r.tokenInvalid) {
+        await this.prisma.liveActivityFlaix.update({
+          where: { id: a.id },
+          data: { status: LiveActivityStatus.STALE, endedAt: maintenant },
+        });
+      } else if (!r.ok) {
+        this.logger.warn(`Live Activity Flaix (commande ${s.numero}) : APNs ${r.status} ${r.reason ?? ''}`);
+      }
+    }
+  }
+
+  /** Plus rien à envoyer à ces activités : on les clôt côté serveur. */
+  private async fermerActivites(jeton: string): Promise<void> {
+    await this.prisma.liveActivityFlaix.updateMany({
+      where: { jeton, status: LiveActivityStatus.ACTIVE },
+      data: { status: LiveActivityStatus.ENDED, endedAt: new Date() },
+    });
+  }
+
+  private async annoncer(s: Suivi): Promise<IssueEnvoi> {
     if (!this.expoPush || !this.pushTokens) return 'personne';
     try {
       const jetons = await this.pushTokens.tokensForUsers([s.userId]);

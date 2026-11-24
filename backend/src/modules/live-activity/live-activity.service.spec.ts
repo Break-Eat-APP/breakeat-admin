@@ -26,6 +26,7 @@ describe('LiveActivityService', () => {
       update: jest.Mock;
       updateMany: jest.Mock;
     };
+    liveActivityFlaix: { findFirst: jest.Mock; update: jest.Mock };
   };
   let apns: { sendLiveActivityUpdate: jest.Mock };
 
@@ -47,6 +48,8 @@ describe('LiveActivityService', () => {
         findMany: jest.fn().mockResolvedValue([]),
       },
       pickupPoint: { findUnique: jest.fn().mockResolvedValue({ name: 'Buvette 4' }) },
+      // Les activités de commandes Flaix (24/11/2026) : aucune ici.
+      liveActivityFlaix: { findFirst: jest.fn().mockResolvedValue(null), update: jest.fn() },
       liveActivity: {
         upsert: jest.fn().mockResolvedValue({ id: 'la-1', orderId: ORDER_A, status: 'ACTIVE' }),
         findFirst: jest.fn(),

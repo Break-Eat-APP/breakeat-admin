@@ -1040,6 +1040,27 @@ export const apiRegisterLiveActivity = (params: {
   });
 
 /** Signale que l'activité est terminée côté iOS : le serveur cesse d'émettre. */
+/**
+ * COMMANDE FLAIX (24/11/2026) : la page de commande vient d'afficher ce jeton.
+ * Le serveur suit la commande et rend l'état de départ de la Live Activity.
+ * 404 tant que Flaix ne la liste pas encore : réessayer.
+ */
+export const apiSuivreCommandeFlaix = (jeton: string) =>
+  req<{
+    status: string;
+    statusLabel: string;
+    orderNumber: string;
+    pickupPoint: string | null;
+    updatedAt: string;
+  }>(`/flaix/commandes/${encodeURIComponent(jeton)}/suivi`, { method: 'POST' });
+
+/** La Live Activity d'une commande Flaix a reçu son jeton push. */
+export const apiRegisterLiveActivityFlaix = (params: {
+  jeton: string;
+  activityId: string;
+  pushToken: string;
+}) => req<{ ok: boolean }>('/flaix/live-activities', { method: 'POST', body: JSON.stringify(params) });
+
 export const apiUnregisterLiveActivity = (activityId: string) =>
   req<{ id: string; status: string }>(`/live-activities/${activityId}`, {
     method: 'DELETE',

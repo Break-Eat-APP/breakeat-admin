@@ -1,10 +1,13 @@
 import {
+  Body,
   Controller,
   ForbiddenException,
   Get,
+  HttpCode,
   NotFoundException,
   Param,
   ParseUUIDPipe,
+  Post,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -15,6 +18,7 @@ import { GlobalRole } from '../../common/enums/role.enum';
 import { FlaixService } from './flaix.service';
 import { CommandesClientFlaixService } from './commandes-client-flaix.service';
 import { SurveillanceCommandesFlaixService } from './surveillance-commandes-flaix.service';
+import { FORME_JETON, RegisterLiveActivityFlaixDto } from './dto/live-activity-flaix.dto';
 
 /**
  * FlaixController — read-only endpoints for operator dashboards.
@@ -51,8 +55,38 @@ export class FlaixController {
     });
     const reponse = await this.commandesClient.pourEmail(moi?.email);
     // Les commandes en cours sont surveillées pour « Ta commande est prête ».
-    this.surveillance.surveiller(user.sub, reponse.commandes);
+    // Un incident de surveillance ne doit pas priver le client de sa liste.
+    await this.surveillance.surveiller(user.sub, reponse.commandes).catch(() => undefined);
     return reponse;
+  }
+
+  /**
+   * POST /api/v1/flaix/commandes/:jeton/suivi
+   * La page de commande Flaix de l'app vient d'afficher ce jeton (fin du
+   * paiement, 24/11/2026) : le serveur suit la commande, et rend l'état de
+   * départ de la Live Activity. 404 tant que Flaix ne la liste pas encore pour
+   * ce client — l'app réessaie. Seules les commandes de SA liste (lue par son
+   * e-mail, en base) peuvent être suivies.
+   */
+  @Post('commandes/:jeton/suivi')
+  @HttpCode(200)
+  async suivre(@Param('jeton') jeton: string, @CurrentUser() user: JwtPayload) {
+    if (!FORME_JETON.test(jeton)) throw new NotFoundException('Commande introuvable pour le moment.');
+    const moi = await this.prisma.user.findUnique({ where: { id: user.sub }, select: { email: true } });
+    const reponse = await this.commandesClient.pourEmail(moi?.email);
+    return this.surveillance.suivreDepuisLApp(user.sub, jeton, reponse.commandes);
+  }
+
+  /**
+   * POST /api/v1/flaix/live-activities
+   * L'app a démarré la Live Activity d'une commande Flaix qu'elle suit.
+   */
+  @Post('live-activities')
+  @HttpCode(200)
+  async enregistrerLiveActivity(@Body() dto: RegisterLiveActivityFlaixDto, @CurrentUser() user: JwtPayload) {
+    await this.surveillance.enregistrerActivite({ userId: user.sub, ...dto });
+    // Un corps, pas un 204 : l'app lit toujours la réponse en JSON.
+    return { ok: true };
   }
 
   /**

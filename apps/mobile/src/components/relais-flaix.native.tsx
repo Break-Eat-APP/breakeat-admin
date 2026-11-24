@@ -6,6 +6,8 @@ import { estChezFlaix, hoteHorsFlaix, navigationAutorisee } from '@lib/navigatio
 import { creerSignalCommandeFlaix } from '@lib/signal-commande-flaix';
 import { apiGetMesCommandesFlaix } from '@lib/api/mobile-api';
 import { useAuthStore } from '@store/auth.store';
+import { jetonDeLAdresse } from '@lib/suivi-commande-flaix';
+import { suivreCommandeFlaixDansLApp } from '@lib/live-activity-tracking';
 import { Ionicons } from '@expo/vector-icons';
 
 import { THEME, FONT } from '@lib/theme';
@@ -63,6 +65,19 @@ export function RelaisFlaix({ url, titre }: { url: string; titre: string }) {
       }),
     [],
   );
+  /**
+   * LA COMMANDE PAYÉE, RECONNUE À SON JETON (24/11/2026). Après le paiement,
+   * Flaix affiche une adresse en `…/orders/<jeton>` : la commande est suivie
+   * (notification « prête ») et sa Live Activity démarre. Une fois par jeton.
+   */
+  const jetonsVus = useRef(new Set<string>());
+  const surAdresse = (adresse: string) => {
+    const jeton = jetonDeLAdresse(adresse);
+    if (!jeton || jetonsVus.current.has(jeton) || !useAuthStore.getState().token) return;
+    jetonsVus.current.add(jeton);
+    void suivreCommandeFlaixDansLApp(jeton);
+  };
+
   useEffect(() => {
     const abonnement = AppState.addEventListener('change', (etat) => {
       if (etat !== 'active') void signal.maintenant();
@@ -125,6 +140,7 @@ export function RelaisFlaix({ url, titre }: { url: string; titre: string }) {
         onNavigationStateChange={(nav: WebViewNavigation) => {
           setAilleurs(hoteHorsFlaix(nav.url));
           if (!nav.loading && estChezFlaix(nav.url)) signal.planifier();
+          surAdresse(nav.url);
         }}
         style={styles.vue}
       />

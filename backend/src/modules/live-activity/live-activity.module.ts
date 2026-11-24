@@ -23,6 +23,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [NotificationsModule],
   controllers: [LiveActivityController, FlaixWebhookController],
   providers: [ApnsService, LiveActivityService, FlaixWebhookService],
-  exports: [LiveActivityService],
+  // ApnsService : aussi pour la Live Activity des commandes Flaix (24/11/2026).
+  exports: [LiveActivityService, ApnsService],
 })
 export class LiveActivityModule {}

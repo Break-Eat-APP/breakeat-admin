@@ -6,6 +6,7 @@ import { CommandesClientFlaixService } from './commandes-client-flaix.service';
 import { SurveillanceCommandesFlaixService } from './surveillance-commandes-flaix.service';
 import { ImportMatchsFlaixService } from './import-matchs-flaix.service';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { LiveActivityModule } from '../live-activity/live-activity.module';
 
 /**
  * FlaixModule — the integration boundary between BREAK EAT and the Flaix AI engine.
@@ -21,7 +22,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
  *   FLAIX_API_KEY — API key for authentication (optional)
  */
 @Module({
-  imports: [ConfigModule, NotificationsModule],
+  // LiveActivityModule : l'envoi APNs des Live Activities Flaix (24/11/2026).
+  imports: [ConfigModule, NotificationsModule, LiveActivityModule],
   controllers: [FlaixController],
   providers: [
     FlaixService,

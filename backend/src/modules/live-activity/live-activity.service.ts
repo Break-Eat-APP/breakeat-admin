@@ -191,7 +191,18 @@ export class LiveActivityService {
     const activity = await this.prisma.liveActivity.findFirst({
       where: { activityId: params.activityId, userId: params.userId },
     });
-    if (!activity) throw new NotFoundException('Live Activity not found');
+    if (!activity) {
+      // Une Live Activity de commande FLAIX (24/11/2026) : l'app ne fait pas
+      // la différence au moment de la fin, la route est la même.
+      const flaix = await this.prisma.liveActivityFlaix.findFirst({
+        where: { activityId: params.activityId, userId: params.userId },
+      });
+      if (!flaix) throw new NotFoundException('Live Activity not found');
+      return this.prisma.liveActivityFlaix.update({
+        where: { id: flaix.id },
+        data: { status: LiveActivityStatus.ENDED, endedAt: new Date() },
+      });
+    }
 
     return this.prisma.liveActivity.update({
       where: { id: activity.id },

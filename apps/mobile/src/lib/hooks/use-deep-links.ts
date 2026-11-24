@@ -53,6 +53,14 @@ async function suivre(url: string): Promise<void> {
   const orderId = parts[1];
   const action = parts[2]?.toLowerCase();
 
+  // La Live Activity d'une commande FLAIX (24/11/2026) : son suivi est dans
+  // « Mes commandes ». « Je suis arrivé » n'a pas d'équivalent chez Flaix :
+  // le client se présente au comptoir avec son numéro.
+  if (orderId.startsWith('flaix-')) {
+    navigateTo('Commandes');
+    return;
+  }
+
   if (action !== 'arrived') {
     navigateTo('OrderTracking', { orderId });
     return;

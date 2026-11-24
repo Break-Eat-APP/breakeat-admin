@@ -235,7 +235,16 @@ export function OrderHistoryScreen() {
     // déjà une liste vide quand Flaix ne répond pas ; ceci couvre une
     // version du serveur qui n'aurait pas encore la route.
     void apiGetMesCommandesFlaix()
-      .then((r) => setFlaix(r.commandes ?? []))
+      .then((r) => {
+        setFlaix(r.commandes ?? []);
+        // Une commande Flaix terminée ferme aussi sa Live Activity, sans
+        // dépendre d'une poussée APNs qui peut manquer (24/11/2026).
+        void endTrackingForFinishedOrders(
+          (r.commandes ?? [])
+            .filter((c) => !c.enCours)
+            .map((c) => ({ id: `flaix-${c.id}`, status: 'COMPLETED' })),
+        );
+      })
       .catch(() => undefined);
     try {
       const recues = await apiGetMyOrders();
