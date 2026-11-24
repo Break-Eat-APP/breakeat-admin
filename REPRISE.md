@@ -113,6 +113,8 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   (`3a5cdade-6203-4345-9bf6-8e95a0c64a57`) : **build 47 finie et envoyée à
 >   App Store Connect** (manifeste de scenes relu dans l'Info.plist de l'.ipa).
 >   **Testée par Rémi sur son iPhone iOS 27 le 24/11 : elle s'ouvre.**
+>   **Soumise à Apple le 24/11 (publication manuelle), validation accélérée
+>   demandée.** Reste : validation, puis clic « Publier cette version ».
 >   Suite : TestFlight → test de
 >   Rémi sur son iPhone iOS 27 → soumission avec validation accélérée →
 >   publication par Rémi. **Ne pas inciter à mettre à jour avant la 1.1.4.**
