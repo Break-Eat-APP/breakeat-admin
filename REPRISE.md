@@ -139,6 +139,18 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >      Railway (« Flux Flaix (journal, rien écrit) ») : créations et adoptions
 >      attendues ? ;
 >   4. puis `FLAIX_FLUX_IMPORT=actif` sur Railway.
+>   **Identifiants des lieux Flaix** (développeur, 24/11), à saisir dans l'admin
+>   (« Identifiant du lieu côté Flaix ») : `stade-marie-marvingt` (68),
+>   `lemans-fc` (69), `palais-omnisports-marseille` (71), `stade-velodrome`
+>   (72), `arena-d-aix-en-provence` (73), `guillaume-stadium` (74),
+>   `alp-arena` (75), `stade-marcel-michelin` (76).
+>   **Contrat des commandes reçu (24/11)** : statuts `en_attente`,
+>   `en_preparation`, `prete`, `remise`, `annulee` (déjà gérés) ; paiement
+>   `au_retrait`, `paye_en_ligne`, `rembourse` ; clé = `jeton` (jamais
+>   `reference`, non unique) ; ne pas interroger la LISTE en boucle (suivi :
+>   `/api/public/orders/<jeton>/status`) ; 401 et 403 sans réessai ; ne jamais
+>   journaliser une adresse à jeton (nos journaux tronquent le jeton à 6
+>   caractères). Reste à savoir : l'adresse de la page de confirmation.
 >   **Questions au développeur** : liste des statuts (annulé reste-t-il dans la
 >   liste ?), identifiant stable (`idInterne` retenu), événements des 7
 >   derniers jours, paramètres d'identité acceptés par `commande.lien`.
