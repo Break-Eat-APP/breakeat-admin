@@ -13,6 +13,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { THEME, FONT } from '@lib/theme';
 
 /**
@@ -29,6 +31,16 @@ import { THEME, FONT } from '@lib/theme';
  *     feuille hors d'un champ le ferme aussi.
  *  3. Un appui sur « Enregistrer » pendant que le clavier est ouvert ne doit
  *     pas être avalé par la fermeture du clavier → `keyboardShouldPersistTaps`.
+ *
+ * ANDROID (24/11/2026, capture d'un client sur Samsung, pendant un match) :
+ *  4. La feuille descendait SOUS la barre de navigation d'Android (||| ○ <) :
+ *     « Plus tard » s'y dessinait, mais un appui touchait la barre du
+ *     téléphone — impossible de fermer. → la marge du bas de l'écran
+ *     (`useSafeAreaInsets`) s'ajoute sous le contenu.
+ *  5. Le clavier recouvrait la feuille : l'app comptait sur Android pour
+ *     redimensionner la fenêtre, ce qu'il ne fait plus dans une fenêtre
+ *     modale quand l'écran est « bord à bord » (Android 15 et suivants). →
+ *     `KeyboardAvoidingView` agit aussi sur Android.
  */
 export const BARRE_CLAVIER = 'barre-clavier-ok';
 
@@ -43,15 +55,13 @@ export function FeuilleClavier({
   /** La colonne de son contenu (l'écart entre les champs, par exemple). */
   contenuStyle?: StyleProp<ViewStyle>;
 }) {
+  const insets = useSafeAreaInsets();
   return (
-    <KeyboardAvoidingView
-      style={styles.racine}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <KeyboardAvoidingView style={styles.racine} behavior="padding">
       {/* Le voile : le toucher range le clavier (il ne ferme pas la feuille,
           pour ne rien perdre de ce qui a été tapé). */}
       <Pressable style={styles.voile} onPress={Keyboard.dismiss} accessible={false} />
-      <View style={style}>
+      <View style={[style, Platform.OS === 'android' && insets.bottom > 0 ? { paddingBottom: insets.bottom + 16 } : null]}>
         <ScrollView
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}

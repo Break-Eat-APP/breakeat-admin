@@ -72,7 +72,10 @@ module.exports = {
   // 1.1.4 (24/11/2026) : le cycle de vie par « scenes » (UIScene), exige par
   // iOS 27 — la 1.1.3 (build 46) plantait AU LANCEMENT sur tout iPhone sous
   // iOS 27. Voir `enableSceneSupport` plus bas et BUG-2026-049.
-  version: '1.1.4',
+  // `VERSION_VISEE` : posee SEULEMENT par le workflow « Mise a jour a distance »
+  // pour viser les Android restes en 1.1.3 (meme natif Android que la 1.1.4).
+  // Jamais dans une build.
+  version: process.env.VERSION_VISEE || '1.1.4',
   orientation: 'portrait',
   scheme: 'breakeat',
   // L'ICONE A SON PROPRE FICHIER (10/11/2026). Le B occupait 83 % de la

@@ -33,6 +33,10 @@ on:
         default: all
         type: choice
         options: [all, ios, android]
+      version:
+        description: "Version visee (vide = celle de app.config.js). Ex. 1.1.3 pour les Android pas encore en 1.1.4 — avec plateforme android SEULEMENT"
+        required: false
+        default: ''
 
 # Une seule publication à la fois : deux lancements rapprochés se suivent.
 concurrency:
@@ -87,6 +91,14 @@ jobs:
       - name: Publier
         working-directory: apps/mobile
         run: |
+          # Une version visee ne vaut que pour UNE plateforme dont le natif est
+          # le meme : la 1.1.4 ne change que le natif iOS (24/11/2026), donc une
+          # mise a jour ecrite en 1.1.4 convient aux Android en 1.1.3, pas aux
+          # iPhone. On refuse « all » et « ios » avec une version visee.
+          if [ -n "${VERSION_VISEE}" ] && [ "${PLATEFORME}" != "android" ]; then
+            echo "::error::Une version visee (${VERSION_VISEE}) se publie pour android seulement."
+            exit 1
+          fi
           npx eas-cli@latest update \
             --channel production \
             --environment production \
@@ -100,3 +112,5 @@ jobs:
           # ou un « $(...) » dans le message serait sinon EXÉCUTÉ par le shell.
           MESSAGE: ${{ inputs.message }}
           PLATEFORME: ${{ inputs.plateforme }}
+          # Lu par app.config.js (`version`), donc par `runtimeVersion`.
+          VERSION_VISEE: ${{ inputs.version }}
