@@ -131,7 +131,12 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 > - 🔴 **BUG-2026-051 (24/11)** : boucle de la feuille des coordonnées pour les comptes Google/Apple sans téléphone — corrigée en 1.7.55 (`saison.screen.tsx`), même publication que ci-dessous.
 > - **1.7.55 (24/11) — Android, BUG-2026-050** : la feuille « Pour commander
 >   plus vite » passait sous la barre de navigation et sous le clavier
->   (capture d'un client, Samsung). Corrigé ; POUSSÉ PENDANT LE MATCH (accord de Rémi, sans l'import des
+>   (capture d'un client, Samsung). **MISE À JOUR ANDROID 1.1.3 PUBLIÉE le
+>   24/11 vers 20h25** (groupe `6e350451`, commit `0375cee`), depuis le poste
+>   de l'agent avec l'accord de Rémi, après deux lancements du workflow partis
+>   en 1.1.4 (version vide) ou refusés (version 1.1.3 avec « all »). Les
+>   groupes 1.1.4 de 19h32 et 20h10 servent les iPhone 1.1.4.
+>   Corrigé ; POUSSÉ PENDANT LE MATCH (accord de Rémi, sans l'import des
 >   matchs, qui attend) puis **mise à jour à distance plateforme `android`,
 >   version visée `1.1.3`** (nouvelle option du workflow), avec l'accord de
 >   Rémi. Ensuite, Rémi essaie sur son Android : fermer par « Plus tard »,
