@@ -7,6 +7,8 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ## [1.7.55] — 2026-11-24 — Android : la feuille « Pour commander plus vite » ne se fermait plus
 
+- **LA VRAIE CAUSE (BUG-2026-051), trouvée ensuite** : une BOUCLE. Au retour de la feuille (« Enregistrer » sans numéro, « Plus tard », bouton retour), l’écran Saison revérifiait le profil avant d’ouvrir la commande ; un compte Google ou Apple n’a jamais de téléphone, la feuille se rouvrait aussitôt — impossible de commander, même en relançant l’app. Les comptes par e-mail (téléphone donné à l’inscription) n’étaient pas touchés. Désormais, au retour de la feuille, la commande s’ouvre ; et la feuille n’est proposée qu’une fois par visite de l’écran. ~ `apps/mobile/src/screens/saison.screen.tsx`
+
 - **Pourquoi** : capture d’un client sur Samsung, pendant le match du 24/11 (compte Google). La feuille descendait sous la barre de navigation d’Android : « Plus tard » s’y dessinait mais un appui touchait la barre du téléphone. Et le clavier recouvrait « Enregistrer et commander » : l’app comptait sur Android pour remonter la fenêtre, ce qu’il ne fait plus dans une fenêtre modale bord à bord. BUG-2026-050.
 - **App** : `FeuilleClavier` (coordonnées, note d’une commande) réserve la marge du bas de l’écran sur Android et remonte au-dessus du clavier sur les deux plateformes. Non vérifié sur un Android réel avant publication : à essayer par Rémi.
 - **Mise à jour à distance** : le workflow accepte une « version visée » (`1.1.3`), pour **Android seulement** — les Android sont en 1.1.3, et la 1.1.4 ne change que le natif iOS. `app.config.js` lit `VERSION_VISEE`, posée par le workflow seulement.

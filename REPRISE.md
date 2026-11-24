@@ -121,6 +121,7 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   « Retirer de la vente » proposé à Rémi en attendant (à sa décision).
 >   La 1.1.4 Android suivra (même version, ADR-0005) ; les mises à jour à
 >   distance devront viser la 1.1.3 ET la 1.1.4 tant que les deux coexistent.
+> - 🔴 **BUG-2026-051 (24/11)** : boucle de la feuille des coordonnées pour les comptes Google/Apple sans téléphone — corrigée en 1.7.55 (`saison.screen.tsx`), même publication que ci-dessous.
 > - **1.7.55 (24/11) — Android, BUG-2026-050** : la feuille « Pour commander
 >   plus vite » passait sous la barre de navigation et sous le clavier
 >   (capture d'un client, Samsung). Corrigé ; POUSSÉ PENDANT LE MATCH (accord de Rémi, sans l'import des

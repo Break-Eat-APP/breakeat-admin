@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -96,6 +96,8 @@ export function SaisonScreen({ route, navigation }: Props) {
   const [demandeOuverte, setDemandeOuverte] = useState(false);
   /** Le match qu'on allait ouvrir quand la demande de coordonnées a surgi. */
   const [matchEnAttente, setMatchEnAttente] = useState<string | null>(null);
+  /** La feuille a déjà été proposée sur cet écran : on ne la repropose pas. */
+  const demandePosee = useRef(false);
   /** Le temps d'aller demander la destination : le bouton ne doit pas partir deux fois. */
   const [envoiCommande, setEnvoiCommande] = useState(false);
   const [planOuvert, setPlanOuvert] = useState(false);
@@ -228,7 +230,7 @@ export function SaisonScreen({ route, navigation }: Props) {
    * Mieux vaut un refus clair qu'un paiement pour un match qui ne prend
    * plus rien.
    */
-  const ouvrirFlaixPour = async (eventId: string): Promise<void> => {
+  const ouvrirFlaixPour = async (eventId: string, apresDemande = false): Promise<void> => {
     if (!lieu) return;
     setEnvoiCommande(true);
     try {
@@ -236,11 +238,20 @@ export function SaisonScreen({ route, navigation }: Props) {
 
       // Ses coordonnées lui éviteront de se reconnecter chez Flaix — on les
       // demande ici plutôt que de le laisser les ressaisir là-bas.
-      if (destination.attendIdentite) {
+      //
+      // UNE FOIS, PAS EN BOUCLE (BUG-2026-051, 24/11/2026, client Gmail sur
+      // Android pendant un match). Au retour de la feuille — « Enregistrer »
+      // sans numéro, « Plus tard », ou le bouton retour —, on revérifiait le
+      // profil : un compte Google n'a jamais de téléphone, la feuille se
+      // rouvrait, et le client ne pouvait plus ni fermer ni commander, même en
+      // relançant l'app. Au retour de la feuille, on ouvre la commande ; et la
+      // feuille n'est plus reproposée de la séance (`demandePosee`).
+      if (destination.attendIdentite && !apresDemande && !demandePosee.current) {
         try {
           const p = profil ?? (await apiMonProfil());
           setProfil(p);
           if (coordonneesManquantes(p)) {
+            demandePosee.current = true;
             setMatchEnAttente(eventId);
             setDemandeOuverte(true);
             return;
@@ -544,7 +555,7 @@ export function SaisonScreen({ route, navigation }: Props) {
           // Dans les deux cas une seule chose compte — que l'adresse soit
           // celle du match CHOISI.
           if (enregistre) setProfil(null);
-          void ouvrirFlaixPour(match);
+          void ouvrirFlaixPour(match, true);
         }}
       />    </View>
   );
