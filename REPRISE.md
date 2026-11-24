@@ -121,6 +121,18 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   « Retirer de la vente » proposé à Rémi en attendant (à sa décision).
 >   La 1.1.4 Android suivra (même version, ADR-0005) ; les mises à jour à
 >   distance devront viser la 1.1.3 ET la 1.1.4 tant que les deux coexistent.
+> - **1.7.53 (24/11) — « prête » sans ouvrir « Mes commandes »** : la page de
+>   commande Flaix met elle-même la commande sous surveillance (page posée,
+>   fermeture, app en arrière-plan). **Pas encore sur les téléphones** : la
+>   prochaine mise à jour à distance vise la **1.1.4** (version de
+>   `app.config.js`), donc l'iPhone 1.1.4 une fois publiée — PAS les Android
+>   en 1.1.3, qui l'auront avec la build Android 1.1.4. À lancer après le
+>   match, avec l'accord de Rémi.
+>   **Message au développeur Flaix (24/11)** : webhook (ORDER_CREATED,
+>   ORDER_READY…), liste des états, `estimatedReadyAt`, jeton dans l'adresse
+>   de la page de confirmation (ou `breakeat://commande-flaix/<jeton>`),
+>   `[#breakeatId]`, heure de remise (`remiseLe`), préproduction. Il a
+>   renvoyé l'API de lecture par e-mail, déjà branchée depuis le 21/11.
 > - **DÉCISIONS DE RÉMI DU 23/11** :
 >   - **Sortie sur les stores autorisée** (ADR-0017, remplace la condition de
 >     ADR-0012) : tous les lieux publics encaissent par Flaix. **Fait : la

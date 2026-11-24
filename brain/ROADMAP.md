@@ -577,6 +577,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.50 | 2026-11-23 | Commande Flaix « remise » : le client lit « Récupérée » |
 | 1.7.51 | 2026-11-23 | Mot de passe oublié : rappel des indésirables, e-mails au tutoiement |
 | 1.7.52 | 2026-11-24 | iOS 27 : cycle de vie par scenes, build 1.1.4 (la 1.1.3 plantait au lancement) |
+| 1.7.53 | 2026-11-24 | Commande Flaix : la page de commande met la commande sous surveillance (« prête » sans ouvrir « Mes commandes ») |
 
 ---
 

@@ -1,8 +1,11 @@
-import React, { useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import type { ShouldStartLoadRequest, WebViewNavigation } from 'react-native-webview/lib/WebViewTypes';
-import { hoteHorsFlaix, navigationAutorisee } from '@lib/navigation-flaix';
+import { estChezFlaix, hoteHorsFlaix, navigationAutorisee } from '@lib/navigation-flaix';
+import { creerSignalCommandeFlaix } from '@lib/signal-commande-flaix';
+import { apiGetMesCommandesFlaix } from '@lib/api/mobile-api';
+import { useAuthStore } from '@store/auth.store';
 import { Ionicons } from '@expo/vector-icons';
 
 import { THEME, FONT } from '@lib/theme';
@@ -44,6 +47,31 @@ export function RelaisFlaix({ url, titre }: { url: string; titre: string }) {
   // prestataire) — la barre d'adresse que la page intégrée n'a pas.
   const [ailleurs, setAilleurs] = useState<string | null>(null);
   const webview = useRef<WebView>(null);
+
+  /**
+   * « TA COMMANDE EST PRÊTE » SANS PASSER PAR « MES COMMANDES » (24/11/2026).
+   * Le serveur ne surveille une commande Flaix qu'après l'avoir lue : la page
+   * la lui fait lire quand elle se pose (confirmation du paiement comprise),
+   * quand on la ferme, et quand l'app passe en arrière-plan — le client qui
+   * range son téléphone juste après avoir payé. Voir `lib/signal-commande-flaix.ts`.
+   */
+  const signal = useMemo(
+    () =>
+      creerSignalCommandeFlaix({
+        lire: apiGetMesCommandesFlaix,
+        estConnecte: () => Boolean(useAuthStore.getState().token),
+      }),
+    [],
+  );
+  useEffect(() => {
+    const abonnement = AppState.addEventListener('change', (etat) => {
+      if (etat !== 'active') void signal.maintenant();
+    });
+    return () => {
+      abonnement.remove();
+      void signal.maintenant();
+    };
+  }, [signal]);
 
   /**
    * CE QUE LA PAGE A LE DROIT D'OUVRIR — `lib/navigation-flaix.ts`, testé.
@@ -94,7 +122,10 @@ export function RelaisFlaix({ url, titre }: { url: string; titre: string }) {
           setErreur(true);
         }}
         onShouldStartLoadWithRequest={resteChezFlaix}
-        onNavigationStateChange={(nav: WebViewNavigation) => setAilleurs(hoteHorsFlaix(nav.url))}
+        onNavigationStateChange={(nav: WebViewNavigation) => {
+          setAilleurs(hoteHorsFlaix(nav.url));
+          if (!nav.loading && estChezFlaix(nav.url)) signal.planifier();
+        }}
         style={styles.vue}
       />
       {ailleurs ? (

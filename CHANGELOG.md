@@ -5,6 +5,13 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.53] — 2026-11-24 — Commande Flaix : « prête » sans passer par « Mes commandes »
+
+- **Pourquoi** : le serveur n’envoie « Ta commande est prête » que pour les commandes Flaix qu’il surveille, et il ne les apprenait qu’en lisant « Mes commandes » (ADR-0015). Un client qui payait puis rangeait son téléphone ne recevait rien.
+- **App** : la page de commande Flaix (relais intégré, iOS et Android) fait elle-même cette lecture : quand une page Flaix se pose (3 s après le chargement, confirmation du paiement comprise), quand l’écran se ferme, et quand l’app passe en arrière-plan. Une lecture en cours est suivie d’une seconde si un signal arrive entre-temps. Erreurs avalées : le signal ne gêne jamais la commande.
+- **Limites** : la surveillance reste en mémoire sur le serveur (un redémarrage l’efface jusqu’à la prochaine lecture) ; le webhook Flaix la remplacera. Visible après une mise à jour à distance.
+- + `apps/mobile/src/lib/signal-commande-flaix.ts` (+ test) ; ~ `apps/mobile/src/components/relais-flaix.native.tsx`
+
 ## [1.7.52] — 2026-11-24 — iOS 27 : la 1.1.3 plantait au lancement, build 1.1.4
 
 - **Pourquoi** : publiée sur l’App Store le 23/11, la 1.1.3 (build 46) se fermait au lancement sur l’iPhone de Rémi sous iOS 27.2.1. Le journal de plantage (`.ips`) donne `UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption` (EXC_BREAKPOINT) : compilée avec le SDK iOS 27 (image EAS « latest »), une app qui n’adopte pas le cycle de vie par « scenes » (UIScene) est tuée par iOS 27 avant toute ligne de JavaScript. Une mise à jour à distance n’y peut rien. La 1.0.10 (outils plus anciens) et Android ne sont pas touchés.
