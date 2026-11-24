@@ -5,6 +5,12 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.52] — 2026-11-24 — iOS 27 : la 1.1.3 plantait au lancement, build 1.1.4
+
+- **Pourquoi** : publiée sur l’App Store le 23/11, la 1.1.3 (build 46) se fermait au lancement sur l’iPhone de Rémi sous iOS 27.2.1. Le journal de plantage (`.ips`) donne `UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption` (EXC_BREAKPOINT) : compilée avec le SDK iOS 27 (image EAS « latest »), une app qui n’adopte pas le cycle de vie par « scenes » (UIScene) est tuée par iOS 27 avant toute ligne de JavaScript. Une mise à jour à distance n’y peut rien. La 1.0.10 (outils plus anciens) et Android ne sont pas touchés.
+- **App** : `expo-build-properties` → `ios.enableSceneSupport: true` (SDK 57.0.23+) : manifeste de scenes dans Info.plist et `EXExpoAppSceneDelegate`. Changement natif : **version 1.1.4**. Vérifié en local : `expo config --type introspect` montre le manifeste ; la compilation et le lancement ne se vérifient que sur EAS et sur un iPhone sous iOS 27 (TestFlight).
+- ~ `apps/mobile/app.config.js`
+
 ## [1.7.51] — 2026-11-23 — Mot de passe oublié : « regarde tes indésirables », et des e-mails qui tutoient
 
 - **Pourquoi** : « Mot de passe oublié » est activé depuis le 23/11 (Brevo). Des clients reçoivent les courriels de BreakEat en indésirables, malgré DKIM et DMARC : sans rappel, le client croit que rien n'est parti. Et les deux e-mails, comme une erreur du serveur, vouvoyaient (CLAUDE.md § 4).

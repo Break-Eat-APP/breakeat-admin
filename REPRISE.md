@@ -104,6 +104,18 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   européenne pour les vendeurs). Sans déclaration, l'app risque d'être
 >   retirée de l'Union européenne. Play Console → Paramètres → Profil de
 >   développeur.
+> - 🔴 **24/11 — LA 1.1.3 PLANTE AU LANCEMENT SOUS iOS 27 (BUG-2026-049)**.
+>   iOS 27 tue une app compilée avec son SDK si elle n'adopte pas le cycle de
+>   vie par scenes. Touchés : les iPhone sous iOS 27 passés en 1.1.3. Pas
+>   touchés : les iPhone restés en 1.0.10 (ils commandent par le lien Flaix,
+>   constaté par Rémi), Android. Correctif `enableSceneSupport` en **1.1.4**
+>   (`04ee098`), build iOS lancée le 24/11 vers 13 h
+>   (`3a5cdade-6203-4345-9bf6-8e95a0c64a57`). Suite : TestFlight → test de
+>   Rémi sur son iPhone iOS 27 → soumission avec validation accélérée →
+>   publication par Rémi. **Ne pas inciter à mettre à jour avant la 1.1.4.**
+>   « Retirer de la vente » proposé à Rémi en attendant (à sa décision).
+>   La 1.1.4 Android suivra (même version, ADR-0005) ; les mises à jour à
+>   distance devront viser la 1.1.3 ET la 1.1.4 tant que les deux coexistent.
 > - **DÉCISIONS DE RÉMI DU 23/11** :
 >   - **Sortie sur les stores autorisée** (ADR-0017, remplace la condition de
 >     ADR-0012) : tous les lieux publics encaissent par Flaix. **Fait : la
