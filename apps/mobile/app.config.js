@@ -69,7 +69,10 @@ module.exports = {
   // 1.1.3 (16/11/2026) : la Live Activity « prête » resserrée (natif : le
   // widget). Les builds 1.1.2 (dont la 44) ne recevront plus les mises à jour
   // à distance publiées après cette version.
-  version: '1.1.3',
+  // 1.1.4 (24/11/2026) : le cycle de vie par « scenes » (UIScene), exige par
+  // iOS 27 — la 1.1.3 (build 46) plantait AU LANCEMENT sur tout iPhone sous
+  // iOS 27. Voir `enableSceneSupport` plus bas et BUG-2026-049.
+  version: '1.1.4',
   orientation: 'portrait',
   scheme: 'breakeat',
   // L'ICONE A SON PROPRE FICHIER (10/11/2026). Le B occupait 83 % de la
@@ -205,7 +208,15 @@ module.exports = {
         //
         // Applique AUSSI aux Pods, que la retouche du .pbxproj faite par
         // ./plugins/withLiveActivity n'atteint pas.
-        ios: { deploymentTarget: '16.4' },
+        //
+        // `enableSceneSupport` : NE JAMAIS RETIRER. Compilee avec le SDK
+        // iOS 27 (image EAS « latest »), une app sans cycle de vie par
+        // « scenes » est TUEE par iOS 27 au lancement
+        // (`UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`,
+        // EXC_BREAKPOINT). La 1.1.3 (build 46) est sortie sans, et plantait
+        // sur tous les iPhone sous iOS 27 (24/11/2026, BUG-2026-049). Option
+        // propre au SDK 57 ; le SDK 58 l'integre et la rend inutile.
+        ios: { deploymentTarget: '16.4', enableSceneSupport: true },
       },
     ],
     // Sentry est conditionne au JETON, pas a l'environnement.
