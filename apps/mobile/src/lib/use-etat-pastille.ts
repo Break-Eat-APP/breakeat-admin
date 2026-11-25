@@ -1,7 +1,7 @@
-import { useEffect, useReducer } from 'react';
+import { useEffect, useMemo, useReducer } from 'react';
 import { AppState } from 'react-native';
 
-import { apiGetMyOrders } from '@lib/api/mobile-api';
+import { apiGetMesSuivisFlaix, apiGetMyOrders } from '@lib/api/mobile-api';
 import { useAuthStore } from '@store/auth.store';
 import { useSuiviStore } from '@store/suivi.store';
 import { estEnCours, etatPastille, expirationEtat, type EtatPastille } from '@lib/suivi-commande';
@@ -24,7 +24,13 @@ async function rafraichir(fraicheurMs = 1_000): Promise<void> {
   if (Date.now() - useSuiviStore.getState().chargeA < fraicheurMs) return;
   chargementEnCours = true;
   try {
-    useSuiviStore.getState().publier(await apiGetMyOrders());
+    // Les commandes FLAIX aussi (25/11/2026) : la flamme ne s'allumait que
+    // pour une commande BreakEat. Lues dans notre base, jamais chez Flaix.
+    // Une panne de l'une ne prive pas l'autre.
+    const [breakeat, flaix] = await Promise.allSettled([apiGetMyOrders(), apiGetMesSuivisFlaix()]);
+    if (flaix.status === 'fulfilled') useSuiviStore.getState().publierFlaix(flaix.value);
+    if (breakeat.status === 'rejected') throw breakeat.reason;
+    useSuiviStore.getState().publier(breakeat.value);
   } catch (e: unknown) {
     // On garde le dernier état connu : mieux vaut un anneau en retard de dix
     // secondes qu'une pastille qui retombe au repos à chaque coupure réseau
@@ -44,7 +50,9 @@ async function rafraichir(fraicheurMs = 1_000): Promise<void> {
  */
 export function useEtatPastille(routeCourante?: string): EtatPastille {
   const token = useAuthStore((e) => e.token);
-  const commandes = useSuiviStore((e) => e.commandes);
+  const commandesBreakeat = useSuiviStore((e) => e.commandes);
+  const commandesFlaix = useSuiviStore((e) => e.commandesFlaix);
+  const commandes = useMemo(() => [...commandesBreakeat, ...commandesFlaix], [commandesBreakeat, commandesFlaix]);
   // Ne sert qu'à provoquer un nouveau rendu quand le ✓ doit s'effacer.
   const [, reveiller] = useReducer((n: number) => n + 1, 0);
 

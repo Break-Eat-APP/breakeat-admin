@@ -199,7 +199,30 @@ export function OrderHistoryScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
   /** Les commandes passées dans Flaix : lues à part, une panne Flaix ne vide
    *  jamais les commandes BreakEat. */
-  const [flaix, setFlaix] = useState<CommandeFlaix[]>([]);
+  const [flaixLu, setFlaix] = useState<CommandeFlaix[]>([]);
+  /**
+   * L'ÉTAT EN DIRECT DES COMMANDES FLAIX (25/11/2026). La liste ci-dessus n'est
+   * lue chez Flaix qu'à l'ouverture de l'écran (le contrat Flaix interdit de
+   * l'interroger en boucle) : « en préparation » n'apparaissait donc qu'en
+   * rouvrant l'écran. La flamme relit toutes les 10 s l'état que NOTRE serveur
+   * tient à jour (`/flaix/mes-suivis`) ; on le pose ici sur chaque ticket.
+   */
+  const suivisFlaix = useSuiviStore((e) => e.commandesFlaix);
+  const flaix = useMemo(() => {
+    const parId = new Map(suivisFlaix.map((s) => [s.id, s]));
+    return flaixLu.map((c) => {
+      const s = parId.get(c.id);
+      if (!s || s.etat === c.etat) return c;
+      return {
+        ...c,
+        etat: s.etat,
+        prete: s.etat === 'ready',
+        enCours: !['PICKED_UP', 'CANCELLED'].includes(s.status),
+        // La phrase lue chez Flaix décrivait l'état d'avant : on ne la garde pas.
+        etatDetail: null,
+      };
+    });
+  }, [flaixLu, suivisFlaix]);
   // Commande dont on regarde le plan — porte le plan ET le nom de la buvette,
   // pour que le titre dise devant laquelle se presenter.
   const [planAffiche, setPlanAffiche] = useState<Order | null>(null);
@@ -899,7 +922,10 @@ function uiFlaix(c: CommandeFlaix): StatusUi {
     return STATUS_UI.PICKED_UP;
   }
   if (['cancelled', 'canceled', 'refunded', 'failed', 'expired'].includes(etat)) return STATUS_UI.CANCELLED;
-  if (['preparing', 'in_preparation', 'in_progress', 'cooking'].includes(etat)) return STATUS_UI.PREPARING;
+  // `assigned` : le mot de Flaix pour « en préparation » (constaté le 25/11/2026).
+  if (['preparing', 'in_preparation', 'in_progress', 'cooking', 'assigned', 'processing', 'started'].includes(etat)) {
+    return STATUS_UI.PREPARING;
+  }
   if (['queued', 'pending', 'waiting', 'received', 'accepted', 'paid'].includes(etat) || c.enCours) {
     return STATUS_UI.PAID;
   }

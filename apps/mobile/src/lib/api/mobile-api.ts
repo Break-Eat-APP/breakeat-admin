@@ -1059,6 +1059,21 @@ export const apiSuivreCommandeFlaix = (jeton: string) =>
     updatedAt: string;
   }>(`/flaix/commandes/${encodeURIComponent(jeton)}/suivi`, { method: 'POST' });
 
+/**
+ * L'ÉTAT EN DIRECT DES COMMANDES FLAIX SUIVIES (25/11/2026), lu dans la base
+ * BreakEat (aucun appel à Flaix) : pour la flamme et « Mes commandes ».
+ * `status` dans le vocabulaire d'une commande BreakEat ; `etat` celui de Flaix.
+ */
+export interface SuiviFlaix {
+  id: string;
+  numero: string;
+  etat: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export const apiGetMesSuivisFlaix = () => req<SuiviFlaix[]>('/flaix/mes-suivis');
+
 /** La Live Activity d'une commande Flaix a reçu son jeton push. */
 export const apiRegisterLiveActivityFlaix = (params: {
   jeton: string;

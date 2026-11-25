@@ -170,6 +170,23 @@ decrire('suivi des commandes Flaix (base réelle)', () => {
     expect((await suivi(c.id)).termine).toBe(true);
   });
 
+  it('l’état en direct pour la flamme : « assigned » se lit PREPARING, et seulement pour son client', async () => {
+    const svc = service();
+    const c = commande();
+    await svc.surveiller(userId, [c]);
+    etats[c.id] = 'assigned';
+    await svc.tourner(T0);
+
+    const suivis = await svc.mesSuivis(userId, T0);
+    expect(suivis).toEqual([
+      expect.objectContaining({ id: c.id, numero: '1003', etat: 'assigned', status: 'PREPARING' }),
+    ]);
+    const autre = (
+      await s.prisma.user.create({ data: { email: `${unique('autre')}@test.fr`, passwordHash: 'x', displayName: 'Autre' } })
+    ).id;
+    expect(await svc.mesSuivis(autre, T0)).toEqual([]);
+  });
+
   it('suivi depuis l’app : rend l’état de départ, et refuse le jeton d’un autre', async () => {
     const svc = service();
     const c = commande({ etat: 'preparing' });

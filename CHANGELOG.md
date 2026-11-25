@@ -5,6 +5,14 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.62] — 2026-11-25 — Commande Flaix : la flamme s’allume, « en préparation » s’affiche en direct
+
+- **Pourquoi** : essai de Rémi (25/11) : en préparation, rien dans l’app — ni contour de la flamme, ni étape sur le ticket ; tout n’apparaissait qu’à « prête ». Trois causes : l’écran « Mes commandes » ne connaissait pas `assigned` (le mot de Flaix pour « en préparation ») ; la flamme ne regardait que les commandes BreakEat ; la liste Flaix n’est lue qu’à l’ouverture de l’écran (le contrat Flaix interdit de l’interroger en boucle).
+- **Serveur** : `GET /flaix/mes-suivis` : l’état en direct des commandes Flaix suivies du client, lu dans NOTRE base (tenue à jour toutes les 15 s par la surveillance), dans le vocabulaire d’une commande BreakEat. Aucun appel à Flaix.
+- **App** : la flamme relit aussi ces commandes (toutes les 10 s pendant une commande en cours) : son contour s’allume pour une commande Flaix reçue, en préparation, prête. « Mes commandes » pose cet état en direct sur chaque ticket Flaix. `assigned` se lit « En préparation ».
+- **Tests** : serveur 1222/1222 et 228/228 (dont l’état en direct, cloisonné par client), app 182/182.
+- ~ serveur `surveillance-commandes-flaix.service.ts`, `flaix.controller.ts`, test d’intégration ; app `use-etat-pastille.ts`, `suivi.store.ts`, `order-history.screen.tsx`, `mobile-api.ts`
+
 ## [1.7.61] — 2026-11-25 — « Fermer » dans la page Flaix ramène à « Mes commandes »
 
 - **Pourquoi** : demande de Rémi (25/11) : après une commande, le bouton « Fermer » de la page Flaix doit ramener directement à « Mes commandes » de BreakEat.

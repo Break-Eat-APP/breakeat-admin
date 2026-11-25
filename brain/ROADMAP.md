@@ -585,6 +585,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.59 | 2026-11-25 | Un match terminé n’est plus « ouvert » au calendrier (BUG-2026-053) |
 | 1.7.60 | 2026-11-25 | Live Activity Flaix sans jeton dans l’adresse ; « en préparation » s’affiche |
 | 1.7.61 | 2026-11-25 | « Fermer » dans la page Flaix ramène à « Mes commandes » ; journal du suivi Flaix |
+| 1.7.62 | 2026-11-25 | Commande Flaix : flamme et « en préparation » en direct |
 | 1.7.55 | 2026-11-24 | Android : feuille des coordonnées sous la barre de navigation et le clavier (BUG-2026-050) |
 
 ---

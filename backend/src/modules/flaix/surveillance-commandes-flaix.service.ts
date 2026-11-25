@@ -136,6 +136,44 @@ export class SurveillanceCommandesFlaixService {
     return etatLiveActivity(suivi);
   }
 
+  /**
+   * L'ÉTAT EN DIRECT DES COMMANDES FLAIX SUIVIES DE CE CLIENT (25/11/2026).
+   *
+   * Lu dans NOTRE base, que la surveillance tient à jour toutes les 15 s : la
+   * flamme de la barre du bas et « Mes commandes » peuvent le relire toutes les
+   * 10 s sans jamais interroger Flaix en boucle (contrat Flaix, § 7). Les
+   * commandes en cours, et celles terminées depuis moins d'une heure (la flamme
+   * montre « récupérée » une minute).
+   *
+   * Le statut est rendu dans le vocabulaire d'une commande BreakEat (PAID,
+   * PREPARING, READY, PICKED_UP, CANCELLED) : la flamme le lit sans changement.
+   */
+  async mesSuivis(userId: string, maintenant: Date = new Date()) {
+    const suivis = await this.prisma.suiviCommandeFlaix.findMany({
+      where: {
+        userId,
+        OR: [{ termine: false }, { updatedAt: { gt: new Date(maintenant.getTime() - 60 * 60_000) } }],
+      },
+      orderBy: { passeeLe: 'desc' },
+      take: 20,
+    });
+    const VERS_COMMANDE = {
+      CREATED: 'PAID',
+      PREPARING: 'PREPARING',
+      READY: 'READY',
+      COLLECTED: 'PICKED_UP',
+      CANCELLED: 'CANCELLED',
+    } as const;
+    return suivis.map((s) => ({
+      id: s.jeton,
+      numero: s.numero,
+      etat: s.etat,
+      status: VERS_COMMANDE[statutWidget(s.etat)],
+      createdAt: s.passeeLe.toISOString(),
+      updatedAt: s.updatedAt.toISOString(),
+    }));
+  }
+
   /** L'app a démarré une Live Activity pour une commande Flaix qu'elle suit. */
   async enregistrerActivite(params: {
     userId: string;

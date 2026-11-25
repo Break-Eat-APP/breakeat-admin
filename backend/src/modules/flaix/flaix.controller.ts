@@ -61,6 +61,17 @@ export class FlaixController {
   }
 
   /**
+   * GET /api/v1/flaix/mes-suivis
+   * L'état en direct des commandes Flaix suivies du client CONNECTÉ, lu dans
+   * notre base (aucun appel à Flaix) : pour la flamme et « Mes commandes »,
+   * relus toutes les 10 s pendant qu'une commande est en cours (25/11/2026).
+   */
+  @Get('mes-suivis')
+  mesSuivis(@CurrentUser() user: JwtPayload) {
+    return this.surveillance.mesSuivis(user.sub);
+  }
+
+  /**
    * POST /api/v1/flaix/commandes/:jeton/suivi
    * La page de commande Flaix de l'app vient d'afficher ce jeton (fin du
    * paiement, 24/11/2026) : le serveur suit la commande, et rend l'état de
