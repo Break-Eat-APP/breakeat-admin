@@ -290,3 +290,37 @@ export function deciderImport(
   }
   return decisions;
 }
+
+/** Le nom court d'un lieu dans le flux Flaix : jamais de « / » ni d'espace. */
+export const NOM_COURT_LIEU = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
+
+/**
+ * LE NOM COURT D'UN LIEU, À PARTIR DE CE QUE LE CLUB COLLE (25/11/2026).
+ *
+ * Le club colle ce qu'il a sous la main : le nom court (`guillaume-stadium`),
+ * le lien de sa page événements Flaix (`…/l/guillaume-stadium`) ou l'adresse
+ * du flux (`…/api/public/lieux/guillaume-stadium/evenements`). Un lien doit
+ * être un lien FLAIX en https (`verifierLienFlaix`) : on ne va pas lire un
+ * calendrier n'importe où. `null` si rien de reconnaissable.
+ */
+export function nomCourtDuLieu(saisie: string | null | undefined): string | null {
+  const brut = (saisie ?? '').trim();
+  if (!brut) return null;
+  if (NOM_COURT_LIEU.test(brut)) return brut;
+
+  const v = verifierLienFlaix(brut);
+  if (!v.valide) return null;
+  const chemin = new URL(v.url).pathname;
+  const m = /\/lieux\/([^/]+)/.exec(chemin) ?? /^\/l\/([^/]+)/.exec(chemin);
+  const nom = m ? decodeURIComponent(m[1]) : null;
+  return nom && NOM_COURT_LIEU.test(nom) ? nom : null;
+}
+
+/** Ce que l'aperçu dit de chaque événement du flux, pour l'écran du club. */
+export type ActionApercu = 'creer' | 'adopter' | 'modifier' | 'a_jour' | 'ignorer';
+
+export function actionApercu(d: Decision): ActionApercu {
+  if (d.type === 'creer') return 'creer';
+  if (d.type === 'modifier') return d.adopte ? 'adopter' : 'modifier';
+  return d.raison === 'à jour' ? 'a_jour' : 'ignorer';
+}

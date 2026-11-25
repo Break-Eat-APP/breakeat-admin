@@ -191,11 +191,12 @@ export default registerAs('app', () => ({
      * Le flux des matchs Flaix, importé toutes les 10 minutes (24/11/2026,
      * `flaix/import-matchs-flaix.service.ts`). `fluxUrl` = la base, sans le
      * lieu (`…/api/public/lieux`) ; vide = l'adresse de production Flaix.
-     * `fluxImport` : `journal` (défaut, lit et journalise sans écrire),
-     * `actif` (écrit), `arret`.
+     * `fluxImport` : interrupteur GÉNÉRAL de secours (25/11/2026) — vide ou
+     * `actif` : chaque lieu suit son réglage (`Venue.flaixFluxActif`) ;
+     * `journal` : lit sans écrire ; `arret` : coupe tout.
      */
     fluxUrl: process.env.FLAIX_FLUX_URL ?? '',
-    fluxImport: process.env.FLAIX_FLUX_IMPORT ?? 'journal',
+    fluxImport: process.env.FLAIX_FLUX_IMPORT ?? '',
   },
 
   /**

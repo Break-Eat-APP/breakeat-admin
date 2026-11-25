@@ -7,6 +7,7 @@
  */
 import { EventStatus } from '@prisma/client';
 import { ImportMatchsFlaixService } from '../../src/modules/flaix/import-matchs-flaix.service';
+import { EventsService } from '../../src/modules/events/events.service';
 import { monterServices, unique, creerOrganisationComplete } from './banc';
 
 const url = process.env.DATABASE_URL_TEST;
@@ -108,6 +109,71 @@ decrire('import du flux des matchs Flaix (base réelle)', () => {
     await imp.importerLieu(o.venue.id, o.org.id, 'stade-test', flux('annule'), MAINTENANT);
     [ev] = await importes(o.venue.id);
     expect(ev.status).toBe(EventStatus.CANCELLED);
+  });
+
+  describe('le calendrier Flaix réglé par le club (25/11/2026)', () => {
+    let lecture: jest.SpyInstance;
+    beforeEach(() => {
+      lecture = jest.spyOn(global, 'fetch').mockImplementation(async () =>
+        new Response(JSON.stringify(flux()), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+      );
+    });
+    afterEach(() => lecture.mockRestore());
+
+    const LIEN = 'https://commande.flaix.bo.synertic.net/l/stade-test';
+
+    it('l’aperçu montre ce qui serait créé, sans rien écrire', async () => {
+      const o = await lieuFlaix();
+      const a = await service('').apercu(sa, o.org.id, o.venue.id, LIEN, MAINTENANT);
+      expect(a.lieu).toBe('stade-test');
+      expect(a.evenements).toEqual([expect.objectContaining({ cle: '108', nom: 'U2', action: 'creer' })]);
+      expect(await importes(o.venue.id)).toHaveLength(0);
+    });
+
+    it('l’activation garde le nom court et synchronise tout de suite', async () => {
+      const o = await lieuFlaix();
+      const r = await service('').regler(sa, o.org.id, o.venue.id, { lien: LIEN, actif: true }, MAINTENANT);
+      expect(r).toMatchObject({ lieu: 'stade-test', actif: true, bilan: { crees: 1 } });
+      const v = await s.prisma.venue.findUniqueOrThrow({ where: { id: o.venue.id } });
+      expect(v).toMatchObject({ flaixVenueId: 'stade-test', flaixFluxActif: true });
+      expect(await importes(o.venue.id)).toHaveLength(1);
+    });
+
+    it('refuse d’activer un lieu qui ne passe pas par Flaix, et un lien qui n’est pas Flaix', async () => {
+      const o = await creerOrganisationComplete(s.prisma, unique('club'), sa);
+      await expect(service('').regler(sa, o.org.id, o.venue.id, { lien: LIEN, actif: true })).rejects.toThrow(
+        /ne passe pas par Flaix/,
+      );
+      await expect(service('').apercu(sa, o.org.id, o.venue.id, 'https://pirate.fr/l/x')).rejects.toThrow(
+        /non reconnu/,
+      );
+    });
+
+    it('le lieu d’un autre club est introuvable', async () => {
+      const o = await lieuFlaix();
+      const autreAdmin = (
+        await s.prisma.user.create({
+          data: { email: `${unique('admin')}@test.fr`, passwordHash: 'x', displayName: 'Autre club' },
+        })
+      ).id;
+      const autre = await creerOrganisationComplete(s.prisma, unique('club'), autreAdmin);
+      await expect(service('').reglage(autreAdmin, autre.org.id, o.venue.id)).rejects.toThrow(/introuvable/);
+    });
+  });
+
+  it('verrouille le nom, les horaires et le lien d’un événement importé, pas sa visibilité', async () => {
+    const o = await lieuFlaix();
+    await service('actif').importerLieu(o.venue.id, o.org.id, 'stade-test', flux(), MAINTENANT);
+    const [ev] = await importes(o.venue.id);
+    const evenements = new EventsService(s.prisma);
+
+    await expect(evenements.update(o.org.id, ev.id, sa, { name: 'Autre' })).rejects.toThrow(/calendrier Flaix/);
+    await expect(
+      evenements.definirLiensCommandeFlaix(o.org.id, sa, [{ eventId: ev.id, url: 'https://commande.flaix.bo.synertic.net/o/x' }]),
+    ).rejects.toThrow(/calendrier Flaix/);
+    await expect(evenements.update(o.org.id, ev.id, sa, { visibility: 'PRIVATE' as never })).resolves.toMatchObject({
+      visibility: 'PRIVATE',
+    });
   });
 
   it('en mode journal, lit sans rien écrire', async () => {

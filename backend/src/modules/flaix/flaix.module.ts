@@ -5,6 +5,7 @@ import { FlaixController } from './flaix.controller';
 import { CommandesClientFlaixService } from './commandes-client-flaix.service';
 import { SurveillanceCommandesFlaixService } from './surveillance-commandes-flaix.service';
 import { ImportMatchsFlaixService } from './import-matchs-flaix.service';
+import { FluxMatchsFlaixController } from './flux-matchs-flaix.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { LiveActivityModule } from '../live-activity/live-activity.module';
 
@@ -24,7 +25,7 @@ import { LiveActivityModule } from '../live-activity/live-activity.module';
 @Module({
   // LiveActivityModule : l'envoi APNs des Live Activities Flaix (24/11/2026).
   imports: [ConfigModule, NotificationsModule, LiveActivityModule],
-  controllers: [FlaixController],
+  controllers: [FlaixController, FluxMatchsFlaixController],
   providers: [
     FlaixService,
     CommandesClientFlaixService,

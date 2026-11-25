@@ -5,6 +5,15 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.58] — 2026-11-25 — Le calendrier Flaix se règle dans « Événements & configuration »
+
+- **Pourquoi** : demande de Rémi (25/11) : coller le lien du calendrier Flaix là où l’on gère ses événements, VOIR les événements à venir avant tout import, et ne plus dépendre d’une variable Railway ni de la lecture des journaux.
+- **Admin** : bloc « Calendrier Flaix — <lieu> » en tête d’« Événements & configuration », pour chaque lieu passé à Flaix. On colle le lien de la page événements (`…/l/ton-lieu`), l’adresse du flux ou le nom court ; « Voir les événements » montre chaque événement à venir et ce qui se passera (Nouveau · Déjà présent, sera relié · Sera mis à jour · À jour · Ignoré) sans rien écrire ; « Activer la synchronisation » importe tout de suite puis toutes les 10 min ; « Couper » arrête. Badge « Flaix » sur les événements importés ; sur leur fiche, nom, horaires et lien de commande verrouillés (« se modifient dans Flaix »), l’heure d’ouverture affichée ; visibilité, points de retrait, adversaire et affiche restent réglables.
+- **Serveur** : `Venue.flaixFluxActif` (migration `20261125b_flux_flaix_par_lieu`, faux par défaut) : la synchronisation est lieu par lieu. Routes `GET/PUT /organizations/:orgId/venues/:venueId/flux-flaix` et `POST …/apercu` (rôle de gestion du club, lieu du club seulement). Le lien collé est réduit au nom court, et seulement s’il est chez Flaix en https. **Verrou côté serveur** : nom, horaires et lien de commande d’un événement importé sont refusés à la modification, avec la raison. `FLAIX_FLUX_IMPORT` devient un interrupteur général de secours (vide = chaque lieu suit son réglage).
+- **Tests** : 22 tests de règles (dont le lien collé), 9 tests d’intégration de l’import (aperçu sans écriture, activation, cloisonnement entre clubs, verrou) ; suites complètes 1217/1217 et 227/227 ; `next build` de l’admin.
+- **Non vérifié** : le rendu de l’écran dans un navigateur connecté (à regarder par Rémi).
+- + `flux-matchs-flaix.controller.ts`, `dto/flux-flaix.dto.ts`, admin `components/calendrier-flaix.tsx`, migration ; ~ `import-matchs-flaix.service.ts`, `flux-matchs-flaix.ts` (+ spec), `events.service.ts`, `flaix.module.ts`, `app.config.ts`, `.env.example`, `schema.prisma`, admin `events/page.tsx`, `events/[id]/page.tsx`, `admin-client.ts`, test d’intégration de l’import
+
 ## [1.7.57] — 2026-11-25 — La commande ouvre à l’heure de Flaix, match par match
 
 - **Pourquoi** : décision de Rémi du 25/11 (« 08:30, on s’adapte à lui ») : le flux des matchs Flaix donne l’heure d’ouverture de chaque événement (`commande.ouvreLe`), qui peut différer de l’heure réglée sur le lieu (U2 : 08:30 contre 08:00). **Règle métier changée** : l’ouverture n’est plus seulement par lieu. CLAUDE.md § 4 et ADR-0018 mis à jour.

@@ -1,5 +1,7 @@
 import { EventStatus } from '@prisma/client';
 import {
+  actionApercu,
+  nomCourtDuLieu,
   cheminDuLien,
   deciderImport,
   ETIQUETTES_IDENTITE,
@@ -214,5 +216,30 @@ describe('flux des matchs Flaix — décisions', () => {
   it('garde l’adversaire du club quand Flaix n’en donne pas', () => {
     const ev = existant({ flaixEventId: '108', opponentName: 'Lens', posterUrl: flux[0].affiche, flaixOrderUrl: flux[0].lien });
     expect(deciderImport(flux, [ev], MAINTENANT)[0].type).toBe('ignorer');
+  });
+});
+
+describe('flux des matchs Flaix — le lien que le club colle (25/11/2026)', () => {
+  it('reconnaît le nom court, la page événements et l’adresse du flux', () => {
+    expect(nomCourtDuLieu('guillaume-stadium')).toBe('guillaume-stadium');
+    expect(nomCourtDuLieu('https://commande.flaix.bo.synertic.net/l/guillaume-stadium')).toBe('guillaume-stadium');
+    expect(nomCourtDuLieu(' https://flaix.bo.synertic.net/api/public/lieux/stade-velodrome/evenements ')).toBe(
+      'stade-velodrome',
+    );
+  });
+
+  it('refuse un lien hors de Flaix, en http, ou sans lieu', () => {
+    expect(nomCourtDuLieu('https://pirate.fr/l/guillaume-stadium')).toBeNull();
+    expect(nomCourtDuLieu('http://commande.flaix.bo.synertic.net/l/guillaume-stadium')).toBeNull();
+    expect(nomCourtDuLieu('https://commande.flaix.bo.synertic.net/o/u2')).toBeNull();
+    expect(nomCourtDuLieu('deux mots')).toBeNull();
+    expect(nomCourtDuLieu('')).toBeNull();
+  });
+
+  it('traduit chaque décision pour l’écran d’aperçu', () => {
+    const [creer] = deciderImport(lireFluxMatchs(REPONSE)!.evenements, [], MAINTENANT);
+    expect(actionApercu(creer)).toBe('creer');
+    const [adopter] = deciderImport(lireFluxMatchs(REPONSE)!.evenements, [existant({ startAt: new Date('2026-11-25T21:00:00+01:00') })], MAINTENANT);
+    expect(actionApercu(adopter)).toBe('adopter');
   });
 });

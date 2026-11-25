@@ -34,7 +34,12 @@ public, sans donnée client, avec ETag.
    l'emporte sur l'heure du lieu (`fenetre-commande.ts`, serveur ; l'app
    affiche l'heure de chaque match). Nulle chez Flaix : l'heure du lieu
    reprend. *Texte initial du 24/11 : l'heure restait celle du lieu.*
-6. **Mise en service prudente** : `FLAIX_FLUX_IMPORT=journal` par défaut (lit et
+6. **Réglé par le club, lieu par lieu** (25/11/2026) : dans « Événements &
+   configuration », il colle le lien de son calendrier Flaix, voit l'aperçu,
+   puis active (`Venue.flaixFluxActif`). Nom, horaires et lien d'un
+   événement importé sont verrouillés côté serveur. `FLAIX_FLUX_IMPORT`
+   n'est plus qu'un interrupteur général de secours.
+7. *(24/11, remplacé par le point 6)* **Mise en service prudente** : `FLAIX_FLUX_IMPORT=journal` par défaut (lit et
    journalise sans écrire) ; `actif` pour écrire, `arret` pour couper.
 
 ## Pourquoi

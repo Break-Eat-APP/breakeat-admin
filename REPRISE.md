@@ -121,6 +121,12 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   « Retirer de la vente » proposé à Rémi en attendant (à sa décision).
 >   La 1.1.4 Android suivra (même version, ADR-0005) ; les mises à jour à
 >   distance devront viser la 1.1.3 ET la 1.1.4 tant que les deux coexistent.
+> - **1.7.58 (25/11) — LE CALENDRIER FLAIX SE RÈGLE DANS « ÉVÉNEMENTS &
+>   CONFIGURATION »** : coller le lien de la page événements Flaix, « Voir les
+>   événements » (aperçu sans écriture), « Activer la synchronisation » (lieu
+>   par lieu, `Venue.flaixFluxActif`). Plus besoin du champ de l'admin ni de
+>   `FLAIX_FLUX_IMPORT`. Événements importés : badge « Flaix », nom/horaires/
+>   lien verrouillés (serveur). Aucun lieu n'est encore activé.
 > - **EN LIGNE LE 25/11** : serveur `7f92104` (CI verte, `/health` vérifié),
 >   import des matchs en mode journal, suivi Flaix en base. **Mises à jour à
 >   distance publiées le 25/11** (depuis le poste de l'agent, accord de Rémi) :

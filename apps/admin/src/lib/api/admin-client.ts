@@ -378,6 +378,10 @@ export interface AdminEvent {
    * l'événement qui décide lequel s'ouvre.
    */
   flaixOrderUrl?: string | null;
+  /** Importé du calendrier Flaix (25/11/2026) : nom, horaires et lien se modifient dans Flaix. */
+  flaixEventId?: string | null;
+  /** L'heure d'ouverture de la commande donnée par Flaix, ou null. */
+  ordersOpenAt?: string | null;
   /**
    * L'ADVERSAIRE DU MATCH — son nom et son blason.
    *
@@ -560,6 +564,48 @@ export interface LigneMatchFlaix {
  * rend QUE les champs ecrits, pour que l'ecran n'efface pas localement ce
  * qui est toujours en base.
  */
+// ─── Le calendrier Flaix d'un lieu (25/11/2026) ───────────────────────────
+
+export interface LigneApercuFlaix {
+  cle: string;
+  nom: string;
+  debut: string;
+  fin: string;
+  ouvreLe: string | null;
+  affiche: string | null;
+  annule: boolean;
+  /** creer · adopter (match saisi à la main, relié) · modifier · a_jour · ignorer */
+  action: 'creer' | 'adopter' | 'modifier' | 'a_jour' | 'ignorer';
+  eventId: string | null;
+  raison: string | null;
+}
+
+export interface ReglageFluxFlaix {
+  lieu: string | null;
+  actif: boolean;
+  bilan?: { crees: number; modifies: number; erreur?: string };
+}
+
+export async function apiReglageFluxFlaix(orgId: string, venueId: string): Promise<ReglageFluxFlaix> {
+  return req('GET', `/organizations/${orgId}/venues/${venueId}/flux-flaix`);
+}
+
+export async function apiApercuFluxFlaix(
+  orgId: string,
+  venueId: string,
+  lien: string,
+): Promise<{ lieu: string; evenements: LigneApercuFlaix[] }> {
+  return req('POST', `/organizations/${orgId}/venues/${venueId}/flux-flaix/apercu`, { lien });
+}
+
+export async function apiReglerFluxFlaix(
+  orgId: string,
+  venueId: string,
+  params: { lien?: string | null; actif: boolean },
+): Promise<ReglageFluxFlaix> {
+  return req('PUT', `/organizations/${orgId}/venues/${venueId}/flux-flaix`, params);
+}
+
 export async function apiDefinirLiensCommandeFlaix(
   orgId: string,
   liens: {

@@ -599,7 +599,8 @@ export default function EventDetailPage() {
             n'existe pas.
           */}
           {(() => {
-            const fige = event.status === 'ENDED' || event.status === 'CANCELLED';
+            // Importé de Flaix (25/11/2026) : le nom se modifie dans Flaix.
+            const fige = event.status === 'ENDED' || event.status === 'CANCELLED' || Boolean(event.flaixEventId);
             return (
               <button
                 type="button"
@@ -639,7 +640,17 @@ export default function EventDetailPage() {
         souvent (match reporté, horaire confirmé tard par la ligue).
       */}
       <Card title="Date et horaires">
-        {event.status === 'ENDED' || event.status === 'CANCELLED' ? (
+        {event.flaixEventId ? (
+          // IMPORTÉ DU CALENDRIER FLAIX (25/11/2026) : le serveur refuserait
+          // de toute façon, et l'import réécrirait dans les 10 minutes.
+          <p style={{ margin: 0, fontSize: 13.5, color: BRAND.inkSoft, lineHeight: 1.5 }}>
+            Cet événement vient du <strong>calendrier Flaix</strong> : son nom, ses horaires, son lien de commande
+            et l&apos;heure d&apos;ouverture se modifient dans Flaix, et BreakEat suit dans les 10 minutes.
+            {event.ordersOpenAt
+              ? ` La commande ouvre le ${new Date(event.ordersOpenAt).toLocaleString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}.`
+              : ''}
+          </p>
+        ) : event.status === 'ENDED' || event.status === 'CANCELLED' ? (
           <p style={{ margin: 0, fontSize: 13.5, color: BRAND.grey }}>
             Un événement terminé ou annulé ne se modifie plus.
           </p>
@@ -748,6 +759,9 @@ export default function EventDetailPage() {
               events={[event]}
               modeContinu={venue?.operatingMode === 'PERMANENT'}
               portee="evenement"
+              // Le lien d'un événement importé vient de Flaix (25/11/2026) :
+              // seuls l'adversaire, le blason et l'affiche restent ici.
+              avecLien={!event.flaixEventId}
               onSaved={(maj) => {
                 const m = maj.find((x) => x.id === event.id);
                 // `{ ...e, ...m }` : le serveur ne rend QUE ce qu'il a écrit,

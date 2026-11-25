@@ -503,6 +503,12 @@ model Venue {
   /// côté Flaix (utilisé par les appels API Flaix, à brancher au contrat Flaix).
   flaixEnabled           Boolean            @default(false) @map("flaix_enabled")
   flaixVenueId           String?            @map("flaix_venue_id")
+  /// LA SYNCHRONISATION DU CALENDRIER FLAIX, LIEU PAR LIEU (25/11/2026).
+  /// Vraie : toutes les 10 minutes, les événements de ce lieu sont créés, mis
+  /// à jour et annulés depuis le flux des matchs Flaix (`flaixVenueId` = le
+  /// nom court du lieu dans ce flux). Activée par le club depuis
+  /// « Événements & configuration », après avoir vu l'aperçu.
+  flaixFluxActif         Boolean            @default(false) @map("flaix_flux_actif")
   /// L'HEURE À LAQUELLE LE LIEN DE COMMANDE DEVIENT ACCESSIBLE, le jour de
   /// l'événement. Format « HH:MM », dans le fuseau du lieu (`timezone`).
   ///

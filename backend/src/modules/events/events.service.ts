@@ -67,6 +67,11 @@ export type EventWithSuppliers = Event & {
  * Une constante plutôt que deux chaînes : la création et la modification
  * refusent la même chose, et doivent le dire avec les mêmes mots.
  */
+/** Ce que le club lit quand il touche un champ que Flaix gère. */
+export const GERE_DANS_FLAIX =
+  'Cet événement vient du calendrier Flaix : son nom, ses horaires et son lien de commande ' +
+  'se modifient dans Flaix, et BreakEat suit dans les 10 minutes.';
+
 const FIN_AVANT_DEBUT =
   'La fin de l’événement doit être après son début. Vérifie l’heure de fin — ' +
   'pour un match qui finit après minuit, mets la date du lendemain.';
@@ -189,6 +194,14 @@ export class EventsService {
 
     this.guardPermanentContainer(existing);
     this.guardFinalized(existing);
+
+    // UN ÉVÉNEMENT IMPORTÉ DE FLAIX (25/11/2026) : son nom et ses horaires
+    // viennent de Flaix, et l'import les réécrirait dans les 10 minutes. Le
+    // refuser ici, avec la raison, vaut mieux qu'une modification qui
+    // disparaît sans prévenir.
+    if (existing.flaixEventId && (dto.name !== undefined || dto.startAt !== undefined || dto.endAt !== undefined)) {
+      throw new BadRequestException(GERE_DANS_FLAIX);
+    }
 
     const startAt = dto.startAt ? new Date(dto.startAt) : existing.startAt;
     const endAt = dto.endAt ? new Date(dto.endAt) : existing.endAt;
@@ -396,7 +409,7 @@ export class EventsService {
 
     const evenements = await this.prisma.event.findMany({
       where: { id: { in: liens.map((l) => l.eventId) }, organizationId },
-      select: { id: true, name: true, isPermanentContainer: true },
+      select: { id: true, name: true, isPermanentContainer: true, flaixEventId: true },
     });
     const parId = new Map(evenements.map((e) => [e.id, e]));
 
@@ -420,6 +433,10 @@ export class EventsService {
       const data: Prisma.EventUpdateInput = {};
       const retour: LigneMatchFlaix = { id: ev.id };
 
+      // Le lien d'un événement importé de Flaix vient de Flaix (25/11/2026).
+      if (l.url !== undefined && ev.flaixEventId) {
+        throw new BadRequestException(`${ev.name} — ${GERE_DANS_FLAIX}`);
+      }
       if (l.url !== undefined) {
         const saisie = l.url?.trim();
         if (!saisie) {

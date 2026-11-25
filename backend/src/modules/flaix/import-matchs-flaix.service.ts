@@ -1,37 +1,40 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
 import { VenueStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { rattacherLesPointsDeRetrait } from '../../common/helpers/rattachement-buvettes';
-import { deciderImport, lireFluxMatchs, type Decision } from './flux-matchs-flaix';
+import { requireOrgAccess, MANAGE_ROLES } from '../../common/helpers/require-org-access';
+import {
+  actionApercu,
+  deciderImport,
+  lireFluxMatchs,
+  nomCourtDuLieu,
+  NOM_COURT_LIEU,
+  type ActionApercu,
+  type Decision,
+} from './flux-matchs-flaix';
 
 /**
- * L'IMPORT AUTOMATIQUE DU FLUX DES MATCHS FLAIX (24/11/2026).
+ * LE CALENDRIER FLAIX D'UN LIEU, IMPORTÉ TOUTES LES 10 MINUTES (24-25/11/2026).
  *
  * Avant : chaque match était saisi deux fois, dans Flaix puis dans BreakEat.
- * Désormais, toutes les 10 minutes, BreakEat lit le flux de chaque lieu relié
- * à Flaix et crée, met à jour ou annule ses événements. Les règles vivent dans
- * `flux-matchs-flaix.ts` ; ici, on lit et on écrit.
+ * Le club colle le lien de son calendrier Flaix dans « Événements &
+ * configuration », voit l'APERÇU (ce qui serait créé, relié, mis à jour), puis
+ * ACTIVE la synchronisation de ce lieu (`Venue.flaixFluxActif`). Ensuite, toutes
+ * les 10 minutes, les événements se créent, se mettent à jour et s'annulent
+ * seuls. Les règles vivent dans `flux-matchs-flaix.ts` ; ici, on lit et on écrit.
  *
- * QUELS LIEUX : passés à Flaix (`flaixEnabled`) ET dont « l'identifiant du lieu
- * côté Flaix » (`flaixVenueId`, réglé dans l'admin) est rempli — c'est le
- * `<lieu>` de l'adresse du flux, par exemple `guillaume-stadium`.
- *
- * TROIS MODES (`FLAIX_FLUX_IMPORT`), pour l'allumer sans risque :
- *  · `journal` (défaut) : lit le flux et JOURNALISE ce qu'il ferait, sans rien
- *    écrire. À regarder dans les journaux Railway avant d'allumer ;
- *  · `actif` : écrit ;
- *  · `arret` : ne lit rien.
+ * `FLAIX_FLUX_IMPORT` reste un interrupteur GÉNÉRAL de secours : `arret` coupe
+ * tout, `journal` lit sans écrire ; vide ou `actif`, chaque lieu suit son
+ * propre réglage.
  *
  * Une panne de Flaix n'arrête rien : un lieu qui ne répond pas garde ses
- * événements, et sera relu au passage suivant.
+ * événements, et sera relu au passage suivant. ADR-0018.
  */
 
 const INTERVALLE_MS = 10 * 60_000;
 const DELAI_REPONSE_MS = 10_000;
-/** Le `<lieu>` de l'adresse : jamais de « / » ni d'espace. */
-const IDENTIFIANT_LIEU = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
 
 export type ModeImport = 'actif' | 'journal' | 'arret';
 
@@ -41,6 +44,26 @@ export interface BilanLieu {
   crees: number;
   modifies: number;
   erreur?: string;
+}
+
+/** Un événement du flux, tel que l'écran d'aperçu le montre. */
+export interface LigneApercu {
+  cle: string;
+  nom: string;
+  debut: string;
+  fin: string;
+  ouvreLe: string | null;
+  affiche: string | null;
+  annule: boolean;
+  action: ActionApercu;
+  /** L'événement BreakEat concerné (adopté, mis à jour), s'il existe. */
+  eventId: string | null;
+  raison: string | null;
+}
+
+export interface ReglageFluxLieu {
+  lieu: string | null;
+  actif: boolean;
 }
 
 @Injectable()
@@ -56,12 +79,15 @@ export class ImportMatchsFlaixService {
   ) {}
 
   get mode(): ModeImport {
-    const m = (this.config.get<string>('app.flaix.fluxImport') ?? 'journal').toLowerCase();
-    return m === 'actif' || m === 'arret' ? m : 'journal';
+    const m = (this.config.get<string>('app.flaix.fluxImport') || 'actif').toLowerCase();
+    return m === 'journal' || m === 'arret' ? m : 'actif';
   }
 
   private get base(): string {
-    return (this.config.get<string>('app.flaix.fluxUrl') || 'https://flaix.bo.synertic.net/api/public/lieux').replace(/\/+$/, '');
+    return (this.config.get<string>('app.flaix.fluxUrl') || 'https://flaix.bo.synertic.net/api/public/lieux').replace(
+      /\/+$/,
+      '',
+    );
   }
 
   @Interval(INTERVALLE_MS)
@@ -77,21 +103,26 @@ export class ImportMatchsFlaixService {
     }
   }
 
-  /** Tous les lieux reliés, l'un après l'autre. */
+  /** Tous les lieux dont la synchronisation est active, l'un après l'autre. */
   async importerTout(maintenant: Date): Promise<BilanLieu[]> {
     const lieux = await this.prisma.venue.findMany({
-      where: { flaixEnabled: true, flaixVenueId: { not: null }, status: VenueStatus.ACTIVE },
+      where: {
+        flaixEnabled: true,
+        flaixFluxActif: true,
+        flaixVenueId: { not: null },
+        status: VenueStatus.ACTIVE,
+      },
       select: { id: true, organizationId: true, flaixVenueId: true },
     });
     const bilans: BilanLieu[] = [];
     for (const v of lieux) {
       const lieu = (v.flaixVenueId ?? '').trim();
-      if (!IDENTIFIANT_LIEU.test(lieu)) {
+      if (!NOM_COURT_LIEU.test(lieu)) {
         bilans.push({ venueId: v.id, lieu, crees: 0, modifies: 0, erreur: 'identifiant Flaix invalide' });
         continue;
       }
       try {
-        const json = await this.lire(lieu);
+        const json = await this.lire(lieu, true);
         if (json === null) {
           bilans.push({ venueId: v.id, lieu, crees: 0, modifies: 0 });
           continue;
@@ -106,38 +137,31 @@ export class ImportMatchsFlaixService {
     return bilans;
   }
 
-  /** Lit le flux d'un lieu. `null` = inchangé depuis la dernière lecture. */
-  private async lire(lieu: string): Promise<unknown> {
+  /**
+   * Lit le flux d'un lieu. `null` = inchangé depuis la dernière lecture
+   * (seulement avec `avecEtag` : l'aperçu relit toujours tout).
+   */
+  private async lire(lieu: string, avecEtag: boolean): Promise<unknown> {
     const adresse = `${this.base}/${encodeURIComponent(lieu)}/evenements`;
-    const etag = this.etags.get(lieu);
+    const etag = avecEtag ? this.etags.get(lieu) : undefined;
     const res = await fetch(adresse, {
       headers: { Accept: 'application/json', ...(etag ? { 'If-None-Match': etag } : {}) },
       signal: AbortSignal.timeout(DELAI_REPONSE_MS),
       redirect: 'error',
     });
     if (res.status === 304) return null;
+    if (res.status === 404) throw new Error('lieu inconnu chez Flaix (404)');
     if (!res.ok) throw new Error(`réponse ${res.status}`);
     const json: unknown = await res.json();
     const nouveau = res.headers.get('etag');
-    // L'ETag n'est retenu qu'en mode actif : en mode journal, rien n'a été
-    // écrit, et le passage en actif doit relire tout le flux.
-    if (nouveau && this.mode === 'actif') this.etags.set(lieu, nouveau);
+    // L'ETag n'est retenu que si l'on écrit : en mode journal, rien n'a été
+    // écrit, et le retour en actif doit relire tout le flux.
+    if (avecEtag && nouveau && this.mode === 'actif') this.etags.set(lieu, nouveau);
     return json;
   }
 
-  /** Applique (ou journalise) les décisions pour un lieu. */
-  async importerLieu(
-    venueId: string,
-    organizationId: string,
-    lieu: string,
-    json: unknown,
-    maintenant: Date,
-  ): Promise<BilanLieu> {
-    const flux = lireFluxMatchs(json);
-    if (!flux) throw new Error('réponse illisible (pas de liste « evenements »)');
-    for (const raison of flux.ecartes) this.logger.warn(`Flux Flaix « ${lieu} », écarté — ${raison}`);
-
-    const existants = await this.prisma.event.findMany({
+  private evenementsDuLieu(venueId: string) {
+    return this.prisma.event.findMany({
       where: { venueId },
       select: {
         id: true,
@@ -153,7 +177,21 @@ export class ImportMatchsFlaixService {
         ordersOpenAt: true,
       },
     });
-    const decisions = deciderImport(flux.evenements, existants, maintenant);
+  }
+
+  /** Applique (ou journalise) les décisions pour un lieu. */
+  async importerLieu(
+    venueId: string,
+    organizationId: string,
+    lieu: string,
+    json: unknown,
+    maintenant: Date,
+  ): Promise<BilanLieu> {
+    const flux = lireFluxMatchs(json);
+    if (!flux) throw new Error('réponse illisible (pas de liste « evenements »)');
+    for (const raison of flux.ecartes) this.logger.warn(`Flux Flaix « ${lieu} », écarté — ${raison}`);
+
+    const decisions = deciderImport(flux.evenements, await this.evenementsDuLieu(venueId), maintenant);
     const ecrire = this.mode === 'actif';
     const bilan: BilanLieu = { venueId, lieu, crees: 0, modifies: 0 };
 
@@ -184,10 +222,127 @@ export class ImportMatchsFlaixService {
     return bilan;
   }
 
+  // ─── Le réglage du club, depuis « Événements & configuration » ──────────
+
+  private async lieuDuClub(userId: string, orgId: string, venueId: string) {
+    await requireOrgAccess(this.prisma, userId, orgId, MANAGE_ROLES);
+    const venue = await this.prisma.venue.findFirst({
+      where: { id: venueId, organizationId: orgId },
+      select: { id: true, organizationId: true, flaixEnabled: true, flaixVenueId: true, flaixFluxActif: true },
+    });
+    // Un lieu d'un autre club est traité comme inexistant.
+    if (!venue) throw new NotFoundException('Lieu introuvable.');
+    return venue;
+  }
+
+  async reglage(userId: string, orgId: string, venueId: string): Promise<ReglageFluxLieu> {
+    const v = await this.lieuDuClub(userId, orgId, venueId);
+    return { lieu: v.flaixVenueId, actif: v.flaixFluxActif };
+  }
+
+  private nomCourtOuErreur(lien: string): string {
+    const nom = nomCourtDuLieu(lien);
+    if (!nom) {
+      throw new BadRequestException(
+        'Lien Flaix non reconnu. Colle le lien de ta page événements Flaix (…/l/ton-lieu) ou le nom court du lieu.',
+      );
+    }
+    return nom;
+  }
+
+  /** Ce que la synchronisation ferait, SANS rien écrire. */
+  async apercu(
+    userId: string,
+    orgId: string,
+    venueId: string,
+    lien: string,
+    maintenant: Date = new Date(),
+  ): Promise<{ lieu: string; evenements: LigneApercu[] }> {
+    await this.lieuDuClub(userId, orgId, venueId);
+    const lieu = this.nomCourtOuErreur(lien);
+    let json: unknown;
+    try {
+      json = await this.lire(lieu, false);
+    } catch (e: unknown) {
+      throw new BadRequestException(
+        `Le calendrier Flaix de « ${lieu} » n’a pas pu être lu (${e instanceof Error ? e.message : String(e)}).`,
+      );
+    }
+    const flux = lireFluxMatchs(json);
+    if (!flux) throw new BadRequestException('La réponse de Flaix est illisible.');
+    const decisions = deciderImport(flux.evenements, await this.evenementsDuLieu(venueId), maintenant);
+    return {
+      lieu,
+      evenements: flux.evenements.map((f, i) => {
+        const d = decisions[i];
+        return {
+          cle: f.cle,
+          nom: f.nom,
+          debut: f.debut.toISOString(),
+          fin: f.fin.toISOString(),
+          ouvreLe: f.ouvreLe ? f.ouvreLe.toISOString() : null,
+          affiche: f.affiche,
+          annule: f.annule,
+          action: actionApercu(d),
+          eventId: d.type === 'modifier' ? d.eventId : null,
+          raison: d.type === 'ignorer' ? d.raison : null,
+        };
+      }),
+    };
+  }
+
+  /**
+   * Enregistre le lien et active (ou coupe) la synchronisation du lieu. À
+   * l'activation, une première synchronisation part tout de suite : le club
+   * voit ses événements sans attendre dix minutes.
+   */
+  async regler(
+    userId: string,
+    orgId: string,
+    venueId: string,
+    params: { lien?: string | null; actif: boolean },
+    maintenant: Date = new Date(),
+  ): Promise<ReglageFluxLieu & { bilan?: BilanLieu }> {
+    const v = await this.lieuDuClub(userId, orgId, venueId);
+    const saisi = params.lien?.trim();
+    const lieu = saisi ? this.nomCourtOuErreur(saisi) : v.flaixVenueId;
+    if (params.actif && !v.flaixEnabled) {
+      throw new BadRequestException(
+        'Ce lieu ne passe pas par Flaix : il faut d’abord activer « Passer la commande à Flaix ».',
+      );
+    }
+    if (params.actif && !lieu) throw new BadRequestException('Colle d’abord le lien de ton calendrier Flaix.');
+
+    await this.prisma.venue.update({
+      where: { id: venueId },
+      data: { flaixVenueId: lieu, flaixFluxActif: params.actif },
+    });
+    this.logger.log(
+      `Calendrier Flaix « ${lieu ?? '—'} » ${params.actif ? 'activé' : 'coupé'} pour le lieu ${venueId} par ${userId}`,
+    );
+
+    if (!params.actif || !lieu) return { lieu, actif: params.actif };
+    this.etags.delete(lieu);
+    try {
+      const json = await this.lire(lieu, true);
+      const bilan =
+        json === null
+          ? { venueId, lieu, crees: 0, modifies: 0 }
+          : await this.importerLieu(venueId, v.organizationId, lieu, json, maintenant);
+      return { lieu, actif: true, bilan };
+    } catch (e: unknown) {
+      // Le réglage est enregistré ; la synchronisation reprendra au passage suivant.
+      const erreur = e instanceof Error ? e.message : String(e);
+      return { lieu, actif: true, bilan: { venueId, lieu, crees: 0, modifies: 0, erreur } };
+    }
+  }
+
   private journaliser(lieu: string, d: Exclude<Decision, { type: 'ignorer' }>, ecrit: boolean): void {
     const prefixe = ecrit ? 'Flux Flaix' : 'Flux Flaix (journal, rien écrit)';
     if (d.type === 'creer') {
-      this.logger.log(`${prefixe} « ${lieu} » : création de « ${d.data.name} » (${d.cle}) le ${d.data.startAt.toISOString()}`);
+      this.logger.log(
+        `${prefixe} « ${lieu} » : création de « ${d.data.name} » (${d.cle}) le ${d.data.startAt.toISOString()}`,
+      );
     } else {
       this.logger.log(
         `${prefixe} « ${lieu} » : ${d.adopte ? 'adoption' : 'mise à jour'} de ${d.eventId} (${d.cle}) — ${Object.keys(d.data).join(', ')}`,

@@ -16,6 +16,7 @@ import {
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
 import { LiensCommandeFlaix } from '@/components/liens-commande-flaix';
+import { CalendrierFlaix } from '@/components/calendrier-flaix';
 
 // ─── Status badge ─────────────────────────────────────────────────────────────
 
@@ -269,6 +270,14 @@ ${msg}`);
                   🔒 Privé
                 </span>
               )}
+              {ev.flaixEventId ? (
+                <span
+                  title="Importé du calendrier Flaix : nom, horaires et lien se modifient dans Flaix"
+                  style={{ background: '#e0f2fe', color: '#075985', borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700 }}
+                >
+                  Flaix
+                </span>
+              ) : null}
               {ev.flaixReportUrl ? (
                 <span style={{ background: BRAND.bgSubtle, color: BRAND.inkSoft, borderRadius: 999, padding: '2px 9px', fontSize: 11, fontWeight: 700 }}>
                   📊 Rapport Flaix
@@ -386,6 +395,20 @@ ${msg}`);
           {showForm ? '✕ Annuler' : '+ Nouvel événement'}
         </button>
       </div>
+
+      {/* Le calendrier Flaix de chaque lieu passé à Flaix (25/11/2026) : un lien,
+          un aperçu, puis les événements suivent Flaix tout seuls. */}
+      {venues
+        .filter((v) => v.flaixEnabled)
+        .map((v) => (
+          <CalendrierFlaix
+            key={v.id}
+            orgId={orgId}
+            venueId={v.id}
+            venueName={v.name}
+            onSynchronise={() => void loadEvents()}
+          />
+        ))}
 
       {/* Create form */}
       {showForm && (
