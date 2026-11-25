@@ -301,7 +301,12 @@ export class SurveillanceCommandesFlaixService {
     if (!this.expoPush || !this.pushTokens) return 'personne';
     try {
       const jetons = await this.pushTokens.tokensForUsers([s.userId]);
-      if (jetons.length === 0) return 'personne';
+      if (jetons.length === 0) {
+        // Dit, et plus en silence (25/11/2026) : notifications refusées, ou
+        // téléphone jamais enregistré — c'est la première chose à vérifier.
+        this.logger.warn(`Commande Flaix ${s.numero} prête : aucun appareil enregistré pour ce client, notification impossible`);
+        return 'personne';
+      }
       const titre = 'Ta commande est prête';
       const corps =
         (s.numero ? `Commande n° ${s.numero} — ` : '') +
