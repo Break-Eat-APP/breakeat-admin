@@ -90,7 +90,7 @@ export class SurveillanceCommandesFlaixService {
   async surveiller(userId: string, commandes: CommandeFlaix[]): Promise<void> {
     const enCours = commandes.filter((c) => c.enCours && c.id);
     if (enCours.length === 0) return;
-    await this.prisma.suiviCommandeFlaix.createMany({
+    const cree = await this.prisma.suiviCommandeFlaix.createMany({
       data: enCours.map((c) => ({
         jeton: c.id,
         userId,
@@ -103,6 +103,14 @@ export class SurveillanceCommandesFlaixService {
       // Déjà suivie (par ce client) : rien à faire. Un jeton est unique chez Flaix.
       skipDuplicates: true,
     });
+    // Le JOURNAL de chaque étape (25/11/2026) : sans lui, une commande bien
+    // suivie ne laissait aucune trace, et un essai ne se vérifiait pas.
+    // Le numéro seulement — jamais le jeton, qui est un droit d'accès.
+    if (cree.count > 0) {
+      this.logger.log(
+        `Commande Flaix suivie : n° ${enCours.map((c) => c.numero).join(', ')} (${cree.count} nouvelle(s))`,
+      );
+    }
   }
 
   /**
@@ -120,7 +128,11 @@ export class SurveillanceCommandesFlaixService {
     const suivi = await this.prisma.suiviCommandeFlaix.findFirst({ where: { jeton, userId } });
     // Même réponse qu'on ne la connaisse pas ou qu'elle soit à un autre : un
     // jeton ne doit rien révéler de la commande d'un autre client.
-    if (!suivi) throw new NotFoundException('Commande introuvable pour le moment.');
+    if (!suivi) {
+      this.logger.warn(`Suivi demandé par l’app : commande pas (encore) dans la liste Flaix du client (${commandes.length} commande(s) lue(s))`);
+      throw new NotFoundException('Commande introuvable pour le moment.');
+    }
+    this.logger.log(`Suivi demandé par l’app : commande n° ${suivi.numero}, état ${suivi.etat}`);
     return etatLiveActivity(suivi);
   }
 
@@ -133,7 +145,7 @@ export class SurveillanceCommandesFlaixService {
   }): Promise<void> {
     const suivi = await this.prisma.suiviCommandeFlaix.findFirst({
       where: { jeton: params.jeton, userId: params.userId },
-      select: { jeton: true },
+      select: { jeton: true, numero: true },
     });
     if (!suivi) throw new NotFoundException('Commande introuvable.');
     await this.prisma.$transaction(async (tx) => {
@@ -153,6 +165,7 @@ export class SurveillanceCommandesFlaixService {
         },
       });
     });
+    this.logger.log(`Live Activity Flaix enregistrée (commande n° ${suivi.numero})`);
   }
 
   @Interval(INTERVALLE_MS)
@@ -230,7 +243,10 @@ export class SurveillanceCommandesFlaixService {
         },
       });
 
-      if (etat !== s.etat) await this.pousserActivites({ ...s, etat }, maintenant);
+      if (etat !== s.etat) {
+        this.logger.log(`Commande Flaix n° ${s.numero} : ${s.etat} → ${etat}`);
+        await this.pousserActivites({ ...s, etat }, maintenant);
+      }
       if (fini) await this.fermerActivites(s.jeton);
     } catch (e: unknown) {
       this.logger.error(`Surveillance Flaix : commande ${s.numero} non vérifiée (${String(e)})`);
@@ -246,6 +262,7 @@ export class SurveillanceCommandesFlaixService {
     if (activites.length === 0) return;
 
     const etat = etatLiveActivity(s, maintenant);
+    this.logger.log(`Live Activity Flaix n° ${s.numero} → ${etat.status} (${activites.length} activité(s))`);
     const finale = etat.status === 'COLLECTED' || etat.status === 'CANCELLED';
     for (const a of activites) {
       const r = await this.apns.sendLiveActivityUpdate(
