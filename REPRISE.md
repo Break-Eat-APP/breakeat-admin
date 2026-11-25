@@ -126,6 +126,12 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   `queued → assigned` et Live Activity → PREPARING. **Vocabulaire du suivi
 >   `/status` de Flaix** : `queued` (en attente), `assigned` (en préparation),
 >   `ready` (prête), `delivered` (remise).
+>   **Cycle complet vérifié** : `assigned → ready` (Live Activity READY),
+>   `ready → delivered` (Live Activity COLLECTED, fermée). Reste à confirmer :
+>   la notification « prête » (ligne de journal absente ; journal du cas
+>   « aucun appareil » ajouté, `abc58ed`). **Mises à jour du 25/11 au soir** :
+>   `1.1.4 · ios` (`8f79f294`) et `1.1.3 · android` (`1123caa9`), commit
+>   `abc58ed` — bouton « Fermer » → « Mes commandes ».
 > - **1.7.61 (25/11)** : « Fermer » dans la page Flaix → « Mes commandes »
 >   (`window.close()` intercepté, ou message `flaix_fermer` du développeur
 >   Flaix) ; journal de chaque étape du suivi Flaix (rechercher « Flaix » dans
