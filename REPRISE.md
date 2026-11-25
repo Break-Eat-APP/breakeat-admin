@@ -132,6 +132,10 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   « aucun appareil » ajouté, `abc58ed`). **Mises à jour du 25/11 au soir** :
 >   `1.1.4 · ios` (`8f79f294`) et `1.1.3 · android` (`1123caa9`), commit
 >   `abc58ed` — bouton « Fermer » → « Mes commandes ».
+>   **1.7.62 publiée le 25/11** (`be3c812`) : `1.1.4 · ios` (`300a9683`),
+>   `1.1.3 · android` (`6c7e319d`) — flamme et « en préparation » en direct.
+>   La Live Activity ne se voit pas app ouverte : écran verrouillé ou
+>   Dynamic Island hors de l’app.
 > - **1.7.61 (25/11)** : « Fermer » dans la page Flaix → « Mes commandes »
 >   (`window.close()` intercepté, ou message `flaix_fermer` du développeur
 >   Flaix) ; journal de chaque étape du suivi Flaix (rechercher « Flaix » dans
