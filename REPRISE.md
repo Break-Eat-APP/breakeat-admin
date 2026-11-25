@@ -127,7 +127,8 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   `window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'flaix_commande', jeton }))`
 >   à la confirmation du paiement (démarrage immédiat). Le mot de Flaix pour
 >   « en préparation » dans `/status` reste inconnu : il sera journalisé
->   (« État de suivi Flaix inconnu »). À publier par mise à jour à distance.
+>   (« État de suivi Flaix inconnu »). **Publié le 25/11** : `1.1.4 · ios`
+>   (groupe `bbbaaf4c`) et `1.1.3 · android` (groupe `4051c269`), commit `1459a76`.
 > - **1.7.58 (25/11) — LE CALENDRIER FLAIX SE RÈGLE DANS « ÉVÉNEMENTS &
 >   CONFIGURATION »** : coller le lien de la page événements Flaix, « Voir les
 >   événements » (aperçu sans écriture), « Activer la synchronisation » (lieu
