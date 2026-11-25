@@ -5,6 +5,13 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.61] — 2026-11-25 — « Fermer » dans la page Flaix ramène à « Mes commandes »
+
+- **Pourquoi** : demande de Rémi (25/11) : après une commande, le bouton « Fermer » de la page Flaix doit ramener directement à « Mes commandes » de BreakEat.
+- **App** : `window.close()` de la page Flaix est remplacé, avant le chargement, par un message à l’app (`flaix_fermer`), qui ouvre « Mes commandes ». Le développeur Flaix peut aussi envoyer ce message lui-même si son bouton ne passe pas par `window.close()`. Quitter la page relit la liste : la commande passée est suivie et sa Live Activity démarre. Non vérifié : ce que fait réellement le bouton de Flaix.
+- **Serveur** (`3456700`) : journal de chaque étape du suivi des commandes Flaix (suivie, demandée par l’app, changement d’état, Live Activity enregistrée et poussée), numéro seulement.
+- ~ app `relais-flaix.native.tsx`, `suivi-commande-flaix.ts` (+ test) ; serveur `surveillance-commandes-flaix.service.ts`
+
 ## [1.7.60] — 2026-11-25 — Live Activity Flaix : la commande se reconnaît sans jeton ; « en préparation » s’affiche
 
 - **Pourquoi** : essai de Rémi au Mans (25/11) : aucune Live Activity, et l’étape « en préparation » absente du ticket. Après le paiement, Flaix reste sur l’adresse du match (`…/o/lemans-fc-vs-lyon`) : l’app ne pouvait pas savoir quelle commande venait d’être passée (BUG-2026-054). Et le ticket suivait le vocabulaire non documenté du suivi `/status` (BUG-2026-055).

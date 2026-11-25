@@ -121,6 +121,10 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   « Retirer de la vente » proposé à Rémi en attendant (à sa décision).
 >   La 1.1.4 Android suivra (même version, ADR-0005) ; les mises à jour à
 >   distance devront viser la 1.1.3 ET la 1.1.4 tant que les deux coexistent.
+> - **1.7.61 (25/11)** : « Fermer » dans la page Flaix → « Mes commandes »
+>   (`window.close()` intercepté, ou message `flaix_fermer` du développeur
+>   Flaix) ; journal de chaque étape du suivi Flaix (rechercher « Flaix » dans
+>   les Deploy Logs de breakeat-admin).
 > - **1.7.60 (25/11) — LIVE ACTIVITY FLAIX, 2e ESSAI** : Flaix reste sur
 >   `…/o/<match>` après paiement (pas de jeton). L'app repère la commande en
 >   relisant la liste ; **demandé au développeur Flaix** : une ligne

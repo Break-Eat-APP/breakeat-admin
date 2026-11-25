@@ -13,6 +13,7 @@ import {
   idActiviteFlaix,
   jetonDeLActivite,
   jetonDeLAdresse,
+  estMessageFermer,
   jetonDuMessage,
   nouvellesCommandes,
   suivreCommandeFlaix,
@@ -113,5 +114,14 @@ describe('reconnaître la commande sans jeton dans l’adresse (25/11/2026)', ()
       c('finie', '2026-11-25T18:16:00+01:00', false),
     ];
     expect(nouvellesCommandes(liste, new Set(['deja-connue']), OUVERTE)).toEqual(['nouvelle']);
+  });
+});
+
+describe('« Fermer » dans la page Flaix (25/11/2026)', () => {
+  it('reconnaît le message de fermeture, et seulement lui', () => {
+    expect(estMessageFermer(JSON.stringify({ type: 'flaix_fermer' }))).toBe(true);
+    expect(estMessageFermer(JSON.stringify({ type: 'flaix_commande', jeton: JETON }))).toBe(false);
+    expect(estMessageFermer('fermer')).toBe(false);
+    expect(estMessageFermer(null)).toBe(false);
   });
 });

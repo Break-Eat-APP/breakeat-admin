@@ -50,6 +50,31 @@ export function jetonDuMessage(data: string | null | undefined): string | null {
   }
 }
 
+/**
+ * « FERMER » DANS LA PAGE FLAIX → « MES COMMANDES » (demande de Rémi, 25/11/2026).
+ *
+ * Le bouton est dans la page Flaix ; on ne sait pas ce qu'il fait. Deux voies :
+ * la page appelle `window.close()`, que l'app remplace (`INTERCEPTION_FERMETURE`)
+ * par ce message ; ou le développeur Flaix l'envoie lui-même.
+ */
+export function estMessageFermer(data: string | null | undefined): boolean {
+  if (!data) return false;
+  try {
+    return (JSON.parse(data) as { type?: unknown }).type === 'flaix_fermer';
+  } catch {
+    return false;
+  }
+}
+
+/** Injecté avant la page : `window.close()` prévient l'app au lieu de ne rien faire. */
+export const INTERCEPTION_FERMETURE = `(function () {
+  var envoyer = function () {
+    if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'flaix_fermer' }));
+  };
+  try { window.close = envoyer; } catch (e) {}
+})();
+true;`;
+
 /** La marge sur l'heure de commande : Flaix la donne à la minute près. */
 export const MARGE_HEURE_MS = 2 * 60_000;
 

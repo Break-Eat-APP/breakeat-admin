@@ -10,7 +10,14 @@ import { estChezFlaix, hoteHorsFlaix, navigationAutorisee } from '@lib/navigatio
 import { creerSignalCommandeFlaix } from '@lib/signal-commande-flaix';
 import { apiGetMesCommandesFlaix, apiSuivreCommandeFlaix } from '@lib/api/mobile-api';
 import { useAuthStore } from '@store/auth.store';
-import { jetonDeLAdresse, jetonDuMessage, nouvellesCommandes } from '@lib/suivi-commande-flaix';
+import {
+  INTERCEPTION_FERMETURE,
+  estMessageFermer,
+  jetonDeLAdresse,
+  jetonDuMessage,
+  nouvellesCommandes,
+} from '@lib/suivi-commande-flaix';
+import { navigateTo } from '@navigation/nav-ref';
 import { suivreCommandeFlaixDansLApp } from '@lib/live-activity-tracking';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -102,6 +109,13 @@ export function RelaisFlaix({ url, titre }: { url: string; titre: string }) {
   };
 
   const surMessage = (e: WebViewMessageEvent) => {
+    // « Fermer » dans la page Flaix : direction « Mes commandes » (Rémi,
+    // 25/11/2026). Quitter cet écran relit la liste : la commande qui vient
+    // d'être passée y est suivie, et sa Live Activity démarre.
+    if (estMessageFermer(e.nativeEvent.data)) {
+      navigateTo('Commandes');
+      return;
+    }
     const jeton = jetonDuMessage(e.nativeEvent.data);
     if (jeton) suivreJeton(jeton);
   };
@@ -197,6 +211,7 @@ export function RelaisFlaix({ url, titre }: { url: string; titre: string }) {
         }}
         onShouldStartLoadWithRequest={resteChezFlaix}
         onMessage={surMessage}
+        injectedJavaScriptBeforeContentLoaded={INTERCEPTION_FERMETURE}
         onNavigationStateChange={(nav: WebViewNavigation) => {
           setAilleurs(hoteHorsFlaix(nav.url));
           if (!nav.loading && estChezFlaix(nav.url)) signal.planifier();
