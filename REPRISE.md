@@ -121,6 +121,15 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   « Retirer de la vente » proposé à Rémi en attendant (à sa décision).
 >   La 1.1.4 Android suivra (même version, ADR-0005) ; les mises à jour à
 >   distance devront viser la 1.1.3 ET la 1.1.4 tant que les deux coexistent.
+> - **EN LIGNE LE 25/11** : serveur `7f92104` (CI verte, `/health` vérifié),
+>   import des matchs en mode journal, suivi Flaix en base. **Mises à jour à
+>   distance publiées le 25/11** (depuis le poste de l'agent, accord de Rémi) :
+>   `1.1.4 · ios` (groupe `9609ce27`) et `1.1.3 · android` (groupe
+>   `a47dbe3e`), commit `7f92104`. Google Play : la 1.1.3 code 8 publiée par
+>   Rémi ; aucune build Android 1.1.4 n'existe encore. **Décision de Rémi
+>   (25/11) : l'heure d'ouverture de la commande vient de Flaix, par
+>   événement (`commande.ouvreLe`)** — à coder (fenêtre de commande serveur
+>   ET app), ADR-0018 à mettre à jour.
 > - **1.7.56 (24/11) — LIVE ACTIVITY DES COMMANDES FLAIX + suivi en base**,
 >   construit et testé, COMMITÉ EN LOCAL avec l'import des matchs (migrations
 >   `20261124_evenement_flaix` et `20261124b_suivi_commandes_flaix`) : à
