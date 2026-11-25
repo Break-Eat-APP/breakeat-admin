@@ -1,12 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
-import type { ShouldStartLoadRequest, WebViewNavigation } from 'react-native-webview/lib/WebViewTypes';
+import type {
+  ShouldStartLoadRequest,
+  WebViewMessageEvent,
+  WebViewNavigation,
+} from 'react-native-webview/lib/WebViewTypes';
 import { estChezFlaix, hoteHorsFlaix, navigationAutorisee } from '@lib/navigation-flaix';
 import { creerSignalCommandeFlaix } from '@lib/signal-commande-flaix';
-import { apiGetMesCommandesFlaix } from '@lib/api/mobile-api';
+import { apiGetMesCommandesFlaix, apiSuivreCommandeFlaix } from '@lib/api/mobile-api';
 import { useAuthStore } from '@store/auth.store';
-import { jetonDeLAdresse } from '@lib/suivi-commande-flaix';
+import { jetonDeLAdresse, jetonDuMessage, nouvellesCommandes } from '@lib/suivi-commande-flaix';
 import { suivreCommandeFlaixDansLApp } from '@lib/live-activity-tracking';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -57,30 +61,85 @@ export function RelaisFlaix({ url, titre }: { url: string; titre: string }) {
    * quand on la ferme, et quand l'app passe en arrière-plan — le client qui
    * range son téléphone juste après avoir payé. Voir `lib/signal-commande-flaix.ts`.
    */
-  const signal = useMemo(
-    () =>
-      creerSignalCommandeFlaix({
-        lire: apiGetMesCommandesFlaix,
-        estConnecte: () => Boolean(useAuthStore.getState().token),
-      }),
-    [],
-  );
   /**
-   * LA COMMANDE PAYÉE, RECONNUE À SON JETON (24/11/2026). Après le paiement,
-   * Flaix affiche une adresse en `…/orders/<jeton>` : la commande est suivie
-   * (notification « prête ») et sa Live Activity démarre. Une fois par jeton.
+   * LA COMMANDE PAYÉE, ET SA LIVE ACTIVITY (24-25/11/2026).
+   *
+   * Flaix reste sur l'adresse du match après le paiement (constaté par Rémi le
+   * 25/11 : `…/o/lemans-fc-vs-lyon`) : l'adresse ne dit pas quelle commande
+   * vient d'être passée. Trois façons de la reconnaître, une seule suite :
+   *  1. le MESSAGE de la page Flaix (`flaix_commande`), si son développeur
+   *     l'ajoute — immédiat ;
+   *  2. une adresse en `…/orders/<jeton>`, si Flaix y passe un jour ;
+   *  3. sinon, la LISTE du client relue quand la page se pose, quand on la
+   *     quitte, et au retour dans l'app : toute commande en cours apparue
+   *     depuis l'ouverture de la page est la sienne.
+   *
+   * PAS DE DOUBLON : une commande n'est suivie qu'une fois ici (`suivies`),
+   * `suivreCommandeFlaix` ne démarre pas une activité qui existe déjà, et le
+   * serveur ignore une commande déjà suivie.
+   *
+   * iOS ne démarre une Live Activity que l'app À L'ÉCRAN : en arrière-plan, on
+   * fait seulement suivre la commande au serveur (la notification « prête »
+   * partira), et l'activité démarre au retour dans l'app.
    */
-  const jetonsVus = useRef(new Set<string>());
-  const surAdresse = (adresse: string) => {
-    const jeton = jetonDeLAdresse(adresse);
-    if (!jeton || jetonsVus.current.has(jeton) || !useAuthStore.getState().token) return;
-    jetonsVus.current.add(jeton);
+  const ouverteLe = useRef(Date.now());
+  const connues = useRef<Set<string> | null>(null);
+  const suivies = useRef(new Set<string>());
+
+  const suivreJeton = (jeton: string) => {
+    if (suivies.current.has(jeton) || !useAuthStore.getState().token) return;
+    if (AppState.currentState !== 'active') {
+      void apiSuivreCommandeFlaix(jeton).catch(() => undefined);
+      return;
+    }
+    suivies.current.add(jeton);
     void suivreCommandeFlaixDansLApp(jeton);
   };
 
+  const surAdresse = (adresse: string) => {
+    const jeton = jetonDeLAdresse(adresse);
+    if (jeton) suivreJeton(jeton);
+  };
+
+  const surMessage = (e: WebViewMessageEvent) => {
+    const jeton = jetonDuMessage(e.nativeEvent.data);
+    if (jeton) suivreJeton(jeton);
+  };
+
+  /** Relit la liste (ce qui la met sous surveillance) et repère la nouvelle commande. */
+  const lireEtReperer = async () => {
+    const r = await apiGetMesCommandesFlaix();
+    for (const jeton of nouvellesCommandes(r.commandes ?? [], connues.current ?? new Set(), ouverteLe.current)) {
+      suivreJeton(jeton);
+    }
+  };
+
+  const signal = useMemo(
+    () =>
+      creerSignalCommandeFlaix({
+        lire: () => lireEtReperer(),
+        estConnecte: () => Boolean(useAuthStore.getState().token),
+      }),
+    // `lireEtReperer` ne lit que des références : une seule création suffit.
+    [],
+  );
+
+  // Les commandes que le client a DÉJÀ à l'ouverture de la page : elles ne sont
+  // pas « la nouvelle ».
   useEffect(() => {
-    const abonnement = AppState.addEventListener('change', (etat) => {
-      if (etat !== 'active') void signal.maintenant();
+    if (!useAuthStore.getState().token) return;
+    void apiGetMesCommandesFlaix()
+      .then((r) => {
+        connues.current = new Set((r.commandes ?? []).map((c) => c.id));
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    // Au départ ET au retour : au retour, l'app est à l'écran, et c'est là
+    // seulement qu'iOS laisse démarrer la Live Activity.
+    const abonnement = AppState.addEventListener('change', () => {
+      void signal.maintenant();
     });
     return () => {
       abonnement.remove();
@@ -137,6 +196,7 @@ export function RelaisFlaix({ url, titre }: { url: string; titre: string }) {
           setErreur(true);
         }}
         onShouldStartLoadWithRequest={resteChezFlaix}
+        onMessage={surMessage}
         onNavigationStateChange={(nav: WebViewNavigation) => {
           setAilleurs(hoteHorsFlaix(nav.url));
           if (!nav.loading && estChezFlaix(nav.url)) signal.planifier();

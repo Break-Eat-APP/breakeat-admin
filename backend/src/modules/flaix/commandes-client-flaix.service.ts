@@ -188,15 +188,43 @@ export function phraseEtat(etat: string): string | null {
   if (['queued', 'pending', 'waiting', 'received', 'accepted', 'paid'].includes(etat)) {
     return 'Ta commande est dans la file, on la prépare bientôt.';
   }
-  if (['preparing', 'in_preparation', 'in_progress', 'cooking'].includes(etat)) {
+  if (PREPARATION.includes(etat)) {
     return 'Ta commande est en préparation.';
   }
   return null;
 }
 
+/** Les mots de Flaix pour « en préparation » (le suivi n'est pas documenté). */
+const PREPARATION = ['preparing', 'in_preparation', 'in_progress', 'cooking', 'assigned', 'processing', 'started'];
+/** Ce que le suivi Flaix sait dire, et que BreakEat comprend. */
+const ETATS_CONNUS = new Set([
+  'queued', 'pending', 'waiting', 'received', 'accepted', 'paid', 'ready', ...PREPARATION,
+]);
+
+/**
+ * L'AVANCEMENT D'UNE COMMANDE, pour comparer deux sources (25/11/2026).
+ *
+ * La liste Flaix parle le vocabulaire du CONTRAT (`en_preparation`…, § 6) ;
+ * le suivi en direct (`/status`) a le sien, qui n'est pas documenté. Le
+ * ticket affichait l'état du suivi : un mot inconnu pour « en préparation »
+ * laissait la commande sur « reçue » (Rémi, 25/11). On garde désormais
+ * l'étape LA PLUS AVANCÉE des deux. -1 : inconnu, ou annulée.
+ */
+export function rangEtat(etat: string | null | undefined): number {
+  const e = (etat ?? '').toLowerCase();
+  if (!e) return -1;
+  if (ETATS_TERMINAUX.has(e)) return ['cancelled', 'canceled', 'refunded', 'failed', 'expired'].includes(e) ? -1 : 3;
+  if (estPrete(e)) return 2;
+  if (PREPARATION.includes(e)) return 1;
+  if (ETATS_CONNUS.has(e)) return 0;
+  return -1;
+}
+
 @Injectable()
 export class CommandesClientFlaixService {
   private readonly logger = new Logger(CommandesClientFlaixService.name);
+  /** Les états de suivi inconnus déjà signalés : une ligne de journal par mot. */
+  private readonly etatsInconnus = new Set<string>();
   private readonly origine: string;
   private readonly cle: string;
   private readonly cache = new Map<string, { a: number; valeur: CommandeFlaix[] }>();
@@ -327,6 +355,12 @@ export class CommandesClientFlaixService {
       const s = (await res.json()) as SuiviBrut;
       const etat = texte(s.status);
       if (!etat) return null;
+      // Un mot que BreakEat ne connaît pas : on le NOTE, une fois, pour l'ajouter
+      // (le vocabulaire du suivi Flaix n'est pas documenté, 25/11/2026).
+      if (!ETATS_CONNUS.has(etat) && !ETATS_TERMINAUX.has(etat) && !this.etatsInconnus.has(etat)) {
+        this.etatsInconnus.add(etat);
+        this.logger.warn(`État de suivi Flaix inconnu : « ${etat} » (${texte(s.status_label) ?? 'sans libellé'})`);
+      }
       return {
         etat,
         libelle: texte(s.status_label),
@@ -343,10 +377,14 @@ export class CommandesClientFlaixService {
   private async lireSuivi(c: CommandeFlaix): Promise<void> {
     const e = await this.lireEtat(c.id);
     if (!e) return;
+    c.retraitAffiche = e.retraitAffiche;
+    // La liste dit déjà plus loin (ex. « en_preparation » quand le suivi dit un
+    // mot inconnu) : on garde l'étape de la liste (25/11/2026).
+    // Une fin (récupérée, ANNULÉE…) dite par le suivi l'emporte toujours.
+    if (!estTerminal(e.etat) && rangEtat(c.etat) > rangEtat(e.etat)) return;
     c.etat = e.etat;
     c.etatLibelle = libelleClient(e.etat, e.libelle) ?? c.etatLibelle;
     c.etatDetail = e.detail;
-    c.retraitAffiche = e.retraitAffiche;
     c.prete = estPrete(e.etat);
     c.enCours = !estTerminal(e.etat);
   }

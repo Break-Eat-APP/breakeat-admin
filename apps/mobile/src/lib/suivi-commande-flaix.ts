@@ -29,6 +29,52 @@ export function jetonDeLAdresse(url: string | null | undefined): string | null {
 
 export const idActiviteFlaix = (jeton: string) => `${PREFIXE_FLAIX}${jeton}`;
 
+const FORME_JETON = /^[A-Za-z0-9_-]{8,128}$/;
+
+/**
+ * LE MESSAGE DE LA PAGE FLAIX (25/11/2026). Flaix reste sur l'adresse du match
+ * après le paiement (constaté par Rémi : `…/o/lemans-fc-vs-lyon`) : l'adresse
+ * ne dit pas QUELLE commande vient d'être passée. Le développeur Flaix peut
+ * l'envoyer à l'app :
+ *   window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'flaix_commande', jeton }))
+ * Rend le jeton, ou null pour tout autre message.
+ */
+export function jetonDuMessage(data: string | null | undefined): string | null {
+  if (!data) return null;
+  try {
+    const m = JSON.parse(data) as { type?: unknown; jeton?: unknown };
+    if (m.type !== 'flaix_commande' || typeof m.jeton !== 'string') return null;
+    return FORME_JETON.test(m.jeton) ? m.jeton : null;
+  } catch {
+    return null;
+  }
+}
+
+/** La marge sur l'heure de commande : Flaix la donne à la minute près. */
+export const MARGE_HEURE_MS = 2 * 60_000;
+
+/**
+ * LES COMMANDES PASSÉES PENDANT QUE LA PAGE ÉTAIT OUVERTE (25/11/2026).
+ *
+ * Sans jeton dans l'adresse ni message de Flaix, l'app reconnaît la nouvelle
+ * commande en relisant la liste du client : en cours, absente de la liste lue
+ * à l'ouverture de la page, et passée depuis (à 2 min près, Flaix arrondit à
+ * la minute).
+ */
+export function nouvellesCommandes(
+  commandes: Array<{ id: string; enCours: boolean; passeeLe: string }>,
+  connues: ReadonlySet<string>,
+  ouverteLe: number,
+): string[] {
+  return commandes
+    .filter((c) => c.enCours && !connues.has(c.id))
+    .filter((c) => {
+      const t = new Date(c.passeeLe).getTime();
+      return !Number.isNaN(t) && t >= ouverteLe - MARGE_HEURE_MS;
+    })
+    .map((c) => c.id);
+}
+
 export function jetonDeLActivite(orderId: string): string | null {
   return orderId.startsWith(PREFIXE_FLAIX) ? orderId.slice(PREFIXE_FLAIX.length) || null : null;
 }

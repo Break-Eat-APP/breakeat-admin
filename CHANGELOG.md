@@ -5,6 +5,14 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.60] — 2026-11-25 — Live Activity Flaix : la commande se reconnaît sans jeton ; « en préparation » s’affiche
+
+- **Pourquoi** : essai de Rémi au Mans (25/11) : aucune Live Activity, et l’étape « en préparation » absente du ticket. Après le paiement, Flaix reste sur l’adresse du match (`…/o/lemans-fc-vs-lyon`) : l’app ne pouvait pas savoir quelle commande venait d’être passée (BUG-2026-054). Et le ticket suivait le vocabulaire non documenté du suivi `/status` (BUG-2026-055).
+- **App** : la page Flaix note les commandes du client à son ouverture ; quand elle se pose, quand on la quitte et au retour dans l’app, elle relit la liste : toute commande en cours apparue depuis est la sienne, suivie par le serveur, et sa Live Activity démarre (seulement l’app à l’écran, comme l’exige iOS ; en arrière-plan, seule la surveillance part). Elle accepte aussi le message `flaix_commande` de la page Flaix, immédiat, si le développeur Flaix l’ajoute. Sans doublon : une commande suivie une fois, une activité jamais démarrée deux fois, le serveur ignore une commande déjà suivie.
+- **Serveur** : l’étape d’une commande Flaix est la plus avancée entre la liste (contrat, `en_preparation`) et le suivi ; une fin dite par le suivi (récupérée, annulée) l’emporte toujours. Un état de suivi inconnu est journalisé une fois (« État de suivi Flaix inconnu »). La Live Activity reconnaît `assigned`, `processing`, `started` comme « en préparation ».
+- **Tests** : serveur 1222/1222, app 181/181. **Non vérifié** sur un vrai iPhone avec une commande en préparation.
+- ~ app `relais-flaix.native.tsx`, `suivi-commande-flaix.ts` (+ test) ; serveur `commandes-client-flaix.service.ts` (+ spec), `etat-widget-flaix.ts`
+
 ## [1.7.59] — 2026-11-25 — Un match terminé n’est plus « ouvert » au calendrier
 
 - **Pourquoi** : constaté par Rémi aux Spartiates (BUG-2026-053) : le match du 22/11, ouvert à la main, était cerclé « commande ouverte » trois jours après, et « Commander » répondait « pas ouverte ».

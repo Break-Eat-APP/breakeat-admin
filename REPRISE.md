@@ -121,6 +121,13 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   « Retirer de la vente » proposé à Rémi en attendant (à sa décision).
 >   La 1.1.4 Android suivra (même version, ADR-0005) ; les mises à jour à
 >   distance devront viser la 1.1.3 ET la 1.1.4 tant que les deux coexistent.
+> - **1.7.60 (25/11) — LIVE ACTIVITY FLAIX, 2e ESSAI** : Flaix reste sur
+>   `…/o/<match>` après paiement (pas de jeton). L'app repère la commande en
+>   relisant la liste ; **demandé au développeur Flaix** : une ligne
+>   `window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'flaix_commande', jeton }))`
+>   à la confirmation du paiement (démarrage immédiat). Le mot de Flaix pour
+>   « en préparation » dans `/status` reste inconnu : il sera journalisé
+>   (« État de suivi Flaix inconnu »). À publier par mise à jour à distance.
 > - **1.7.58 (25/11) — LE CALENDRIER FLAIX SE RÈGLE DANS « ÉVÉNEMENTS &
 >   CONFIGURATION »** : coller le lien de la page événements Flaix, « Voir les
 >   événements » (aperçu sans écriture), « Activer la synchronisation » (lieu

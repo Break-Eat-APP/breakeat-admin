@@ -1,5 +1,5 @@
 import { ConfigService } from '@nestjs/config';
-import { CommandesClientFlaixService, phraseEtat } from './commandes-client-flaix.service';
+import { CommandesClientFlaixService, phraseEtat, rangEtat } from './commandes-client-flaix.service';
 
 const ORIGINE = 'https://commande.flaix.test';
 
@@ -135,6 +135,30 @@ describe('CommandesClientFlaixService', () => {
     expect(r.commandes[0]).toMatchObject({ enCours: false, etat: 'delivered', etatLibelle: 'Récupérée' });
   });
 
+  it('« en_preparation » dans la liste l’emporte sur un mot de suivi inconnu (25/11/2026)', async () => {
+    fetchMock
+      .mockResolvedValueOnce(reponse({ commandes: [commandeBrute({ statut: 'en_preparation' })] }))
+      .mockResolvedValueOnce(reponse({ status: 'mystere', status_label: 'En cuisine', pickup_str: '20:20' }));
+    const r = await service().pourEmail('client@exemple.fr', MAINTENANT);
+    expect(r.commandes[0]).toMatchObject({ etat: 'preparing', etatLibelle: 'En préparation', retraitAffiche: '20:20' });
+  });
+
+  it('une annulation dite par le suivi l’emporte sur la liste', async () => {
+    fetchMock
+      .mockResolvedValueOnce(reponse({ commandes: [commandeBrute({ statut: 'en_preparation' })] }))
+      .mockResolvedValueOnce(reponse({ status: 'cancelled', status_label: 'Annulée' }));
+    const r = await service().pourEmail('client@exemple.fr', MAINTENANT);
+    expect(r.commandes[0]).toMatchObject({ etat: 'cancelled', enCours: false });
+  });
+
+  it('le suivi qui dit « prête » l’emporte sur une liste restée « en attente »', async () => {
+    fetchMock
+      .mockResolvedValueOnce(reponse({ commandes: [commandeBrute()] }))
+      .mockResolvedValueOnce(reponse({ status: 'ready', status_label: 'Prête' }));
+    const r = await service().pourEmail('client@exemple.fr', MAINTENANT);
+    expect(r.commandes[0]).toMatchObject({ etat: 'ready', prete: true });
+  });
+
   it('le suivi « delivered / Remise » se lit « Récupérée » côté client', async () => {
     fetchMock
       .mockResolvedValueOnce(reponse({ commandes: [commandeBrute()] }))
@@ -247,5 +271,18 @@ describe('CommandesClientFlaixService', () => {
     );
     const r = await service().pourEmail('client@exemple.fr', MAINTENANT);
     expect(r.commandes.map((c) => c.id)).toEqual(['bbbbbbbbbbbb', 'aaaaaaaaaaaa']);
+  });
+});
+
+describe('l’avancement d’une commande Flaix (25/11/2026)', () => {
+  it('range les étapes dans l’ordre, et met de côté l’inconnu et l’annulé', () => {
+    expect(rangEtat('queued')).toBe(0);
+    expect(rangEtat('preparing')).toBe(1);
+    expect(rangEtat('assigned')).toBe(1);
+    expect(rangEtat('ready')).toBe(2);
+    expect(rangEtat('delivered')).toBe(3);
+    expect(rangEtat('mystere')).toBe(-1);
+    expect(rangEtat('cancelled')).toBe(-1);
+    expect(rangEtat(null)).toBe(-1);
   });
 });

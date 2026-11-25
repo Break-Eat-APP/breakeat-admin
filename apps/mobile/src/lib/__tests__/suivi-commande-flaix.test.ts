@@ -13,6 +13,8 @@ import {
   idActiviteFlaix,
   jetonDeLActivite,
   jetonDeLAdresse,
+  jetonDuMessage,
+  nouvellesCommandes,
   suivreCommandeFlaix,
   type DepsSuivi,
 } from '../suivi-commande-flaix';
@@ -89,5 +91,27 @@ describe('suivre une commande Flaix', () => {
     expect(await suivreCommandeFlaix(JETON, d)).toBeNull();
     expect(d.suivre).toHaveBeenCalledTimes(1);
     expect(d.demarrer).not.toHaveBeenCalled();
+  });
+});
+
+describe('reconnaître la commande sans jeton dans l’adresse (25/11/2026)', () => {
+  it('lit le message de la page Flaix, et rien d’autre', () => {
+    expect(jetonDuMessage(JSON.stringify({ type: 'flaix_commande', jeton: JETON }))).toBe(JETON);
+    expect(jetonDuMessage(JSON.stringify({ type: 'autre', jeton: JETON }))).toBeNull();
+    expect(jetonDuMessage(JSON.stringify({ type: 'flaix_commande', jeton: '../pirate' }))).toBeNull();
+    expect(jetonDuMessage('pas du json')).toBeNull();
+  });
+
+  const OUVERTE = new Date('2026-11-25T18:14:30+01:00').getTime();
+  const c = (id: string, passeeLe: string, enCours = true) => ({ id, passeeLe, enCours });
+
+  it('repère la commande passée depuis l’ouverture (Flaix arrondit à la minute)', () => {
+    const liste = [
+      c('nouvelle', '2026-11-25T18:14:00+01:00'),
+      c('ancienne', '2026-11-25T17:56:00+01:00'),
+      c('deja-connue', '2026-11-25T18:15:00+01:00'),
+      c('finie', '2026-11-25T18:16:00+01:00', false),
+    ];
+    expect(nouvellesCommandes(liste, new Set(['deja-connue']), OUVERTE)).toEqual(['nouvelle']);
   });
 });

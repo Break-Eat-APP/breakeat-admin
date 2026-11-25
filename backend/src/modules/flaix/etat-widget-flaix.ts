@@ -22,7 +22,9 @@ const LIBELLES: Record<StatutWidget, string> = {
   CANCELLED: 'Commande annulée',
 };
 
-const PREPARATION = new Set(['preparing', 'in_progress', 'in_preparation', 'cooking', 'en_preparation']);
+const PREPARATION = new Set([
+  'preparing', 'in_progress', 'in_preparation', 'cooking', 'en_preparation', 'assigned', 'processing', 'started',
+]);
 const PRETE = new Set(['ready', 'prete']);
 const REMISE = new Set(['delivered', 'collected', 'picked_up', 'done', 'completed', 'served', 'remise', 'recuperee']);
 const ANNULEE = new Set(['cancelled', 'canceled', 'refunded', 'failed', 'expired', 'annulee', 'remboursee']);
