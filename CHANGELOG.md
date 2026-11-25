@@ -8,7 +8,7 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 ## [1.7.59] — 2026-11-25 — Un match terminé n’est plus « ouvert » au calendrier
 
 - **Pourquoi** : constaté par Rémi aux Spartiates (BUG-2026-053) : le match du 22/11, ouvert à la main, était cerclé « commande ouverte » trois jours après, et « Commander » répondait « pas ouverte ».
-- **Serveur** : l’événement actif d’un lieu doit aussi être non terminé (sauf le contenant d’un lieu permanent). Les tests du contrôleur avaient des dates figées en juin 2026 et reposaient sur ce défaut : dates relatives à l’horloge, et un test de non-régression. 1220/1220.
+- **Serveur** : l’événement actif d’un lieu doit aussi être non terminé (sauf le contenant d’un lieu permanent). Les tests du contrôleur avaient des dates figées en juin 2026 et reposaient sur ce défaut : dates relatives à l’horloge, et un test de non-régression. 1218/1218 (le message du commit `2a1883f` dit 1220 par erreur).
 - ~ `public-venues.controller.ts` (+ spec)
 
 ## [1.7.58] — 2026-11-25 — Le calendrier Flaix se règle dans « Événements & configuration »
