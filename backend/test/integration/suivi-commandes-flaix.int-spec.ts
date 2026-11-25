@@ -14,7 +14,11 @@ import { monterServices, unique } from './banc';
 const url = process.env.DATABASE_URL_TEST;
 const decrire = url ? describe : describe.skip;
 
-const T0 = new Date('2026-11-24T20:00:00Z');
+// L'HEURE DU TEST SUIT L'HORLOGE (25/11/2026). Une date fixe passait en local
+// le 24 au soir et échouait en CI le lendemain : la base pose « prochaine
+// lecture » à son propre `now()`, qui dépassait alors cette date fixe, et
+// aucune commande n'était due. Une minute dans le futur : toujours due.
+const T0 = new Date(Date.now() + 60_000);
 const plus = (ms: number) => new Date(T0.getTime() + ms);
 
 function commande(p: Partial<CommandeFlaix> = {}): CommandeFlaix {
