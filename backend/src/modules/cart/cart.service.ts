@@ -1448,6 +1448,8 @@ export class CartService {
                 status: true,
                 isPermanentContainer: true,
                 flaixOrderUrl: true,
+                // L'heure d'ouverture donnée par Flaix pour CET événement (25/11/2026).
+                ordersOpenAt: true,
               },
             },
           },

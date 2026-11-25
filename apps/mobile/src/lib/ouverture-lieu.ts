@@ -95,9 +95,19 @@ export function heureDOuverture(lieu: LieuOuvrable): string | null {
  * Les jours se comparent dans le fuseau de l'APPAREIL, comme l'heure affichée.
  */
 export function quandLaCommandeOuvre(lieu: LieuOuvrable, maintenant: Date = new Date()): string | null {
-  const heure = heureDOuverture(lieu);
-  if (!heure || !lieu.commandeOuvreA) return null;
-  const d = new Date(lieu.commandeOuvreA);
+  if (!heureDOuverture(lieu) || !lieu.commandeOuvreA) return null;
+  return quandOuvre(lieu.commandeOuvreA, maintenant);
+}
+
+/**
+ * « aujourd'hui à 08:30 » pour une heure d'ouverture ISO donnée — celle d'UN
+ * match (25/11/2026 : Flaix la donne match par match). `null` si illisible.
+ */
+export function quandOuvre(iso: string | null | undefined, maintenant: Date = new Date()): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const heure = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
   const jour = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const ecart = Math.round((jour(d) - jour(maintenant)) / 86_400_000);

@@ -5,6 +5,14 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.57] — 2026-11-25 — La commande ouvre à l’heure de Flaix, match par match
+
+- **Pourquoi** : décision de Rémi du 25/11 (« 08:30, on s’adapte à lui ») : le flux des matchs Flaix donne l’heure d’ouverture de chaque événement (`commande.ouvreLe`), qui peut différer de l’heure réglée sur le lieu (U2 : 08:30 contre 08:00). **Règle métier changée** : l’ouverture n’est plus seulement par lieu. CLAUDE.md § 4 et ADR-0018 mis à jour.
+- **Serveur** : `Event.ordersOpenAt` (migration `20261125_ouverture_par_evenement`, nullable). Remplie, elle l’emporte dans `heureDOuverture` (fenêtre de commande, garde du panier, destination de commande) ; nulle, l’heure du lieu reprend. L’import du flux la reprend, y compris quand Flaix la retire. La saison rend l’heure d’ouverture de chaque match à venir (`commandeOuvreA`).
+- **App** : le calendrier dit « La commande ouvre demain à 08:30 » avec l’heure du match ; à défaut, la phrase du lieu. Visible après une mise à jour à distance.
+- **Tests** : serveur 1214/1214 et 222/222, app 179/179 ; migrations rejouées sur base vierge.
+- ~ `schema.prisma`, `fenetre-commande.ts` (+ spec), `public-venues.controller.ts`, `cart.service.ts`, `flux-matchs-flaix.ts` (+ spec), `import-matchs-flaix.service.ts`, app `ouverture-lieu.ts` (+ test), `saison.screen.tsx`, `mobile-api.ts` ; + migration
+
 ## [1.7.56] — 2026-11-24 — Commande Flaix : Live Activity, et un suivi qui ne se perd plus
 
 - **Pourquoi** : une commande passée chez Flaix n’avait ni Live Activity, ni suivi durable : la surveillance « prête » vivait en mémoire et s’effaçait au redémarrage du serveur (ADR-0015). Le développeur Flaix a confirmé le 24/11 les statuts, l’adresse de suivi (`/api/public/orders/<jeton>/status`) et l’adresse de fin de paiement (`…/orders/<jeton>`). Pas de webhook (décision de Rémi) : on interroge.

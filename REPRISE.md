@@ -128,8 +128,9 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   `a47dbe3e`), commit `7f92104`. Google Play : la 1.1.3 code 8 publiée par
 >   Rémi ; aucune build Android 1.1.4 n'existe encore. **Décision de Rémi
 >   (25/11) : l'heure d'ouverture de la commande vient de Flaix, par
->   événement (`commande.ouvreLe`)** — à coder (fenêtre de commande serveur
->   ET app), ADR-0018 à mettre à jour.
+>   événement (`commande.ouvreLe`)** — **codée en 1.7.57** (`Event.ordersOpenAt`),
+>   ADR-0018 et CLAUDE.md § 4 à jour. Prend effet quand l'import passe en
+>   `actif` ; d'ici là, l'heure du lieu.
 > - **1.7.56 (24/11) — LIVE ACTIVITY DES COMMANDES FLAIX + suivi en base**,
 >   construit et testé, COMMITÉ EN LOCAL avec l'import des matchs (migrations
 >   `20261124_evenement_flaix` et `20261124b_suivi_commandes_flaix`) : à

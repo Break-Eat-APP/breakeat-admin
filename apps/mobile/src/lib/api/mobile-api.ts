@@ -636,6 +636,11 @@ export interface EvenementDeSaison {
    * lieu — un seul endroit d'où part la commande.
    */
   ouvert: boolean;
+  /**
+   * L'heure d'ouverture de la commande de CE match (ISO), donnée par Flaix
+   * (25/11/2026). Nulle hors Flaix, ou pour un match passé.
+   */
+  commandeOuvreA?: string | null;
 }
 
 export interface PublicVenue {

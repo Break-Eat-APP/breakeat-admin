@@ -22,7 +22,7 @@ import {
 } from '@lib/api/mobile-api';
 import { useUserLocation } from '@lib/hooks/use-user-location';
 import { showAlert } from '@lib/alert';
-import { ouvertALaCommande } from '@lib/ouverture-lieu';
+import { ouvertALaCommande, quandOuvre } from '@lib/ouverture-lieu';
 import {
   delaiAvantEvenement,
   libelleAttente,
@@ -571,6 +571,10 @@ export function SaisonScreen({ route, navigation }: Props) {
  */
 function phraseAttente(match: EvenementDeSaison, lieu: PublicVenue | null): string {
   if (match.passe) return 'Événement terminé';
+  // L'heure de CE match, donnée par Flaix (25/11/2026), avec son jour :
+  // « La commande ouvre demain à 08:30 ».
+  const quand = quandOuvre(match.commandeOuvreA);
+  if (quand) return `La commande ouvre ${quand}`;
   if (lieu?.flaixEnabled) {
     return `La commande ouvre à ${lieu.heureOuvertureCommande} le jour de l’événement`;
   }

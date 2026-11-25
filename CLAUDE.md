@@ -110,7 +110,9 @@ buvette (`Supplier`) ; « **comptoir de retrait** » = le `PickupPoint` où l'on
 récupère. Jamais « fournisseur » devant un club.
 
 Trois moments distincts : le lien du match (le club), **l'ouverture de la
-commande** (BreakEat, `Venue.ordersOpenAt`, par lieu), les créneaux de retrait
+commande** (donnée par **Flaix**, match par match, `Event.ordersOpenAt` importé du
+flux — décision de Rémi du 25/11/2026 ; à défaut, l'heure du lieu
+`Venue.ordersOpenAt`), les créneaux de retrait
 (**Flaix** — ne jamais les afficher, ils changent sans qu'on l'apprenne).
 
 ---

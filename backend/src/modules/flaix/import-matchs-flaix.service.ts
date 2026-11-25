@@ -150,6 +150,7 @@ export class ImportMatchsFlaixService {
         flaixOrderUrl: true,
         opponentName: true,
         posterUrl: true,
+        ordersOpenAt: true,
       },
     });
     const decisions = deciderImport(flux.evenements, existants, maintenant);

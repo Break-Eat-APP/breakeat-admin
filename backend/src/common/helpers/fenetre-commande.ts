@@ -38,6 +38,11 @@ export interface EvenementCommandable {
   /** Le contenant unique d'un lieu PERMANENT (restaurant) : pas de match, pas d'horaire. */
   isPermanentContainer?: boolean;
   flaixOrderUrl: string | null;
+  /**
+   * L'heure d'ouverture donnée par FLAIX pour cet événement (25/11/2026).
+   * Remplie, elle fait foi ; absente ou nulle, l'heure du lieu reprend.
+   */
+  ordersOpenAt?: Date | null;
 }
 
 /** Le réglage du lieu : à quelle heure, et dans quel fuseau. */
@@ -192,6 +197,11 @@ function instantLocal(
  * plus.
  */
 export function heureDOuverture(ev: EvenementCommandable, reglage: ReglageOuverture): Date {
+  // FLAIX DÉCIDE (décision de Rémi, 25/11/2026 : « on s'adapte à lui ») :
+  // l'heure que Flaix donne pour CET événement l'emporte, telle quelle — même
+  // après le coup d'envoi, c'est son choix. Sans elle, la règle du lieu.
+  if (ev.ordersOpenAt && !Number.isNaN(ev.ordersOpenAt.getTime())) return ev.ordersOpenAt;
+
   const minutes = minutesDepuisMinuit(reglage.heure);
   if (minutes === null) return ev.startAt;
 

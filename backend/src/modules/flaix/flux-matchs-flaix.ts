@@ -30,9 +30,10 @@ import { nettoyerNomAdversaire } from '../events/adversaire';
  *    elles, Flaix ne reçoit plus l'e-mail du client, et ses commandes
  *    n'apparaissent plus dans « Mes commandes ». Un lien déjà en place qui mène
  *    à la même page est conservé tel quel ; un lien neuf reçoit le modèle.
- *  · L'heure d'ouverture de la commande (`commande.ouvreLe`) n'est PAS reprise :
- *    elle reste réglée par lieu chez BreakEat (`Venue.ordersOpenAt`,
- *    CLAUDE.md § 4) tant que Rémi n'a pas décidé autrement.
+ *  · L'heure d'ouverture de la commande (`commande.ouvreLe`) EST reprise
+ *    (décision de Rémi du 25/11/2026 : « on s'adapte à lui ») et l'emporte sur
+ *    l'heure du lieu (`Event.ordersOpenAt`, `fenetre-commande.ts`). Nulle chez
+ *    Flaix : nulle chez nous, et l'heure du lieu reprend.
  */
 
 /** Les étiquettes d'identité ajoutées à un lien de commande neuf. */
@@ -56,6 +57,8 @@ export interface EvenementFlux {
   /** Le lien de commande, nu (sans étiquettes), vérifié ; null s'il manque. */
   lien: string | null;
   annule: boolean;
+  /** L'heure d'ouverture de la commande donnée par Flaix, ou null. */
+  ouvreLe: Date | null;
 }
 
 export interface FluxLu {
@@ -140,6 +143,7 @@ export function lireFluxMatchs(json: unknown): FluxLu | null {
       affiche,
       lien,
       annule: estAnnule(e.statut),
+      ouvreLe: date(commande?.ouvreLe) ?? date(e.ouvertureCommande),
     });
   }
   return { lieu: lieuId, evenements, ecartes };
@@ -170,6 +174,7 @@ export interface EvenementExistant {
   flaixOrderUrl: string | null;
   opponentName: string | null;
   posterUrl: string | null;
+  ordersOpenAt: Date | null;
 }
 
 export interface ChampsEvenement {
@@ -181,6 +186,7 @@ export interface ChampsEvenement {
   flaixOrderUrl?: string;
   opponentName?: string;
   posterUrl?: string;
+  ordersOpenAt?: Date | null;
 }
 
 export type Decision =
@@ -246,6 +252,7 @@ export function deciderImport(
           ...(f.lien ? { flaixOrderUrl: lienAvecEtiquettes(f.lien) } : {}),
           ...(f.adversaire ? { opponentName: f.adversaire } : {}),
           ...(f.affiche ? { posterUrl: f.affiche } : {}),
+          ...(f.ouvreLe ? { ordersOpenAt: f.ouvreLe } : {}),
         },
       });
       continue;
@@ -269,6 +276,10 @@ export function deciderImport(
       }
       if (f.adversaire && ev.opponentName !== f.adversaire) data.opponentName = f.adversaire;
       if (f.affiche && ev.posterUrl !== f.affiche) data.posterUrl = f.affiche;
+      // L'heure d'ouverture suit Flaix, y compris quand il la retire.
+      if ((ev.ordersOpenAt?.getTime() ?? null) !== (f.ouvreLe?.getTime() ?? null)) {
+        data.ordersOpenAt = f.ouvreLe;
+      }
     }
 
     if (Object.keys(data).length === 0) {

@@ -17,6 +17,7 @@ import { CLUB_EN_SERVICE } from '../../common/helpers/organisation-ouverte';
 import {
   estCommandableMaintenant,
   fenetreDeCommande,
+  heureDOuverture,
 } from '../../common/helpers/fenetre-commande';
 import { saisonDuLieu } from '../../common/helpers/saison-du-lieu';
 import { CacheCourt, dureeCacheLieux } from '../../common/helpers/cache-court';
@@ -114,6 +115,8 @@ const SELECTION_LIEU = {
       endAt: true,
       isPermanentContainer: true,
       flaixOrderUrl: true,
+      // L'heure d'ouverture donnée par Flaix pour CET événement (25/11/2026).
+      ordersOpenAt: true,
       // L'adversaire : ce que le calendrier de la saison montre à la place
       // d'un numéro de jour (`common/helpers/saison-du-lieu.ts`).
       opponentName: true,
@@ -475,7 +478,14 @@ export class PublicVenuesController {
            * Sur les événements ACCESSIBLES, comme le lien : un calendrier ne
            * doit pas révéler qu'un événement réservé existe.
            */
-          saison: saisonDuLieu(accessible, maintenant, ouvrable),
+          saison: saisonDuLieu(accessible, maintenant, ouvrable).map((s) => {
+            // L'HEURE D'OUVERTURE DE CHAQUE MATCH (25/11/2026) : Flaix la
+            // donne match par match. Sur un lieu en Flaix seulement — ailleurs,
+            // c'est le club qui ouvre à la main, et annoncer une heure
+            // serait une promesse inventée.
+            const ev = v.flaixEnabled && !s.passe ? accessible.find((e) => e.id === s.id) : undefined;
+            return { ...s, commandeOuvreA: ev ? heureDOuverture(ev, reglage).toISOString() : null };
+          }),
           /**
            * L'HEURE à laquelle la commande ouvre, le jour du match (« 08:00 »).
            *
@@ -580,6 +590,8 @@ export class PublicVenuesController {
         visibility: true,
         isPermanentContainer: true,
         flaixOrderUrl: true,
+        // L'heure d'ouverture donnée par Flaix pour CET événement (25/11/2026).
+        ordersOpenAt: true,
       },
     });
     if (!evenement) throw new NotFoundException('Événement introuvable.');

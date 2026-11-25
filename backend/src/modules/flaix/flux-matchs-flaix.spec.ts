@@ -58,6 +58,8 @@ function existant(p: Partial<EvenementExistant> = {}): EvenementExistant {
     flaixOrderUrl: null,
     opponentName: null,
     posterUrl: null,
+    // Déjà alignée sur Flaix par défaut : chaque test ne bouge que ce qu'il vise.
+    ordersOpenAt: new Date('2026-11-25T08:30:00+01:00'),
     ...p,
   };
 }
@@ -75,6 +77,7 @@ describe('flux des matchs Flaix — lecture', () => {
     expect(e.lien).toBe('https://commande.flaix.bo.synertic.net/o/u2');
     expect(e.affiche).toContain('/events/108/cover.png');
     expect(e.annule).toBe(false);
+    expect(e.ouvreLe?.toISOString()).toBe('2026-11-25T07:30:00.000Z');
   });
 
   it('refuse une réponse sans liste', () => {
@@ -129,6 +132,19 @@ describe('flux des matchs Flaix — décisions', () => {
     expect(d.data.flaixEventId).toBe('108');
     expect(d.data.flaixOrderUrl).toContain('mail=[#mail]');
     expect(d.data.posterUrl).toContain('cover.png');
+    expect(d.data.ordersOpenAt?.toISOString()).toBe('2026-11-25T07:30:00.000Z');
+  });
+
+  it('suit l’heure d’ouverture de Flaix, y compris quand il la retire', () => {
+    const base = { flaixEventId: '108', posterUrl: flux[0].affiche, flaixOrderUrl: flux[0].lien };
+    const [d1] = deciderImport(flux, [existant({ ...base, ordersOpenAt: null })], MAINTENANT);
+    expect(d1).toMatchObject({ type: 'modifier', data: { ordersOpenAt: flux[0].ouvreLe } });
+
+    const sansHeure = lireFluxMatchs({
+      evenements: [{ ...REPONSE.evenements[0], commande: { ...REPONSE.evenements[0].commande, ouvreLe: null } }],
+    })!.evenements;
+    const [d2] = deciderImport(sansHeure, [existant(base)], MAINTENANT);
+    expect(d2).toMatchObject({ type: 'modifier', data: { ordersOpenAt: null } });
   });
 
   it('ne fait rien sur un événement déjà à jour (idempotent)', () => {

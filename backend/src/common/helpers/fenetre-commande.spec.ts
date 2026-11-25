@@ -107,6 +107,25 @@ describe('l’heure d’ouverture du lien', () => {
   });
 });
 
+describe('l’heure d’ouverture donnée par Flaix (25/11/2026)', () => {
+  const FLAIX = new Date('2026-07-17T06:30:00.000Z'); // 08:30 à Paris
+
+  it('l’emporte sur l’heure du lieu', () => {
+    expect(heureDOuverture(ev({ ordersOpenAt: FLAIX }), PARIS).toISOString()).toBe(FLAIX.toISOString());
+  });
+
+  it('nulle ou absente, l’heure du lieu reprend', () => {
+    expect(heureDOuverture(ev({ ordersOpenAt: null }), PARIS).toISOString()).toBe('2026-07-17T06:00:00.000Z');
+  });
+
+  it('décide de la fenêtre : fermé à 08:15, ouvert à 08:30', () => {
+    const match = ev({ ordersOpenAt: FLAIX });
+    const avant = fenetreDeCommande([match], new Date('2026-07-17T06:15:00.000Z'), PARIS);
+    expect(avant).toMatchObject({ etat: 'bientot', ouvreA: FLAIX });
+    expect(fenetreDeCommande([match], FLAIX, PARIS).etat).toBe('ouvert');
+  });
+});
+
 describe('quel événement est ouvert à la commande', () => {
   it('après l’heure d’ouverture, le lien du match du jour', () => {
     const midi = new Date('2026-07-17T10:00:00.000Z'); // 12 h à Paris

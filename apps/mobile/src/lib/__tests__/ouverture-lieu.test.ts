@@ -12,6 +12,7 @@ import {
   heureDOuverture,
   ouvertALaCommande,
   quandLaCommandeOuvre,
+  quandOuvre,
   type LieuOuvrable,
 } from '../ouverture-lieu';
 
@@ -153,5 +154,19 @@ describe('le JOUR de l’ouverture, toujours dit (10/11)', () => {
   it('se tait quand la commande est ouverte', () => {
     const v = lieu({ flaixEnabled: true, flaixOrderUrl: LIEN, commandeOuvreA: local(13, 8).toISOString() });
     expect(quandLaCommandeOuvre(v, local(10, 16))).toBeNull();
+  });
+});
+
+describe('l’heure d’ouverture d’UN match, donnée par Flaix (25/11/2026)', () => {
+  const local = (j: number, h: number, m = 0) => new Date(2026, 10, j, h, m);
+
+  it('dit le jour et l’heure du match', () => {
+    expect(quandOuvre(local(25, 8, 30).toISOString(), local(24, 22))).toMatch(/^demain à 08:30$/);
+    expect(quandOuvre(local(25, 8, 30).toISOString(), local(25, 7))).toMatch(/^aujourd’hui à 08:30$/);
+  });
+
+  it('rend null sans heure, ou pour une heure illisible', () => {
+    expect(quandOuvre(null)).toBeNull();
+    expect(quandOuvre('pas une date')).toBeNull();
   });
 });

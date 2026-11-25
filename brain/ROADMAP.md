@@ -580,6 +580,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.53 | 2026-11-24 | Commande Flaix : la page de commande met la commande sous surveillance (« prête » sans ouvrir « Mes commandes ») |
 | 1.7.54 | 2026-11-24 | Import automatique du flux des matchs Flaix (ADR-0018) |
 | 1.7.56 | 2026-11-24 | Commande Flaix : Live Activity, suivi en base (15 s / 60 s) |
+| 1.7.57 | 2026-11-25 | La commande ouvre à l’heure de Flaix, match par match |
 | 1.7.55 | 2026-11-24 | Android : feuille des coordonnées sous la barre de navigation et le clavier (BUG-2026-050) |
 
 ---

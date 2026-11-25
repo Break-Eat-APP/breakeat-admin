@@ -671,6 +671,12 @@ model Event {
   /// ADOPTER s'il retrouve le même match (même lien, ou même heure à 3 h près).
   /// Unique par lieu — Flaix numérote ses événements, pas les nôtres.
   flaixEventId         String?         @map("flaix_event_id")
+  /// L'HEURE D'OUVERTURE DE LA COMMANDE DE CET ÉVÉNEMENT, donnée par Flaix
+  /// (`commande.ouvreLe` du flux des matchs, décision de Rémi du 25/11/2026 :
+  /// « on s'adapte à lui »). Remplie, elle l'emporte sur l'heure du lieu
+  /// (`Venue.ordersOpenAt`) ; nulle, l'heure du lieu reprend. Voir
+  /// `common/helpers/fenetre-commande.ts`.
+  ordersOpenAt         DateTime?       @map("orders_open_at")
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
 

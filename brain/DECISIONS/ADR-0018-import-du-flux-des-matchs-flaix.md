@@ -28,9 +28,12 @@ public, sans donnée client, avec ETag.
 4. **Le lien de commande garde les étiquettes d'identité** (`[#mail]`…) : un
    lien neuf reçoit le modèle `firstname/lastname/mail/phone` ; un lien en
    place qui mène à la même page est conservé.
-5. **L'heure d'ouverture de la commande reste celle du lieu chez BreakEat**
-   (`Venue.ordersOpenAt`) : `commande.ouvreLe` du flux n'est pas repris.
-   À trancher par Rémi (voir « Ce qui la remettrait en cause »).
+5. **L'heure d'ouverture de la commande vient de Flaix, match par match**
+   (décision de Rémi du 25/11/2026 : « 08:30, on s'adapte à lui, plus
+   simple »). `commande.ouvreLe` est importé dans `Event.ordersOpenAt` et
+   l'emporte sur l'heure du lieu (`fenetre-commande.ts`, serveur ; l'app
+   affiche l'heure de chaque match). Nulle chez Flaix : l'heure du lieu
+   reprend. *Texte initial du 24/11 : l'heure restait celle du lieu.*
 6. **Mise en service prudente** : `FLAIX_FLUX_IMPORT=journal` par défaut (lit et
    journalise sans écrire) ; `actif` pour écrire, `arret` pour couper.
 
@@ -47,9 +50,7 @@ Une panne du flux fige le calendrier à son dernier état, sans alerte autre
 que les journaux.
 
 ## Ce qui la remettrait en cause
-- Rémi décide que l'ouverture de la commande vient de Flaix, match par match
-  (`ouvreLe`) : il faudrait un champ d'ouverture par événement et changer
-  `fenetre-commande.ts` (serveur et app).
+- ~~L'ouverture par match~~ : tranché le 25/11, appliqué (point 5).
 - Flaix change d'identifiant stable, ou retire les événements annulés du flux
   au lieu de les marquer.
 - Le webhook E1 couvre un jour aussi les événements : l'import deviendrait un
