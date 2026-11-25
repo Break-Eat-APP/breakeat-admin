@@ -60,8 +60,11 @@ const EV = (over: Partial<Record<string, unknown>> = {}) => ({
   name: 'Match',
   status: EventStatus.ACTIVE,
   visibility: EventVisibility.PUBLIC,
-  startAt: new Date('2026-06-01T18:00:00Z'),
-  endAt: new Date('2026-06-01T23:00:00Z'),
+  // EN COURS, par rapport à l'horloge (25/11/2026) : un événement actif mais
+  // TERMINÉ ne compte plus comme l'événement du lieu. Ces dates étaient
+  // figées en juin 2026, et les tests reposaient justement sur ce défaut.
+  startAt: new Date(Date.now() - 60 * 60_000),
+  endAt: new Date(Date.now() + 4 * 60 * 60_000),
   isPermanentContainer: false,
   flaixOrderUrl: null,
   ...over,
@@ -519,6 +522,26 @@ describe('PublicVenuesController — lieux privés (Phase 16.1)', () => {
  * c'est que cette seconde porte n'en soit pas une derobee : les regles de
  * confidentialite doivent valoir mot pour mot.
  */
+describe('PublicVenuesController — un match terminé resté actif (25/11/2026)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('n’est plus l’événement du lieu, ni « ouvert » au calendrier', async () => {
+    const fini = EV({
+      id: 'e-fini',
+      startAt: new Date(Date.now() - 72 * 60 * 60_000),
+      endAt: new Date(Date.now() - 70 * 60 * 60_000),
+    });
+    prisma.venue.findMany.mockResolvedValue([{ ...PUBLIC_VENUE, flaixEnabled: true, events: [fini] }]);
+    prisma.groupMember.findMany.mockResolvedValue([]);
+    const [lieu] = (await makeController().search(undefined, 'stade')) as unknown as {
+      currentEventId: string | null;
+      saison: { id: string; ouvert: boolean }[];
+    }[];
+    expect(lieu.currentEventId).toBeNull();
+    expect(lieu.saison.find((s) => s.id === 'e-fini')?.ouvert).toBe(false);
+  });
+});
+
 describe('PublicVenuesController — un lieu par son identifiant', () => {
   beforeEach(() => jest.clearAllMocks());
 

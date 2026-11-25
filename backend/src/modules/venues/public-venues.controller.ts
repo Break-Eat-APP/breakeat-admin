@@ -372,8 +372,15 @@ export class PublicVenuesController {
         // six mois doit rester masqué.
         if (porteurs.has(v.id) && !ouverts.has(v.id)) return null;
         const accessible = v.events.filter(canAccess);
-        // Cible de navigation : premier événement accessible ET actif.
-        const currentEvent = accessible.find((e) => e.status === EventStatus.ACTIVE);
+        // Cible de navigation : premier événement accessible ET actif, ET PAS
+        // TERMINÉ (25/11/2026). Un match ouvert à la main sur un lieu Flaix
+        // n'est jamais refermé par la fermeture automatique (elle ignore ces
+        // lieux) : il restait « actif » après sa fin, le calendrier le
+        // cerclait « commande ouverte », et le bouton répondait « pas ouvert ».
+        // Les Spartiates, match du 22/11, constaté par Rémi le 25/11.
+        const currentEvent = accessible.find(
+          (e) => e.status === EventStatus.ACTIVE && (e.isPermanentContainer || e.endAt.getTime() > maintenant.getTime()),
+        );
 
         // LE LIEN FLAIX DU MOMENT.
         //
