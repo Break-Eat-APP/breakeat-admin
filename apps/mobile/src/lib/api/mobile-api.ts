@@ -1071,8 +1071,18 @@ export interface SuiviFlaix {
   status: string;
   createdAt: string;
   updatedAt: string;
+  /** Récupérée et pas encore notée : « Noter ma commande » (26/11/2026). */
+  notable?: boolean;
+  note?: number | null;
 }
 export const apiGetMesSuivisFlaix = () => req<SuiviFlaix[]>('/flaix/mes-suivis');
+
+/** La note d'une commande Flaix récupérée (26/11/2026). */
+export const apiNoterCommandeFlaix = (jeton: string, note: { stars: number; comment?: string }) =>
+  req<{ stars: number }>(`/flaix/commandes/${encodeURIComponent(jeton)}/note`, {
+    method: 'POST',
+    body: JSON.stringify(note),
+  });
 
 /** La Live Activity d'une commande Flaix a reçu son jeton push. */
 export const apiRegisterLiveActivityFlaix = (params: {

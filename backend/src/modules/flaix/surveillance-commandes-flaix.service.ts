@@ -1,4 +1,12 @@
-import { Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { Interval } from '@nestjs/schedule';
 import { LiveActivityStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
@@ -53,6 +61,12 @@ const PAR_PAQUET = 10;
 const MAX_ESSAIS_ENVOI = 3;
 /** Une Live Activity terminée reste visible une minute. */
 const VISIBLE_APRES_FIN_MS = 60_000;
+/** « Note ta commande » : 10 min après la remise (Rémi, 22/11/2026). */
+const DELAI_RELANCE_NOTE_MS = 10 * 60_000;
+/** Au-delà, la relance n'a plus de sens : on ne l'envoie plus. */
+const RELANCE_NOTE_MAX_MS = 24 * 60 * 60_000;
+/** Combien de temps une commande récupérée se note encore dans l'app. */
+const NOTABLE_PENDANT_MS = 48 * 60 * 60_000;
 /** Sans nouvelle, iOS grise l'activité au bout d'une heure. */
 const PEREMPTION_MS = 60 * 60 * 1000;
 
@@ -99,6 +113,8 @@ export class SurveillanceCommandesFlaixService {
         passeeLe: new Date(c.passeeLe).getTime() ? new Date(c.passeeLe) : new Date(),
         etat: c.etat ?? 'queued',
         preteAnnoncee: c.prete,
+        lieuFlaix: c.lieuId ?? null,
+        evenementFlaix: c.evenementId ?? null,
       })),
       // Déjà suivie (par ce client) : rien à faire. Un jeton est unique chez Flaix.
       skipDuplicates: true,
@@ -152,10 +168,12 @@ export class SurveillanceCommandesFlaixService {
     const suivis = await this.prisma.suiviCommandeFlaix.findMany({
       where: {
         userId,
-        OR: [{ termine: false }, { updatedAt: { gt: new Date(maintenant.getTime() - 60 * 60_000) } }],
+        // Terminées depuis moins de 48 h : le temps de les noter.
+        OR: [{ termine: false }, { updatedAt: { gt: new Date(maintenant.getTime() - NOTABLE_PENDANT_MS) } }],
       },
       orderBy: { passeeLe: 'desc' },
       take: 20,
+      include: { note: { select: { stars: true } } },
     });
     const VERS_COMMANDE = {
       CREATED: 'PAID',
@@ -171,7 +189,99 @@ export class SurveillanceCommandesFlaixService {
       status: VERS_COMMANDE[statutWidget(s.etat)],
       createdAt: s.passeeLe.toISOString(),
       updatedAt: s.updatedAt.toISOString(),
+      // Notable : récupérée, pas encore notée (26/11/2026).
+      notable: s.remiseLe !== null && !s.note,
+      note: s.note?.stars ?? null,
     }));
+  }
+
+  /**
+   * LA NOTE D'UNE COMMANDE FLAIX (26/11/2026). Seulement SA commande, et
+   * seulement une fois récupérée ; une seule note (la base l'impose).
+   */
+  async noter(
+    userId: string,
+    jeton: string,
+    params: { stars: number; comment?: string | null },
+  ): Promise<{ stars: number }> {
+    const suivi = await this.prisma.suiviCommandeFlaix.findFirst({ where: { jeton, userId } });
+    if (!suivi) throw new NotFoundException('Commande introuvable.');
+    if (!suivi.remiseLe) {
+      throw new BadRequestException('Tu pourras noter ta commande une fois que tu l’auras récupérée.');
+    }
+    const commentaire = params.comment?.trim() || null;
+    try {
+      await this.prisma.noteCommandeFlaix.create({
+        data: {
+          jeton,
+          userId,
+          stars: params.stars,
+          comment: commentaire,
+          numero: suivi.numero,
+          pointDeRetrait: suivi.pointDeRetrait,
+          lieuFlaix: suivi.lieuFlaix,
+          evenementFlaix: suivi.evenementFlaix,
+        },
+      });
+    } catch (e: unknown) {
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
+        throw new ConflictException('Tu as déjà noté cette commande. Merci !');
+      }
+      throw e;
+    }
+    this.logger.log(`Commande Flaix n° ${suivi.numero} notée ${params.stars}/5`);
+    return { stars: params.stars };
+  }
+
+  /**
+   * « NOTE TA COMMANDE », 10 MIN APRÈS LA REMISE (26/11/2026). Une fois par
+   * commande, pas pour une commande déjà notée, et plus au-delà de 24 h.
+   */
+  async relancerNotes(maintenant: Date): Promise<number> {
+    if (!this.expoPush || !this.pushTokens) return 0;
+    const dues = await this.prisma.suiviCommandeFlaix.findMany({
+      where: {
+        relanceNoteLe: null,
+        note: null,
+        remiseLe: {
+          lte: new Date(maintenant.getTime() - DELAI_RELANCE_NOTE_MS),
+          gt: new Date(maintenant.getTime() - RELANCE_NOTE_MAX_MS),
+        },
+      },
+      take: 100,
+    });
+    let envoyees = 0;
+    for (const s of dues) {
+      // Marquée AVANT l'envoi : un échec ne relance pas en boucle, et deux tours
+      // n'envoient jamais deux fois.
+      const pris = await this.prisma.suiviCommandeFlaix.updateMany({
+        where: { jeton: s.jeton, relanceNoteLe: null },
+        data: { relanceNoteLe: maintenant },
+      });
+      if (pris.count === 0) continue;
+      try {
+        const jetons = await this.pushTokens.tokensForUsers([s.userId]);
+        if (jetons.length === 0) continue;
+        const r = await this.expoPush.send(
+          jetons.map((to) => ({
+            to,
+            title: 'Note ta commande',
+            body:
+              `Commande n° ${s.numero}` +
+              (s.pointDeRetrait ? ` chez ${s.pointDeRetrait}` : '') +
+              ' : dis-nous comment ça s’est passé.',
+            sound: 'default' as const,
+            data: { type: 'noter_commande', source: 'flaix', jeton: s.jeton },
+          })),
+        );
+        if (r.invalidTokens.length > 0) await this.pushTokens.purgeInvalid(r.invalidTokens);
+        if (r.sent > 0) envoyees += 1;
+        this.logger.log(`Commande Flaix n° ${s.numero} : « Note ta commande » envoyée (${r.sent} appareil(s))`);
+      } catch (e: unknown) {
+        this.logger.error(`Commande Flaix n° ${s.numero} : « Note ta commande » non envoyée (${String(e)})`);
+      }
+    }
+    return envoyees;
   }
 
   /** L'app a démarré une Live Activity pour une commande Flaix qu'elle suit. */
@@ -219,6 +329,7 @@ export class SurveillanceCommandesFlaixService {
       for (let i = 0; i < dus.length; i += PAR_PAQUET) {
         await Promise.all(dus.slice(i, i + PAR_PAQUET).map((s) => this.verifier(s, maintenant)));
       }
+      await this.relancerNotes(maintenant);
     } catch (e: unknown) {
       this.logger.error(`Surveillance Flaix : tour interrompu (${String(e)})`);
     } finally {

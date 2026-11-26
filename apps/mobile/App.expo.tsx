@@ -66,6 +66,7 @@ import {
 import { envoyerFavoris, lireFavoris } from '@lib/favoris';
 import { signalerVisite } from '@lib/frequentation';
 import { useNotifStore } from '@store/notif.store';
+import { useSuiviStore } from '@store/suivi.store';
 import { NotificationsScreen } from '@screens/notifications.screen';
 import { AideScreen } from '@screens/aide.screen';
 import { MotDePasseOublieScreen } from '@screens/mot-de-passe-oublie.screen';
@@ -217,7 +218,13 @@ export default function AppPreview() {
     const arreterOuvertures = ecouterOuvertures((data) => {
       // Le client vient de toucher une annonce : le compte a changé.
       void useNotifStore.getState().rafraichir();
-      if (data.type !== 'missing_items' && data.type !== 'order_ready') return;
+      // « Note ta commande » d'une commande Flaix (26/11/2026) : la feuille de
+      // note s'ouvre d'elle-même sur « Mes commandes ».
+      if (data.type === 'noter_commande' && typeof data.jeton === 'string') {
+        useSuiviStore.getState().demanderNote(data.jeton);
+      } else if (data.type !== 'missing_items' && data.type !== 'order_ready') {
+        return;
+      }
       const ouvrir = () => navigationRef.navigate('Commandes');
       if (navigationRef.isReady()) ouvrir();
       else setTimeout(() => navigationRef.isReady() && ouvrir(), 800);

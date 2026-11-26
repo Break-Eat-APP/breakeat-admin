@@ -5,6 +5,15 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.64] — 2026-11-26 — « Note ta commande » pour les commandes Flaix
+
+- **Pourquoi** : demandé par Rémi le 22/11 (« la note a disparu », « une notif 10 min après ») : une commande passée chez Flaix ne pouvait pas être notée, et rien ne relançait le client. Attendait l’heure de remise, enregistrée depuis le 24/11.
+- **Serveur** : `NoteCommandeFlaix` (une note par commande, 1 à 5 étoiles et 1000 caractères bornés par la base, lieu et événement Flaix figés pour le club). `POST /flaix/commandes/:jeton/note` : seulement SA commande, seulement récupérée, une seule fois (« Tu as déjà noté cette commande. Merci ! »). **Relance « Note ta commande »** 10 min après la remise, une fois, jamais pour une commande déjà notée, plus au-delà de 24 h. `/flaix/mes-suivis` dit si la commande est notable (48 h après la remise).
+- **App** : bouton « Noter ma commande » sur le ticket Flaix récupéré, la même feuille que pour une commande BreakEat (une bonne note ouvre toujours la demande d’avis App Store) ; toucher la notification ouvre « Mes commandes » et la feuille de note.
+- **Base** : migration `20261126_note_commandes_flaix` (table neuve, trois colonnes nullables, clés `users` en UUID), rejouée sur une base vierge.
+- **Tests** : serveur 1222/1222 et 231/231 (relance à 10 min une seule fois, note refusée avant la remise, note unique, cloisonnement), app 182/182. **Non vérifié** sur un téléphone.
+- ~ serveur `surveillance-commandes-flaix.service.ts`, `commandes-client-flaix.service.ts`, `flaix.controller.ts`, `dto/live-activity-flaix.dto.ts`, `schema.prisma` (+ migration), test d’intégration ; app `noter-commande.tsx`, `order-history.screen.tsx`, `suivi.store.ts`, `App.expo.tsx`, `mobile-api.ts`
+
 ## [1.7.63] — 2026-11-26 — La flamme suit la DERNIÈRE commande passée
 
 - **Pourquoi** : Rémi (26/11) : « si je recommande, le contour doit se remettre à zéro et repartir ». La flamme suivait la commande en cours la plus AVANCÉE : une ancienne commande restée « prête » (jamais remise chez Flaix, comme les commandes test 1001-1002) gardait le contour vert et la coche jusqu’à 12 h, par-dessus une nouvelle commande « reçue ».

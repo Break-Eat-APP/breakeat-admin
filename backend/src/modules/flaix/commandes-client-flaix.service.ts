@@ -65,6 +65,10 @@ export interface CommandeFlaix {
   numero: string;
   passeeLe: string;
   lieu: string | null;
+  /** Le nom court du lieu chez Flaix (`guillaume-stadium`), pour la note (26/11/2026). */
+  lieuId?: string | null;
+  /** L'`idInterne` de l'événement chez Flaix. */
+  evenementId?: string | null;
   ville: string | null;
   evenement: string | null;
   pointDeRetrait: string | null;
@@ -121,8 +125,8 @@ interface CommandeBrute {
   jeton?: unknown;
   passeeLe?: unknown;
   statut?: unknown;
-  evenement?: { nom?: unknown } | null;
-  lieu?: { nom?: unknown; ville?: unknown } | null;
+  evenement?: { nom?: unknown; idInterne?: unknown } | null;
+  lieu?: { nom?: unknown; ville?: unknown; id?: unknown } | null;
   pointDeRetrait?: unknown;
   retraitPrevu?: unknown;
   lignes?: unknown;
@@ -304,6 +308,8 @@ export class CommandesClientFlaixService {
       numero: texte(b.reference) ?? '',
       passeeLe,
       lieu: texte(b.lieu?.nom),
+      lieuId: texte(b.lieu?.id),
+      evenementId: typeof b.evenement?.idInterne === 'number' ? String(b.evenement.idInterne) : texte(b.evenement?.idInterne),
       ville: texte(b.lieu?.ville),
       evenement: texte(b.evenement?.nom),
       pointDeRetrait: texte(b.pointDeRetrait),

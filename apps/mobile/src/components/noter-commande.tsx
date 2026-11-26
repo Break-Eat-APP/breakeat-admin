@@ -37,6 +37,7 @@ export function NoterCommande({
   orderId,
   buvette,
   onFini,
+  envoyer: envoyerNote,
 }: {
   visible: boolean;
   orderId: string;
@@ -44,6 +45,11 @@ export function NoterCommande({
   buvette: string | null;
   /** `note` non nulle quand l'avis est parti — l'appelant rafraîchit. */
   onFini: (note: number | null) => void;
+  /**
+   * L'envoi de la note. Par défaut, celle d'une commande BreakEat ; une
+   * commande FLAIX passe la sienne (26/11/2026) — même feuille, même geste.
+   */
+  envoyer?: (note: { stars: number; comment?: string }) => Promise<unknown>;
 }) {
   const [etoiles, setEtoiles] = useState(0);
   const [commentaire, setCommentaire] = useState('');
@@ -62,10 +68,8 @@ export function NoterCommande({
     setEnvoi(true);
     setErreur('');
     try {
-      await apiNoterCommande(orderId, {
-        stars: etoiles,
-        comment: commentaire.trim() || undefined,
-      });
+      const note = { stars: etoiles, comment: commentaire.trim() || undefined };
+      await (envoyerNote ? envoyerNote(note) : apiNoterCommande(orderId, note));
       /**
        * UNE BONNE NOTE OUVRE LA DEMANDE D'AVIS APPLE — pas l'inverse.
        *

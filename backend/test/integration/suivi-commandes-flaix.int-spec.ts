@@ -187,6 +187,58 @@ decrire('suivi des commandes Flaix (base réelle)', () => {
     expect(await svc.mesSuivis(autre, T0)).toEqual([]);
   });
 
+  describe('« Note ta commande » (26/11/2026)', () => {
+    async function remise(svc: SurveillanceCommandesFlaixService) {
+      const c = commande({ lieuId: 'guillaume-stadium', evenementId: '108' } as Partial<CommandeFlaix>);
+      await svc.surveiller(userId, [c]);
+      etats[c.id] = 'delivered';
+      await svc.tourner(T0);
+      return c;
+    }
+
+    it('relance 10 min après la remise, une seule fois', async () => {
+      const svc = service();
+      await remise(svc);
+      envois = 0;
+      await svc.relancerNotes(plus(9 * 60_000));
+      expect(envois).toBe(0);
+      await svc.relancerNotes(plus(10 * 60_000));
+      expect(envois).toBe(1);
+      await svc.relancerNotes(plus(20 * 60_000));
+      expect(envois).toBe(1);
+    });
+
+    it('refuse une note avant la remise, l’accepte après, une seule fois, avec le lieu Flaix', async () => {
+      const svc = service();
+      const enCours = commande();
+      await svc.surveiller(userId, [enCours]);
+      await expect(svc.noter(userId, enCours.id, { stars: 5 })).rejects.toThrow(/récupérée/);
+
+      const c = await remise(svc);
+      await expect(svc.noter(userId, c.id, { stars: 4, comment: ' Top ' })).resolves.toEqual({ stars: 4 });
+      const note = await s.prisma.noteCommandeFlaix.findUniqueOrThrow({ where: { jeton: c.id } });
+      expect(note).toMatchObject({ stars: 4, comment: 'Top', lieuFlaix: 'guillaume-stadium', evenementFlaix: '108' });
+      await expect(svc.noter(userId, c.id, { stars: 2 })).rejects.toThrow(/déjà noté/);
+
+      const [suivi] = (await svc.mesSuivis(userId, plus(60_000))).filter((x) => x.id === c.id);
+      expect(suivi).toMatchObject({ notable: false, note: 4 });
+    });
+
+    it('pas de relance pour une commande déjà notée, ni de note sur la commande d’un autre', async () => {
+      const svc = service();
+      const c = await remise(svc);
+      await svc.noter(userId, c.id, { stars: 5 });
+      envois = 0;
+      await svc.relancerNotes(plus(11 * 60_000));
+      expect(envois).toBe(0);
+
+      const autre = (
+        await s.prisma.user.create({ data: { email: `${unique('autre')}@test.fr`, passwordHash: 'x', displayName: 'Autre' } })
+      ).id;
+      await expect(svc.noter(autre, c.id, { stars: 1 })).rejects.toThrow(/introuvable/);
+    });
+  });
+
   it('suivi depuis l’app : rend l’état de départ, et refuse le jeton d’un autre', async () => {
     const svc = service();
     const c = commande({ etat: 'preparing' });

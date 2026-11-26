@@ -21,6 +21,9 @@ interface SuiviState {
   chargeA: number;
   publier: (commandes: Order[]) => void;
   publierFlaix: (commandes: SuiviFlaix[]) => void;
+  /** Une commande Flaix à noter, demandée par la notification « Note ta commande ». */
+  jetonANoter: string | null;
+  demanderNote: (jeton: string | null) => void;
   /** À la déconnexion : la pastille d'un autre compte n'a rien à montrer. */
   vider: () => void;
 }
@@ -31,5 +34,7 @@ export const useSuiviStore = create<SuiviState>((set) => ({
   chargeA: 0,
   publier: (commandes) => set({ commandes, chargeA: Date.now() }),
   publierFlaix: (commandesFlaix) => set({ commandesFlaix }),
+  jetonANoter: null,
+  demanderNote: (jetonANoter) => set({ jetonANoter }),
   vider: () => set({ commandes: [], commandesFlaix: [], chargeA: 0 }),
 }));

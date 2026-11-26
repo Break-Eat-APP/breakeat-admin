@@ -24,6 +24,8 @@ import {
   apiLienRecu,
   apiGetMyOrders,
   apiGetMesCommandesFlaix,
+  apiGetMesSuivisFlaix,
+  apiNoterCommandeFlaix,
   apiMarkArrived,
   formatPrice,
   formatTime,
@@ -208,10 +210,13 @@ export function OrderHistoryScreen() {
    * tient à jour (`/flaix/mes-suivis`) ; on le pose ici sur chaque ticket.
    */
   const suivisFlaix = useSuiviStore((e) => e.commandesFlaix);
+  const suivisParId = useMemo(() => new Map(suivisFlaix.map((s) => [s.id, s])), [suivisFlaix]);
+  /** La commande Flaix dont la feuille de note est ouverte (26/11/2026). */
+  const [flaixANoter, setFlaixANoter] = useState<CommandeFlaix | null>(null);
+  const jetonANoter = useSuiviStore((e) => e.jetonANoter);
   const flaix = useMemo(() => {
-    const parId = new Map(suivisFlaix.map((s) => [s.id, s]));
     return flaixLu.map((c) => {
-      const s = parId.get(c.id);
+      const s = suivisParId.get(c.id);
       if (!s || s.etat === c.etat) return c;
       return {
         ...c,
@@ -222,7 +227,17 @@ export function OrderHistoryScreen() {
         etatDetail: null,
       };
     });
-  }, [flaixLu, suivisFlaix]);
+  }, [flaixLu, suivisParId]);
+
+  // « Note ta commande » touchée : la feuille s'ouvre dès que la commande est
+  // dans la liste (elle peut se charger juste après l'ouverture de l'écran).
+  useEffect(() => {
+    if (!jetonANoter) return;
+    const c = flaixLu.find((x) => x.id === jetonANoter);
+    if (!c) return;
+    useSuiviStore.getState().demanderNote(null);
+    if (suivisParId.get(c.id)?.notable !== false) setFlaixANoter(c);
+  }, [jetonANoter, flaixLu, suivisParId]);
   // Commande dont on regarde le plan — porte le plan ET le nom de la buvette,
   // pour que le titre dise devant laquelle se presenter.
   const [planAffiche, setPlanAffiche] = useState<Order | null>(null);
@@ -522,7 +537,11 @@ export function OrderHistoryScreen() {
           }
           renderItem={({ item }) =>
             estFlaix(item) ? (
-              <TicketFlaix commande={item} />
+              <TicketFlaix
+                commande={item}
+                notable={suivisParId.get(item.id)?.notable === true}
+                onNoter={setFlaixANoter}
+              />
             ) : (
               <OrderCard
                 order={item}
@@ -541,6 +560,23 @@ export function OrderHistoryScreen() {
         title={planAffiche?.supplierName ?? 'Plan des buvettes'}
         onClose={() => setPlanAffiche(null)}
       />
+      {flaixANoter ? (
+        <NoterCommande
+          visible
+          orderId={flaixANoter.id}
+          buvette={flaixANoter.pointDeRetrait}
+          envoyer={(note) => apiNoterCommandeFlaix(flaixANoter.id, note)}
+          onFini={(note) => {
+            setFlaixANoter(null);
+            // Relue au serveur : le bouton disparaît quand la note est enregistrée.
+            if (note != null) {
+              void apiGetMesSuivisFlaix()
+                .then((r) => useSuiviStore.getState().publierFlaix(r))
+                .catch(() => undefined);
+            }
+          }}
+        />
+      ) : null}
       {commandeANoter ? (
         <NoterCommande
           visible
@@ -952,7 +988,16 @@ async function ouvrirLienFlaix(url: string | null) {
  * reçu » mènent aux pages Flaix ; pas de « Je suis arrivé », de plan ni de
  * note (ils demandent une commande BreakEat).
  */
-function TicketFlaix({ commande: c }: { commande: CommandeFlaix }) {
+function TicketFlaix({
+  commande: c,
+  notable = false,
+  onNoter,
+}: {
+  commande: CommandeFlaix;
+  /** Récupérée et pas encore notée (26/11/2026). */
+  notable?: boolean;
+  onNoter?: (commande: CommandeFlaix) => void;
+}) {
   const cfg = uiFlaix(c);
   const live = c.enCours;
   const stepIndex = STEPS.indexOf(cfg.phase);
@@ -1069,6 +1114,17 @@ function TicketFlaix({ commande: c }: { commande: CommandeFlaix }) {
             >
               <Ionicons name="receipt-outline" size={18} color="#fff" />
               <Text style={[styles.actionTexte, styles.actionTexteBlanc]}>Voir le reçu</Text>
+            </Pressable>
+          ) : null}
+          {/* « Noter ma commande » : le même bouton qu'une commande BreakEat (26/11/2026). */}
+          {notable && onNoter ? (
+            <Pressable
+              style={({ pressed }) => [styles.action, styles.actionNoter, pressed && styles.pressed]}
+              onPress={() => onNoter(c)}
+              hitSlop={4}
+            >
+              <Ionicons name="star-outline" size={18} color={THEME.orange} />
+              <Text style={[styles.actionTexte, { color: THEME.orange }]}>Noter ma commande</Text>
             </Pressable>
           ) : null}
         </View>

@@ -121,6 +121,11 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   « Retirer de la vente » proposé à Rémi en attendant (à sa décision).
 >   La 1.1.4 Android suivra (même version, ADR-0005) ; les mises à jour à
 >   distance devront viser la 1.1.3 ET la 1.1.4 tant que les deux coexistent.
+> - **1.7.64 (26/11) — « NOTE TA COMMANDE » POUR FLAIX** : relance 10 min
+>   après la remise (une fois, jamais si déjà notée, plus après 24 h), bouton
+>   sur le ticket récupéré, note en base (`notes_commandes_flaix`, avec le
+>   lieu Flaix). Les notes Flaix ne sont pas encore affichées au club
+>   (statistiques) : à faire.
 > - **Règle de Rémi (26/11) : la flamme suit la DERNIÈRE commande passée**
 >   (1.7.63), plus la plus avancée. « Récupérée » : une minute. Publiée le 26/11 (`a7e419b`) :
 >   `1.1.4 · ios` (`3eb12d91`), `1.1.3 · android` (`73bc1f11`).

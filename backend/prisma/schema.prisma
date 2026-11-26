@@ -275,6 +275,7 @@ model User {
   favoriteVenues      VenueFavorite[]
   suivisFlaix         SuiviCommandeFlaix[]
   liveActivitiesFlaix LiveActivityFlaix[]
+  notesFlaix          NoteCommandeFlaix[]
 
   @@map("users")
 }
@@ -2182,11 +2183,18 @@ model SuiviCommandeFlaix {
   /// Remise, annulée ou expirée : plus rien à lire chez Flaix.
   termine          Boolean   @default(false)
   prochaineLecture DateTime  @default(now()) @map("prochaine_lecture")
+  /// Le lieu et l'événement chez Flaix (nom court, `idInterne`), pour rattacher
+  /// la note au bon club (26/11/2026).
+  lieuFlaix        String?   @map("lieu_flaix")
+  evenementFlaix   String?   @map("evenement_flaix")
+  /// « Note ta commande » envoyée 10 min après la remise (une fois).
+  relanceNoteLe    DateTime? @map("relance_note_le")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
   user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   activites LiveActivityFlaix[]
+  note      NoteCommandeFlaix?
 
   @@index([termine, prochaineLecture])
   @@index([userId])
@@ -2215,4 +2223,29 @@ model LiveActivityFlaix {
   @@index([jeton, status])
   @@index([userId])
   @@map("live_activities_flaix")
+}
+
+/// LA NOTE D'UNE COMMANDE FLAIX (26/11/2026) — le pendant de `OrderRating`
+/// pour une commande passée chez Flaix, qui n'a pas d'`Order` chez BreakEat.
+///
+/// Une note par commande (`jeton` en clé) : la contrainte est en base. 1 à 5
+/// étoiles et 1000 caractères au plus, bornés par la base elle-même. Le lieu
+/// Flaix est figé ici pour que le club retrouve ses notes.
+model NoteCommandeFlaix {
+  jeton          String   @id
+  userId         String   @map("user_id")
+  stars          Int
+  comment        String?
+  numero         String
+  pointDeRetrait String?  @map("point_de_retrait")
+  lieuFlaix      String?  @map("lieu_flaix")
+  evenementFlaix String?  @map("evenement_flaix")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  suivi SuiviCommandeFlaix @relation(fields: [jeton], references: [jeton], onDelete: Cascade)
+  user  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([lieuFlaix, createdAt])
+  @@index([userId])
+  @@map("notes_commandes_flaix")
 }

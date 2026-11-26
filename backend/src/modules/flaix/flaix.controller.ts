@@ -18,7 +18,7 @@ import { GlobalRole } from '../../common/enums/role.enum';
 import { FlaixService } from './flaix.service';
 import { CommandesClientFlaixService } from './commandes-client-flaix.service';
 import { SurveillanceCommandesFlaixService } from './surveillance-commandes-flaix.service';
-import { FORME_JETON, RegisterLiveActivityFlaixDto } from './dto/live-activity-flaix.dto';
+import { FORME_JETON, NoterCommandeFlaixDto, RegisterLiveActivityFlaixDto } from './dto/live-activity-flaix.dto';
 
 /**
  * FlaixController — read-only endpoints for operator dashboards.
@@ -86,6 +86,17 @@ export class FlaixController {
     const moi = await this.prisma.user.findUnique({ where: { id: user.sub }, select: { email: true } });
     const reponse = await this.commandesClient.pourEmail(moi?.email);
     return this.surveillance.suivreDepuisLApp(user.sub, jeton, reponse.commandes);
+  }
+
+  /**
+   * POST /api/v1/flaix/commandes/:jeton/note
+   * « Note ta commande » pour une commande Flaix récupérée (26/11/2026).
+   */
+  @Post('commandes/:jeton/note')
+  @HttpCode(200)
+  noter(@Param('jeton') jeton: string, @CurrentUser() user: JwtPayload, @Body() dto: NoterCommandeFlaixDto) {
+    if (!FORME_JETON.test(jeton)) throw new NotFoundException('Commande introuvable.');
+    return this.surveillance.noter(user.sub, jeton, dto);
   }
 
   /**
