@@ -141,7 +141,8 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 > - **1.7.75 (27/11) — AFFICHES EN GRAND** : carte du match pleine largeur, tuile
 >   entière, à la vraie forme (l'image de couverture Flaix est en paysage,
 >   1200 × 630). C'est l'étape 1 de « images à leur forme d'origine ».
->   **À publier par mise à jour à distance.**
+>   **Publiée le 27/11** (`473b223`) : défaut 1.1.5 (`f9240f41`), `1.1.4 · ios`
+>   (`9d49f0fb`), `1.1.3 · android` (`9974f4ce`).
 > - **1.7.74 (27/11) — CONSOLE : « DRAFT » SUR UN MATCH FLAIX** n'était pas une
 >   panne. Pour un lieu Flaix, le statut ne ferme que s'il vaut suspendu,
 >   annulé ou terminé (ADR-0009). L'admin montre désormais l'état réel
