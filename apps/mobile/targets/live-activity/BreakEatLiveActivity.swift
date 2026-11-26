@@ -33,6 +33,18 @@ private func statusColor(for state: BreakEatOrderAttributes.ContentState) -> Col
   return Brand.orange
 }
 
+/// L'étape en un mot, pour la droite de la Dynamic Island (26/11/2026).
+private func etapeCourte(_ state: BreakEatOrderAttributes.ContentState) -> String {
+  switch state.status {
+  case "READY": return "Prête"
+  case "PREPARING": return "En prépa"
+  case "COLLECTED": return "Récupérée"
+  case "CANCELLED": return "Annulée"
+  case "DELAYED": return "Retard"
+  default: return "Reçue"
+  }
+}
+
 /// Le symbole qui REMPLACE le logo quand il se passe quelque chose.
 ///
 /// `nil` pour le cours normal des choses : c'est alors la marque qui s'affiche.
@@ -446,7 +458,10 @@ private struct LockScreenView: View {
     // au bord — « moche et étouffé » (Rémi, 16/11). Une commande prête n'a
     // plus de progression à montrer : le titre le dit. On la retire, et on
     // resserre un peu.
-    let compacte = state.canAnnounceArrival && !state.hasMissingItems
+    // « Je suis arrivé » n'existe pas pour une commande FLAIX (26/11/2026) :
+    // le comptoir Flaix ne reçoit pas ce signal.
+    let arrivee = state.canAnnounceArrival && !orderId.hasPrefix("flaix-")
+    let compacte = arrivee && !state.hasMissingItems
     VStack(alignment: .leading, spacing: state.hasMissingItems || compacte ? 10 : 13) {
       if state.hasMissingItems {
         MissingHeroRow(state: state)
@@ -466,7 +481,7 @@ private struct LockScreenView: View {
       // au comptoir. Avant, le client n'a rien à signaler ; après, c'est fait.
       // Rien de tout cela en cas de manque : la consigne est déjà d'y aller.
       if !state.hasMissingItems {
-        if state.canAnnounceArrival {
+        if arrivee {
           ArrivalButton(orderId: orderId)
         } else if state.hasArrived, !state.isFinished {
           ArrivedBadge()
@@ -614,7 +629,7 @@ struct BreakEatLiveActivity: Widget {
           Text("N° \(context.state.orderNumber)")
             .font(.system(size: 13, weight: .semibold).monospacedDigit())
             .foregroundStyle(Brand.red)
-        } else if context.state.canAnnounceArrival {
+        } else if context.state.canAnnounceArrival && !context.attributes.orderId.hasPrefix("flaix-") {
           Image(systemName: "figure.wave")
             .foregroundStyle(Brand.green)
         } else if let cible = cibleVisible(context.state, isStale: context.isStale) {
@@ -628,11 +643,11 @@ struct BreakEatLiveActivity: Widget {
             .foregroundStyle(statusColor(for: context.state))
         } else {
           // NI DÉCOMPTE NI HEURE (commande Flaix, 26/11/2026) : la pilule
-          // restait vide à droite. Le numéro, en vert — c'est ce qu'on dit
-          // au comptoir.
-          Text("N° \(context.state.orderNumber)")
-            .font(.system(size: 13, weight: .semibold).monospacedDigit())
-            .foregroundStyle(Brand.green)
+          // restait vide à droite. L'ÉTAPE, dans sa couleur (Rémi : « plus
+          // logique » que le numéro, déjà sur l'écran verrouillé).
+          Text(etapeCourte(context.state))
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(statusColor(for: context.state))
         }
 
       } minimal: {

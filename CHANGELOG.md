@@ -8,7 +8,7 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 ## [1.7.68] — 2026-11-26 — Build 1.1.5 (iOS et Android)
 
 - **Pourquoi** : le widget de la Live Activity revu en 1.7.66 (logo, numéro et « récupérée » en vert, numéro dans la Dynamic Island) est natif : il n’arrive qu’avec une build. Rémi l’a lancée le 26/11.
-- **Contenu natif** : le widget 1.7.66 ; les textes d’autorisation de localisation au tutoiement (BUG-2026-025).
+- **Contenu natif** : le widget 1.7.66, avec l’ÉTAPE (« Reçue », « En prépa », « Prête », « Récupérée ») à droite de la Dynamic Island plutôt que le numéro (Rémi, 26/11 : « plus logique »), et sans « Je suis arrivé » pour une commande Flaix (le comptoir Flaix ne le reçoit pas) ; les textes d’autorisation de localisation au tutoiement (BUG-2026-025). La première build iOS a été annulée pour inclure ces deux points ; la build Android (code 9) n’est pas concernée (widget iOS seulement).
 - **Version 1.1.5** (`app.config.js`). Conséquence (ADR-0005) : les mises à jour à distance visent désormais la 1.1.5 ; pour les téléphones restés sur une build plus ancienne, le workflow accepte une « version visée » avec UNE plateforme (`ios` + `1.1.4`, `android` + `1.1.3`), jamais « all ».
 - ~ `apps/mobile/app.config.js`, `.github/workflows/mise-a-jour-a-distance.yml`
 
