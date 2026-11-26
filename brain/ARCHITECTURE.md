@@ -1,8 +1,9 @@
 # Architecture de BreakEat — l'état réel
 
-> **Mis à jour le 17/11/2026** (rattachement et ouverture automatiques des
-> points de retrait, invitations à accepter, « Au plus vite », tâches
-> planifiées). **Réécrit le 11/11/2026 à partir du code** (gouvernance, étape 3). La
+> **Mis à jour le 26/11/2026** (lieux Flaix : commandes remontées, suivi en
+> base, Live Activity, flux des matchs, ouverture par match, notes ;
+> notifications : catégorie Android, reprise). Le 17/11 : rattachement et
+> ouverture automatiques, invitations, « Au plus vite ». **Réécrit le 11/11/2026 à partir du code** (gouvernance, étape 3). La
 > version précédente (01/06/2026) décrivait l'intention de départ : elle est
 > dans l'historique Git. Ici, ce qui tourne vraiment. En cas de doute, **le
 > code fait foi** — et ce document se corrige.
@@ -74,7 +75,8 @@ L'**entrée réelle** de l'app mobile est `apps/mobile/App.expo.tsx`
 | Lieux et programmation | `venues`, `events` (dont l'**ouverture et la fermeture automatiques**, `ouverture-automatique.service.ts`), `suppliers` (les buvettes, appelées **« points de retrait »** dans la console depuis le 16/11), `pickup-points` (les **comptoirs de retrait**), `slots` (créneaux BreakEat), `categories`, `products`, `stock`. Le rattachement automatique buvette ↔ événement vit dans `common/helpers/rattachement-buvettes.ts` ([ADR-0009](DECISIONS/ADR-0009-points-de-retrait-rattaches-et-ouverture-automatique.md)) |
 | Commande | `cart`, `orders` (machine à états, produits manquants), `order-splits` (« partager l'addition »), `payments` (Stripe), `webhooks` |
 | Temps réel et notifications | `realtime` (Socket.IO, file `RealtimeOutbox`, adaptateur Redis), `live-activity` (APNs + webhooks Flaix), `notifications` (Expo Push, campagnes programmées, cloche) |
-| Flaix | `flaix` (rapports, décisions — le « cœur décisionnel » est un stub sans appelant, voir REPRISE) |
+| Flaix | `flaix` : **commandes du client** lues chez Flaix (`commandes-client-flaix.service.ts`) ; **suivi en base**, « prête », Live Activity et « Note ta commande » (`surveillance-commandes-flaix.service.ts`) ; **import du flux des matchs** (`import-matchs-flaix.service.ts`, `flux-matchs-flaix.ts`, réglage par lieu dans `flux-matchs-flaix.controller.ts`) ; rapports. Le « cœur décisionnel » (rush, décisions) reste un stub sans appelant, voir REPRISE |
+| Favoris | `favorites` : copie serveur des lieux suivis, pour le ciblage des campagnes ([ADR-0013](DECISIONS/ADR-0013-campagnes-vers-ceux-qui-suivent-le-lieu.md)) |
 | Club | `loyalty` (fidélité), `stats`, `frequentation` (visites de l'app), `clients`, `documents` (contenu en base), `courriel`, `app-settings`, `feature-flags` |
 
 ---
@@ -119,11 +121,34 @@ d'annoncer « prête » (`ready_announce_due_at`)
 Le client touche le lieu → écran **Saison** (calendrier des matchs) →
 « Commander » → le **serveur** choisit le lien Flaix du match selon l'heure
 (`common/helpers/fenetre-commande.ts`) → page Flaix dans l'app, identité du
-client glissée par étiquettes (`[#firstname]`, `[#mail]`…). **La commande
-Flaix ne remonte pas encore chez BreakEat** : c'est le flux E1 du cahier des
-charges, attendu du développeur Flaix
-([ADR-0003](DECISIONS/ADR-0003-lien-de-commande-par-evenement.md),
-`brain/FLAIX_FLUX_EVENEMENTS_CAHIER_DES_CHARGES.md`).
+client glissée par étiquettes (`[#firstname]`, `[#mail]`…)
+([ADR-0003](DECISIONS/ADR-0003-lien-de-commande-par-evenement.md)).
+
+**Depuis le 21-26/11, la commande Flaix remonte chez BreakEat. Pas de webhook :
+on interroge** ([ADR-0015](DECISIONS/ADR-0015-commandes-flaix-lues-par-email.md)).
+
+1. « Mes commandes » lit chez Flaix les commandes de l'e-mail du compte
+   (`GET /flaix/mes-commandes`).
+2. Après le paiement, la page Flaix de l'app repère la nouvelle commande par
+   différence de liste. Elle demande au serveur de la suivre
+   (`POST /flaix/commandes/:jeton/suivi`) et démarre la Live Activity.
+3. Le serveur suit la commande **en base** (`SuiviCommandeFlaix`) :
+   - il lit son état toutes les 15 s, puis toutes les 60 s après « prête » ;
+   - il pousse chaque étape à la Live Activity (APNs) ;
+   - il envoie « Ta commande est prête » (Expo, avec son) ;
+   - 10 min après la remise, il envoie « Note ta commande ».
+4. L'app lit l'état en direct dans **notre** base (`GET /flaix/mes-suivis`),
+   jamais chez Flaix en boucle.
+
+**Les matchs viennent de Flaix** ([ADR-0018](DECISIONS/ADR-0018-import-du-flux-des-matchs-flaix.md)) :
+- import toutes les 10 min, lieu par lieu (`Venue.flaixFluxActif`, réglé dans
+  l'admin) ;
+- nom, horaires, lien et **heure d'ouverture de la commande**
+  (`Event.ordersOpenAt`) viennent du flux ;
+- ces champs sont verrouillés côté serveur.
+
+Le détail, bloc par bloc : `brain/ENGINEERING_MANUAL.md`, « Les blocs livrés
+du 21 au 26/11/2026 ».
 
 ### 4.3 Le temps réel
 Socket.IO, salons par organisation / événement / buvette (isolation
@@ -138,10 +163,18 @@ par REST. Contrats : `brain/REALTIME_CONTRACTS.md`.
 - **Live Activity** (iPhone, écran verrouillé) : mise à jour à chaque étape,
   **en silence** ; seules « prête » et « produit manquant » allument l'écran
   avec un son. Cible native : `apps/mobile/targets/live-activity`.
-- **Notification classique** (Expo Push) : « prête » quand aucune Live
-  Activity n'est atteinte ; campagnes des clubs (clients ayant commandé
-  dans le club — BUG-2026-011 pour les lieux Flaix).
-- Rattrapage de l'annonce « prête » chaque minute (`@Cron`).
+- **Notification classique** (Expo Push) :
+  - « prête » quand aucune Live Activity n'est atteinte ;
+  - campagnes des clubs, vers « a commandé OU suit le lieu » (ADR-0013).
+- **Commande Flaix** : « prête » et « Note ta commande » par Expo. La Live
+  Activity avance en silence (`surveillance-commandes-flaix.service.ts`).
+- **Android** : les notifications de commande passent par la catégorie
+  « Commandes » (importance haute, son, bannière), créée par l'app. Le serveur
+  ne la vise que pour les téléphones qui l'ont déclarée
+  (`PushToken.canalCommandes`).
+- Rattrapage de l'annonce « prête » chaque minute (`@Cron`). **Un envoi Expo
+  ne lève jamais** : un bilan `sent: 0` laisse l'annonce due, et elle est
+  reprise (BUG-2026-057).
 
 ### 4.5 Les tâches planifiées (`@Cron`, dans le serveur)
 
@@ -159,6 +192,8 @@ Chacune est **rattrapable** (une minute ratée se refait à la suivante) et
 | « Partager l'addition » : envois interrompus remboursés, l'addition rouverte | toutes les 5 min | `order-splits/order-splits.service.ts` |
 | **Paiements abandonnés** : paniers en attente de paiement depuis 30 min — Stripe vérifié puis annulé, points / place / stock rendus (17/11) | toutes les 5 min | `cart/paiements-abandonnes.service.ts` |
 | Fidélité : points réservés par un panier expiré, rendus | toutes les 5 min | `loyalty/loyalty.service.ts` |
+| **Suivi des commandes Flaix** : état, Live Activity (avec rattrapage), « prête », « Note ta commande ». Chaque suivi est réservé avant traitement | toutes les 15 s (`@Interval`) | `flaix/surveillance-commandes-flaix.service.ts` |
+| **Import du flux des matchs Flaix** (lieux activés, ETag) | toutes les 10 min (`@Interval`) | `flaix/import-matchs-flaix.service.ts` |
 
 Hors serveur, dans GitHub Actions : sauvegarde de nuit, essai de restauration
 mensuel, audit des dépendances, mise à jour à distance (lancée à la main).

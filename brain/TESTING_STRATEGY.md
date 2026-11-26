@@ -44,6 +44,44 @@ Required for:
 - realtime outbox behavior;
 - dashboard snapshot endpoint;
 - supplier duplication joins upcoming events, closed (`duplication-buvette.int-spec.ts`).
+- Flaix order tracking (`suivi-commandes-flaix.int-spec.ts`, 24-26/11/2026):
+  - each followed order is reserved before it is processed, so two server
+    instances never handle the same order;
+  - Live Activity updates are retried after an APNs error and pushed to a
+    late-registered activity;
+  - "Note ta commande" goes out once, 10 min after hand-over;
+  - the live state is scoped to its own customer.
+- Flaix match feed import (`import-matchs-flaix.int-spec.ts`):
+  - the preview writes nothing;
+  - activation is venue by venue;
+  - one club cannot touch another club's venue;
+  - imported fields are locked.
+
+## Rules learnt in November 2026
+
+- **No fixed dates in tests.** Build them from the clock (`Date.now()` ±
+  offsets). Two suites broke because a fixed date slipped into the past
+  (BUG-2026-052, CI red on `main`). Another suite kept a production bug alive
+  with June dates (BUG-2026-053, a finished match still shown "open").
+- **Simulate the production failure, not the convenient one.**
+  `ExpoPushService.send()` never throws: an outage comes back as
+  `{ sent: 0, failed: n }`. A test that only made `send` reject missed
+  BUG-2026-057.
+- **Mobile Jest does not resolve the `@lib` alias.**
+  - Import relatively in a module under test, or mock it with
+    `{ virtual: true }`.
+  - Variables used inside a `jest.mock` factory must start with `mock`; read
+    them through a getter if the factory runs before they exist.
+  - Use `require`, not a dynamic `import()`: Jest runs without
+    `--experimental-vm-modules`.
+- **Server type-check is `pnpm run typecheck`**: it also checks
+  `tsconfig.tests.json` (integration tests).
+- **Integration tests on the workstation.** Use Docker:
+  - `postgres:18-alpine` on port 15432 and `redis:7-alpine` on port 16379
+    (ports 55432 and up are reserved by Windows);
+  - then `prisma migrate deploy`;
+  - then `pnpm test:integration`, with `DATABASE_URL_TEST` and
+    `REDIS_URL_TEST` set.
 
 They run in CI on a real PostgreSQL after replaying every migration
 (`.github/workflows/ci.yml`, job « Tests d'integration (base reelle) »).

@@ -7,6 +7,27 @@ n'est encore développé : ni côté Flaix, ni
 côté BreakEat. Ce document fixe le format, pour que les deux côtés puissent
 avancer chacun de leur côté.
 
+> **État au 26/11/2026 — ce qui est livré :**
+>
+> **B, le flux des matchs** : livré par Flaix le 24/11
+> (`/api/public/lieux/<nom-court>/evenements`).
+> - BreakEat l'importe toutes les 10 min, lieu par lieu, avec l'heure
+>   d'ouverture de chaque match (1.7.54, 1.7.57, 1.7.58, ADR-0018).
+> - Le réglage se fait dans l'admin : « Calendrier Flaix ».
+>
+> **E1, les commandes Flaix dans l'app** : livré sans webhook (décision de
+> Rémi du 24/11).
+> - BreakEat lit la liste par e-mail et suit chaque commande par
+>   `/orders/<jeton>/status`, en base, toutes les 15 s.
+> - On y gagne « Mes commandes », « Ta commande est prête », la Live Activity
+>   et « Note ta commande » (1.7.44 → 1.7.65).
+> - La fidélité sur les commandes Flaix n'est **pas** faite.
+>
+> **C, D, E2 et E3** : non commencés.
+>
+> Le détail technique : `brain/ENGINEERING_MANUAL.md`, « Les blocs livrés du
+> 21 au 26/11/2026 ».
+
 **Trois besoins distincts :**
 
 1. **Le calendrier** (A, B, C) — que BreakEat lise les matchs saisis dans
@@ -286,6 +307,18 @@ inutiles : **B, E1, E2 et E3 suffisent.**
 
 #### E1 — Les commandes Flaix remontent dans BreakEat (à construire par Flaix)
 
+> **Mise à jour du 26/11/2026 : ce qui suit a été tranché.** Pas de
+> webhook : BreakEat interroge le suivi `/status` de chaque commande, en base,
+> toutes les 15 s jusqu'à « prête », puis toutes les 60 s.
+> - Les états réellement rencontrés sont `queued`, `assigned`
+>   (= en préparation, découvert en vrai le 25/11), `ready` et `delivered`.
+>   Un état inconnu est journalisé.
+> - Flaix ne met pas le jeton dans l'adresse après paiement : l'app repère la
+>   commande par différence de liste. Elle accepte aussi un `postMessage`
+>   `flaix_commande` si le développeur Flaix l'ajoute.
+>
+> Le texte d'origine est conservé ci-dessous pour l'historique.
+>
 > **Où on en est au 21/11/2026.** Flaix a livré une **API de lecture** :
 > `POST /api/public/clients/commandes` (clé `X-Api-Key`, corps `{ email }`),
 > qui rend les commandes d'un client, plus l'adresse publique de suivi

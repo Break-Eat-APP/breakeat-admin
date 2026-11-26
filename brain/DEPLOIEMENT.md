@@ -106,7 +106,22 @@ npx eas-cli submit --platform ios --profile beta --id <id de la build> --non-int
 ```
 
 Le numéro de build monte tout seul (`appVersionSource: remote`). Apple traite
-la build 5 à 10 minutes avant qu'elle n'apparaisse dans TestFlight.
+la build 5 à 30 minutes avant qu'elle n'apparaisse dans TestFlight, puis dans
+la section « Build » de la version sur App Store Connect.
+
+**Une build finie sur EAS n'est PAS chez Apple** : tant que `eas submit` n'a
+pas tourné, la section « Build » d'App Store Connect reste vide (« Chargez vos
+builds… »). Constaté le 26/11 avec la build 49. L'envoi vers Apple se lance
+depuis le poste de Rémi. L'agent en a été empêché le 26/11 par le mode
+automatique de Claude Code.
+
+**Limite : 15 builds EAS par mois** (forfait de Rémi, rappelé le 26/11). Aucune
+build sans son accord explicite. Une build annulée compte aussi. Grouper les
+changements natifs.
+
+**iOS 27** : `expo-build-properties` → `ios.enableSceneSupport: true`
+(`app.config.js`). Sans lui, une build faite avec le SDK iOS 27 est tuée au
+lancement (BUG-2026-049, build 1.1.4). **Ne jamais le retirer.**
 
 **La règle de version** ([ADR-0005](DECISIONS/ADR-0005-runtime-version-version-de-l-app.md)) :
 tout changement **natif** (icône, écran d'ouverture, permission, module natif,
@@ -116,9 +131,31 @@ les mises à jour à distance.
 
 **Une mise à jour à distance** (JavaScript seulement : écrans, textes,
 design) : GitHub → Actions → « Mise a jour a distance » → Run workflow →
-message, plateforme `all`. **Pas depuis le poste** (2 à 3 Go nécessaires). Le
-téléphone la reçoit au lancement et l'applique au suivant (fermer et rouvrir
-l'app, parfois deux fois).
+message, plateforme `all`. Depuis le nouveau poste (16 Go, 21/11), elle part
+aussi en local (voir plus bas). Le téléphone la reçoit au lancement et
+l'applique au suivant (fermer et rouvrir l'app, parfois deux fois).
+
+**Plusieurs versions installées en même temps : publier une fois PAR
+version.** Une mise à jour ne s'installe que sur la version qu'elle vise
+(`runtimeVersion` = version de l'app). Au 26/11, il y a trois publications par
+livraison :
+
+| Pour | Workflow GitHub | En local (`apps/mobile`) |
+|---|---|---|
+| 1.1.5 (iOS et Android) | plateforme `all`, version visée vide | `npx eas-cli update --channel production --environment production --platform all --message "…" --non-interactive` |
+| iPhones restés en 1.1.4 | plateforme `ios`, version visée `1.1.4` | même commande, précédée de `VERSION_VISEE=1.1.4`, avec `--platform ios` |
+| Android restés en 1.1.3 | plateforme `android`, version visée `1.1.3` | même commande, précédée de `VERSION_VISEE=1.1.3`, avec `--platform android` |
+
+En local, charger d'abord les variables `env` du profil `beta` de `eas.json`
+et `NODE_OPTIONS=--max-old-space-size=6144`. **EAS refuse un arbre Git sale** :
+un fichier non suivi (un audit déposé dans `brain/audits/`, par exemple) bloque
+la publication. Le mettre de côté le temps de publier, ou le committer.
+
+Le workflow refuse une version visée avec `all` : une version ancienne n'est
+pas la même sur les deux plateformes. On retire une ligne du tableau quand
+plus aucun téléphone n'a cette version (tableau de bord EAS → Updates).
+Erreur du 24/11 à ne pas refaire : publier « 1.1.4 » pour Android, où personne
+n'a la 1.1.4. La mise à jour n'arrive alors à aucun Android.
 
 **Android** (même code, même version) :
 
@@ -133,16 +170,25 @@ bibliothèques natives, l'absence de Google Play Billing et de la permission
 `AD_ID` (contrôle fait le 17/11, `brain/taches/2026-11-17-soumission-stores-1.1.3.md`).
 Dépôt : Play Console → Tests internes ou Production → modifier la version →
 déposer l'`.aab` → notes de version entre `<fr-FR>` et `</fr-FR>` (500
-caractères au plus) → envoyer pour examen.
+caractères au plus) → envoyer pour examen. Le lien de l'`.aab` se lit dans
+EAS (`npx eas-cli build:view <id> --json` → `artifacts.buildUrl`). La clé du
+compte de service Play (`google-play-service-account.json`) **n'est pas sur le
+poste** : pas d'`eas submit` pour Android.
 
 **Les captures App Store** : onglet « iPhone avec Dynamic Island (écran
 moyen) », **1206 × 2622** ou 1179 × 2556 (les 1320 × 2868 y sont refusées).
 Google Play : 1080 × 1920, bannière 1024 × 500, icône 512 × 512.
 
-Au 17/11/2026 : **version 1.1.3** — iOS **build 46** en vérification chez
-Apple ; Android **code de version 7** en examen chez Google ; mise à jour à
-distance 1.1.3 publiée le 16/11 (`1fbdf46`), à relancer après les corrections
-du 17/11.
+Au 26/11/2026 :
+- **iOS** : la 1.1.4 (build 47, correctif iOS 27) est sur l'App Store. La
+  **1.1.5 (build 49)** est construite, à envoyer à Apple puis en vérification
+  par Rémi.
+- **Android** : la 1.1.3 (code 7) est sur Play. La **1.1.5 (code 9)** est
+  construite, à déposer dans la Play Console.
+- Mises à jour à distance : la dernière est la 1.7.71, publiée sur les trois
+  versions.
+
+(Au 17/11 : 1.1.3, iOS build 46, Android code 7.)
 
 ## Les sauvegardes
 

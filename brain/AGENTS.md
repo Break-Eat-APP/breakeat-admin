@@ -1,6 +1,6 @@
 # Les agents sur BreakEat — qui fait quoi, et comment
 
-> **Réécrit le 11/11/2026** (gouvernance, étape 3). La version du 01/06/2026
+> **Mis à jour le 26/11/2026** (limites de l'agent : builds, envoi aux stores, manuel). **Réécrit le 11/11/2026** (gouvernance, étape 3). La version du 01/06/2026
 > est dans l'historique Git. Les **règles** communes à tous les agents sont
 > dans [`CLAUDE.md`](../CLAUDE.md) à la racine — ce fichier-ci dit les
 > **rôles**, la **coordination** et le **compte rendu**.
@@ -18,6 +18,7 @@ s'il pense qu'elle est fausse, il le **dit** à Rémi au lieu de la changer.
 |---|---|---|
 | **Rémi** | Décide du produit et des règles métier ; valide les déploiements, les mises à jour à distance, les builds ; détient tous les accès (Railway, Stripe, Vercel, Apple, Google, Expo, GitHub) | — |
 | **Claude Code** | Agent principal : diagnostic, conception, implémentation, tests, documentation, builds et envois TestFlight à la demande ; **guide** Rémi dans App Store Connect et la Play Console (textes, visuels, déclarations vérifiées dans le code, contrôle des `.aab`) | Ne voit aucun tableau de bord (Railway, Stripe, Vercel, stores) : **demande les journaux ou une capture** ; ne saisit jamais d'identifiant ; n'accepte aucun contrat à la place de Rémi ; ne publie rien sans son accord |
+| **Claude Code — ce qui demande Rémi (26/11/2026)** | — | **15 builds EAS par mois** : aucune build sans son accord. Les mises à jour à distance se demandent à chaque fois (« Oui, publie-les »), puis partent sur **chaque version installée** (voir `brain/DEPLOIEMENT.md`). L'envoi d'une build à Apple (`eas submit`) a été **bloqué par le mode automatique** de Claude Code le 26/11 : Rémi le lance lui-même. La clé Play n'est pas sur le poste : l'`.aab` se dépose à la main |
 | **Codex** | **Audits** : relecture du code et des changements récents, rapports datés (`AUDIT_*.md`) | Ne modifie pas le code ; ses rapports se rangent dans `brain/audits/` avec la réponse de Claude (corrigé / écarté / assumé, et pourquoi) |
 | **Cursor** | Pas utilisé à ce jour | S'il l'est : mêmes règles, et jamais sur les mêmes fichiers qu'un autre agent en même temps |
 | **Développeur Flaix** | Construit côté Flaix ce que décrit `brain/FLAIX_FLUX_EVENEMENTS_CAHIER_DES_CHARGES.md` (dossier PDF : `brain/livrables/`) | N'a pas accès à ce dépôt à ce jour |
@@ -47,6 +48,7 @@ pas pu l'être), les risques, la suite.
 | Un bug ou un incident | `brain/BUGS_ET_INCIDENTS.md` |
 | Une décision qui engage | `brain/DECISIONS/` |
 | **Tâche importante** : migration, paiement, intégration Flaix, sécurité, incident `SEV-0`/`SEV-1` | Un compte rendu daté dans `brain/taches/`, au [modèle](taches/MODELE.md) |
+| **Tout bloc de code livré** (nouvelle fonction, nouveau service, nouvelle table) | `brain/ENGINEERING_MANUAL.md`, au format du manuel : quoi, pourquoi, comment, **références de code**, données, tests, risques, débogage. Plus la ligne dans `GUIDE_DEVELOPPEMENT/CARTE_DU_CODE.md` ; et `brain/DOMAIN_MODEL.md` si le schéma change |
 
 `brain/TASK_SUMMARY.md` (jusqu'au 09/11/2026) est l'ancien journal des
 tâches, gardé pour l'historique ; les nouveaux comptes rendus vont dans

@@ -2,6 +2,18 @@
 
 Version: living developer handbook
 
+## Dernière mise à jour
+
+- **26/11/2026 — 1.7.71 — Claude Code (pour Rémi)** : ajout de « Les blocs
+  livrés du 21 au 26/11/2026 », en fin de document. Il couvre les commandes
+  Flaix dans « Mes commandes », le suivi durable, la Live Activity et
+  « prête » Flaix, l'import du flux des matchs, « Note ta commande », la
+  flamme, les notifications (enregistrement, état, reprise, catégorie
+  Android), iOS 27 et les builds 1.1.4 et 1.1.5, les corrections Android et
+  le tri de « Mes commandes ». Raison : passation (gouvernance § 7).
+  Références : CHANGELOG 1.7.42 → 1.7.71, ADR-0013, 0015, 0018, BUG-2026-049
+  → 058.
+
 ## Purpose
 
 This document is the technical notice for BREAK EAT.
@@ -8455,5 +8467,577 @@ collecte **après l'avoir lu**, pas de mémoire.
 La production encaisse en mode test pendant la vérification des stores :
 publication manuelle des deux côtés (ADR-0012), Stripe en production avant
 le clic.
+
+---
+
+## Les blocs livrés du 21 au 26/11/2026 (1.7.42 → 1.7.71)
+
+Cette partie suit le format obligatoire de ce manuel, bloc par bloc. Elle
+s'adresse à un développeur qui reprend le code : ce qui existe, pourquoi,
+comment ça tourne, où regarder, comment le casser sans le vouloir et comment
+le déboguer. Le détail livraison par livraison est dans `CHANGELOG.md`
+(1.7.42 → 1.7.71). Les décisions sont dans `brain/DECISIONS/` (ADR-0013,
+0015, 0018), les bugs dans `brain/BUGS_ET_INCIDENTS.md` (BUG-2026-049 à 058)
+et les comptes rendus dans `brain/taches/` (21 au 26/11).
+
+Les numéros de ligne sont ceux de `a3fe555`. Si un numéro a bougé, cherchez le
+nom de la fonction.
+
+### Vue d'ensemble : une commande Flaix, de bout en bout
+
+```
+ Client (app BreakEat)              Serveur BreakEat (Railway)                 Flaix
+ ──────────────────────             ──────────────────────────                 ─────
+ Page de commande Flaix  ─────────────────────────────────────────────────▶  commande + paiement
+ (WebView, relais-flaix)
+   │ à l'ouverture : liste des commandes du client (GET /flaix/mes-commandes) ◀── liste par e-mail
+   │ après paiement : relit la liste → nouvelle commande repérée
+   ├─ POST /flaix/commandes/:jeton/suivi ──▶ SuiviCommandeFlaix (en base)
+   ├─ démarre la Live Activity (iOS, app à l'écran)
+   └─ POST /flaix/live-activities ─────────▶ LiveActivityFlaix (jeton APNs)
+                                            │ toutes les 15 s : /orders/<jeton>/status ──▶ état
+                                            ├─ état changé → mise à jour APNs de la Live Activity
+                                            ├─ « ready » → push Expo « Ta commande est prête » (son)
+                                            ├─ « delivered » → fin d'activité, remiseLe
+                                            └─ +10 min → push « Note ta commande »
+ « Mes commandes », flamme  ◀── GET /flaix/mes-suivis (lu dans NOTRE base, zéro appel Flaix)
+```
+
+Trois règles tiennent tout l'ensemble :
+- **Flaix est la source de vérité** de l'état. BreakEat lit, ne décide jamais
+  (CLAUDE.md § 2, règle 4).
+- **Ce qui compte est en base**, pas en mémoire. Un redémarrage du serveur ne
+  perd aucun suivi (ADR-0015, réécrit le 24/11).
+- **Pas de webhook** (décision de Rémi du 24/11) : on interroge, à un rythme
+  borné.
+
+---
+
+### [2026-11-21] Favoris au serveur, campagnes vers ceux qui suivent le lieu (1.7.42 → 1.7.43)
+
+**Ce qui a été construit.** La table `venue_favorites` et la route
+`PUT /api/v1/favorite-venues`. Le ciblage des campagnes devient « a commandé
+OU suit le lieu ».
+
+**Pourquoi.** Les commandes Flaix ne créent pas d'`Order` BreakEat. Une
+campagne d'un lieu Flaix visait donc zéro appareil (BUG-2026-011, ADR-0013).
+
+**Comment ça marche.** L'app envoie la liste entière de ses favoris à chaque
+enregistrement et à chaque connexion. Le serveur remplace la liste, écarte
+les lieux inconnus et en garde 200 au plus. L'utilisateur vient toujours du
+jeton, jamais de la requête.
+
+**Références de code.**
+- `backend/src/modules/favorites/favorites.service.ts` : le remplacement de la
+  liste.
+- `backend/src/modules/notifications/scheduled-push.service.ts`
+  (`destinataires`) : le ciblage.
+
+**Tests.** `favorites.service.spec.ts` et
+`test/integration/favoris-campagne.int-spec.ts`. Compte rendu complet :
+`brain/taches/2026-11-21-favoris-serveur-campagnes.md`.
+
+---
+
+### [2026-11-21 → 23] Les commandes Flaix dans « Mes commandes » (1.7.44 → 1.7.50)
+
+**Ce qui a été construit.** L'écran « Mes commandes » montre aussi les
+commandes passées chez Flaix, avec le même ticket que les commandes BreakEat.
+
+**Pourquoi.** Dans un lieu piloté par Flaix, le client paie chez Flaix. Sans
+ce bloc, l'app ne savait rien de ses commandes (ADR-0015).
+
+**Comment ça marche.**
+1. `GET /flaix/mes-commandes` (client connecté) demande à Flaix les commandes
+   de l'e-mail du compte (`FLAIX_COMMANDES_URL`, clé `FLAIX_COMMANDES_API_KEY`).
+2. Chaque commande brute est convertie en `CommandeFlaix` : numéro, point de
+   retrait, `passeeLe`, état, phrase d'état au tutoiement et jeton.
+3. Pour une commande en cours, l'état est complété par le suivi
+   `/api/public/orders/<jeton>/status`. On garde l'étape **la plus avancée**
+   (`rangEtat`). Une fin (récupérée, annulée) l'emporte toujours.
+4. La réponse est complétée par l'image du lieu BreakEat et le logo du club
+   (`avecImagesDuLieu`). On les retrouve par l'événement importé, sinon par le
+   nom court du lieu.
+5. L'app dessine `TicketFlaix` : mêmes styles que le ticket BreakEat, état
+   traduit par `uiFlaix`.
+
+**Références de code.**
+- `backend/src/modules/flaix/commandes-client-flaix.service.ts:251`
+  (`pourEmail`) : l'appel à Flaix, éteint sans les variables.
+- `…:301` (`convertir`) : la forme d'une commande. Un champ inattendu est
+  ignoré, jamais une erreur.
+- `…:196` (`phraseEtat`), `…:223` (`rangEtat`) : la phrase client et l'ordre
+  des étapes (`queued` < `assigned`/`preparing` < `ready` < `delivered`).
+- `…:360` (`lireEtat`) : le suivi par jeton.
+- `backend/src/modules/flaix/flaix.controller.ts:50` : la route.
+- `apps/mobile/src/screens/order-history.screen.tsx:962` (`uiFlaix`) et
+  `TicketFlaix` : l'affichage.
+
+**Flux de données.** E-mail du compte → Flaix → conversion → app. **Rien en
+base** pour la liste : elle est relue à chaque ouverture de l'écran.
+
+**Risques et règles.**
+- **Ne jamais interroger la liste en boucle** : le contrat Flaix l'interdit.
+  Le direct passe par `/flaix/mes-suivis`, voir le bloc suivant.
+- Le jeton est un **droit d'accès** : jamais dans un journal, jamais renvoyé à
+  un autre client.
+- Le vocabulaire de Flaix n'est pas tout documenté. `assigned` = « en
+  préparation » a été découvert en vrai le 25/11. Un état inconnu est
+  journalisé une fois (« État de suivi Flaix inconnu »).
+- « remise » (mot de l'opératrice) se lit « Récupérée » pour le client.
+
+**Débogage.**
+- Liste vide : vérifier les deux variables dans Railway, puis l'e-mail du
+  compte (un compte Apple masqué n'a pas le même e-mail chez Flaix).
+- Étape figée : chercher le numéro de commande dans le journal Railway.
+
+---
+
+### [2026-11-24 → 26] Suivi durable, « prête » et Live Activity des commandes Flaix (1.7.53, 1.7.56, 1.7.60 → 1.7.62, 1.7.65)
+
+**Ce qui a été construit.**
+- Le suivi des commandes Flaix **en base** (`SuiviCommandeFlaix`).
+- La notification « Ta commande est prête ».
+- La Live Activity iOS d'une commande Flaix (`LiveActivityFlaix`).
+- L'état en direct pour l'app (`/flaix/mes-suivis`).
+- La détection, par l'app, de la commande qui vient d'être payée.
+
+**Pourquoi.** Avant le 24/11, la surveillance vivait en mémoire. Un
+redémarrage l'effaçait, et le serveur n'apprenait une commande qu'en lisant
+« Mes commandes ». Le client qui rangeait son téléphone après avoir payé ne
+recevait rien.
+
+**Comment ça marche, côté app.**
+1. La page de commande Flaix (`relais-flaix.native.tsx`) note les commandes
+   du client à l'ouverture.
+2. Quand une page se pose, quand on la quitte et au retour dans l'app, elle
+   relit la liste. `nouvellesCommandes` en extrait toute commande en cours
+   apparue depuis : c'est la sienne. C'est nécessaire parce qu'après le
+   paiement, Flaix reste sur l'adresse du match (`/o/<match>`) : **il n'y a pas
+   de jeton dans l'adresse** (BUG-2026-054).
+3. Pour chaque nouvelle commande, `suivreCommandeFlaixDansLApp` :
+   - demande au serveur de la suivre ;
+   - démarre la Live Activity `flaix-<jeton>`, seulement si l'app est à
+     l'écran (exigence d'iOS) ;
+   - envoie son jeton APNs.
+4. Une commande n'est retenue comme suivie (`suivies`) qu'une fois l'activité
+   réellement démarrée, ou si l'appareil n'a pas de Live Activity. Un échec se
+   retente à la détection suivante. `enCours` empêche deux démarrages
+   simultanés.
+5. La page Flaix peut aussi envoyer elle-même `flaix_commande` (avec le jeton)
+   ou `flaix_fermer` par `postMessage`. `window.close()` est remplacé, avant
+   le chargement, par `flaix_fermer`, qui ouvre « Mes commandes »
+   (`INTERCEPTION_FERMETURE`).
+
+**Comment ça marche, côté serveur.**
+1. `POST /flaix/commandes/:jeton/suivi` n'accepte qu'une commande **présente
+   dans la liste du client**. Le serveur crée le suivi, et ignore une commande
+   déjà suivie.
+2. `tourner()` passe toutes les 15 s, 300 suivis au plus par tour, par paquets
+   de 10.
+3. Chaque suivi est **réservé** avant traitement par une mise à jour
+   conditionnelle (`reserverPuisVerifier`). Deux instances du serveur ne
+   traitent donc jamais la même commande.
+4. `verifier` lit l'état chez Flaix :
+   - le rythme est de 15 s jusqu'à « prête », puis 60 s jusqu'à la remise ;
+   - après 12 h, le suivi est abandonné ;
+   - « prête » est annoncée **une fois** : push Expo avec son, 3 essais
+     au plus ; un résultat `sent: 0` compte comme un échec ;
+   - à la remise, `remiseLe` est posé et les activités sont fermées.
+5. `rattraperActivites` repousse l'état à chaque Live Activity dont
+   `etatEnvoye` diffère de l'état courant. Cela couvre deux cas : la reprise
+   après une erreur APNs, et une activité enregistrée après un changement
+   d'état. Ce rattrapage s'arrête une heure après la fin.
+6. `GET /flaix/mes-suivis` rend l'état de ces suivis, lu dans **notre** base,
+   dans le vocabulaire d'une commande BreakEat. Aucun appel à Flaix.
+
+**Références de code.**
+- `backend/src/modules/flaix/surveillance-commandes-flaix.service.ts` :
+  - `:50-76` : tous les rythmes et toutes les limites, en constantes nommées ;
+  - `:142` (`suivreDepuisLApp`), `:109` (`surveiller`) : l'entrée d'un suivi ;
+  - `:172` (`mesSuivis`) : l'état pour l'app ;
+  - `:295` (`enregistrerActivite`) : le jeton APNs d'une activité ;
+  - `:327` (`tourner`), `:354` (`reserverPuisVerifier`), `:363` (`verifier`) :
+    la boucle ;
+  - `:438` (`rattraperActivites`) : la reprise des Live Activities ;
+  - `:498` (`annoncer`) : le push « prête », avec la catégorie Android pour les
+    appareils qui l'ont.
+- `backend/src/modules/flaix/etat-widget-flaix.ts:32` (`statutWidget`) :
+  - traduit l'état Flaix en état du widget (CREATED, PREPARING, READY,
+    COLLECTED, CANCELLED) ;
+  - `assigned`, `processing` et `started` donnent PREPARING.
+- `backend/src/modules/flaix/flaix.controller.ts` :
+  - `:100` `mes-suivis` ;
+  - `:113` `commandes/:jeton/suivi` ;
+  - `:137` `live-activities` (renvoie `{ ok: true }`, jamais un 204 vide).
+- `apps/mobile/src/components/relais-flaix.native.tsx:94-137` : `suivies`,
+  `enCours`, les messages et la détection.
+- `apps/mobile/src/lib/suivi-commande-flaix.ts` : fonctions pures et testées :
+  - `jetonDeLAdresse`, `jetonDuMessage`, `estMessageFermer` ;
+  - `nouvellesCommandes:89`, avec une marge de 2 min sur l'heure.
+- `apps/mobile/src/lib/live-activity-tracking.ts:167`
+  (`suivreCommandeFlaixDansLApp`) : rend une `IssueSuivi` (`suivie`,
+  `sans_activite`, `a_retenter`).
+- Widget natif : `apps/mobile/targets/live-activity/BreakEatLiveActivity.swift`.
+  Il est commun aux commandes BreakEat et Flaix. Une commande Flaix n'a pas
+  « Je suis arrivé » (`:463`, `:632` : `hasPrefix("flaix-")`).
+
+**Données.**
+- `suivis_commandes_flaix` (clé = le jeton) ;
+- `live_activities_flaix` (un jeton APNs par activité, `etat_envoye`) ;
+- migrations `20261124b_suivi_commandes_flaix` et
+  `20261126b_etat_envoye_live_activity_flaix`.
+
+La table des Live Activities BreakEat n'est **pas** touchée : c'est une table à
+part, pour ne rien casser du parcours BreakEat.
+
+**Dépendances.**
+- `ApnsService` (exporté par `LiveActivityModule`) ;
+- `ExpoPushService` ;
+- `PushTokensService` ;
+- `CommandesClientFlaixService` (lecture chez Flaix).
+
+**Tests.**
+- `backend/test/integration/suivi-commandes-flaix.int-spec.ts`, sur une base
+  réelle : reprise APNs, enregistrement tardif, deux instances, état en direct
+  cloisonné par client ;
+- `apps/mobile/src/lib/__tests__/suivi-commande-flaix.test.ts`,
+  `signal-commande-flaix.test.ts`.
+
+Vérifié en vrai le 25/11 sur la commande n° 1006 au Mans : reçue → en
+préparation → prête → récupérée.
+
+**Risques et règles.**
+- Ne **jamais** remettre le suivi en mémoire.
+- Ne pas raccourcir les rythmes. Flaix a validé 15 s ; plus vite, on le
+  surchargerait.
+- Une Live Activity ne démarre que l'app à l'écran : en arrière-plan, seule la
+  surveillance serveur part. C'est voulu.
+- Le widget Swift ne change **qu'avec une build**. Une mise à jour à distance
+  n'y touche pas.
+
+**Débogage.** Journal Railway, en cherchant le numéro de commande. Chaque
+étape y est écrite (numéro seulement, jamais le jeton) :
+- « Flaix suivie » ;
+- « demandée par l'app » ;
+- `queued → assigned` ;
+- « Live Activity enregistrée / poussée ».
+
+Pas de « Flaix suivie » = l'app n'a pas repéré la commande. Regarder alors la
+détection dans `relais-flaix`.
+
+---
+
+### [2026-11-24 → 25] Le flux des matchs Flaix : import, réglage par lieu, ouverture par match (1.7.54, 1.7.57, 1.7.58)
+
+**Ce qui a été construit.**
+- Les matchs d'un lieu piloté par Flaix arrivent tout seuls dans BreakEat,
+  toutes les 10 minutes, depuis
+  `https://flaix.bo.synertic.net/api/public/lieux/<nom-court>/evenements`.
+- Dans l'admin, le bloc « Calendrier Flaix » d'« Événements & configuration »
+  permet de coller le lien, de **voir** ce qui serait importé, puis d'activer
+  lieu par lieu.
+- L'heure d'ouverture de la commande vient de Flaix, match par match.
+
+**Pourquoi.** Chaque match était saisi deux fois, avec son lien collé à la
+main. Décision de Rémi : ADR-0018 et CLAUDE.md § 4 (« 08:30, on s'adapte à
+lui »).
+
+**Comment ça marche.**
+1. `tourner()` (`@Interval`, 10 min) importe chaque lieu dont `flaixFluxActif`
+   est vrai.
+2. `lire()` respecte l'ETag de Flaix : sans changement, rien n'est relu.
+3. `lireFluxMatchs` valide le JSON. Un événement mal formé est écarté, sans
+   faire tomber le flux.
+4. `deciderImport` compare chaque événement du flux à ceux du lieu et décide :
+   - **créer**, avec les points de retrait du club ;
+   - **adopter** un événement saisi à la main au même moment : il est relié,
+     pas doublé ;
+   - **modifier** : nom, heures, lien, adversaire, affiche, ouverture ;
+   - **annuler** ;
+   - **ignorer**.
+5. Le lien de commande garde ses étiquettes d'identité
+   (`ETIQUETTES_IDENTITE`, `lienAvecEtiquettes`).
+6. `Event.ordersOpenAt` (`commande.ouvreLe` de Flaix) l'emporte dans
+   `heureDOuverture`. Nulle, c'est l'heure du lieu (`Venue.ordersOpenAt`) qui
+   reprend.
+7. `apercu()` rend ce qui se passerait, **sans rien écrire** (Nouveau, Déjà
+   présent, sera relié, Sera mis à jour, À jour, Ignoré).
+8. Côté serveur, `events.service.ts` refuse de modifier le nom, les horaires
+   ou le lien d'un événement importé (`GERE_DANS_FLAIX`), avec la raison.
+
+**Références de code.**
+- `backend/src/modules/flaix/flux-matchs-flaix.ts` :
+  - `:92` (`lireFluxMatchs`) ;
+  - `:203` (`deciderImport`, fonction pure) ;
+  - `:306` (`nomCourtDuLieu`, qui accepte le lien collé, l'adresse du flux ou
+    le nom court, chez Flaix en https seulement) ;
+  - `:322` (`actionApercu`).
+- `backend/src/modules/flaix/import-matchs-flaix.service.ts` :
+  - `:94` (`tourner`), `:107` (`importerTout`), `:183` (`importerLieu`) ;
+  - `:254` (`apercu`), `:299` (`regler`) ;
+  - `:227` (`lieuDuClub`) : le cloisonnement entre clubs.
+- `backend/src/modules/flaix/flux-matchs-flaix.controller.ts:16` :
+  - `GET`/`PUT /organizations/:orgId/venues/:venueId/flux-flaix` ;
+  - `POST …/apercu` ;
+  - rôle de gestion du club exigé.
+- `backend/src/common/helpers/fenetre-commande.ts:199` (`heureDOuverture`) :
+  l'heure de l'événement l'emporte.
+- `backend/src/modules/events/events.service.ts:71` : `GERE_DANS_FLAIX`.
+- `apps/admin/src/components/calendrier-flaix.tsx:34` : le bloc de l'admin.
+- App : `apps/mobile/src/screens/saison.screen.tsx` et
+  `lib/ouverture-lieu.ts` affichent « La commande ouvre demain à 08:30 ».
+
+**Données.** Migrations :
+- `events.flaix_event_id`, unique par lieu : `20261124_evenement_flaix` ;
+- `events.orders_open_at` : `20261125_ouverture_par_evenement` ;
+- `venues.flaix_flux_actif` : `20261125b_flux_flaix_par_lieu`.
+
+**Mise en service.**
+- `FLAIX_FLUX_IMPORT` est un **interrupteur général de secours** :
+  - vide : chaque lieu suit son réglage ;
+  - `journal` : rien n'est écrit, les journaux disent ce qui serait fait ;
+  - `arret` : tout est coupé.
+- Noms courts des lieux connus au 26/11 : voir `REPRISE.md`.
+
+**Tests.**
+- `flux-matchs-flaix.spec.ts` : 22 règles, dont le lien collé ;
+- `test/integration/import-matchs-flaix.int-spec.ts` : aperçu sans écriture,
+  activation, cloisonnement, verrou.
+
+**Risques et règles.**
+- Ne jamais afficher les créneaux de retrait de Flaix : ils changent sans
+  qu'on l'apprenne.
+- Le verrou est **côté serveur**. Masquer un champ dans l'admin ne suffirait
+  pas (CLAUDE.md § 2, règle 5).
+- Un événement saisi à la main est adopté, jamais doublé. Ne pas retirer
+  l'étape « adopter ».
+
+**Débogage.**
+- Journal Railway : chercher le nom court du lieu (« créé », « mis à jour »,
+  « adopté »).
+- L'aperçu de l'admin dit ce que l'import ferait, sans rien toucher.
+
+---
+
+### [2026-11-26] « Note ta commande » pour une commande Flaix (1.7.64)
+
+**Ce qui a été construit.**
+- La note d'une commande Flaix : 1 à 5 étoiles et un commentaire.
+- La relance « Note ta commande » 10 min après la remise.
+
+**Comment ça marche.**
+- `relancerNotes()` tourne à chaque tour de la surveillance. Il envoie un
+  push 10 min après `remiseLe` :
+  - une seule fois (`relanceNoteLe`) ;
+  - jamais pour une commande déjà notée ;
+  - plus au-delà de 24 h.
+- `POST /flaix/commandes/:jeton/note` (`noter`) n'accepte que **sa**
+  commande, récupérée, et une seule fois.
+- `/flaix/mes-suivis` dit si la commande est encore notable (48 h après la
+  remise).
+- Côté app, toucher la notification ouvre « Mes commandes » et la feuille de
+  note (`demanderNote`, `jetonANoter` dans `store/suivi.store.ts`).
+
+**Références de code.**
+- `surveillance-commandes-flaix.service.ts:207` (`noter`) ;
+- `…:245` (`relancerNotes`) ;
+- `flaix.controller.ts:126` ;
+- `apps/mobile/src/components/noter-commande.tsx` (prop `envoyer`) ;
+- `App.expo.tsx:230` (`noter_commande`).
+
+**Données.** `notes_commandes_flaix`, migration
+`20261126_note_commandes_flaix`. Le lieu et l'événement Flaix y sont figés,
+pour que le club lise ses notes.
+
+**Reste à faire.** Les statistiques du club pour les notes Flaix ne sont pas
+encore construites.
+
+---
+
+### [2026-11-25 → 26] La flamme suit la dernière commande passée (1.7.62 → 1.7.63)
+
+**Ce qui a été construit.** Le contour de la flamme (onglet du bas) s'allume
+aussi pour une commande Flaix. Il suit la **dernière commande passée**, pas la
+plus avancée.
+
+**Pourquoi.** Règle de Rémi du 26/11 : « si je recommande, le contour doit se
+remettre à zéro et repartir ». Une ancienne commande restée « prête » gardait
+le contour vert par-dessus une nouvelle commande « reçue ».
+
+**Règle métier changée.** Avec deux commandes en cours, la plus ancienne prête
+ne colore plus la flamme. Sa notification et sa Live Activity préviennent
+toujours.
+
+**Références de code.**
+- `apps/mobile/src/lib/suivi-commande.ts:87` (`etatPastille`) :
+  - jaune `JAUNE` `:32` pour reçue ou en préparation, vert pour prête ;
+  - « récupérée » reste une minute (`DUREE_FIN_MS` `:43`).
+- `apps/mobile/src/lib/use-etat-pastille.ts:51` : relit
+  `/flaix/mes-suivis` toutes les 10 s pendant une commande en cours.
+
+---
+
+### [2026-11-26] Notifications : enregistrement, état affiché, reprise, catégorie Android (1.7.65, 1.7.67, 1.7.69, 1.7.70)
+
+**Ce qui a été construit.** Quatre corrections sur le même parcours.
+
+1. **Aucun téléphone ne s'enregistrait** (BUG-2026-056, SEV-1).
+   `Constants.isDevice` n'existe plus au SDK 57 : l'app se croyait sur un
+   simulateur partout. `lib/vrai-telephone.ts:20` (`estUnVraiTelephone`) ne
+   refuse plus que lorsqu'on **sait** être sur un simulateur
+   (`isDevice === false`). Un vrai simulateur échoue de lui-même, sans bruit.
+2. **L'état affiché dit la vérité** (1.7.67) :
+   - `enregistrerPush()` (`push-notifications.ts:61`) rend un booléen ;
+   - le profil n'affiche « activées » que si le téléphone est inscrit, sinon
+     « non relié — Réessayer » ;
+   - le badge relit le compte du serveur au lieu d'ajouter 1 ;
+   - la cloche n'est marquée lue qu'après un chargement réussi ;
+   - une campagne (`type: 'campagne'`) ouvre la cloche.
+3. **Une panne Expo silencieuse est reprise** (BUG-2026-057).
+   `ExpoPushService.send` **ne lève jamais** : une panne revient en `sent: 0`.
+   Dans `live-activity.service.ts:595`, si des appareils existent et
+   qu'aucun n'est atteint, l'annonce « prête » n'est pas marquée faite. Le
+   rattrapage de chaque minute la reprend, 5 essais au plus.
+4. **Catégorie Android « Commandes »** (1.7.70) :
+   - `lib/canal-commandes.ts:22` (`creerCanalCommandes`) crée la catégorie
+     `commandes` en importance haute : son, vibration, bannière, visible écran
+     verrouillé ;
+   - l'app le déclare à l'enregistrement du jeton (`canalCommandes: true`) ;
+   - `push-tokens.service.ts:85` (`canauxCommandes`) rend les jetons qui
+     l'ont ;
+   - les envois **de commande** posent `channelId: CANAL_COMMANDES`
+     (`expo-push.service.ts:32`) **pour ces jetons seulement** : « prête »
+     BreakEat et Flaix, « Note ta commande », produit manquant.
+
+**Pourquoi ce « seulement ».** Un `channelId` inconnu du téléphone fait
+**disparaître** la notification sur Android. Une ancienne app qui se
+réenregistre sans le champ n'efface pas la déclaration (`register` ne touche
+`canalCommandes` que s'il est fourni).
+
+**Données.** `push_tokens.canal_commandes` (booléen, faux par défaut),
+migration `20261126c_canal_commandes`.
+
+**Tests.**
+- Serveur : `push-tokens.service.spec.ts`, `live-activity.service.spec.ts`
+  (cas `sent: 0`) ;
+- App : `vrai-telephone.test.ts`, `permission-notifs.test.ts`,
+  `canal-commandes.test.ts`.
+
+**Risques et règles.**
+- Ne jamais poser un `channelId` sans savoir que le téléphone l'a.
+- Ne jamais considérer un `send()` réussi sans lire `sent`.
+- Le son réel dépend du téléphone (silencieux, Concentration, réglages de la
+  catégorie) : seul un essai sur appareil le prouve.
+
+**Débogage.**
+- Page Notifications du profil : « non relié » = pas de jeton au serveur.
+- Journal Railway : `envoyé à N appareil(s)`.
+- Côté Android : Réglages → Applications → BreakEat → Notifications → la
+  catégorie « Commandes » doit exister.
+
+---
+
+### [2026-11-24 → 26] iOS 27, builds 1.1.4 et 1.1.5, widget revu (1.7.52, 1.7.66, 1.7.68)
+
+**Ce qui a été construit.**
+- **Build 1.1.4** (iOS) : la 1.1.3, compilée avec le SDK iOS 27, était tuée au
+  lancement par iOS 27 (BUG-2026-049, journal `.ips` :
+  `UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption`). Correctif :
+  `enableSceneSupport: true` dans `expo-build-properties`
+  (`apps/mobile/app.config.js:225`). **Ne jamais le retirer.**
+- **Build 1.1.5** (iOS 49, Android code 9) : le widget revu :
+  - nouveau logo qui remplit son disque (`IconeEtat`, `echelleLogo`) ;
+  - numéro et « récupérée » en vert ;
+  - **étape** à droite de la Dynamic Island (`etapeCourte`, `:37`) ;
+  - pas de « Je suis arrivé » pour Flaix.
+
+**Mises à jour à distance sur plusieurs versions.**
+- `runtimeVersion` = version de l'app (ADR-0005). Une mise à jour ne
+  s'installe que sur la version visée.
+- Tant que des téléphones restent sur une build plus ancienne, on publie
+  **trois fois** :
+  - par défaut (1.1.5) ;
+  - `ios` avec `VERSION_VISEE=1.1.4` ;
+  - `android` avec `VERSION_VISEE=1.1.3`.
+- `app.config.js:81` lit `VERSION_VISEE`. Le workflow refuse « all » avec une
+  version visée.
+- Procédure détaillée : `brain/DEPLOIEMENT.md`.
+
+**Risques et règles.**
+- Tout changement natif (widget, permission, module, configuration Expo) :
+  monter `version` **avant** la build (CLAUDE.md § 6).
+- **15 builds EAS par mois** (forfait de Rémi) : aucune build sans son accord
+  explicite.
+- Grouper les changements natifs. Exemple en attente : « Reçue » en jaune dans
+  le widget.
+
+---
+
+### [2026-11-24] Android : la feuille des coordonnées et la boucle (1.7.55)
+
+**Deux causes.**
+1. La feuille passait sous la barre de navigation et sous le clavier
+   (BUG-2026-050). Correctif dans `components/feuille-clavier.tsx` :
+   - marge du bas ;
+   - `KeyboardAvoidingView` en `padding` sur les deux plateformes.
+2. **La vraie panne** (BUG-2026-051) : une boucle.
+   - Un compte Google ou Apple n'a pas de téléphone. Au retour de la feuille,
+     l'écran Saison revérifiait le profil et rouvrait la feuille.
+   - Correctif dans `saison.screen.tsx:233` : `apresDemande` ouvre la
+     commande au retour, et `demandePosee` (`:100`) ne propose la feuille
+     qu'une fois par visite.
+
+**Règle.** Une demande facultative ne doit jamais bloquer le parcours qu'elle
+précède.
+
+---
+
+### [2026-11-25] Un match terminé n'est plus « ouvert » (1.7.59)
+
+`public-venues.controller.ts:381` : l'événement actif d'un lieu doit aussi
+être **non terminé**, sauf le contenant d'un lieu permanent (BUG-2026-053,
+Spartiates).
+
+Les tests du contrôleur avaient des dates figées en juin et reposaient sur ce
+défaut. Ils sont passés en dates **relatives à l'horloge**. Voir
+`brain/TESTING_STRATEGY.md`.
+
+---
+
+### [2026-11-26] « Mes commandes » dans l'ordre (1.7.71)
+
+`apps/mobile/src/lib/ordre-commandes.ts:12` (`plusRecentesDabord`) trie
+ensemble les commandes BreakEat (`createdAt`) et Flaix (`passeeLe`), la plus
+récente en tête :
+- tri stable ;
+- une date illisible passe en dernier ;
+- la liste reçue n'est pas modifiée.
+
+Employé dans `order-history.screen.tsx` pour « En cours » et « Terminées ».
+Cause du bug (BUG-2026-058) : les deux listes étaient mises bout à bout.
+
+---
+
+### Ce que ces journées ont appris
+
+1. **Une liste mêlée se trie après le mélange.** Deux listes triées mises bout
+   à bout ne font pas une liste triée (BUG-2026-058).
+2. **Un envoi qui ne lève jamais doit être lu.** `send()` rend un bilan : un
+   `sent: 0` est un échec (BUG-2026-057).
+3. **Une API qui disparaît ne prévient pas.** `Constants.isDevice` est devenu
+   `undefined`, donc « faux ». Pour un test de sécurité, distinguer « je sais
+   que non » de « je ne sais pas » (BUG-2026-056).
+4. **Un identifiant que le téléphone ignore fait perdre le message.** Un
+   `channelId` Android ne se pose que pour un appareil qui l'a déclaré.
+5. **Ce qui doit survivre va en base.** La surveillance Flaix en mémoire
+   perdait tout au redémarrage (ADR-0015).
+6. **Une date figée dans un test finit par mentir.** Toujours relatif à
+   l'horloge (BUG-2026-052, BUG-2026-053).
+7. **Le vocabulaire d'un tiers se découvre en vrai.** `assigned` n'était
+   nulle part. Journaliser un état inconnu une fois, et le traiter comme
+   l'étape la plus proche.
+8. **Le natif ne voyage pas à distance.** Widget, permissions, scenes iOS :
+   une build, une version montée, et la limite de 15 builds par mois.
 
 ---

@@ -5,6 +5,16 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.72] — 2026-11-26 — Documentation de passation : les blocs du 21 au 26/11
+
+- **Pourquoi** : demande de Rémi (26/11) : chaque développement et chaque code expliqués dans les bons dossiers, « au cas où un développeur devrait reprendre mon code ». Les documents de gouvernance dataient du 17/11 et ne connaissaient ni le suivi Flaix, ni le flux des matchs, ni les corrections des notifications.
+- **Manuel** (`brain/ENGINEERING_MANUAL.md`) : « Dernière mise à jour » en tête (gouvernance § 7.2), et « Les blocs livrés du 21 au 26/11/2026 » : une vue d'ensemble d'une commande Flaix, puis chaque bloc au format du manuel (quoi, pourquoi, comment, références de code avec lignes, données, tests, risques, débogage), et huit leçons.
+- **Mis à jour** : `CARTE_DU_CODE.md`, `ARCHITECTURE.md` (flux Flaix, tâches planifiées), `DOMAIN_MODEL.md` (tables Flaix, `PushToken.canalCommandes`, champs Flaix de `Event` et `Venue`), `DEPLOIEMENT.md` (mises à jour sur plusieurs versions, limite de 15 builds, envoi aux stores), `TESTING_STRATEGY.md` (règles apprises), `AGENTS.md`, `ROADMAP.md`, cahier des charges Flaix (ce qui est livré), `REPRISE.md`.
+- **Comptes rendus** (`brain/taches/`) : iOS 27 et build 1.1.4 ; import du flux des matchs ; suivi, Live Activity et note des commandes Flaix ; notifications et catégorie Android.
+- **Audit final Codex du 26/11** rangé avec sa réponse (aucun défaut ; actions de clôture faites ou à faire sur téléphone).
+- **Word** : `GUIDE_DEVELOPPEMENT/PHASES_DE_DEVELOPPEMENT.docx` régénéré (jusqu'à 1.7.71).
+- Aucun code modifié.
+
 ## [1.7.71] — 2026-11-26 — « Mes commandes » : les commandes dans l'ordre
 
 - **Pourquoi** : Rémi, 26/11 : dans « Terminées », les commandes du 16/11, puis d'octobre, de septembre, et tout en bas celles du 26 et du 25/11. La liste mettait bout à bout les commandes BreakEat puis les commandes Flaix, chacune triée de son côté (BUG-2026-058).

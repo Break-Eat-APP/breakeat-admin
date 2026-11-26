@@ -513,7 +513,18 @@ ne puisse pas les contredire.
 
 Le travail se compte désormais en **versions** du CHANGELOG. Les leçons de
 chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
-03/11 », « Ce que les journées du 05 au 09/11 ont laissé ici »).
+03/11 », « Ce que les journées du 05 au 09/11 ont laissé ici », « … du 11 au
+17/11 », et **« Les blocs livrés du 21 au 26/11/2026 »**, écrit bloc par bloc
+avec les références de code).
+
+**Le chantier du 21 au 26/11 (1.7.42 → 1.7.71)** : les lieux Flaix rejoignent
+l'app.
+- Les commandes Flaix remontent dans « Mes commandes », avec un suivi en base,
+  « prête », la Live Activity et la note.
+- Les matchs sont importés depuis Flaix, avec l'heure d'ouverture par match.
+- Les notifications réparées : enregistrement, état affiché, reprise,
+  catégorie Android.
+- Correctif iOS 27 (build 1.1.4) ; widget revu (build 1.1.5).
 
 | Version | Date | Sujet |
 |---|---|---|
@@ -592,6 +603,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.66 | 2026-11-26 | Ticket Flaix : image du lieu, numéro en vert ; widget Live Activity revu (prochaine build) |
 | 1.7.67 | 2026-11-26 | Notifications : état affiché vrai, badge et cloche cohérents (audit Codex) |
 | 1.7.68 | 2026-11-26 | Build 1.1.5 iOS et Android (widget Live Activity, textes au tutoiement) |
+| 1.7.72 | 2026-11-26 | Documentation de passation : manuel bloc par bloc (21 → 26/11), carte, architecture, modèle, déploiement, comptes rendus |
 | 1.7.71 | 2026-11-26 | « Mes commandes » triées par date, BreakEat et Flaix mêlées (BUG-2026-058) |
 | 1.7.70 | 2026-11-26 | Android : catégorie « Commandes » (son, bannière) pour les notifications de commande |
 | 1.7.69 | 2026-11-26 | « Prête » BreakEat : panne Expo silencieuse reprise (BUG-2026-057) |

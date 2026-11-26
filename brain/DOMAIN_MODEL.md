@@ -47,6 +47,14 @@ Required fields:
 - timezone
 - status
 
+**Flaix fields on Venue.**
+
+- `flaixEnabled`: Flaix sells and decides for this venue.
+- `flaixFluxActif` (25/11/2026, false by default): the match feed is
+  imported for this venue. It is switched on in the admin, venue by venue.
+- The Flaix short name of the venue (its id on the Flaix side) is what the
+  feed URL is built from.
+
 ### Venue operating mode
 
 Phase 22. A Venue carries `operatingMode`:
@@ -96,6 +104,19 @@ automatically** every minute: `DRAFT` (with at least one attached supplier) →
 `ACTIVE` when ordering opens (`Venue.ordersOpenAt` on the event day, or its
 start if earlier); `ACTIVE`/`PAUSED` → `ENDED` at `endAt` (ADR-0009). `ENDED`
 only stops NEW orders; paid orders stay at the counter.
+
+**Flaix-imported events (24-25/11/2026, ADR-0018).**
+
+- `flaixEventId` (TEXT, the external Flaix id; unique per venue): set when
+  the event came from the Flaix match feed.
+- `ordersOpenAt` (nullable timestamp): the opening time Flaix gives for this
+  match (`commande.ouvreLe`).
+  - When set, it overrides `Venue.ordersOpenAt` everywhere ordering opens
+    (`common/helpers/fenetre-commande.ts`, `heureDOuverture`).
+  - When null, the venue's time applies.
+- On an imported event, name, times and ordering link are **owned by Flaix**:
+  the server refuses to change them (`events.service.ts`, `GERE_DANS_FLAIX`).
+- Visibility, pickup points, opponent and poster stay editable.
 
 ### Supplier
 
@@ -331,6 +352,59 @@ Rules:
 - A redemption always leaves a payable minimum on the order (see
   `MIN_PAYABLE_CENTS`): points reduce a bill, they never settle it entirely,
   because the payment provider rejects amounts below its floor.
+
+### Flaix order tracking (24-26/11/2026)
+
+A Flaix order is **not** an `Order`. Flaix sells it; BreakEat only follows
+it (ADR-0015).
+
+**SuiviCommandeFlaix** (`suivis_commandes_flaix`): one row per Flaix order a
+customer's app asked to follow.
+
+- Key: `jeton`, the Flaix public token. It is an access right: never logged,
+  never returned to another customer.
+- Fields:
+  - `userId`, `numero` (shown at the counter), `pointDeRetrait`,
+    `passeeLe` ;
+  - `etat` (normalised Flaix state: `queued`, `assigned`, `preparing`,
+    `ready`, `delivered`, `cancelled`) ;
+  - `preteAnnoncee` and `essaisAnnonce` (the "ready" push, 3 tries max) ;
+  - `remiseLe` (when we saw it handed over) ;
+  - `termine`, `prochaineLecture` (next poll) ;
+  - `lieuFlaix`, `evenementFlaix`, `relanceNoteLe` ("Note ta commande"
+    sent once, 10 min after hand-over).
+- Index `(termine, prochaineLecture)` drives the 15-second loop.
+
+**LiveActivityFlaix** (`live_activities_flaix`): one iOS Live Activity of a
+followed Flaix order.
+
+- Fields: `jeton` → SuiviCommandeFlaix, `userId`, `activityId`
+  (`flaix-<jeton>`), `pushToken` (APNs, unique), `status`.
+- `etatEnvoye`: the last widget state the iPhone really received. While it
+  differs from the current state, the server pushes again. This covers an
+  APNs error, and an activity registered after a state change.
+- It is kept **apart** from the BreakEat `LiveActivity` table on purpose.
+
+**NoteCommandeFlaix** (`notes_commandes_flaix`): the customer's rating of a
+Flaix order.
+
+- Key: `jeton`. One rating per order.
+- Fields: `stars` (1-5) and `comment` (1000 characters, both bounded by the
+  database).
+- `numero`, `pointDeRetrait`, `lieuFlaix` and `evenementFlaix` are frozen
+  at rating time, so the club can read its ratings.
+
+All three tables use UUID foreign keys to `users` and cascade on account
+deletion.
+
+### PushToken — Android "Commandes" channel (26/11/2026)
+
+`canalCommandes` (boolean, false by default): this device created the
+Android notification channel `commandes` (high importance, sound, banner).
+
+- Order notifications set `channelId: 'commandes'` **only** for such tokens.
+  An unknown channel id makes Android drop the notification.
+- An older app that registers without the field leaves the value untouched.
 
 ## Relationship Rules
 

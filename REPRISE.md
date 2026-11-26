@@ -131,7 +131,21 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   défaut 1.1.5 (`887477b3`), `1.1.4 · ios` (`779ae468`), `1.1.3 · android`
 >   (`f4aada48`). Reste : vérifier le son sur un Android.
 > - **1.7.71 (26/11) — « MES COMMANDES » TRIÉES PAR DATE** (BUG-2026-058) :
->   BreakEat et Flaix mêlées. **À publier par mise à jour à distance.**
+>   BreakEat et Flaix mêlées. **Publiée le 26/11** (`a3fe555`) : défaut 1.1.5
+>   (`dd42a755`), `1.1.4 · ios` (`5114a4d0`), `1.1.3 · android` (`8bc56f7a`).
+> - **Audit final Codex du 26/11** : aucun défaut de code. Réponse dans
+>   `brain/audits/`. Reste : essai du son sur un Android, et une commande
+>   BreakEat sans Live Activity.
+> - **DOCUMENTATION DE PASSATION À JOUR (26/11)** :
+>   - `brain/ENGINEERING_MANUAL.md` → « Les blocs livrés du 21 au 26/11/2026 »
+>     (bloc par bloc, avec les références de code) ;
+>   - CARTE_DU_CODE, ARCHITECTURE, DOMAIN_MODEL, DEPLOIEMENT,
+>     TESTING_STRATEGY, AGENTS et le cahier des charges Flaix ;
+>   - quatre comptes rendus dans `brain/taches/` ;
+>   - `PHASES_DE_DEVELOPPEMENT.docx` régénéré.
+> - **Piège** : EAS refuse de publier avec un fichier non suivi dans le dépôt
+>   (un audit déposé dans `brain/audits/`). Le mettre de côté ou le committer
+>   avant `eas update`.
 > - **Widget : « Reçue » en jaune comme la flamme** — demandé par Rémi le
 >   26/11. Les couleurs du widget sont dans le code natif
 >   (`BreakEatLiveActivity.swift`) : il faut une build (limite Expo de
