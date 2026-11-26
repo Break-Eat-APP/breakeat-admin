@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
+import { cadreAffiche } from '@lib/cadre-affiche';
 import { initialesAdversaire } from '@lib/calendrier-saison';
 import { THEME, HEAD } from '@lib/theme';
 
@@ -179,7 +180,75 @@ export function VignetteEvenement({
   );
 }
 
+/**
+ * L'AFFICHE EN GRAND, À SA VRAIE FORME (27/11/2026).
+ *
+ * Rémi : « je trouve ça un peu petit ». La carte du match posait l'affiche
+ * dans un cadre 2:3 de 88 × 132 points à côté du titre. Une affiche en
+ * PAYSAGE (le collage « Disney en concert ») y tenait en bande de 88 points
+ * de large : illisible.
+ *
+ * Ici, l'image prend toute la largeur de la carte, et le cadre prend LA FORME
+ * DU FICHIER, lue avec `Image.getSize`. Ce qui écarte l'ancien principe
+ * (« on ne lit pas les proportions ») : la carte n'a qu'une image et toute sa
+ * largeur, l'attendre une fraction de seconde ne coûte rien. La hauteur est
+ * bornée (`cadreAffiche`) pour que « Commander » reste à l'écran.
+ */
+export function AfficheEnGrand({
+  uri,
+  hauteurMax,
+  compact = false,
+}: {
+  uri: string;
+  /** La hauteur à ne pas dépasser (la case d'une tuile du calendrier : 120). */
+  hauteurMax?: number;
+  /** Dans une tuile : sans marge dessous, arrondi plus petit. */
+  compact?: boolean;
+}) {
+  const [largeur, setLargeur] = useState(0);
+  const [ratio, setRatio] = useState<number | null>(null);
+
+  useEffect(() => {
+    let vivant = true;
+    Image.getSize(
+      uri,
+      (l, h) => {
+        if (vivant && l > 0 && h > 0) setRatio(l / h);
+      },
+      () => {
+        // Taille illisible : le cadre par défaut (cadreAffiche) suffit.
+      },
+    );
+    return () => {
+      vivant = false;
+    };
+  }, [uri]);
+
+  const cadre = cadreAffiche(largeur, ratio, hauteurMax);
+  return (
+    <View
+      style={[styles.grandeZone, compact && { marginBottom: 0 }]}
+      onLayout={(e) => setLargeur(e.nativeEvent.layout.width)}
+    >
+      {largeur > 0 ? (
+        <View
+          style={[
+            styles.cadre,
+            styles.grandCadre,
+            compact && { borderRadius: 10 },
+            { width: cadre.largeur, height: cadre.hauteur },
+          ]}
+        >
+          <Image source={{ uri }} style={styles.pleine} resizeMode="contain" />
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  grandeZone: { width: '100%', alignItems: 'center', marginBottom: 12 },
+  grandCadre: { borderRadius: 14, borderWidth: 1, borderColor: THEME.border },
   cadre: {
     alignItems: 'center',
     justifyContent: 'center',

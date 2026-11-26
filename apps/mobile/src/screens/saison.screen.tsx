@@ -33,7 +33,7 @@ import {
 } from '@lib/calendrier-saison';
 import { useBottomBarSpace } from '@components/app-bottom-bar';
 import { DemandeCoordonnees } from '@components/demande-coordonnees';
-import { VignetteEvenement } from '@components/vignette-evenement';
+import { AfficheEnGrand, VignetteEvenement } from '@components/vignette-evenement';
 import { ImageDuLieu } from '@components/image-du-lieu';
 import { BuvettePlanViewer } from '@components/buvette-plan-viewer';
 import { THEME, shadowCard, HEAD, FONT } from '@lib/theme';
@@ -324,11 +324,13 @@ export function SaisonScreen({ route, navigation }: Props) {
   */
   const carteSelection = selection ? (
     <View style={[styles.carte, shadowCard]}>
+      {/* L'AFFICHE EN GRAND (27/11/2026, « un peu petit », Rémi) : toute la
+          largeur de la carte, à la vraie forme du fichier — une affiche en
+          paysage n'est plus une bande de 88 points. Sans affiche, le blason
+          reste à côté du titre. */}
+      {selection.posterUrl?.trim() ? <AfficheEnGrand uri={selection.posterUrl.trim()} /> : null}
       <View style={styles.carteHaut}>
-        {/* `lecture` : la carte n'a qu'une image, elle peut la
-            donner en grand — une affiche de concert y passe de 32
-            pixels de large à 88, et devient lisible. */}
-        <VignetteEvenement evenement={selection} taille={44} role="lecture" />
+        {selection.posterUrl?.trim() ? null : <VignetteEvenement evenement={selection} taille={44} role="lecture" />}
         <View style={styles.carteTextes}>
           <Text style={styles.carteNom} numberOfLines={2}>
             {selection.opponentName ?? selection.name}
@@ -625,7 +627,21 @@ function TuileMatch({
       accessibilityLabel={`${match.opponentName ?? match.name}, ${libelleDateLongue(match.startAt)}`}
       accessibilityState={{ selected: selectionne }}
     >
-      <VignetteEvenement evenement={match} taille={72} />
+      {/*
+        LA CASE DE L'IMAGE A UNE HAUTEUR FIXE (27/11/2026, « un peu petit »).
+        Une affiche y est montrée ENTIÈRE, à sa vraie forme, sur toute la
+        largeur de la tuile : l'image de couverture de Flaix est en paysage
+        (1200 × 630), et le cadre portrait d'avant n'en gardait que le centre,
+        sur 48 points de large. Un blason reste rond, à 88, centré. Deux tuiles
+        côte à côte gardent leur nom à la même hauteur.
+      */}
+      <View style={styles.tuileImage}>
+        {match.posterUrl?.trim() ? (
+          <AfficheEnGrand uri={match.posterUrl.trim()} hauteurMax={HAUTEUR_AFFICHE_TUILE} compact />
+        ) : (
+          <VignetteEvenement evenement={match} taille={88} />
+        )}
+      </View>
       <Text style={styles.tuileNom} numberOfLines={1}>
         {match.opponentName ?? match.name}
       </Text>
@@ -635,6 +651,9 @@ function TuileMatch({
     </Pressable>
   );
 }
+
+/** La hauteur d'une affiche dans une tuile du calendrier (27/11/2026). */
+const HAUTEUR_AFFICHE_TUILE = 120;
 
 /** Le vert de « commande ouverte » — celui de « Prête » dans Mes commandes. */
 const VERT_OUVERT = '#16a34a';
@@ -727,6 +746,7 @@ const styles = StyleSheet.create({
   tuileChoisie: { borderColor: THEME.ink },
   // L'opacité dit le TEMPS : le match est joué, il s'efface.
   tuilePassee: { opacity: 0.4 },
+  tuileImage: { height: HAUTEUR_AFFICHE_TUILE, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' },
   tuileNom: {
     marginTop: 10,
     color: THEME.ink,

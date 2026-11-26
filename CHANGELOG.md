@@ -5,6 +5,18 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.75] — 2026-11-27 — Les affiches du calendrier en grand, à leur vraie forme
+
+- **Pourquoi** : Rémi (27/11), capture du Dôme de Marseille : « un peu petit, les images en présentation ». Dans la tuile du calendrier, une affiche avait la hauteur d'un blason (48 × 72 points) et était recadrée en portrait. Dans la carte du match, elle tenait dans un cadre 2:3 de 88 × 132 points. Or l'image de couverture de Flaix, que l'import pose en affiche, est en **paysage** (1200 × 630 recommandé). On n'en voyait qu'une bande.
+- **App** :
+  - la carte du match montre l'affiche **sur toute sa largeur, à la vraie forme du fichier** (`Image.getSize`), hauteur bornée à 340 points pour garder « Commander » à l'écran ;
+  - la tuile montre l'affiche **entière** sur toute sa largeur, dans une case de 120 points ;
+  - un blason reste rond (88 points, contre 72), centré ;
+  - forme par défaut avant lecture : celle de Flaix (1200 × 630).
+- **Règle** : `lib/cadre-affiche.ts` (fonction pure, testée). L'ancien principe « on ne lit pas les proportions » est levé pour l'affiche en grand.
+- **Tests** : app 206/206, typage, lint.
+- + `apps/mobile/src/lib/cadre-affiche.ts` (+ test) ; ~ `components/vignette-evenement.tsx` (`AfficheEnGrand`), `screens/saison.screen.tsx`
+
 ## [1.7.74] — 2026-11-27 — Console : un match Flaix dit ce qu'il vit, plus « DRAFT »
 
 - **Pourquoi** : Rémi (27/11) voyait « DRAFT » sur un match Flaix ouvert à la commande dans l'app et chez Flaix. Ce n'était pas une panne : pour un lieu Flaix, le serveur ouvre la commande à l'heure, avec le lien, quel que soit le statut (ADR-0009, `fenetre-commande.ts`). Seuls « suspendu », « annulé » et « terminé » la ferment. Un match importé naît en brouillon et y reste. L'écran le faisait passer pour fermé, et en anglais.
