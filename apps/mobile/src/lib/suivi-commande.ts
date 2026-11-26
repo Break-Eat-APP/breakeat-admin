@@ -72,10 +72,14 @@ function horodatage(c: CommandeSuivie): number {
 /**
  * L'état à afficher.
  *
- * 1. Une commande EN COURS l'emporte toujours. S'il y en a plusieurs (deux
- *    buvettes), on suit la plus AVANCÉE : c'est elle qui va demander au client
- *    de se déplacer en premier. Un remboursement partiel ne change rien — la
- *    commande continue d'être servie.
+ * 1. Une commande EN COURS l'emporte toujours. S'il y en a plusieurs, on suit
+ *    la DERNIÈRE PASSÉE (règle de Rémi, 26/11/2026) : « si je recommande, le
+ *    contour se remet à zéro et repart ». Avant, on suivait la plus avancée —
+ *    et une ancienne commande restée « prête » (jamais remise chez Flaix)
+ *    gardait la flamme verte des heures, par-dessus la nouvelle. La commande
+ *    plus ancienne prête prévient encore par sa notification et sa Live
+ *    Activity. Un remboursement partiel ne change rien — la commande continue
+ *    d'être servie.
  * 2. Sinon, la DERNIÈRE commande terminée, si elle l'a été il y a moins de
  *    une minute : ✓ vert si récupérée, bleu si remboursée.
  * 3. Sinon, la pastille au repos.
@@ -84,11 +88,11 @@ export function etatPastille(
   commandes: readonly CommandeSuivie[],
   maintenant: number = Date.now(),
 ): EtatPastille {
-  let rang = 0;
-  for (const c of commandes) {
-    if (estEnCours(c) && !estRemboursee(c)) rang = Math.max(rang, RANG_EN_COURS[c.status]);
-  }
-  if (rang > 0) return ETAT_EN_COURS[rang];
+  const enCours = commandes
+    .filter((c) => estEnCours(c) && !estRemboursee(c))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  const derniereEnCours = enCours[0];
+  if (derniereEnCours) return ETAT_EN_COURS[RANG_EN_COURS[derniereEnCours.status]];
 
   const recentes = commandes
     .filter((c) => maintenant - horodatage(c) < DUREE_FIN_MS)

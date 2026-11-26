@@ -32,11 +32,13 @@ describe('etatPastille', () => {
     expect(etatPastille([commande('COMPLETED')], MAINTENANT)).toBe('recuperee');
   });
 
-  it('deux commandes en cours : suit la PLUS AVANCÉE, quel que soit l’ordre', () => {
-    const nord = commande('PAID');
-    const sud = commande('READY');
-    expect(etatPastille([nord, sud], MAINTENANT)).toBe('prete');
-    expect(etatPastille([sud, nord], MAINTENANT)).toBe('prete');
+  it('deux commandes en cours : suit la DERNIÈRE PASSÉE, quel que soit l’ordre (Rémi, 26/11)', () => {
+    // Une ancienne commande restée « prête » ne garde plus la flamme verte :
+    // la nouvelle repart de « reçue ».
+    const ancienne = commande('READY', { createdAt: ilYa(90) });
+    const nouvelle = commande('PAID', { createdAt: ilYa(1) });
+    expect(etatPastille([ancienne, nouvelle], MAINTENANT)).toBe('recue');
+    expect(etatPastille([nouvelle, ancienne], MAINTENANT)).toBe('recue');
   });
 
   it('une commande en cours l’emporte sur une commande récupérée à l’instant', () => {

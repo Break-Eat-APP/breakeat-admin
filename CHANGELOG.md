@@ -5,6 +5,13 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.63] — 2026-11-26 — La flamme suit la DERNIÈRE commande passée
+
+- **Pourquoi** : Rémi (26/11) : « si je recommande, le contour doit se remettre à zéro et repartir ». La flamme suivait la commande en cours la plus AVANCÉE : une ancienne commande restée « prête » (jamais remise chez Flaix, comme les commandes test 1001-1002) gardait le contour vert et la coche jusqu’à 12 h, par-dessus une nouvelle commande « reçue ».
+- **App** : parmi les commandes en cours, la flamme suit la dernière passée. « Récupérée » reste une minute (règle du 16/11). **Règle changée** : avec deux commandes en cours, la plus ancienne prête ne colore plus la flamme ; sa notification et sa Live Activity préviennent toujours.
+- **Tests** : app 182/182 (le test de l’ancienne règle réécrit pour la nouvelle).
+- ~ `apps/mobile/src/lib/suivi-commande.ts` (+ test)
+
 ## [1.7.62] — 2026-11-25 — Commande Flaix : la flamme s’allume, « en préparation » s’affiche en direct
 
 - **Pourquoi** : essai de Rémi (25/11) : en préparation, rien dans l’app — ni contour de la flamme, ni étape sur le ticket ; tout n’apparaissait qu’à « prête ». Trois causes : l’écran « Mes commandes » ne connaissait pas `assigned` (le mot de Flaix pour « en préparation ») ; la flamme ne regardait que les commandes BreakEat ; la liste Flaix n’est lue qu’à l’ouverture de l’écran (le contrat Flaix interdit de l’interroger en boucle).
