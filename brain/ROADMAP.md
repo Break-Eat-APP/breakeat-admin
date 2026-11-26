@@ -592,6 +592,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.66 | 2026-11-26 | Ticket Flaix : image du lieu, numéro en vert ; widget Live Activity revu (prochaine build) |
 | 1.7.67 | 2026-11-26 | Notifications : état affiché vrai, badge et cloche cohérents (audit Codex) |
 | 1.7.68 | 2026-11-26 | Build 1.1.5 iOS et Android (widget Live Activity, textes au tutoiement) |
+| 1.7.71 | 2026-11-26 | « Mes commandes » triées par date, BreakEat et Flaix mêlées (BUG-2026-058) |
 | 1.7.70 | 2026-11-26 | Android : catégorie « Commandes » (son, bannière) pour les notifications de commande |
 | 1.7.69 | 2026-11-26 | « Prête » BreakEat : panne Expo silencieuse reprise (BUG-2026-057) |
 | 1.7.55 | 2026-11-24 | Android : feuille des coordonnées sous la barre de navigation et le clavier (BUG-2026-050) |

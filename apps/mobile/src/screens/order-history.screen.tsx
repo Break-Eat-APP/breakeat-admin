@@ -43,6 +43,7 @@ import { EVT_COMMANDES_A_RECHARGER } from '@lib/hooks/use-deep-links';
 import { useCartStore } from '@store/cart.store';
 import { useSuiviStore } from '@store/suivi.store';
 import { JAUNE_FOND, JAUNE_TEXTE } from '@lib/suivi-commande';
+import { plusRecentesDabord } from '@lib/ordre-commandes';
 import { MissingItemsBanner } from '@components/missing-items-banner';
 import { RemboursementBanner } from '@components/remboursement-banner';
 import { ImageDuLieu } from '@components/image-du-lieu';
@@ -189,6 +190,8 @@ const estRecuperee = (status: string): boolean => status === 'PICKED_UP' || stat
  */
 type Entree = Order | CommandeFlaix;
 const estFlaix = (e: Entree): e is CommandeFlaix => 'etatLibelle' in e;
+// BreakEat et Flaix mêlés : chacun sa date (26/11/2026).
+const dateDe = (e: Entree) => (estFlaix(e) ? e.passeeLe : e.createdAt);
 const ETATS_FLAIX_RECUPERES = new Set(['collected', 'picked_up', 'delivered', 'done', 'completed', 'served']);
 
 export function OrderHistoryScreen() {
@@ -336,18 +339,23 @@ export function OrderHistoryScreen() {
   const [filtre, setFiltre] = useState<'toutes' | 'encours' | 'terminees'>('toutes');
 
   const sections = useMemo(() => {
-    const enCours: Entree[] = [
-      ...flaix.filter((c) => c.enCours),
-      ...orders.filter((o) => isLive(o.status)),
-    ];
+    const enCours = plusRecentesDabord<Entree>(
+      [...flaix.filter((c) => c.enCours), ...orders.filter((o) => isLive(o.status))],
+      dateDe,
+    );
     // « Récupérées » ne garde que ce que le client a eu en main ; « Toutes »
     // montre aussi les annulées et les restituées.
-    const terminees: Entree[] = [
-      ...orders.filter((o) => !isLive(o.status) && (filtre !== 'terminees' || estRecuperee(o.status))),
-      ...flaix.filter(
-        (c) => !c.enCours && (filtre !== 'terminees' || ETATS_FLAIX_RECUPERES.has(c.etat ?? '')),
-      ),
-    ];
+    // Triées par date : mises bout à bout, les Flaix récentes tombaient sous
+    // des BreakEat de septembre (Rémi, 26/11/2026).
+    const terminees = plusRecentesDabord<Entree>(
+      [
+        ...orders.filter((o) => !isLive(o.status) && (filtre !== 'terminees' || estRecuperee(o.status))),
+        ...flaix.filter(
+          (c) => !c.enCours && (filtre !== 'terminees' || ETATS_FLAIX_RECUPERES.has(c.etat ?? '')),
+        ),
+      ],
+      dateDe,
+    );
     const garder = (quoi: 'encours' | 'terminees') => filtre === 'toutes' || filtre === quoi;
     return [
       ...(garder('encours') && enCours.length > 0

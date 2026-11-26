@@ -127,8 +127,15 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 > - **1.7.70 (26/11) — CATÉGORIE ANDROID « COMMANDES »** : importance haute
 >   (son, bannière) pour « prête », « Note ta commande », produit manquant.
 >   Le serveur ne la vise que pour les téléphones qui l'ont déclarée
->   (`push_tokens.canal_commandes`). **À publier par mise à jour à distance**
->   (trois publications), puis vérifier le son sur un Android.
+>   (`push_tokens.canal_commandes`). **Publiée le 26/11** (`fd44c66`) :
+>   défaut 1.1.5 (`887477b3`), `1.1.4 · ios` (`779ae468`), `1.1.3 · android`
+>   (`f4aada48`). Reste : vérifier le son sur un Android.
+> - **1.7.71 (26/11) — « MES COMMANDES » TRIÉES PAR DATE** (BUG-2026-058) :
+>   BreakEat et Flaix mêlées. **À publier par mise à jour à distance.**
+> - **Widget : « Reçue » en jaune comme la flamme** — demandé par Rémi le
+>   26/11. Les couleurs du widget sont dans le code natif
+>   (`BreakEatLiveActivity.swift`) : il faut une build (limite Expo de
+>   15 par mois). À grouper avec le prochain changement natif.
 > - **BUILDS 1.1.5 FINIES** (iOS 49, Android code 9) : pas encore chez Apple ni
 >   Google au 26/11 — Rémi lance `eas submit` pour iOS (l'agent n'a pas pu) et
 >   dépose le `.aab` dans la Play Console ; essai TestFlight conseillé avant

@@ -5,6 +5,15 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.71] — 2026-11-26 — « Mes commandes » : les commandes dans l'ordre
+
+- **Pourquoi** : Rémi, 26/11 : dans « Terminées », les commandes du 16/11, puis d'octobre, de septembre, et tout en bas celles du 26 et du 25/11. La liste mettait bout à bout les commandes BreakEat puis les commandes Flaix, chacune triée de son côté (BUG-2026-058).
+- **App** : « En cours » et « Terminées » sont triées ensemble par date, la plus récente en tête (`plusRecentesDabord` : date de la commande BreakEat, `passeeLe` pour Flaix ; une date illisible passe en dernier).
+- **Arrive par mise à jour à distance.**
+- **Tests** : app 197/197.
+- + `apps/mobile/src/lib/ordre-commandes.ts` (+ test)
+- ~ `apps/mobile/src/screens/order-history.screen.tsx`
+
 ## [1.7.70] — 2026-11-26 — Android : une catégorie « Commandes » qui sonne
 
 - **Pourquoi** : audit Codex du 26/11 (réponse dans `brain/audits/`) : l'app ne créait aucune catégorie de notification Android ; « Ta commande est prête » passait par la catégorie par défaut, dont l'importance ne garantit ni le son ni la bannière. Rémi : « Oui, ajoute-le ».
