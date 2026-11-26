@@ -124,10 +124,11 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 > - **1.7.66 + 1.7.67 publiées le 26/11** (`6143900`) : `1.1.4 · ios`
 >   (`e36d2800`), `1.1.3 · android` (`f12a7dad`) — ticket Flaix (image du
 >   lieu, numéro vert), notifications (état vrai, badge, cloche).
-> - **PROCHAINE BUILD NATIVE (iOS ET Android)** : contient le widget revu
->   (1.7.66 : logo, numéro vert, « récupérée » verte, Dynamic Island). **Monter
->   `version` dans `app.config.js` (1.1.5) juste avant la build**, pas avant :
->   sinon les mises à jour à distance quitteraient les iPhone en 1.1.4.
+> - **BUILD 1.1.5 LANCÉE LE 26/11 (iOS ET Android)** : widget revu (1.7.66) et
+>   textes d'autorisation au tutoiement. `version` = 1.1.5 depuis `1.7.68`.
+>   **Mises à jour à distance, jusqu'à ce que tout le monde soit en 1.1.5** :
+>   trois publications — défaut (1.1.5), `ios` + version `1.1.4`, `android` +
+>   version `1.1.3`.
 > - 🔴 **BUG-2026-056 (26/11) — AUCUNE NOTIFICATION N'ARRIVAIT** : l'app se
 >   croyait sur un simulateur (`Constants.isDevice` disparu au SDK 57) et
 >   n'enregistrait aucun téléphone. Corrigé en 1.7.65, par mise à jour à

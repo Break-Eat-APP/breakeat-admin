@@ -591,6 +591,7 @@ chaque période sont regroupées dans le manuel (« Six règles… du 31/10 au
 | 1.7.65 | 2026-11-26 | Notifications réenregistrées (BUG-2026-056) ; Live Activity Flaix rattrapée (audit Codex) |
 | 1.7.66 | 2026-11-26 | Ticket Flaix : image du lieu, numéro en vert ; widget Live Activity revu (prochaine build) |
 | 1.7.67 | 2026-11-26 | Notifications : état affiché vrai, badge et cloche cohérents (audit Codex) |
+| 1.7.68 | 2026-11-26 | Build 1.1.5 iOS et Android (widget Live Activity, textes au tutoiement) |
 | 1.7.55 | 2026-11-24 | Android : feuille des coordonnées sous la barre de navigation et le clavier (BUG-2026-050) |
 
 ---

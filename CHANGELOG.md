@@ -5,6 +5,13 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.68] — 2026-11-26 — Build 1.1.5 (iOS et Android)
+
+- **Pourquoi** : le widget de la Live Activity revu en 1.7.66 (logo, numéro et « récupérée » en vert, numéro dans la Dynamic Island) est natif : il n’arrive qu’avec une build. Rémi l’a lancée le 26/11.
+- **Contenu natif** : le widget 1.7.66 ; les textes d’autorisation de localisation au tutoiement (BUG-2026-025).
+- **Version 1.1.5** (`app.config.js`). Conséquence (ADR-0005) : les mises à jour à distance visent désormais la 1.1.5 ; pour les téléphones restés sur une build plus ancienne, le workflow accepte une « version visée » avec UNE plateforme (`ios` + `1.1.4`, `android` + `1.1.3`), jamais « all ».
+- ~ `apps/mobile/app.config.js`, `.github/workflows/mise-a-jour-a-distance.yml`
+
 ## [1.7.67] — 2026-11-26 — Notifications : l’état affiché dit la vérité ; cloche et badge cohérents
 
 - **Pourquoi** : audit Codex « notifications » du 26/11 (réponse dans `brain/audits/`). Après BUG-2026-056, le profil pouvait encore dire « Notifications activées » sans que le téléphone soit inscrit ; le badge comptait des push absents de la cloche ; la cloche se marquait lue avant d’avoir chargé ; une campagne touchée n’ouvrait pas la cloche.

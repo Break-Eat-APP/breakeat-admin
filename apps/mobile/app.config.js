@@ -75,7 +75,10 @@ module.exports = {
   // `VERSION_VISEE` : posee SEULEMENT par le workflow « Mise a jour a distance »
   // pour viser les Android restes en 1.1.3 (meme natif Android que la 1.1.4).
   // Jamais dans une build.
-  version: process.env.VERSION_VISEE || '1.1.4',
+  // 1.1.5 (26/11/2026) : le widget de la Live Activity revu (logo, numéro et
+  // « récupérée » en vert, numéro dans la Dynamic Island) et les textes
+  // d'autorisation au tutoiement — deux changements NATIFS.
+  version: process.env.VERSION_VISEE || '1.1.5',
   orientation: 'portrait',
   scheme: 'breakeat',
   // L'ICONE A SON PROPRE FICHIER (10/11/2026). Le B occupait 83 % de la
@@ -118,7 +121,7 @@ module.exports = {
       // la position en silence : la decouverte des lieux par proximite serait
       // definitivement muette, sans la moindre erreur visible.
       NSLocationWhenInUseUsageDescription:
-        'BreakEat utilise votre position pour vous montrer les lieux et buvettes autour de vous.',
+        'BreakEat utilise ta position pour te montrer les lieux et buvettes autour de toi.',
       // Apple reclame AUSSI la variante « Always » : la bibliotheque de
       // geolocalisation reference les API d'arriere-plan, et l'analyse
       // statique les voit dans le binaire — meme si l'app ne les appelle
@@ -127,12 +130,12 @@ module.exports = {
       //
       // Le texte le dit franchement : Break Eat n'a aucun usage en arriere-plan.
       NSLocationAlwaysAndWhenInUseUsageDescription:
-        'BreakEat utilise votre position uniquement pendant que vous utilisez l’app, pour vous montrer les lieux autour de vous. Aucun suivi en arriere-plan.',
+        'BreakEat utilise ta position uniquement pendant que tu utilises l’app, pour te montrer les lieux autour de toi. Aucun suivi en arrière-plan.',
       // Cle historique (iOS 10 et anterieur), sans effet a partir de notre
       // cible 16.4 : presente uniquement pour satisfaire le controle d'Apple,
       // qui ne revele ses exigences qu'une par envoi.
       NSLocationAlwaysUsageDescription:
-        'BreakEat utilise votre position uniquement pendant que vous utilisez l’app.',
+        'BreakEat utilise ta position uniquement pendant que tu utilises l’app.',
     },
   },
   android: {
