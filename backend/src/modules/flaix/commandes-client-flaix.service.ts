@@ -65,6 +65,12 @@ export interface CommandeFlaix {
   numero: string;
   passeeLe: string;
   lieu: string | null;
+  /**
+   * La photo du lieu BreakEat, et le logo du club (26/11/2026) : le ticket
+   * Flaix montre la même image qu'un ticket BreakEat. Posés par le contrôleur.
+   */
+  lieuPhotoUrl?: string | null;
+  lieuLogoUrl?: string | null;
   /** Le nom court du lieu chez Flaix (`guillaume-stadium`), pour la note (26/11/2026). */
   lieuId?: string | null;
   /** L'`idInterne` de l'événement chez Flaix. */

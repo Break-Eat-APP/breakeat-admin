@@ -121,6 +121,10 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   « Retirer de la vente » proposé à Rémi en attendant (à sa décision).
 >   La 1.1.4 Android suivra (même version, ADR-0005) ; les mises à jour à
 >   distance devront viser la 1.1.3 ET la 1.1.4 tant que les deux coexistent.
+> - **PROCHAINE BUILD NATIVE (iOS ET Android)** : contient le widget revu
+>   (1.7.66 : logo, numéro vert, « récupérée » verte, Dynamic Island). **Monter
+>   `version` dans `app.config.js` (1.1.5) juste avant la build**, pas avant :
+>   sinon les mises à jour à distance quitteraient les iPhone en 1.1.4.
 > - 🔴 **BUG-2026-056 (26/11) — AUCUNE NOTIFICATION N'ARRIVAIT** : l'app se
 >   croyait sur un simulateur (`Constants.isDevice` disparu au SDK 57) et
 >   n'enregistrait aucun téléphone. Corrigé en 1.7.65, par mise à jour à

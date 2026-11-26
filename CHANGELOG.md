@@ -5,6 +5,15 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.66] — 2026-11-26 — Ticket Flaix : l’image du lieu, le numéro en vert ; Live Activity revue (prochaine build)
+
+- **Pourquoi** : retours de Rémi sur ses captures (26/11) : l’image du lieu manquait sur le bandeau orange des tickets Flaix ; le numéro de commande doit être en vert pour se repérer ; sur la Live Activity, l’ancien logo trop petit dans son rond, le numéro gris, la barre « récupérée » qui finissait en gris, et la Dynamic Island vide à droite (pas de décompte pour une commande Flaix).
+- **Serveur** : `/flaix/mes-commandes` donne pour chaque commande la photo du lieu BreakEat et le logo du club, retrouvés par l’événement importé, sinon par le nom court du lieu (copie, jamais la liste en cache).
+- **App (mise à jour à distance)** : le ticket Flaix montre l’image du lieu comme un ticket BreakEat ; le numéro de commande est en vert sur tous les tickets.
+- **Widget (NATIF — prochaine build, version à monter)** : nouveau logo B, recadré pour remplir son disque sur l’écran verrouillé ; numéro en vert ; « récupérée » en vert (le gris reste pour une annulation) ; Dynamic Island : le numéro en vert quand il n’y a ni décompte ni heure. Non compilé ici (Windows) : vérifié à la build EAS.
+- **Tests** : serveur 1223/1223 (image du lieu), app 187/187.
+- ~ serveur `flaix.controller.ts` (+ spec), `commandes-client-flaix.service.ts` ; app `order-history.screen.tsx`, `mobile-api.ts` ; widget `BreakEatLiveActivity.swift`, `logo-live-activity*.png`
+
 ## [1.7.65] — 2026-11-26 — Les notifications s’enregistrent enfin ; la Live Activity Flaix se rattrape
 
 - **Pourquoi (1)** : Rémi (26/11) : pas de son à « prête », et la page Notifications disait « impossible sur un simulateur » sur une app du store. `Constants.isDevice` n’existe plus dans expo-constants (SDK 57) : l’app se croyait sur un simulateur partout et n’enregistrait aucun téléphone. BUG-2026-056.

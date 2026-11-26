@@ -1024,7 +1024,15 @@ function TicketFlaix({
                 {c.pointDeRetrait ?? c.evenement ?? 'Commande'}
               </Text>
             </View>
-            <ImageDuLieu nom={c.lieu ?? ''} hauteur={58} rayon={12} />
+            {/* La même image qu'un ticket BreakEat (26/11/2026) : photo du lieu,
+                sinon logo du club, retrouvés par le serveur. */}
+            <ImageDuLieu
+              nom={c.lieu ?? ''}
+              logoUrl={c.lieuLogoUrl}
+              photoUrl={c.lieuPhotoUrl}
+              hauteur={58}
+              rayon={12}
+            />
           </View>
           <View style={styles.numeroBulle}>
             <Text style={styles.numeroPrefixe}>Commande n°</Text>
@@ -1155,6 +1163,9 @@ function heureDeRetrait(order: Order): string {
 function dateCourte(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
 }
+
+/** Le vert du numéro de commande : celui de « prête » dans la flamme. */
+const VERT_NUMERO = '#16a34a';
 
 const styles = StyleSheet.create({
   /**
@@ -1349,10 +1360,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 4,
   },
-  numeroPrefixe: { color: THEME.orange, fontSize: 15, fontFamily: HEAD.bold },
+  // EN VERT (Rémi, 26/11/2026) : le numéro se repère d'un coup d'œil sur le
+  // bandeau orange — c'est lui qu'on dit au comptoir.
+  numeroPrefixe: { color: VERT_NUMERO, fontSize: 15, fontFamily: HEAD.bold },
   /** Le plus gros caractère de la carte : on le dira au comptoir, dans le bruit. */
   numeroValeur: {
-    color: THEME.orange,
+    color: VERT_NUMERO,
     fontSize: 36,
     lineHeight: 42,
     fontFamily: HEAD.bold,

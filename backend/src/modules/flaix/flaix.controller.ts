@@ -16,7 +16,7 @@ import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 import { PrismaService } from '../../database/prisma.service';
 import { GlobalRole } from '../../common/enums/role.enum';
 import { FlaixService } from './flaix.service';
-import { CommandesClientFlaixService } from './commandes-client-flaix.service';
+import { CommandesClientFlaixService, type CommandeFlaix } from './commandes-client-flaix.service';
 import { SurveillanceCommandesFlaixService } from './surveillance-commandes-flaix.service';
 import { FORME_JETON, NoterCommandeFlaixDto, RegisterLiveActivityFlaixDto } from './dto/live-activity-flaix.dto';
 
@@ -57,7 +57,38 @@ export class FlaixController {
     // Les commandes en cours sont surveillées pour « Ta commande est prête ».
     // Un incident de surveillance ne doit pas priver le client de sa liste.
     await this.surveillance.surveiller(user.sub, reponse.commandes).catch(() => undefined);
-    return reponse;
+    // Une COPIE : la liste lue chez Flaix est en cache, partagée.
+    return { ...reponse, commandes: await this.avecImagesDuLieu(reponse.commandes).catch(() => reponse.commandes) };
+  }
+
+  /**
+   * L'IMAGE DU LIEU SUR LE TICKET FLAIX (26/11/2026, demande de Rémi). Flaix ne
+   * connaît pas nos photos : on retrouve le lieu BreakEat de chaque commande,
+   * d'abord par son événement importé (`Event.flaixEventId`), sinon par le
+   * nom court du lieu (`Venue.flaixVenueId`).
+   */
+  private async avecImagesDuLieu(commandes: CommandeFlaix[]): Promise<CommandeFlaix[]> {
+    const evenements = [...new Set(commandes.map((c) => c.evenementId).filter((x): x is string => !!x))];
+    const lieux = [...new Set(commandes.map((c) => c.lieuId).filter((x): x is string => !!x))];
+    if (evenements.length === 0 && lieux.length === 0) return commandes;
+    const choix = { photoUrl: true, organization: { select: { logoUrl: true } } } as const;
+    const [parEvenement, parLieu] = await Promise.all([
+      evenements.length
+        ? this.prisma.event.findMany({
+            where: { flaixEventId: { in: evenements } },
+            select: { flaixEventId: true, venue: { select: choix } },
+          })
+        : Promise.resolve([]),
+      lieux.length
+        ? this.prisma.venue.findMany({ where: { flaixVenueId: { in: lieux } }, select: { flaixVenueId: true, ...choix } })
+        : Promise.resolve([]),
+    ]);
+    const ev = new Map(parEvenement.map((e) => [e.flaixEventId, e.venue]));
+    const li = new Map(parLieu.map((v) => [v.flaixVenueId, v]));
+    return commandes.map((c) => {
+      const v = (c.evenementId && ev.get(c.evenementId)) || (c.lieuId && li.get(c.lieuId)) || null;
+      return v ? { ...c, lieuPhotoUrl: v.photoUrl, lieuLogoUrl: v.organization?.logoUrl ?? null } : c;
+    });
   }
 
   /**

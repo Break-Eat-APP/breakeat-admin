@@ -23,13 +23,13 @@ private enum Brand {
 /// membre plutot que cette fonction, et le widget ne compilerait plus.
 ///
 /// Couleur d'accent selon l'état : orange pendant la préparation, vert quand
-/// c'est prêt, gris une fois terminé. Même code visuel que l'écran « Mes
-/// commandes » de l'app.
+/// c'est prêt ET une fois récupérée (Rémi, 26/11/2026 : la barre finissait en
+/// gris, « elle devrait finir verte »), gris seulement pour une annulation.
 private func statusColor(for state: BreakEatOrderAttributes.ContentState) -> Color {
   if state.hasMissingItems { return Brand.red }
   if state.isCancelled { return Brand.inkSoft }
   if state.isReady { return Brand.green }
-  if state.status == "COLLECTED" { return Brand.inkSoft }
+  if state.status == "COLLECTED" { return Brand.green }
   return Brand.orange
 }
 
@@ -56,6 +56,9 @@ private func symboleParticulier(for state: BreakEatOrderAttributes.ContentState)
 private struct IconeEtat: View {
   let state: BreakEatOrderAttributes.ContentState
   var taille: CGFloat = 21
+  /// La taille du LOGO par rapport à `taille`. 1,3 dans la Dynamic Island ;
+  /// 2 sur l'écran verrouillé, où il remplit son disque (Rémi, 26/11/2026).
+  var echelleLogo: CGFloat = 1.3
 
   var body: some View {
     if let symbole = symboleParticulier(for: state) {
@@ -66,7 +69,7 @@ private struct IconeEtat: View {
       Image("LogoBreakEat")
         .resizable()
         .scaledToFit()
-        .frame(width: taille * 1.3, height: taille * 1.3)
+        .frame(width: taille * echelleLogo, height: taille * echelleLogo)
         .clipShape(Circle())
     }
   }
@@ -165,11 +168,13 @@ private struct BrandRow: View {
       Spacer(minLength: 8)
 
       Text("N° \(orderNumber)")
-        .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(Brand.inkSoft)
+        // EN VERT (Rémi, 26/11/2026) : le numéro est ce qu'on dit au comptoir,
+        // il doit se voir d'un coup d'œil.
+        .font(.system(size: 11, weight: .bold))
+        .foregroundStyle(Brand.green)
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
-        .background(Capsule().fill(Brand.track))
+        .background(Capsule().fill(Brand.green.opacity(0.12)))
     }
   }
 }
@@ -193,7 +198,7 @@ private struct HeroRow: View {
         Circle()
           .fill(statusColor(for: state).opacity(0.13))
           .frame(width: 42, height: 42)
-        IconeEtat(state: state, taille: 21)
+        IconeEtat(state: state, taille: 21, echelleLogo: 2)
       }
 
       VStack(alignment: .leading, spacing: 3) {
@@ -621,6 +626,13 @@ struct BreakEatLiveActivity: Widget {
           Text(time)
             .font(.system(size: 13, weight: .semibold).monospacedDigit())
             .foregroundStyle(statusColor(for: context.state))
+        } else {
+          // NI DÉCOMPTE NI HEURE (commande Flaix, 26/11/2026) : la pilule
+          // restait vide à droite. Le numéro, en vert — c'est ce qu'on dit
+          // au comptoir.
+          Text("N° \(context.state.orderNumber)")
+            .font(.system(size: 13, weight: .semibold).monospacedDigit())
+            .foregroundStyle(Brand.green)
         }
 
       } minimal: {

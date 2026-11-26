@@ -1139,6 +1139,9 @@ export interface CommandeFlaix {
   enCours: boolean;
   lienSuivi: string | null;
   lienRecu: string | null;
+  /** La photo du lieu BreakEat et le logo du club (26/11/2026), s'ils sont connus. */
+  lieuPhotoUrl?: string | null;
+  lieuLogoUrl?: string | null;
 }
 
 export const apiGetMesCommandesFlaix = () =>
