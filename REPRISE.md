@@ -122,7 +122,8 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   La 1.1.4 Android suivra (même version, ADR-0005) ; les mises à jour à
 >   distance devront viser la 1.1.3 ET la 1.1.4 tant que les deux coexistent.
 > - **Règle de Rémi (26/11) : la flamme suit la DERNIÈRE commande passée**
->   (1.7.63), plus la plus avancée. « Récupérée » : une minute.
+>   (1.7.63), plus la plus avancée. « Récupérée » : une minute. Publiée le 26/11 (`a7e419b`) :
+>   `1.1.4 · ios` (`3eb12d91`), `1.1.3 · android` (`73bc1f11`).
 > - **LIVE ACTIVITY FLAIX VÉRIFIÉE EN VRAI (25/11, commande n° 1006)** :
 >   commande repérée par l'app, Live Activity enregistrée, puis
 >   `queued → assigned` et Live Activity → PREPARING. **Vocabulaire du suivi
