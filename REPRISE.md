@@ -124,7 +124,8 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 > - 🔴 **BUG-2026-056 (26/11) — AUCUNE NOTIFICATION N'ARRIVAIT** : l'app se
 >   croyait sur un simulateur (`Constants.isDevice` disparu au SDK 57) et
 >   n'enregistrait aucun téléphone. Corrigé en 1.7.65, par mise à jour à
->   distance. Vérifier ensuite : page Notifications, vraie notification
+>   distance. **Publiée le 26/11** (`be42b05`) : `1.1.4 · ios` (`42545390`),
+>   `1.1.3 · android` (`ba2516f3`). Vérifier ensuite : page Notifications, vraie notification
 >   « prête », campagnes du back-office.
 > - **1.7.64 (26/11) — « NOTE TA COMMANDE » POUR FLAIX** : relance 10 min
 >   après la remise (une fois, jamais si déjà notée, plus après 24 h), bouton
