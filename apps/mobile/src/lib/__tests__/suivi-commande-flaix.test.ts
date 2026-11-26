@@ -61,7 +61,7 @@ describe('jeton de commande Flaix', () => {
 describe('suivre une commande Flaix', () => {
   it('démarre la Live Activity avec l’état rendu par le serveur', async () => {
     const d = deps();
-    expect(await suivreCommandeFlaix(JETON, d)).toBe('act-1');
+    expect(await suivreCommandeFlaix(JETON, d)).toEqual({ issue: 'demarree', activityId: 'act-1' });
     expect(d.demarrer).toHaveBeenCalledWith(
       `flaix-${JETON}`,
       expect.objectContaining({ status: 'CREATED', orderNumber: '1003', estimatedReadyAt: null }),
@@ -70,28 +70,40 @@ describe('suivre une commande Flaix', () => {
 
   it('réessaie tant que Flaix ne liste pas encore la commande', async () => {
     const d = deps({ suivre: jest.fn().mockRejectedValueOnce(new Error('404')).mockResolvedValue(ETAT) });
-    expect(await suivreCommandeFlaix(JETON, d)).toBe('act-1');
+    expect(await suivreCommandeFlaix(JETON, d)).toEqual({ issue: 'demarree', activityId: 'act-1' });
     expect(d.suivre).toHaveBeenCalledTimes(2);
   });
 
   it('abandonne sans erreur après 4 essais', async () => {
     const d = deps({ suivre: jest.fn().mockRejectedValue(new Error('404')) });
-    await expect(suivreCommandeFlaix(JETON, d)).resolves.toBeNull();
+    await expect(suivreCommandeFlaix(JETON, d)).resolves.toEqual({ issue: 'a_retenter' });
     expect(d.suivre).toHaveBeenCalledTimes(4);
     expect(d.demarrer).not.toHaveBeenCalled();
   });
 
   it('ne démarre pas une seconde activité pour la même commande', async () => {
     const d = deps({ activitesEnCours: jest.fn().mockResolvedValue([{ orderId: `flaix-${JETON}` }]) });
-    expect(await suivreCommandeFlaix(JETON, d)).toBeNull();
+    expect(await suivreCommandeFlaix(JETON, d)).toEqual({ issue: 'existante' });
     expect(d.demarrer).not.toHaveBeenCalled();
   });
 
   it('sur Android, le serveur suit quand même la commande (notification), sans Live Activity', async () => {
     const d = deps({ liveActivityPossible: jest.fn().mockResolvedValue(false) });
-    expect(await suivreCommandeFlaix(JETON, d)).toBeNull();
+    expect(await suivreCommandeFlaix(JETON, d)).toEqual({ issue: 'sans_live_activity' });
     expect(d.suivre).toHaveBeenCalledTimes(1);
     expect(d.demarrer).not.toHaveBeenCalled();
+  });
+});
+
+describe('l’issue du suivi (audit Codex du 26/11/2026)', () => {
+  it('un démarrage refusé par iOS est à retenter', async () => {
+    const d = deps({ demarrer: jest.fn().mockResolvedValue(null) });
+    expect(await suivreCommandeFlaix(JETON, d)).toEqual({ issue: 'a_retenter' });
+  });
+
+  it('une erreur au démarrage est à retenter', async () => {
+    const d = deps({ demarrer: jest.fn().mockRejectedValue(new Error('ActivityKit')) });
+    expect(await suivreCommandeFlaix(JETON, d)).toEqual({ issue: 'a_retenter' });
   });
 });
 

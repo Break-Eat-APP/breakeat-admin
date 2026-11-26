@@ -93,14 +93,25 @@ export function RelaisFlaix({ url, titre }: { url: string; titre: string }) {
   const connues = useRef<Set<string> | null>(null);
   const suivies = useRef(new Set<string>());
 
+  /** Une tentative en cours : deux détections simultanées n'en lancent qu'une. */
+  const enCours = useRef(new Set<string>());
+
   const suivreJeton = (jeton: string) => {
-    if (suivies.current.has(jeton) || !useAuthStore.getState().token) return;
+    if (suivies.current.has(jeton) || enCours.current.has(jeton) || !useAuthStore.getState().token) return;
     if (AppState.currentState !== 'active') {
       void apiSuivreCommandeFlaix(jeton).catch(() => undefined);
       return;
     }
-    suivies.current.add(jeton);
-    void suivreCommandeFlaixDansLApp(jeton);
+    // RETENUE SEULEMENT UNE FOIS RÉUSSIE (audit Codex du 26/11/2026) : un échec
+    // (réseau, commande pas encore listée, iOS qui refuse) se retente à la
+    // prochaine détection — page posée, quittée, retour dans l'app.
+    enCours.current.add(jeton);
+    void suivreCommandeFlaixDansLApp(jeton)
+      .then((r) => {
+        if (r.issue !== 'a_retenter') suivies.current.add(jeton);
+      })
+      .catch(() => undefined)
+      .finally(() => enCours.current.delete(jeton));
   };
 
   const surAdresse = (adresse: string) => {

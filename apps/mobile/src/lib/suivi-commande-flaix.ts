@@ -135,7 +135,19 @@ export const ATTENTES_MS = [0, 2_000, 5_000, 10_000];
  * et, sur un iPhone qui le permet, la Live Activity démarre. Rend l'identifiant
  * de l'activité, ou null. Ne lève jamais : rien ne doit gêner la commande.
  */
-export async function suivreCommandeFlaix(jeton: string, deps: DepsSuivi): Promise<string | null> {
+/**
+ * L'ISSUE DU SUIVI (audit Codex du 26/11/2026). La page ne retient une commande
+ * comme traitée QUE si c'est fini pour de bon ; `a_retenter` la laisse
+ * reprendre à la prochaine détection (réseau, commande pas encore listée chez
+ * Flaix, démarrage refusé par iOS).
+ */
+export type IssueSuivi =
+  | { issue: 'demarree'; activityId: string }
+  | { issue: 'existante' }
+  | { issue: 'sans_live_activity' }
+  | { issue: 'a_retenter' };
+
+export async function suivreCommandeFlaix(jeton: string, deps: DepsSuivi): Promise<IssueSuivi> {
   const attendre = deps.attendre ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   let etat: Awaited<ReturnType<DepsSuivi['suivre']>> | null = null;
   for (const ms of ATTENTES_MS) {
@@ -147,14 +159,16 @@ export async function suivreCommandeFlaix(jeton: string, deps: DepsSuivi): Promi
       // Pas encore listée chez Flaix, ou réseau : on réessaie.
     }
   }
-  if (!etat) return null;
+  if (!etat) return { issue: 'a_retenter' };
 
   try {
-    if (!(await deps.liveActivityPossible())) return null;
+    // Android, ou iPhone sans Live Activity : le serveur suit la commande (la
+    // notification « prête » partira), il n'y a rien d'autre à faire.
+    if (!(await deps.liveActivityPossible())) return { issue: 'sans_live_activity' };
     const id = idActiviteFlaix(jeton);
     const deja = await deps.activitesEnCours();
-    if (deja.some((a) => a.orderId === id)) return null;
-    return await deps.demarrer(id, {
+    if (deja.some((a) => a.orderId === id)) return { issue: 'existante' };
+    const activityId = await deps.demarrer(id, {
       status: etat.status,
       statusLabel: etat.statusLabel,
       orderNumber: etat.orderNumber,
@@ -164,7 +178,8 @@ export async function suivreCommandeFlaix(jeton: string, deps: DepsSuivi): Promi
       slotEndAt: null,
       updatedAt: etat.updatedAt,
     });
+    return activityId ? { issue: 'demarree', activityId } : { issue: 'a_retenter' };
   } catch {
-    return null;
+    return { issue: 'a_retenter' };
   }
 }

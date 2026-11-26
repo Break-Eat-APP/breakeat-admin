@@ -61,6 +61,10 @@ const PAR_PAQUET = 10;
 const MAX_ESSAIS_ENVOI = 3;
 /** Une Live Activity terminée reste visible une minute. */
 const VISIBLE_APRES_FIN_MS = 60_000;
+/** Une commande réservée par une instance n'est pas reprise par une autre avant. */
+const RESERVATION_MS = 30_000;
+/** Une heure après la fin d'une commande, on cesse de rattraper sa Live Activity. */
+const ABANDON_APRES_FIN_MS = 60 * 60_000;
 /** « Note ta commande » : 10 min après la remise (Rémi, 22/11/2026). */
 const DELAI_RELANCE_NOTE_MS = 10 * 60_000;
 /** Au-delà, la relance n'a plus de sens : on ne l'envoie plus. */
@@ -327,14 +331,30 @@ export class SurveillanceCommandesFlaixService {
         take: PAR_TOUR,
       });
       for (let i = 0; i < dus.length; i += PAR_PAQUET) {
-        await Promise.all(dus.slice(i, i + PAR_PAQUET).map((s) => this.verifier(s, maintenant)));
+        await Promise.all(dus.slice(i, i + PAR_PAQUET).map((s) => this.reserverPuisVerifier(s, maintenant)));
       }
+      await this.rattraperActivites(maintenant);
       await this.relancerNotes(maintenant);
     } catch (e: unknown) {
       this.logger.error(`Surveillance Flaix : tour interrompu (${String(e)})`);
     } finally {
       this.tourEnCours = false;
     }
+  }
+
+  /**
+   * RÉSERVER LA COMMANDE AVANT DE LA TRAITER (audit Codex du 26/11/2026).
+   * `tourEnCours` ne vaut que pour UNE instance du serveur : à deux, la même
+   * commande pouvait être lue deux fois et la notification « prête » partir en
+   * double. La mise à jour conditionnelle n'est gagnée que par une instance.
+   */
+  private async reserverPuisVerifier(s: Suivi & { prochaineLecture: Date }, maintenant: Date): Promise<void> {
+    const pris = await this.prisma.suiviCommandeFlaix.updateMany({
+      where: { jeton: s.jeton, prochaineLecture: s.prochaineLecture, termine: false },
+      data: { prochaineLecture: new Date(maintenant.getTime() + RESERVATION_MS) },
+    });
+    if (pris.count === 0) return;
+    await this.verifier(s, maintenant);
   }
 
   private async verifier(s: Suivi, maintenant: Date): Promise<void> {
@@ -392,28 +412,47 @@ export class SurveillanceCommandesFlaixService {
         },
       });
 
-      if (etat !== s.etat) {
-        this.logger.log(`Commande Flaix n° ${s.numero} : ${s.etat} → ${etat}`);
-        await this.pousserActivites({ ...s, etat }, maintenant);
-      }
-      if (fini) await this.fermerActivites(s.jeton);
+      // La Live Activity n'est plus poussée ICI, au seul changement d'état :
+      // un envoi raté n'était jamais rattrapé, ni une activité enregistrée
+      // après le changement (audit Codex du 26/11/2026). `rattraperActivites`
+      // pousse à chaque tour tant qu'une activité n'a pas reçu l'état courant.
+      if (etat !== s.etat) this.logger.log(`Commande Flaix n° ${s.numero} : ${s.etat} → ${etat}`);
     } catch (e: unknown) {
       this.logger.error(`Surveillance Flaix : commande ${s.numero} non vérifiée (${String(e)})`);
     }
   }
 
-  /** Fait avancer les Live Activities de cette commande. */
-  private async pousserActivites(s: Suivi, maintenant: Date): Promise<void> {
-    if (!this.apns) return;
-    const activites = await this.prisma.liveActivityFlaix.findMany({
-      where: { jeton: s.jeton, status: LiveActivityStatus.ACTIVE },
+  /**
+   * FAIRE AVANCER LES LIVE ACTIVITIES — UN RATTRAPAGE, À CHAQUE TOUR
+   * (audit Codex du 26/11/2026).
+   *
+   * Chaque activité retient le dernier état réellement reçu par l'iPhone
+   * (`etatEnvoye`). Tant qu'il diffère de l'état courant de la commande, on
+   * repousse : une erreur APNs passagère est reprise au tour suivant (15 s), et
+   * une activité enregistrée APRÈS un changement reçoit l'état courant au tour
+   * suivant. Au-delà d'une heure après la fin de la commande, on renonce.
+   */
+  async rattraperActivites(maintenant: Date): Promise<number> {
+    if (!this.apns) return 0;
+    const actives = await this.prisma.liveActivityFlaix.findMany({
+      where: { status: LiveActivityStatus.ACTIVE },
+      include: { suivi: true },
+      take: 200,
     });
-    if (activites.length === 0) return;
+    let poussees = 0;
+    for (const a of actives) {
+      const s = a.suivi;
+      if (s.termine && maintenant.getTime() - s.updatedAt.getTime() > ABANDON_APRES_FIN_MS) {
+        await this.prisma.liveActivityFlaix.update({
+          where: { id: a.id },
+          data: { status: LiveActivityStatus.ENDED, endedAt: maintenant },
+        });
+        continue;
+      }
+      const etat = etatLiveActivity(s, maintenant);
+      if (a.etatEnvoye === etat.status) continue;
 
-    const etat = etatLiveActivity(s, maintenant);
-    this.logger.log(`Live Activity Flaix n° ${s.numero} → ${etat.status} (${activites.length} activité(s))`);
-    const finale = etat.status === 'COLLECTED' || etat.status === 'CANCELLED';
-    for (const a of activites) {
+      const finale = etat.status === 'COLLECTED' || etat.status === 'CANCELLED';
       const r = await this.apns.sendLiveActivityUpdate(
         a.pushToken,
         finale ? 'end' : 'update',
@@ -422,20 +461,27 @@ export class SurveillanceCommandesFlaixService {
           ? { dismissalDate: new Date(maintenant.getTime() + VISIBLE_APRES_FIN_MS) }
           : { staleDate: new Date(maintenant.getTime() + PEREMPTION_MS) },
       );
-      if (r.ok && finale) {
+      if (r.ok) {
+        poussees += 1;
+        this.logger.log(`Live Activity Flaix n° ${s.numero} → ${etat.status}`);
         await this.prisma.liveActivityFlaix.update({
           where: { id: a.id },
-          data: { status: LiveActivityStatus.ENDED, endedAt: maintenant },
+          data: {
+            etatEnvoye: etat.status,
+            ...(finale ? { status: LiveActivityStatus.ENDED, endedAt: maintenant } : {}),
+          },
         });
-      } else if (!r.ok && r.tokenInvalid) {
+      } else if (r.tokenInvalid) {
         await this.prisma.liveActivityFlaix.update({
           where: { id: a.id },
           data: { status: LiveActivityStatus.STALE, endedAt: maintenant },
         });
-      } else if (!r.ok) {
-        this.logger.warn(`Live Activity Flaix (commande ${s.numero}) : APNs ${r.status} ${r.reason ?? ''}`);
+      } else {
+        // Passager : repris au tour suivant.
+        this.logger.warn(`Live Activity Flaix n° ${s.numero} : APNs ${r.status} ${r.reason ?? ''}, nouvel essai au tour suivant`);
       }
     }
+    return poussees;
   }
 
   /** Plus rien à envoyer à ces activités : on les clôt côté serveur. */

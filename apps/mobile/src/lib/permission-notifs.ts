@@ -1,8 +1,8 @@
 import { Linking, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
-import Constants from 'expo-constants';
 
 import { enregistrerPush } from '@lib/push-notifications';
+import { estUnVraiTelephone } from './vrai-telephone';
 
 /**
  * L'ÉTAT DES NOTIFICATIONS, lu là où il se trouve vraiment.
@@ -56,7 +56,7 @@ export async function lireEtatNotifs(): Promise<EtatNotifs> {
   // Un simulateur ne reçoit AUCUNE push : Apple ne délivre pas de jeton à une
   // machine. Dire « indisponible » y est la vérité ; le dire sur un vrai
   // téléphone était le bug.
-  if (!Constants.isDevice) return 'indisponible';
+  if (!estUnVraiTelephone()) return 'indisponible';
 
   try {
     const { status } = await Notifications.getPermissionsAsync();
@@ -85,7 +85,7 @@ export async function demanderNotifs(): Promise<EtatNotifs> {
     }
   }
 
-  if (!Constants.isDevice) return 'indisponible';
+  if (!estUnVraiTelephone()) return 'indisponible';
 
   try {
     const { status: avant } = await Notifications.getPermissionsAsync();

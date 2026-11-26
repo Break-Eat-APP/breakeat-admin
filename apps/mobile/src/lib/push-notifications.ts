@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { estUnVraiTelephone } from './vrai-telephone';
 import {
   apiRegisterPushToken,
   apiRetirerJetonPush,
@@ -60,7 +61,7 @@ export async function enregistrerPush(): Promise<void> {
   try {
     // Le web n'a pas de jeton Expo, et le simulateur non plus : demander une
     // permission qui ne mènera nulle part n'apporte qu'une boîte de dialogue.
-    if (Platform.OS === 'web' || !Constants.isDevice) return;
+    if (!estUnVraiTelephone()) return;
 
     const { status: existant } = await Notifications.getPermissionsAsync();
     let status = existant;

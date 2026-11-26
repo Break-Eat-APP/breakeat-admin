@@ -12,3 +12,7 @@
 | **Événements importés en `DRAFT`, invisibles au client ?** | **Inexact.** Pour un lieu Flaix, `DRAFT` est commandable (`fenetre-commande.ts`, « Pourquoi DRAFT passe ici ») et la saison n'écarte que `CANCELLED` (`saison-du-lieu.ts`). Constaté en vrai le 25/11 : « Lemans Fc Vs Lyon », importé, apparaît au calendrier de l'app. | Aucune. |
 | **Tests d'intégration ignorés** | Vrai dans l'environnement de l'audit (pas de `DATABASE_URL_TEST`). Ils ont tourné ici sur PostgreSQL réel avant chaque envoi (231/231 pour `912170a`), et la CI les rejoue. | Aucune. |
 | **Relance « Note ta commande » marquée avant l'envoi** | Voulu (« une seule relance », jamais deux) ; contrepartie assumée : un échec Expo n'est pas retenté. | Aucune, sauf demande de Rémi. |
+
+## Suite donnée (26/11/2026, accord de Rémi : « Oui, corrige-les »)
+
+Corrigés en 1.7.65 : la reprise APNs et l'enregistrement tardif (`etat_envoye`, rattrapage à chaque tour), le relais qui ne retient une commande qu'après un vrai démarrage, et la réservation de chaque commande avant traitement. Tests d'intégration : 234/234 sur PostgreSQL réel.

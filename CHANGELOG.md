@@ -5,6 +5,15 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.65] — 2026-11-26 — Les notifications s’enregistrent enfin ; la Live Activity Flaix se rattrape
+
+- **Pourquoi (1)** : Rémi (26/11) : pas de son à « prête », et la page Notifications disait « impossible sur un simulateur » sur une app du store. `Constants.isDevice` n’existe plus dans expo-constants (SDK 57) : l’app se croyait sur un simulateur partout et n’enregistrait aucun téléphone. BUG-2026-056.
+- **App** : `lib/vrai-telephone.ts` : on ne refuse plus que lorsqu’on SAIT être sur un simulateur ; sinon on tente (un vrai simulateur échoue de lui-même, sans bruit). `expo-device`, qui saurait vraiment, demanderait une nouvelle build.
+- **Pourquoi (2)** : audit Codex du 26/11 : une erreur APNs passagère, ou une Live Activity enregistrée après un changement d’état, figeaient l’activité ; la page Flaix retenait une commande comme suivie avant le vrai démarrage ; deux instances du serveur pouvaient traiter la même commande.
+- **Serveur** : chaque Live Activity Flaix retient l’état réellement reçu (`etat_envoye`, migration `20261126b_etat_envoye_live_activity_flaix`) ; à chaque tour, on repousse tant qu’il diffère (reprise après erreur, état courant à l’activité enregistrée en retard ; abandon une heure après la fin). Chaque commande est réservée avant traitement (mise à jour conditionnelle). **App** : la page Flaix ne retient une commande qu’une fois la Live Activity démarrée (ou l’appareil sans Live Activity) ; un échec se retente à la détection suivante.
+- **Tests** : serveur 1222/1222 et 234/234 (reprise APNs, enregistrement tardif, deux instances), app 187/187 ; migrations rejouées sur base vierge.
+- ~ app `vrai-telephone.ts` (+ test), `push-notifications.ts`, `permission-notifs.ts`, `suivi-commande-flaix.ts` (+ test), `live-activity-tracking.ts`, `relais-flaix.native.tsx` ; serveur `surveillance-commandes-flaix.service.ts`, `schema.prisma` (+ migration), test d’intégration
+
 ## [1.7.64] — 2026-11-26 — « Note ta commande » pour les commandes Flaix
 
 - **Pourquoi** : demandé par Rémi le 22/11 (« la note a disparu », « une notif 10 min après ») : une commande passée chez Flaix ne pouvait pas être notée, et rien ne relançait le client. Attendait l’heure de remise, enregistrée depuis le 24/11.

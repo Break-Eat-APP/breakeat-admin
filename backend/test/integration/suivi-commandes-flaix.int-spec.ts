@@ -52,6 +52,7 @@ decrire('suivi des commandes Flaix (base réelle)', () => {
   let envois: number;
   let reussite: boolean;
   let apns: { token: string; event: string; status: string }[];
+  let apnsEnPanne: boolean;
 
   const lireEtat = async (jeton: string) =>
     etats[jeton] == null ? null : { etat: etats[jeton] as string, libelle: null, detail: null, retraitAffiche: null };
@@ -68,6 +69,7 @@ decrire('suivi des commandes Flaix (base réelle)', () => {
       { tokensForUsers: async () => ['ExponentPushToken[x]'], purgeInvalid: async () => undefined } as never,
       {
         sendLiveActivityUpdate: async (token: string, event: string, etat: { status: string }) => {
+          if (apnsEnPanne) return { ok: false, status: 503, reason: 'ServiceUnavailable', tokenInvalid: false };
           apns.push({ token, event, status: etat.status });
           return { ok: true, status: 200, tokenInvalid: false };
         },
@@ -80,6 +82,7 @@ decrire('suivi des commandes Flaix (base réelle)', () => {
     envois = 0;
     reussite = true;
     apns = [];
+    apnsEnPanne = false;
     userId = (
       await s.prisma.user.create({
         data: { email: `${unique('client')}@test.fr`, passwordHash: 'x', displayName: 'Client' },
@@ -185,6 +188,46 @@ decrire('suivi des commandes Flaix (base réelle)', () => {
       await s.prisma.user.create({ data: { email: `${unique('autre')}@test.fr`, passwordHash: 'x', displayName: 'Autre' } })
     ).id;
     expect(await svc.mesSuivis(autre, T0)).toEqual([]);
+  });
+
+  describe('le rattrapage de la Live Activity (audit Codex du 26/11/2026)', () => {
+    it('une erreur APNs passagère est reprise au tour suivant', async () => {
+      const svc = service();
+      const c = commande();
+      await svc.surveiller(userId, [c]);
+      await svc.enregistrerActivite({ userId, jeton: c.id, activityId: 'a', pushToken: 'ef'.repeat(32) });
+      etats[c.id] = 'assigned';
+      apnsEnPanne = true;
+      await svc.tourner(T0);
+      expect(apns).toHaveLength(0);
+      apnsEnPanne = false;
+      await svc.tourner(plus(15_000));
+      expect(apns).toEqual([{ token: 'ef'.repeat(32), event: 'update', status: 'PREPARING' }]);
+      // Reçu : on ne repousse plus le même état.
+      await svc.tourner(plus(30_000));
+      expect(apns).toHaveLength(1);
+    });
+
+    it('une activité enregistrée APRÈS le changement reçoit l’état courant', async () => {
+      const svc = service();
+      const c = commande();
+      await svc.surveiller(userId, [c]);
+      etats[c.id] = 'assigned';
+      await svc.tourner(T0);
+      await svc.enregistrerActivite({ userId, jeton: c.id, activityId: 'b', pushToken: 'ab'.repeat(32) });
+      await svc.tourner(plus(15_000));
+      expect(apns).toEqual([{ token: 'ab'.repeat(32), event: 'update', status: 'PREPARING' }]);
+    });
+
+    it('deux instances ne traitent pas la même commande : « prête » ne part qu’une fois', async () => {
+      const a = service();
+      const b = service();
+      const c = commande();
+      await a.surveiller(userId, [c]);
+      etats[c.id] = 'ready';
+      await Promise.all([a.tourner(T0), b.tourner(T0)]);
+      expect(envois).toBe(1);
+    });
   });
 
   describe('« Note ta commande » (26/11/2026)', () => {

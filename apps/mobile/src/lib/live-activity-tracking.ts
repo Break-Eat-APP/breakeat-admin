@@ -12,7 +12,7 @@ import {
   apiSuivreCommandeFlaix,
   apiUnregisterLiveActivity,
 } from '@lib/api/mobile-api';
-import { jetonDeLActivite, suivreCommandeFlaix } from '@lib/suivi-commande-flaix';
+import { jetonDeLActivite, suivreCommandeFlaix, type IssueSuivi } from '@lib/suivi-commande-flaix';
 import { estUnApercu } from '@lib/apercu-live-activity';
 
 /**
@@ -164,12 +164,13 @@ export async function endTrackingForFinishedOrders(
  * le serveur la suit, et la Live Activity démarre (24/11/2026). Voir
  * `lib/suivi-commande-flaix.ts`.
  */
-export async function suivreCommandeFlaixDansLApp(jeton: string): Promise<void> {
-  const id = await suivreCommandeFlaix(jeton, {
+export async function suivreCommandeFlaixDansLApp(jeton: string): Promise<IssueSuivi> {
+  const r = await suivreCommandeFlaix(jeton, {
     suivre: apiSuivreCommandeFlaix,
     activitesEnCours: listLiveActivities,
     demarrer: (orderId, etat) => startLiveActivity(orderId, etat),
     liveActivityPossible: isLiveActivitySupported,
   });
-  if (id) initLiveActivityTokenSync();
+  if (r.issue === 'demarree') initLiveActivityTokenSync();
+  return r;
 }
