@@ -147,6 +147,11 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
   - `(admin)/clients/page.tsx` — **Mes clients** : anonymes et connectés (qui ne se recoupent jamais), nouveaux, ont commandé, taux de conversion, fichier client + export CSV. `components/jour-par-jour.tsx` = le détail par jour de service, avec le jour le plus fréquenté en tête.
   - `(admin)/documentation/page.tsx` — dépôt et lecture des PDF du club (un iframe ne sachant pas poser d'en-tête, le fichier est lu puis remis au navigateur comme objet local, et l'adresse est révoquée).
   - `components/rapport-flaix.tsx` — le lien du rapport Flaix d'un match, sur la fiche de l'événement.
+  - `lib/statut-evenement.ts` — **fonctions PURES** (27/11) :
+    - les statuts en français (`libelleStatut`) ;
+    - `etatCommandeFlaix` : l'état RÉEL d'un match Flaix (ouvert, bientôt, terminé, suspendu, annulé, lien manquant), avec les mêmes règles que `backend/src/common/helpers/fenetre-commande.ts`. Un match Flaix reste « brouillon » toute sa vie, et c'est normal (ADR-0009).
+
+    Employées par la fiche, la liste et le tableau de bord. Testées.
   - `components/calendrier-flaix.tsx` — **« Calendrier Flaix — <lieu> »** en tête d'« Événements & configuration » (25/11, ADR-0018) : coller le lien Flaix, « Voir les événements » (aperçu sans écriture), activer ou couper la synchronisation. Les événements importés portent le badge « Flaix » ; sur leur fiche, nom, horaires et lien sont verrouillés (le serveur refuse aussi, `GERE_DANS_FLAIX`).
   - `(admin)/events/[id]/page.tsx` — **la fiche d'un événement**. Bouton **Renommer** dans l'en-tête. Sur un lieu Flaix (`venue.flaixEnabled`), elle ne montre QUE le bandeau, « Commande Flaix et affichage », le rapport Flaix, le statut, l'accès et le lieu : les réglages Break Eat (statistiques, fournisseurs, produits, points de retrait, créneaux, QR, branding, poste opérateur) sont masqués exprès.
 - `apps/backoffice/` — super-admin : création de clubs, utilisateurs, groupes, notifications programmées, **purge des commandes de démonstration** (`components/purge-demo.tsx`, encart visible seulement s'il en reste). Appels : `src/lib/api/backoffice-client.ts`.

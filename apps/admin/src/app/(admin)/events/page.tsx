@@ -15,6 +15,7 @@ import {
   getOrgId,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
+import { COULEURS_TON, etatCommandeFlaix, libelleStatut } from '@/lib/statut-evenement';
 import { LiensCommandeFlaix } from '@/components/liens-commande-flaix';
 import { CalendrierFlaix } from '@/components/calendrier-flaix';
 
@@ -26,10 +27,6 @@ const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
   PAUSED:    { bg: '#fef3c7', color: '#92400e' },
   ENDED:     { bg: BRAND.border, color: BRAND.grey },
   CANCELLED: { bg: '#fee2e2', color: '#991b1b' },
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  ACTIVE: 'Actif', DRAFT: 'Brouillon', PAUSED: 'Pausé', ENDED: 'Terminé', CANCELLED: 'Annulé',
 };
 
 // ─── Create event form ────────────────────────────────────────────────────────
@@ -217,7 +214,12 @@ ${msg}`);
    * date et l'heure, l'adversaire, et si le lien Flaix est posé.
    */
   const ligneMatch = (ev: AdminEvent) => {
-    const st = STATUS_STYLE[ev.status] ?? { bg: BRAND.bgSubtle, color: BRAND.inkSoft };
+    // Un match Flaix : son état réel (ouvert, bientôt, terminé), pas « Brouillon »
+    // qu'il garde toute sa vie (27/11/2026, `lib/statut-evenement.ts`).
+    const etatFlaix = estFlaix ? etatCommandeFlaix(ev, lieu?.ordersOpenAt) : null;
+    const st = etatFlaix
+      ? COULEURS_TON[etatFlaix.ton]
+      : STATUS_STYLE[ev.status] ?? { bg: BRAND.bgSubtle, color: BRAND.inkSoft };
     const fini = !estAVenir(ev);
     return (
       <Link key={ev.id} href={`/events/${ev.id}`} style={{ textDecoration: 'none' }}>
@@ -314,7 +316,7 @@ ${msg}`);
           ) : null}
 
           <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: '3px 12px', fontSize: 12, fontWeight: 600 }}>
-            {STATUS_LABEL[ev.status] ?? ev.status}
+            {etatFlaix ? etatFlaix.libelle : libelleStatut(ev.status)}
           </span>
           {ev.status !== 'ENDED' && ev.status !== 'CANCELLED' && (
             <button

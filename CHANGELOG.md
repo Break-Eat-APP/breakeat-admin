@@ -5,6 +5,19 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.74] — 2026-11-27 — Console : un match Flaix dit ce qu'il vit, plus « DRAFT »
+
+- **Pourquoi** : Rémi (27/11) voyait « DRAFT » sur un match Flaix ouvert à la commande dans l'app et chez Flaix. Ce n'était pas une panne : pour un lieu Flaix, le serveur ouvre la commande à l'heure, avec le lien, quel que soit le statut (ADR-0009, `fenetre-commande.ts`). Seuls « suspendu », « annulé » et « terminé » la ferment. Un match importé naît en brouillon et y reste. L'écran le faisait passer pour fermé, et en anglais.
+- **Admin, fiche du match Flaix** :
+  - la pastille et le bloc « Statut » disent l'état réel : « Ouvert à la commande — jusqu'au… », « Bientôt ouvert — la commande ouvre le… », « Terminé », « Suspendu », « Annulé » ou « Lien Flaix manquant » ;
+  - une ligne explique que Flaix ouvre et ferme seul ;
+  - le menu ne propose que les gestes du club : laisser Flaix décider (ou rouvrir), suspendre, annuler, terminer.
+- **Liste des événements** : même état réel pour un lieu Flaix. **Partout** : statuts en français (Brouillon, Actif, Suspendu, Terminé, Annulé), aussi dans le tableau de bord et sur un lieu BreakEat.
+- **Règle** : `apps/admin/src/lib/statut-evenement.ts` applique les règles du serveur (heure de Flaix, sinon heure du lieu le jour du match, jamais après le début). L'heure du lieu y est lue à l'heure locale du navigateur (clubs en France).
+- **Aucun changement de serveur ni de règle métier** : seul l'affichage change.
+- **Tests** : 7 nouveaux (admin 32/32), typage, lint, `next build`. **Pas vu dans un navigateur connecté** : à regarder par Rémi.
+- + `apps/admin/src/lib/statut-evenement.ts` (+ spec) ; ~ `events/[id]/page.tsx`, `events/page.tsx`, `dashboard/page.tsx`
+
 ## [1.7.73] — 2026-11-27 — Une commande Flaix s'ouvre dans BreakEat, avec « Signaler un problème »
 
 - **Pourquoi** : Rémi (26/11) : toucher un ticket Flaix ouvrait la page de suivi de Flaix. Il voulait le même écran qu'une commande BreakEat (capture à l'appui), avec « Signaler un problème avec ma commande » qui prépare un e-mail à contact@breakeatapp.com. Aucune information nouvelle n'était nécessaire de Flaix.

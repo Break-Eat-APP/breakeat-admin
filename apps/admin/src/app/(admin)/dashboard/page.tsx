@@ -27,6 +27,7 @@ import {
   type OrgEventStat,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
+import { libelleStatut } from '@/lib/statut-evenement';
 import { CarteLien, Grille, TitreSection } from '@/components/ui';
 
 // ─── Formatting helpers ─────────────────────────────────────────────────────────
@@ -519,7 +520,7 @@ function EventRow({ ev, active }: { ev: OrgEventStat; active: boolean }) {
             whiteSpace: 'nowrap',
           }}
         >
-          {ev.status}
+          {libelleStatut(ev.status)}
         </span>
         <ChevronRight size={18} strokeWidth={2} color={BRAND.grey} style={{ flexShrink: 0 }} />
       </div>

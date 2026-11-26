@@ -47,6 +47,11 @@ s'est pas ouvert tout seul. Rien de tout cela n'était automatisé.
 ## Ce qui n'est pas concerné
 - Les lieux **Flaix** : Flaix décide (ADR-0001), et leur commande ouvre déjà à
   l'heure, sans statut à basculer.
+  - Conséquence visible (27/11/2026) : un match Flaix reste « brouillon »
+    toute sa vie.
+  - La console montre donc son état réel, pas ce statut
+    (`apps/admin/src/lib/statut-evenement.ts`, 1.7.74).
+  - Seuls « suspendu », « annulé » et « terminé » ferment sa commande.
 - Le contenant d'un lieu **ouvert en continu**, ouvert par définition.
 
 ## Conséquences

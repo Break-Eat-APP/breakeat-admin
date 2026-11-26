@@ -138,6 +138,10 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   détail, « Signaler un problème » vers contact@breakeatapp.com, « Voir le
 >   reçu » chez Flaix). **Publiée le 27/11** (`bc3fc3a`) : défaut 1.1.5
 >   (`4903b38a`), `1.1.4 · ios` (`73234fbf`), `1.1.3 · android` (`e23c7fa1`).
+> - **1.7.74 (27/11) — CONSOLE : « DRAFT » SUR UN MATCH FLAIX** n'était pas une
+>   panne. Pour un lieu Flaix, le statut ne ferme que s'il vaut suspendu,
+>   annulé ou terminé (ADR-0009). L'admin montre désormais l'état réel
+>   (`apps/admin/src/lib/statut-evenement.ts`). Vercel déploie seul.
 > - **Le développeur Flaix n'est plus attendu (27/11)**. Deux choses restent
 >   facultatives : un message `flaix_commande` envoyé par sa page avec le
 >   jeton, et la liste complète de ses états.

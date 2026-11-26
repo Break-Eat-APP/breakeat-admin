@@ -33,6 +33,7 @@ import {
   operatorDashboardUrl,
 } from '@/lib/api/admin-client';
 import { BRAND } from '@/lib/brand';
+import { COULEURS_TON, etatCommandeFlaix, libelleStatut } from '@/lib/statut-evenement';
 import { RapportFlaix } from '@/components/rapport-flaix';
 import { LiensCommandeFlaix } from '@/components/liens-commande-flaix';
 
@@ -532,6 +533,26 @@ export default function EventDetailPage() {
    */
   const estFlaix = venue?.flaixEnabled === true;
 
+  /**
+   * CE QUE VIT VRAIMENT UN MATCH FLAIX (27/11/2026). Son statut reste
+   * « brouillon » toute sa vie, et ce n'est pas une panne : le serveur ouvre la
+   * commande à l'heure, avec le lien, quel que soit le statut (ADR-0009). On
+   * montre donc l'état réel, pas le mot technique. Voir `lib/statut-evenement.ts`.
+   */
+  const etatFlaix = estFlaix ? etatCommandeFlaix(event, venue?.ordersOpenAt) : null;
+  const pastille = etatFlaix ? COULEURS_TON[etatFlaix.ton] : st;
+  // Les gestes d'un club sur un match Flaix : laisser Flaix décider, suspendre,
+  // annuler, terminer. « Brouillon » et « Actif » y veulent dire la même chose.
+  const laisserFlaix = event.status === 'DRAFT' || event.status === 'ACTIVE' ? event.status : 'ACTIVE';
+  const choixStatut = estFlaix
+    ? [
+        { value: laisserFlaix, label: event.status === 'PAUSED' ? 'Rouvrir la commande' : 'Laisser Flaix décider' },
+        { value: 'PAUSED', label: 'Suspendre la commande' },
+        { value: 'CANCELLED', label: 'Annuler le match' },
+        { value: 'ENDED', label: 'Terminer' },
+      ]
+    : EVENT_STATUSES.map((s) => ({ value: s, label: libelleStatut(s) }));
+
   return (
     <div style={{ padding: '30px 36px 56px', fontFamily: BRAND.font }}>
       {/* Header */}
@@ -589,8 +610,8 @@ export default function EventDetailPage() {
           <h1 style={{ fontFamily: BRAND.fontDisplay, fontSize: 30, fontWeight: 800, color: BRAND.ink, margin: 0, letterSpacing: -0.6 }}>
             {event.name}
           </h1>
-          <span style={{ background: st.bg, color: st.color, borderRadius: 999, padding: '3px 12px', fontSize: 12, fontWeight: 600 }}>
-            {event.status}
+          <span style={{ background: pastille.bg, color: pastille.color, borderRadius: 999, padding: '3px 12px', fontSize: 12, fontWeight: 600 }}>
+            {etatFlaix ? etatFlaix.libelle : libelleStatut(event.status)}
           </span>
           {/*
             Un match terminé ou annulé ne se modifie plus — le serveur le
@@ -949,14 +970,39 @@ export default function EventDetailPage() {
             bouton « fermer ».
           </p>
         ) : null}
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        {etatFlaix ? (
+          <div style={{ margin: '0 0 14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span
+                style={{
+                  background: pastille.bg,
+                  color: pastille.color,
+                  borderRadius: 999,
+                  padding: '4px 12px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
+                {etatFlaix.libelle}
+              </span>
+              <span style={{ fontSize: 13, color: BRAND.ink }}>{etatFlaix.detail}</span>
+            </div>
+            <p style={{ color: BRAND.grey, fontSize: 13, margin: '10px 0 0', lineHeight: 1.5 }}>
+              <strong style={{ color: BRAND.ink }}>Géré par Flaix.</strong> La commande s&apos;ouvre à
+              l&apos;heure donnée par Flaix et se ferme à la fin du match, toute seule : rien à
+              activer. Ici, tu peux seulement la suspendre (buvette débordée), annuler le match ou
+              le terminer plus tôt.
+            </p>
+          </div>
+        ) : null}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <select
             value={newStatus}
             onChange={(e) => setNewStatus(e.target.value)}
             style={{ padding: '8px 12px', borderRadius: 6, border: `1px solid ${BRAND.border}`, fontSize: 14, background: BRAND.surface, fontFamily: 'inherit' }}
           >
-            {EVENT_STATUSES.map((s) => (
-              <option key={s} value={s}>{s}</option>
+            {choixStatut.map((s) => (
+              <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
           <button
@@ -980,7 +1026,7 @@ export default function EventDetailPage() {
             {changingStatus ? 'Mise à jour…' : 'Appliquer'}
           </button>
           <span style={{ fontSize: 13, color: BRAND.grey }}>
-            Statut actuel : <strong>{event.status}</strong>
+            Statut enregistré : <strong>{libelleStatut(event.status)}</strong>
           </span>
         </div>
       </Card>
