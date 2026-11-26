@@ -5,6 +5,21 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.73] — 2026-11-27 — Une commande Flaix s'ouvre dans BreakEat, avec « Signaler un problème »
+
+- **Pourquoi** : Rémi (26/11) : toucher un ticket Flaix ouvrait la page de suivi de Flaix. Il voulait le même écran qu'une commande BreakEat (capture à l'appui), avec « Signaler un problème avec ma commande » qui prépare un e-mail à contact@breakeatapp.com. Aucune information nouvelle n'était nécessaire de Flaix.
+- **App** : nouvel écran `SuiviFlaix`. Il reprend les styles du suivi BreakEat :
+  - le numéro en grand, l'état, les étapes Payé → En préparation → Prête ;
+  - le point de retrait, le détail des lignes et le total TTC ;
+  - « Noter ma commande » si la commande est notable, « Voir le reçu » (le reçu officiel reste celui de Flaix, qui encaisse) et « Signaler un problème ».
+- **D'où vient l'état** : la commande vient de « Mes commandes ». L'étape en direct est lue dans `/flaix/mes-suivis` (notre base), toutes les 10 s, et au retour au premier plan. Aucun appel de plus chez Flaix.
+- **Ce qui ouvre l'écran** : toucher le ticket, ou « Suivre ma commande ».
+- **Signalement** : l'e-mail porte le numéro, le lieu, le match, le point de retrait et l'heure, **jamais le jeton Flaix** (c'est un droit d'accès).
+- **Refactor** : la table des mots de Flaix (`assigned` = en préparation…) passe dans `lib/etat-commande-flaix.ts`, partagée par le ticket et l'écran (avant, elle vivait dans le ticket seul).
+- **Tests** : app 202/202 (dont 5 nouveaux sur la table des états), typage et lint. **Pas vu à l'écran** avant la mise à jour à distance.
+- + `apps/mobile/src/screens/suivi-flaix.screen.tsx`, `src/lib/etat-commande-flaix.ts` (+ test)
+- ~ `order-history.screen.tsx`, `order-tracking.screen.tsx` (styles et étapes exportés), `App.expo.tsx`, `navigation/root-navigator.tsx`
+
 ## [1.7.72] — 2026-11-26 — Documentation de passation : les blocs du 21 au 26/11
 
 - **Pourquoi** : demande de Rémi (26/11) : chaque développement et chaque code expliqués dans les bons dossiers, « au cas où un développeur devrait reprendre mon code ». Les documents de gouvernance dataient du 17/11 et ne connaissaient ni le suivi Flaix, ni le flux des matchs, ni les corrections des notifications.

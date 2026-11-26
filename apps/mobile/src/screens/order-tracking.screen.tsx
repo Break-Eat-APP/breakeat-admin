@@ -46,7 +46,7 @@ interface StatusConfig {
   isFinal: boolean;
 }
 
-const STATUS_MAP: Record<string, StatusConfig> = {
+export const STATUS_MAP: Record<string, StatusConfig> = {
   PAID: {
     label: 'Payé',
     icon: 'card-outline',
@@ -126,7 +126,7 @@ const STATUS_MAP: Record<string, StatusConfig> = {
  * Une commande acceptée reste donc sur l'etape « Payé », et avance a « En
  * préparation » quand le comptoir s'en saisit vraiment.
  */
-const STEPS = ['PAID', 'PREPARING', 'READY', 'PICKED_UP'];
+export const STEPS = ['PAID', 'PREPARING', 'READY', 'PICKED_UP'];
 
 /**
  * CE QUI N'EST PAS UNE ETAPE, ET SUR QUOI IL FAUT LE REPLIER.
@@ -147,7 +147,7 @@ const ETAPE_DE_L_ETAT: Record<string, string> = { ACCEPTED: 'PAID' };
  * par un lien (retour de paiement, notification), il n'y a rien a depiler et
  * l'appui reste sans effet — le pire des deux, un bouton mort.
  */
-function retourEnArriere(navigation: {
+export function retourEnArriere(navigation: {
   canGoBack: () => boolean;
   goBack: () => void;
   navigate: (ecran: 'Lieux') => void;
@@ -485,7 +485,11 @@ export function OrderTrackingScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+/**
+ * Partagés avec le suivi d'une commande Flaix (`suivi-flaix.screen.tsx`,
+ * 27/11/2026) : les deux écrans doivent rester IDENTIQUES à l'œil.
+ */
+export const stylesSuivi = StyleSheet.create({
   root: { flex: 1, backgroundColor: THEME.bg },
 
   centered: {
@@ -686,3 +690,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+const styles = stylesSuivi;

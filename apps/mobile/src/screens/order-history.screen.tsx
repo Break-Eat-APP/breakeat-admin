@@ -44,6 +44,7 @@ import { useCartStore } from '@store/cart.store';
 import { useSuiviStore } from '@store/suivi.store';
 import { JAUNE_FOND, JAUNE_TEXTE } from '@lib/suivi-commande';
 import { plusRecentesDabord } from '@lib/ordre-commandes';
+import { avecEtatEnDirect, statutCommandeFlaix } from '@lib/etat-commande-flaix';
 import { MissingItemsBanner } from '@components/missing-items-banner';
 import { RemboursementBanner } from '@components/remboursement-banner';
 import { ImageDuLieu } from '@components/image-du-lieu';
@@ -218,18 +219,7 @@ export function OrderHistoryScreen() {
   const [flaixANoter, setFlaixANoter] = useState<CommandeFlaix | null>(null);
   const jetonANoter = useSuiviStore((e) => e.jetonANoter);
   const flaix = useMemo(() => {
-    return flaixLu.map((c) => {
-      const s = suivisParId.get(c.id);
-      if (!s || s.etat === c.etat) return c;
-      return {
-        ...c,
-        etat: s.etat,
-        prete: s.etat === 'ready',
-        enCours: !['PICKED_UP', 'CANCELLED'].includes(s.status),
-        // La phrase lue chez Flaix décrivait l'état d'avant : on ne la garde pas.
-        etatDetail: null,
-      };
-    });
+    return flaixLu.map((c) => avecEtatEnDirect(c, suivisParId.get(c.id)));
   }, [flaixLu, suivisParId]);
 
   // « Note ta commande » touchée : la feuille s'ouvre dès que la commande est
@@ -549,6 +539,7 @@ export function OrderHistoryScreen() {
                 commande={item}
                 notable={suivisParId.get(item.id)?.notable === true}
                 onNoter={setFlaixANoter}
+                onOuvrir={(commande) => navigation.navigate('SuiviFlaix', { commande })}
               />
             ) : (
               <OrderCard
@@ -960,20 +951,10 @@ function OrderCard({
  * Un état inconnu garde le libellé de Flaix, dans la teinte neutre.
  */
 function uiFlaix(c: CommandeFlaix): StatusUi {
-  const etat = c.etat ?? '';
-  if (c.prete) return STATUS_UI.READY;
-  if (['collected', 'picked_up', 'delivered', 'done', 'completed', 'served'].includes(etat)) {
-    return STATUS_UI.PICKED_UP;
-  }
-  if (['cancelled', 'canceled', 'refunded', 'failed', 'expired'].includes(etat)) return STATUS_UI.CANCELLED;
-  // `assigned` : le mot de Flaix pour « en préparation » (constaté le 25/11/2026).
-  if (['preparing', 'in_preparation', 'in_progress', 'cooking', 'assigned', 'processing', 'started'].includes(etat)) {
-    return STATUS_UI.PREPARING;
-  }
-  if (['queued', 'pending', 'waiting', 'received', 'accepted', 'paid'].includes(etat) || c.enCours) {
-    return STATUS_UI.PAID;
-  }
-  return { ...FALLBACK_UI, label: c.etatLibelle };
+  // La table des mots de Flaix vit dans `lib/etat-commande-flaix.ts` : l'écran
+  // de suivi (27/11/2026) dit la MÊME étape que le ticket.
+  const statut = statutCommandeFlaix(c);
+  return statut ? STATUS_UI[statut] : { ...FALLBACK_UI, label: c.etatLibelle };
 }
 
 async function ouvrirLienFlaix(url: string | null) {
@@ -992,16 +973,23 @@ async function ouvrirLienFlaix(url: string | null) {
  * encoches : ce sont les styles de `OrderCard`, pas une copie.
  *
  * Ce qui change, parce que BreakEat ne fait que LIRE la commande chez Flaix :
- * le ticket ouvre la page de suivi Flaix ; « Suivre ma commande » et « Voir le
- * reçu » mènent aux pages Flaix ; pas de « Je suis arrivé », de plan ni de
- * note (ils demandent une commande BreakEat).
+ * « Voir le reçu » mène au reçu de Flaix (c'est lui qui encaisse) ; pas de
+ * « Je suis arrivé » ni de plan.
+ *
+ * Depuis le 27/11/2026, le ticket et « Suivre ma commande » ouvrent le suivi
+ * BREAKEAT de la commande (`suivi-flaix.screen.tsx`), comme une commande
+ * BreakEat — avec « Signaler un problème avec ma commande ». Avant, ils
+ * ouvraient la page de suivi de Flaix (demande de Rémi, 26/11).
  */
 function TicketFlaix({
   commande: c,
   notable = false,
   onNoter,
+  onOuvrir,
 }: {
   commande: CommandeFlaix;
+  /** Ouvre le suivi BreakEat de la commande (27/11/2026). */
+  onOuvrir: (commande: CommandeFlaix) => void;
   /** Récupérée et pas encore notée (26/11/2026). */
   notable?: boolean;
   onNoter?: (commande: CommandeFlaix) => void;
@@ -1015,7 +1003,7 @@ function TicketFlaix({
   return (
     <Pressable
       style={({ pressed }) => [styles.carte, shadowCard, pressed && styles.pressed]}
-      onPress={() => void ouvrirLienFlaix(c.lienSuivi)}
+      onPress={() => onOuvrir(c)}
       accessibilityRole="button"
       accessibilityLabel={`Commande ${c.numero} — ${cfg.label}. Toucher pour suivre.`}
     >
@@ -1093,12 +1081,10 @@ function TicketFlaix({
             </View>
           </View>
 
-          {c.lienSuivi ? (
-            <View style={styles.detail} accessibilityElementsHidden importantForAccessibility="no">
-              <Text style={styles.detailTexte}>Voir le détail de la commande</Text>
-              <Ionicons name="chevron-forward" size={16} color={THEME.orange} />
-            </View>
-          ) : null}
+          <View style={styles.detail} accessibilityElementsHidden importantForAccessibility="no">
+            <Text style={styles.detailTexte}>Voir le détail de la commande</Text>
+            <Ionicons name="chevron-forward" size={16} color={THEME.orange} />
+          </View>
         </View>
 
         <View style={styles.dechirure}>
@@ -1112,10 +1098,10 @@ function TicketFlaix({
         </View>
 
         <View style={styles.actions}>
-          {live && c.lienSuivi ? (
+          {live ? (
             <Pressable
               style={({ pressed }) => [styles.action, styles.actionAller, pressed && styles.pressed]}
-              onPress={() => void ouvrirLienFlaix(c.lienSuivi)}
+              onPress={() => onOuvrir(c)}
               hitSlop={4}
             >
               <Ionicons name="navigate-outline" size={18} color="#fff" />

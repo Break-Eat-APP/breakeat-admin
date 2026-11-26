@@ -133,6 +133,14 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 > - **1.7.71 (26/11) — « MES COMMANDES » TRIÉES PAR DATE** (BUG-2026-058) :
 >   BreakEat et Flaix mêlées. **Publiée le 26/11** (`a3fe555`) : défaut 1.1.5
 >   (`dd42a755`), `1.1.4 · ios` (`5114a4d0`), `1.1.3 · android` (`8bc56f7a`).
+> - **1.7.73 (27/11) — UNE COMMANDE FLAIX S'OUVRE DANS BREAKEAT** : le ticket
+>   Flaix et « Suivre ma commande » ouvrent l'écran `SuiviFlaix` (étapes,
+>   détail, « Signaler un problème » vers contact@breakeatapp.com, « Voir le
+>   reçu » chez Flaix). **À publier par mise à jour à distance** (trois
+>   publications).
+> - **Le développeur Flaix n'est plus attendu (27/11)**. Deux choses restent
+>   facultatives : un message `flaix_commande` envoyé par sa page avec le
+>   jeton, et la liste complète de ses états.
 > - **Audit final Codex du 26/11** : aucun défaut de code. Réponse dans
 >   `brain/audits/`. Reste : essai du son sur un Android, et une commande
 >   BreakEat sans Live Activity.

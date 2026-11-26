@@ -603,6 +603,7 @@ l'app.
 | 1.7.66 | 2026-11-26 | Ticket Flaix : image du lieu, numéro en vert ; widget Live Activity revu (prochaine build) |
 | 1.7.67 | 2026-11-26 | Notifications : état affiché vrai, badge et cloche cohérents (audit Codex) |
 | 1.7.68 | 2026-11-26 | Build 1.1.5 iOS et Android (widget Live Activity, textes au tutoiement) |
+| 1.7.73 | 2026-11-27 | Une commande Flaix s'ouvre dans BreakEat (suivi, détail, « Signaler un problème ») |
 | 1.7.72 | 2026-11-26 | Documentation de passation : manuel bloc par bloc (21 → 26/11), carte, architecture, modèle, déploiement, comptes rendus |
 | 1.7.71 | 2026-11-26 | « Mes commandes » triées par date, BreakEat et Flaix mêlées (BUG-2026-058) |
 | 1.7.70 | 2026-11-26 | Android : catégorie « Commandes » (son, bannière) pour les notifications de commande |

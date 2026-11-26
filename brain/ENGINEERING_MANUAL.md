@@ -9019,6 +9019,54 @@ Cause du bug (BUG-2026-058) : les deux listes étaient mises bout à bout.
 
 ---
 
+### [2026-11-27] Une commande Flaix s'ouvre dans BreakEat (1.7.73)
+
+**Ce qui a été construit.** L'écran `SuiviFlaix`. C'est le même écran que le
+suivi d'une commande BreakEat :
+- le numéro, l'état et les étapes ;
+- le point de retrait, les lignes et le total ;
+- « Signaler un problème », « Voir le reçu » (chez Flaix), « Noter ma
+  commande ».
+
+**Pourquoi.** Toucher le ticket ouvrait la page de suivi de Flaix, hors de
+BreakEat, et sans le signalement que le client connaît (demande de Rémi,
+26/11).
+
+**Comment ça marche.**
+1. Le ticket passe la `CommandeFlaix` déjà lue par « Mes commandes »
+   (paramètre de navigation, JSON simple).
+2. L'écran relit `/flaix/mes-suivis` toutes les 10 s tant que la commande
+   n'est pas terminée, et au retour au premier plan.
+3. Il publie la réponse dans `useSuiviStore`, que la flamme et « Mes
+   commandes » lisent aussi.
+4. `avecEtatEnDirect` pose l'état tenu par notre serveur sur la commande.
+   `statutCommandeFlaix` en fait une étape BreakEat.
+
+**Références de code.**
+- `apps/mobile/src/screens/suivi-flaix.screen.tsx` : l'écran.
+- `apps/mobile/src/lib/etat-commande-flaix.ts` : `statutCommandeFlaix`,
+  `avecEtatEnDirect`. C'est la table unique des mots de Flaix ; le ticket
+  (`uiFlaix`) l'emploie aussi.
+- `apps/mobile/src/screens/order-tracking.screen.tsx` : `STATUS_MAP`,
+  `STEPS`, `retourEnArriere` et `stylesSuivi` sont exportés. **Modifier un
+  style change les deux écrans**, c'est voulu.
+- `order-history.screen.tsx` (`TicketFlaix`, prop `onOuvrir`) ;
+  `App.expo.tsx` (route `SuiviFlaix`).
+
+**Risques et règles.**
+- Le jeton Flaix **ne va jamais** dans l'e-mail de signalement : c'est un
+  droit d'accès.
+- Pas d'appel chez Flaix depuis cet écran : le contrat interdit de lire la
+  liste en boucle.
+- Un mot de Flaix inconnu, pour une commande en cours, s'affiche « Payé ». Le
+  serveur le journalise.
+
+**Débogage.** Si l'étape reste figée, regarder `/flaix/mes-suivis` : la
+commande est-elle suivie ? Chercher « Flaix suivie » et son numéro dans le
+journal Railway.
+
+---
+
 ### Ce que ces journées ont appris
 
 1. **Une liste mêlée se trie après le mélange.** Deux listes triées mises bout

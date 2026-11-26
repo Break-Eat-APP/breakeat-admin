@@ -1,3 +1,4 @@
+import type { CommandeFlaix } from '@lib/api/mobile-api';
 import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import {
@@ -83,6 +84,8 @@ export type RootStackParamList = {
   /** PHASE 25 — l'ardoise partagee. Ouverte aussi depuis un navigateur, sans compte. */
   Split: { code: string };
   OrderTracking: { orderId: string };
+  /** Le suivi BreakEat d'une commande Flaix (27/11/2026) : la commande lue par « Mes commandes ». */
+  SuiviFlaix: { commande: CommandeFlaix };
   /** Service client : les motifs, et un message déjà préparé. */
   Aide: undefined;
   /** Les quatre documents légaux, regroupés. */

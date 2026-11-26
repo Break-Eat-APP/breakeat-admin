@@ -54,6 +54,7 @@ import { SlotSelectorScreen } from '@screens/slot-selector.screen';
 import { CheckoutScreen } from '@screens/checkout.screen';
 import { OrderConfirmationScreen } from '@screens/order-confirmation.screen';
 import { OrderTrackingScreen } from '@screens/order-tracking.screen';
+import { SuiviFlaixScreen } from '@screens/suivi-flaix.screen';
 import { SplitScreen } from '@screens/split.screen';
 import { useDeepLinks } from '@lib/hooks/use-deep-links';
 import {
@@ -303,6 +304,7 @@ export default function AppPreview() {
               <Stack.Screen name="EventHome" component={EventHomeScreen} />
               <Stack.Screen name="Saison" component={SaisonScreen} />
               <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} />
+              <Stack.Screen name="SuiviFlaix" component={SuiviFlaixScreen} />
               <Stack.Screen name="Notifications" component={NotificationsScreen} />
               <Stack.Screen name="QRScanner" component={QRScannerStub} />
             </Stack.Navigator>

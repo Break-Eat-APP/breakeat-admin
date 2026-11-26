@@ -110,6 +110,14 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
 - `lib/signal-commande-flaix.ts` — relit la liste des commandes quand la page Flaix se pose, se ferme, ou que l'app passe en arrière-plan ; une lecture en cours est suivie d'une seconde si un signal arrive. Testé.
 - `lib/live-activity-tracking.ts` — démarre, enregistre et ferme les Live Activities ; `suivreCommandeFlaixDansLApp(jeton)` rend une `IssueSuivi` (`suivie`, `sans_activite`, `a_retenter`).
 - `lib/push-notifications.ts` — enregistrement du jeton push : `enregistrerPush()` rend VRAI seulement si le serveur a le jeton ; déclare la catégorie Android. `lib/vrai-telephone.ts` : ne refuse que sur un simulateur CERTAIN (`Constants.isDevice` a disparu au SDK 57, BUG-2026-056). `lib/canal-commandes.ts` : crée la catégorie Android « Commandes » (importance haute, une fois). `lib/permission-notifs.ts` : l'état affiché au profil (`activees`, `non-relie`, `refusees`, `indisponible` sur le web). Tous testés.
+- `screens/suivi-flaix.screen.tsx` — **le suivi BreakEat d'une commande Flaix** (27/11) :
+  - mêmes styles que `order-tracking.screen.tsx` (`stylesSuivi`, `STATUS_MAP` et `STEPS` exportés) ;
+  - l'état en direct vient de `/flaix/mes-suivis` ;
+  - « Signaler un problème », « Voir le reçu » (Flaix), « Noter ma commande ».
+- `lib/etat-commande-flaix.ts` — **fonctions PURES**, partagées par le ticket et l'écran de suivi :
+  - `statutCommandeFlaix` traduit les mots de Flaix en étapes BreakEat ;
+  - `avecEtatEnDirect` pose l'état tenu par notre serveur.
+  Testées.
 - `lib/ordre-commandes.ts` — **fonction PURE** `plusRecentesDabord` : trie ensemble commandes BreakEat (`createdAt`) et Flaix (`passeeLe`), la plus récente en tête (BUG-2026-058). Testée.
 - `components/relais-flaix.tsx` + `relais-flaix.native.tsx` — la page de commande Flaix **dans** l'app. Deux fichiers : `react-native-webview` ne rend pas sur le web, et l'export web sert les clients sans application. Le natif ne suit que les domaines de Flaix — **même liste que `backend/src/modules/events/lien-flaix.ts`, toute modification vaut pour les deux**.
 - `lib/navigation-flaix.ts` — **ce que la page de commande Flaix intégrée a le droit d'ouvrir** : Flaix toujours, le reste en HTTPS seulement, et l'adresse affichée dès qu'on a quitté Flaix (`hoteHorsFlaix`). Même liste de domaines que `backend/src/modules/events/lien-flaix.ts`. Testée.
