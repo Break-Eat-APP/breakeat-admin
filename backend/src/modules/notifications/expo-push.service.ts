@@ -20,7 +20,16 @@ export interface ExpoPushMessage {
   data?: Record<string, unknown>;
   sound?: 'default' | null;
   badge?: number;
+  /** Android : la catégorie de notification (`CANAL_COMMANDES`). */
+  channelId?: string;
 }
+
+/**
+ * LA CATÉGORIE ANDROID « COMMANDES » (26/11/2026) : importance haute, son et
+ * bannière. Créée par l'app (`lib/canal-commandes.ts`) ; le serveur ne l'emploie
+ * que pour les appareils qui l'ont déclarée (`PushToken.canalCommandes`).
+ */
+export const CANAL_COMMANDES = 'commandes';
 
 export interface ExpoSendResult {
   sent: number;

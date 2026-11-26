@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { estUnVraiTelephone } from './vrai-telephone';
+import { creerCanalCommandes } from './canal-commandes';
 import {
   apiRegisterPushToken,
   apiRetirerJetonPush,
@@ -93,7 +94,10 @@ export async function enregistrerPush(): Promise<boolean> {
     // après l'enregistrement et reprendrait le jeton au compte connecté.
     if (retraitEnCours) await retraitEnCours;
 
-    await apiRegisterPushToken(data, Platform.OS);
+    // Android : la catégorie « Commandes » (son, bannière) est créée, puis
+    // déclarée au serveur, qui ne la vise que si elle existe (26/11/2026).
+    if (await creerCanalCommandes()) await apiRegisterPushToken(data, Platform.OS, true);
+    else await apiRegisterPushToken(data, Platform.OS);
     jetonActuel = data;
     // Le jeton appartient désormais au compte connecté : un retrait resté en
     // attente pour l'ancien compte ne doit SURTOUT pas le lui reprendre.

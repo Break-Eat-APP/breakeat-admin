@@ -378,12 +378,16 @@ model ScheduledPush {
 
 /// Jeton de push Expo enregistré par un appareil client (notifications C1/C2/C3).
 model PushToken {
-  id        String   @id @default(uuid())
-  userId    String   @map("user_id")
-  token     String   @unique
-  platform  String   @default("unknown")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  token          String   @unique
+  platform       String   @default("unknown")
+  /// L'appareil a créé la catégorie Android « Commandes » (importance haute :
+  /// son et bannière). Le serveur ne la vise QUE pour lui : un `channelId`
+  /// inconnu du téléphone fait disparaître la notification (26/11/2026).
+  canalCommandes Boolean  @default(false) @map("canal_commandes")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

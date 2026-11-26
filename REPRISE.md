@@ -124,6 +124,16 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 > - **1.7.66 + 1.7.67 publiées le 26/11** (`6143900`) : `1.1.4 · ios`
 >   (`e36d2800`), `1.1.3 · android` (`f12a7dad`) — ticket Flaix (image du
 >   lieu, numéro vert), notifications (état vrai, badge, cloche).
+> - **1.7.70 (26/11) — CATÉGORIE ANDROID « COMMANDES »** : importance haute
+>   (son, bannière) pour « prête », « Note ta commande », produit manquant.
+>   Le serveur ne la vise que pour les téléphones qui l'ont déclarée
+>   (`push_tokens.canal_commandes`). **À publier par mise à jour à distance**
+>   (trois publications), puis vérifier le son sur un Android.
+> - **BUILDS 1.1.5 FINIES** (iOS 49, Android code 9) : pas encore chez Apple ni
+>   Google au 26/11 — Rémi lance `eas submit` pour iOS (l'agent n'a pas pu) et
+>   dépose le `.aab` dans la Play Console ; essai TestFlight conseillé avant
+>   la vérification. La clé Play n'est pas sur le poste : pas d'envoi Android
+>   automatique.
 > - **BUILD 1.1.5 LANCÉE LE 26/11 (iOS ET Android)** : widget revu (1.7.66) et
 >   textes d'autorisation au tutoiement. `version` = 1.1.5 depuis `1.7.68`.
 >   **Mises à jour à distance, jusqu'à ce que tout le monde soit en 1.1.5** :

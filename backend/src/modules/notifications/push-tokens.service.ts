@@ -15,14 +15,17 @@ export class PushTokensService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async register(userId: string, token: string, platform?: string) {
+  async register(userId: string, token: string, platform?: string, canalCommandes?: boolean) {
     if (!ExpoPushService.isExpoPushToken(token)) {
       throw new BadRequestException('Jeton de push Expo invalide.');
     }
+    // Absent = on ne touche pas : une ancienne app qui se réenregistre ne
+    // retire pas la catégorie qu'une version plus récente avait déclarée.
+    const canal = canalCommandes === undefined ? {} : { canalCommandes };
     const saved = await this.prisma.pushToken.upsert({
       where: { token },
-      update: { userId, platform: platform ?? 'unknown' },
-      create: { userId, token, platform: platform ?? 'unknown' },
+      update: { userId, platform: platform ?? 'unknown', ...canal },
+      create: { userId, token, platform: platform ?? 'unknown', ...canal },
     });
     this.logger.log(`Push token enregistré pour user ${userId} (${saved.platform})`);
     return { ok: true };
@@ -73,6 +76,19 @@ export class PushTokensService {
       tokens.push(...rows.map((r) => r.token));
     }
     return tokens;
+  }
+
+  /**
+   * Les jetons qui ont déclaré la catégorie Android « Commandes » (26/11/2026).
+   * Pour eux seuls, un envoi de commande peut viser cette catégorie.
+   */
+  async canauxCommandes(tokens: string[]): Promise<Set<string>> {
+    if (tokens.length === 0) return new Set();
+    const rows = await this.prisma.pushToken.findMany({
+      where: { token: { in: tokens }, canalCommandes: true },
+      select: { token: true },
+    });
+    return new Set(rows.map((r) => r.token));
   }
 
   /** Purge les jetons rejetés par Expo (DeviceNotRegistered). */

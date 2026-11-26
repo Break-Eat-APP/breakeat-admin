@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Post, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsBoolean, IsString, IsNotEmpty, IsOptional } from 'class-validator';
 import { PushTokensService } from './push-tokens.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -13,6 +13,11 @@ class RegisterPushTokenDto {
   @IsString()
   @IsOptional()
   platform?: string;
+
+  /** Android : la catégorie « Commandes » est créée sur l'appareil (26/11/2026). */
+  @IsBoolean()
+  @IsOptional()
+  canalCommandes?: boolean;
 }
 
 @UseGuards(JwtAuthGuard)
@@ -24,7 +29,7 @@ export class PushTokensController {
   @Post()
   @HttpCode(HttpStatus.OK)
   register(@CurrentUser() user: JwtPayload, @Body() dto: RegisterPushTokenDto) {
-    return this.pushTokens.register(user.sub, dto.token, dto.platform);
+    return this.pushTokens.register(user.sub, dto.token, dto.platform, dto.canalCommandes);
   }
 
   /** DELETE /api/v1/push-tokens — désenregistre (déconnexion). */

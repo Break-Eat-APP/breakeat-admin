@@ -27,3 +27,37 @@ describe('PushTokensService — retrait par jeton', () => {
     expect(deleteMany).toHaveBeenCalledWith({ where: { token: 'ExponentPushToken[abc123]', userId: 'u1' } });
   });
 });
+
+describe('PushTokensService — catégorie Android « Commandes » (26/11/2026)', () => {
+  const upsert = jest.fn().mockResolvedValue({ platform: 'android' });
+  const findMany = jest.fn().mockResolvedValue([{ token: 'ExponentPushToken[a]' }]);
+  const service = new PushTokensService({ pushToken: { upsert, findMany } } as unknown as PrismaService);
+
+  beforeEach(() => {
+    upsert.mockClear();
+    findMany.mockClear();
+  });
+
+  it('retient la catégorie quand l’appareil la déclare', async () => {
+    await service.register('u1', 'ExponentPushToken[a]', 'android', true);
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({ canalCommandes: true }),
+        create: expect.objectContaining({ canalCommandes: true }),
+      }),
+    );
+  });
+
+  it('une ancienne app qui ne dit rien ne retire pas la catégorie', async () => {
+    await service.register('u1', 'ExponentPushToken[a]', 'android');
+    expect(upsert.mock.calls[0][0].update).not.toHaveProperty('canalCommandes');
+  });
+
+  it('ne rend que les jetons qui l’ont déclarée', async () => {
+    const canaux = await service.canauxCommandes(['ExponentPushToken[a]', 'ExponentPushToken[b]']);
+    expect([...canaux]).toEqual(['ExponentPushToken[a]']);
+    expect(findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ canalCommandes: true }) }),
+    );
+  });
+});

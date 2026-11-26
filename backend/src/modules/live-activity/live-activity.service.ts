@@ -2,7 +2,8 @@ import { ForbiddenException, Injectable, Logger, NotFoundException, Optional } f
 import { LiveActivityStatus, OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { ApnsService } from './apns.service';
-import { ExpoPushService } from '../notifications/expo-push.service';
+import { CANAL_COMMANDES, ExpoPushService } from '../notifications/expo-push.service';
+
 import { PushTokensService } from '../notifications/push-tokens.service';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { dateDePeremption } from './peremption';
@@ -571,9 +572,12 @@ export class LiveActivityService {
       });
       const jetons = commande ? await this.pushTokens.tokensForUsers([commande.userId]) : [];
       if (jetons.length > 0) {
+        // `?.` : une doublure de test sans cette méthode garde l'ancien envoi.
+        const canaux = (await this.pushTokens.canauxCommandes?.(jetons)) ?? new Set<string>();
         const resultat = await this.expoPush.send(
           jetons.map((to) => ({
             to,
+            ...(canaux.has(to) ? { channelId: CANAL_COMMANDES } : {}),
             title: titre,
             body: corps,
             sound: 'default' as const,

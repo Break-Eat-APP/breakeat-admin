@@ -5,6 +5,17 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.70] — 2026-11-26 — Android : une catégorie « Commandes » qui sonne
+
+- **Pourquoi** : audit Codex du 26/11 (réponse dans `brain/audits/`) : l'app ne créait aucune catégorie de notification Android ; « Ta commande est prête » passait par la catégorie par défaut, dont l'importance ne garantit ni le son ni la bannière. Rémi : « Oui, ajoute-le ».
+- **App** : à l'enregistrement du téléphone, la catégorie « Commandes » est créée (importance haute : son, vibration, bannière, visible écran verrouillé) ; l'app le déclare au serveur (`canalCommandes`). iPhone et web : rien ne change.
+- **Serveur** : les notifications de COMMANDE (« prête » BreakEat et Flaix, « Note ta commande », produit manquant) visent cette catégorie, MAIS seulement pour les appareils qui l'ont déclarée : un `channelId` inconnu du téléphone ferait disparaître la notification. Une ancienne app qui se réenregistre sans le champ ne l'efface pas. Les campagnes restent sur la catégorie par défaut.
+- **Base** : `push_tokens.canal_commandes` (booléen, faux par défaut) — migration `20261126c_canal_commandes`, rejouée par `db:verifier`.
+- **Arrive par mise à jour à distance** (JavaScript seulement) : trois publications (défaut 1.1.5, `ios` 1.1.4, `android` 1.1.3), avec l'accord de Rémi.
+- **Tests** : serveur 1227/1227, intégration 234/234, app 194/194.
+- + `apps/mobile/src/lib/canal-commandes.ts` (+ test), `backend/prisma/migrations/20261126c_canal_commandes/`
+- ~ `apps/mobile/src/lib/push-notifications.ts`, `apps/mobile/src/lib/api/mobile-api.ts`, `backend/prisma/schema.prisma`, `backend/src/modules/notifications/` (expo-push, push-tokens + spec), `live-activity.service.ts`, `produits-manquants.service.ts`, `surveillance-commandes-flaix.service.ts`
+
 ## [1.7.69] — 2026-11-26 — « Prête » BreakEat : une panne Expo silencieuse est reprise
 
 - **Pourquoi** : audit Codex du 26/11 (P1, BUG-2026-057) : sans Live Activity, si Expo échouait sans lever d’exception (`sent: 0`), l’annonce « prête » d’une commande BreakEat était quand même marquée faite et jamais reprise.

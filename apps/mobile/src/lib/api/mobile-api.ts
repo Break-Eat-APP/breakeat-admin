@@ -179,10 +179,15 @@ export interface LoginResponse {
 // Le jeton Expo est obtenu via expo-notifications côté natif (voir docs : la mise
 // en place native est requise dans cette app bare RN avant que ceci ne soit appelé).
 
-export async function apiRegisterPushToken(token: string, platform?: string): Promise<void> {
+export async function apiRegisterPushToken(
+  token: string,
+  platform?: string,
+  /** Android : la catégorie « Commandes » existe sur l'appareil (26/11/2026). */
+  canalCommandes?: boolean,
+): Promise<void> {
   await req<{ ok: boolean }>('/push-tokens', {
     method: 'POST',
-    body: JSON.stringify({ token, platform }),
+    body: JSON.stringify({ token, platform, ...(canalCommandes ? { canalCommandes: true } : {}) }),
   });
 }
 

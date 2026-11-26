@@ -3,7 +3,8 @@ import { OrderActorType, OrderStatus, ProductStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { LiveActivityService } from '../live-activity/live-activity.service';
-import { ExpoPushService } from '../notifications/expo-push.service';
+import { CANAL_COMMANDES, ExpoPushService } from '../notifications/expo-push.service';
+
 import { PushTokensService } from '../notifications/push-tokens.service';
 import type { LigneManquanteDto } from './dto/signaler-manquants.dto';
 
@@ -226,9 +227,11 @@ export class ProduitsManquantsService {
 
     const jetons = await this.pushTokens.tokensForUsers([commande.userId]);
     if (jetons.length === 0) return;
+    const canaux = (await this.pushTokens.canauxCommandes?.(jetons)) ?? new Set<string>();
     await this.expoPush.send(
       jetons.map((to) => ({
         to,
+        ...(canaux.has(to) ? { channelId: CANAL_COMMANDES } : {}),
         title: titre,
         body: corps,
         sound: 'default' as const,

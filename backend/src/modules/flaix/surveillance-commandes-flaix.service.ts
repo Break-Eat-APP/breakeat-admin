@@ -10,7 +10,8 @@ import { Prisma } from '@prisma/client';
 import { Interval } from '@nestjs/schedule';
 import { LiveActivityStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
-import { ExpoPushService } from '../notifications/expo-push.service';
+import { CANAL_COMMANDES, ExpoPushService } from '../notifications/expo-push.service';
+
 import { PushTokensService } from '../notifications/push-tokens.service';
 import { ApnsService } from '../live-activity/apns.service';
 import {
@@ -266,9 +267,11 @@ export class SurveillanceCommandesFlaixService {
       try {
         const jetons = await this.pushTokens.tokensForUsers([s.userId]);
         if (jetons.length === 0) continue;
+        const canaux = (await this.pushTokens.canauxCommandes?.(jetons)) ?? new Set<string>();
         const r = await this.expoPush.send(
           jetons.map((to) => ({
             to,
+            ...(canaux.has(to) ? { channelId: CANAL_COMMANDES } : {}),
             title: 'Note ta commande',
             body:
               `Commande n° ${s.numero}` +
@@ -508,9 +511,11 @@ export class SurveillanceCommandesFlaixService {
         (s.pointDeRetrait
           ? `à récupérer au point de retrait ${s.pointDeRetrait}.`
           : 'à récupérer au point de retrait.');
+      const canaux = (await this.pushTokens.canauxCommandes?.(jetons)) ?? new Set<string>();
       const resultat = await this.expoPush.send(
         jetons.map((to) => ({
           to,
+          ...(canaux.has(to) ? { channelId: CANAL_COMMANDES } : {}),
           title: titre,
           body: corps,
           sound: 'default' as const,
