@@ -136,8 +136,8 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 > - **1.7.73 (27/11) — UNE COMMANDE FLAIX S'OUVRE DANS BREAKEAT** : le ticket
 >   Flaix et « Suivre ma commande » ouvrent l'écran `SuiviFlaix` (étapes,
 >   détail, « Signaler un problème » vers contact@breakeatapp.com, « Voir le
->   reçu » chez Flaix). **À publier par mise à jour à distance** (trois
->   publications).
+>   reçu » chez Flaix). **Publiée le 27/11** (`bc3fc3a`) : défaut 1.1.5
+>   (`4903b38a`), `1.1.4 · ios` (`73234fbf`), `1.1.3 · android` (`e23c7fa1`).
 > - **Le développeur Flaix n'est plus attendu (27/11)**. Deux choses restent
 >   facultatives : un message `flaix_commande` envoyé par sa page avec le
 >   jeton, et la liste complète de ses états.
