@@ -5,6 +5,13 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.69] — 2026-11-26 — « Prête » BreakEat : une panne Expo silencieuse est reprise
+
+- **Pourquoi** : audit Codex du 26/11 (P1, BUG-2026-057) : sans Live Activity, si Expo échouait sans lever d’exception (`sent: 0`), l’annonce « prête » d’une commande BreakEat était quand même marquée faite et jamais reprise.
+- **Serveur** : des appareils existent mais aucun n’est atteint → l’annonce reste due ; le rattrapage de chaque minute la reprend (au plus 5 essais). Aucun appareil enregistré reste « fait » (rien à reprendre).
+- **Tests** : serveur 1224/1224 (dont le cas `sent: 0`).
+- ~ `backend/src/modules/live-activity/live-activity.service.ts` (+ spec)
+
 ## [1.7.68] — 2026-11-26 — Build 1.1.5 (iOS et Android)
 
 - **Pourquoi** : le widget de la Live Activity revu en 1.7.66 (logo, numéro et « récupérée » en vert, numéro dans la Dynamic Island) est natif : il n’arrive qu’avec une build. Rémi l’a lancée le 26/11.

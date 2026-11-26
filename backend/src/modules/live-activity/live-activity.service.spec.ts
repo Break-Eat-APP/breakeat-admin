@@ -511,6 +511,19 @@ describe('LiveActivityService', () => {
       );
     });
 
+    it('une panne Expo rendue SANS exception (sent: 0) n’est pas marquée faite non plus (audit Codex du 26/11)', async () => {
+      commandePrete(OrderStatus.READY);
+      prisma.liveActivity.findMany.mockResolvedValue([]);
+      expo.send.mockResolvedValueOnce({ sent: 0, failed: 1, invalidTokens: [] });
+
+      await expect(avecPush.onOrderStatusChanged(ORDER_A, OrderStatus.READY)).resolves.toBeUndefined();
+
+      expect(expo.send).toHaveBeenCalledTimes(1);
+      expect(prisma.order.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ readyAnnouncedAt: expect.any(Date) }) }),
+      );
+    });
+
     it('le RATTRAPAGE annonce une commande prête restée sans annonce (serveur arrêté)', async () => {
       prisma.order.findMany.mockResolvedValueOnce([{ id: ORDER_A, status: OrderStatus.READY }]);
       commandePrete(OrderStatus.READY);

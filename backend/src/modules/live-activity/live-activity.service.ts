@@ -584,6 +584,16 @@ export class LiveActivityService {
         if (resultat.invalidTokens.length > 0) {
           await this.pushTokens.purgeInvalid(resultat.invalidTokens);
         }
+        // `send` NE LÈVE JAMAIS (audit Codex du 26/11/2026, P1) : une panne
+        // Expo revient en `sent: 0`. Des appareils existent mais aucun n'a été
+        // atteint : PAS « fait ». Le bail court, le rattrapage reprendra (au
+        // plus ESSAIS_ANNONCE_MAX fois) — comme pour une exception.
+        if (resultat.sent === 0) {
+          this.logger.warn(
+            `Annonce « prête » de ${orderId} : aucun appareil atteint (${resultat.failed} échec(s)), reprise au rattrapage`,
+          );
+          return;
+        }
       }
     }
 
