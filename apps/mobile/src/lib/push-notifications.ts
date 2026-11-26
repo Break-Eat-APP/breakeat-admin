@@ -57,18 +57,21 @@ let retraitEnCours: Promise<void> | null = null;
  * Ne lève jamais : une notification est un confort. Un refus de permission, un
  * simulateur, un réseau coupé — rien de tout cela ne doit empêcher de commander.
  */
-export async function enregistrerPush(): Promise<void> {
+export async function enregistrerPush(): Promise<boolean> {
+  // `true` seulement si CE téléphone est inscrit côté serveur : c'est ce que
+  // le profil affiche désormais (audit Codex du 26/11/2026), et non la seule
+  // permission du système.
   try {
     // Le web n'a pas de jeton Expo, et le simulateur non plus : demander une
     // permission qui ne mènera nulle part n'apporte qu'une boîte de dialogue.
-    if (!estUnVraiTelephone()) return;
+    if (!estUnVraiTelephone()) return false;
 
     const { status: existant } = await Notifications.getPermissionsAsync();
     let status = existant;
     if (status !== 'granted') {
       ({ status } = await Notifications.requestPermissionsAsync());
     }
-    if (status !== 'granted') return;
+    if (status !== 'granted') return false;
 
     // `projectId` est OBLIGATOIRE depuis le SDK 49 : sans lui, Expo ne sait pas
     // à quel projet rattacher le jeton et la demande échoue à l'exécution — pas
@@ -78,11 +81,13 @@ export async function enregistrerPush(): Promise<void> {
       (Constants as unknown as { easConfig?: { projectId?: string } }).easConfig?.projectId;
     if (!projectId) {
       console.warn('Push : projectId EAS introuvable — jeton non demandé.');
-      return;
+      return false;
     }
 
     const { data } = await Notifications.getExpoPushTokenAsync({ projectId });
-    if (!data || data === jetonActuel) return;
+    if (!data) return false;
+    // Déjà inscrit par cette session : rien à refaire.
+    if (data === jetonActuel) return true;
 
     // Un retrait rejoué encore en route passe AVANT : sinon il arriverait
     // après l'enregistrement et reprendrait le jeton au compte connecté.
@@ -93,8 +98,10 @@ export async function enregistrerPush(): Promise<void> {
     // Le jeton appartient désormais au compte connecté : un retrait resté en
     // attente pour l'ancien compte ne doit SURTOUT pas le lui reprendre.
     if ((await lireRetraitEnAttente()) === data) await effacerRetraitEnAttente();
+    return true;
   } catch (e: unknown) {
     console.warn('Enregistrement du jeton push échoué:', e);
+    return false;
   }
 }
 

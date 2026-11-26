@@ -24,19 +24,15 @@ export type EtatNotifs =
   | 'accordee'
   /** Refusée. Sur iPhone, seul le réglage du système peut revenir dessus. */
   | 'refusee'
-  /** Cet appareil ne sait pas notifier (simulateur, navigateur ancien). */
-  | 'indisponible';
+  /** Cet appareil ne sait pas notifier (simulateur, navigateur). */
+  | 'indisponible'
+  /**
+   * Permission accordée, mais le téléphone n'a PAS pu être inscrit côté
+   * serveur (réseau, Expo) : aucune notification ne l'atteindrait. Dit, et
+   * « Réessayer » proposé (audit Codex du 26/11/2026, BUG-2026-056).
+   */
+  | 'non-relie';
 
-/** L'API du navigateur, quand elle existe. Jamais appelée en natif. */
-function notificationWeb():
-  | { permission: string; requestPermission: () => Promise<string> }
-  | undefined {
-  return (
-    globalThis as unknown as {
-      Notification?: { permission: string; requestPermission: () => Promise<string> };
-    }
-  ).Notification;
-}
 
 function depuisStatutExpo(statut: Notifications.PermissionStatus): EtatNotifs {
   if (statut === 'granted') return 'accordee';
@@ -45,13 +41,10 @@ function depuisStatutExpo(statut: Notifications.PermissionStatus): EtatNotifs {
 }
 
 export async function lireEtatNotifs(): Promise<EtatNotifs> {
-  if (Platform.OS === 'web') {
-    const N = notificationWeb();
-    if (!N) return 'indisponible';
-    if (N.permission === 'granted') return 'accordee';
-    if (N.permission === 'denied') return 'refusee';
-    return 'a-demander';
-  }
+  // LE WEB NE REÇOIT AUCUNE PUSH BREAKEAT (audit Codex du 26/11/2026) : le
+  // serveur n'envoie qu'aux téléphones (jetons Expo). Afficher « activées »
+  // dans un navigateur promettait ce qui n'arrivera jamais.
+  if (Platform.OS === 'web') return 'indisponible';
 
   // Un simulateur ne reçoit AUCUNE push : Apple ne délivre pas de jeton à une
   // machine. Dire « indisponible » y est la vérité ; le dire sur un vrai
@@ -60,7 +53,10 @@ export async function lireEtatNotifs(): Promise<EtatNotifs> {
 
   try {
     const { status } = await Notifications.getPermissionsAsync();
-    return depuisStatutExpo(status);
+    const etat = depuisStatutExpo(status);
+    // Accordée : on vérifie l'INSCRIPTION, pas seulement la permission.
+    if (etat === 'accordee') return (await enregistrerPush()) ? 'accordee' : 'non-relie';
+    return etat;
   } catch {
     return 'indisponible';
   }
@@ -74,16 +70,7 @@ export async function lireEtatNotifs(): Promise<EtatNotifs> {
  * exactement ce qui arrivait quand ce menu vivait sa vie de son côté.
  */
 export async function demanderNotifs(): Promise<EtatNotifs> {
-  if (Platform.OS === 'web') {
-    const N = notificationWeb();
-    if (!N) return 'indisponible';
-    try {
-      const p = await N.requestPermission();
-      return p === 'granted' ? 'accordee' : p === 'denied' ? 'refusee' : 'a-demander';
-    } catch {
-      return 'indisponible';
-    }
-  }
+  if (Platform.OS === 'web') return 'indisponible';
 
   if (!estUnVraiTelephone()) return 'indisponible';
 
@@ -96,7 +83,7 @@ export async function demanderNotifs(): Promise<EtatNotifs> {
     // `enregistrerPush` ne lève jamais et redemande la permission au besoin :
     // l'appeler ici garantit qu'un « oui » se traduit par un jeton côté
     // serveur, pas seulement par un interrupteur vert à l'écran.
-    if (statut === 'granted') await enregistrerPush();
+    if (statut === 'granted') return (await enregistrerPush()) ? 'accordee' : 'non-relie';
     return depuisStatutExpo(statut);
   } catch {
     return 'indisponible';

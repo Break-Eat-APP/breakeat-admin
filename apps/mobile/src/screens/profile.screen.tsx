@@ -297,6 +297,7 @@ function NotificationsMenuItem() {
     active            ? 'Notifications activées' :
     etat === 'refusee' ? 'Notifications refusées' :
     etat === 'indisponible' ? 'Notifications indisponibles sur cet appareil' :
+    etat === 'non-relie' ? 'Notifications : téléphone non relié — Réessayer' :
     'Activer les notifications';
 
   const handlePress = () => {
@@ -306,7 +307,7 @@ function NotificationsMenuItem() {
       showAlert(
         'Notifications',
         Platform.OS === 'web'
-          ? "Ce navigateur ne sait pas afficher de notifications."
+          ? "Les notifications arrivent dans l’app BreakEat, sur ton téléphone."
           : "Les notifications demandent un vrai téléphone : un simulateur n'en reçoit aucune.",
       );
       return;

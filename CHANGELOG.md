@@ -5,6 +5,14 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.67] — 2026-11-26 — Notifications : l’état affiché dit la vérité ; cloche et badge cohérents
+
+- **Pourquoi** : audit Codex « notifications » du 26/11 (réponse dans `brain/audits/`). Après BUG-2026-056, le profil pouvait encore dire « Notifications activées » sans que le téléphone soit inscrit ; le badge comptait des push absents de la cloche ; la cloche se marquait lue avant d’avoir chargé ; une campagne touchée n’ouvrait pas la cloche.
+- **App** : `enregistrerPush()` dit si le téléphone est inscrit ; le profil affiche « activées » seulement dans ce cas, sinon « téléphone non relié — Réessayer ». Le web est « indisponible » (aucune push BreakEat n’y arrive). Le badge relit le compte du serveur à chaque push au lieu d’ajouter 1. La cloche n’est marquée lue qu’après un chargement réussi. Toucher une campagne ouvre la cloche.
+- **Serveur** : les campagnes immédiates et programmées portent `type: 'campagne'`.
+- **Tests** : app 191/191 (dont l’état « non relié »), serveur 1223/1223 et 234/234.
+- ~ app `push-notifications.ts`, `permission-notifs.ts` (+ test), `notif.store.ts`, `notifications.screen.tsx`, `profile.screen.tsx`, `App.expo.tsx` ; serveur `backoffice.service.ts`, `scheduled-push.service.ts`
+
 ## [1.7.66] — 2026-11-26 — Ticket Flaix : l’image du lieu, le numéro en vert ; Live Activity revue (prochaine build)
 
 - **Pourquoi** : retours de Rémi sur ses captures (26/11) : l’image du lieu manquait sur le bandeau orange des tickets Flaix ; le numéro de commande doit être en vert pour se repérer ; sur la Live Activity, l’ancien logo trop petit dans son rond, le numéro gris, la barre « récupérée » qui finissait en gris, et la Dynamic Island vide à droite (pas de décompte pour une commande Flaix).

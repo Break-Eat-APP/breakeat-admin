@@ -439,6 +439,8 @@ export class BackofficeService {
       title: dto.title,
       body: dto.body ?? '',
       sound: 'default' as const,
+      // Toucher la notification ouvre la cloche (audit Codex du 26/11/2026).
+      data: { type: 'campagne' },
     }));
 
     const result = await this.expoPush.send(messages);

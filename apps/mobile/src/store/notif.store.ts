@@ -46,5 +46,8 @@ export const useNotifStore = create<NotifState>((set, get) => ({
     });
   },
 
-  pushReceived: () => set((e) => ({ nonLues: e.nonLues + 1, hasUnread: true })),
+  // LE COMPTE VIENT DU SERVEUR (audit Codex du 26/11/2026) : ajouter 1 à
+  // chaque push allumait la cloche pour « prête » ou « Note ta commande », qui
+  // n'y figurent pas. On relit le vrai compte.
+  pushReceived: () => void get().rafraichir(),
 }));

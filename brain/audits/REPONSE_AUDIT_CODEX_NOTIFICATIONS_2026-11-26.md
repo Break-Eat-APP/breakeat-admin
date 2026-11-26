@@ -1,7 +1,7 @@
 # Réponse à l'audit Codex du 26/11/2026 — notifications
 
 - **Audit :** `AUDIT_CODEX_NOTIFICATIONS_2026-11-26.md` (base `967ab2b`, 1.7.65).
-- **Répondu par :** l'agent, le 26/11/2026. Corrections proposées à Rémi, en attente de son accord.
+- **Répondu par :** l'agent, le 26/11/2026. Corrections faites en 1.7.67 avec l'accord de Rémi (« Oui, corrige puis publie », 26/11).
 
 | Constat | Verdict | Correction proposée |
 |---|---|---|

@@ -223,7 +223,7 @@ export class ScheduledPushService {
       });
 
       const result = await this.expoPush.send(
-        tokens.map((to) => ({ to, title: sp.title, body: sp.body, data: { kind: sp.kind, eventId: sp.eventId } })),
+        tokens.map((to) => ({ to, title: sp.title, body: sp.body, data: { type: 'campagne', kind: sp.kind, eventId: sp.eventId } })),
       );
       if (result.invalidTokens.length > 0) await this.pushTokens.purgeInvalid(result.invalidTokens);
 

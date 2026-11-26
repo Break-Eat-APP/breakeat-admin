@@ -30,23 +30,28 @@ export function NotificationsScreen() {
   // sous le doigt du client pendant qu'il fait défiler, au passage de minuit.
   const [maintenant, setMaintenant] = useState(() => new Date());
 
-  const charger = useCallback(async () => {
+  const charger = useCallback(async (): Promise<boolean> => {
     try {
       const { notifications } = await apiNotifications();
       setListe(notifications);
       setMaintenant(new Date());
+      return true;
     } catch (e: unknown) {
       console.warn('Notifications indisponibles:', e);
+      return false;
     } finally {
       setChargement(false);
     }
   }, []);
 
   useEffect(() => {
-    void charger();
-    // La pastille s'éteint à l'OUVERTURE, pas à la sortie : le client vient de
-    // regarder, la laisser allumée derrière lui serait faux.
-    markRead();
+    // Marquées lues SEULEMENT une fois la liste affichée (audit Codex du
+    // 26/11/2026) : une liste en panne ne doit pas « consommer » des annonces
+    // que le client n'a pas vues. Les points de nouveauté restent visibles
+    // pendant cette visite : ils disent ce qui vient d'arriver.
+    void charger().then((ok) => {
+      if (ok) markRead();
+    });
   }, [charger, markRead]);
 
   // Aujourd'hui, Hier, Cette semaine, Plus ancien — voir `notifications-par-date`.

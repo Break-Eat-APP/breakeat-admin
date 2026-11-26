@@ -220,6 +220,13 @@ export default function AppPreview() {
       void useNotifStore.getState().rafraichir();
       // « Note ta commande » d'une commande Flaix (26/11/2026) : la feuille de
       // note s'ouvre d'elle-même sur « Mes commandes ».
+      // Une CAMPAGNE (audit Codex du 26/11/2026) : la cloche, où elle est archivée.
+      if (data.type === 'campagne') {
+        const cloche = () => navigationRef.navigate('Notifications');
+        if (navigationRef.isReady()) cloche();
+        else setTimeout(() => navigationRef.isReady() && cloche(), 800);
+        return;
+      }
       if (data.type === 'noter_commande' && typeof data.jeton === 'string') {
         useSuiviStore.getState().demanderNote(data.jeton);
       } else if (data.type !== 'missing_items' && data.type !== 'order_ready') {
