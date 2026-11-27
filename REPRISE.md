@@ -138,6 +138,10 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   détail, « Signaler un problème » vers contact@breakeatapp.com, « Voir le
 >   reçu » chez Flaix). **Publiée le 27/11** (`bc3fc3a`) : défaut 1.1.5
 >   (`4903b38a`), `1.1.4 · ios` (`73234fbf`), `1.1.3 · android` (`e23c7fa1`).
+> - **1.7.77 (27/11) — LES NOTES FLAIX DANS « AVIS »** (BUG-2026-059) : la page
+>   « Avis » lit aussi `notes_commandes_flaix` (match importé, sinon lieu).
+>   Serveur seul : pas de mise à jour de l'app. **À vérifier par Rémi** dans
+>   l'admin : ses notes du 26-27/11 doivent y être.
 > - **1.7.75 (27/11) — AFFICHES EN GRAND** : carte du match pleine largeur, tuile
 >   entière, à la vraie forme (l'image de couverture Flaix est en paysage,
 >   1200 × 630). C'est l'étape 1 de « images à leur forme d'origine ».

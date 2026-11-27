@@ -5,6 +5,17 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.77] — 2026-11-27 — Les notes des commandes Flaix arrivent dans « Avis »
+
+- **Pourquoi** : Rémi (27/11) notait ses commandes Flaix (« Note ta commande ») et ne voyait rien dans « Avis », ni dans l'admin ni dans le back-office. Ces notes sont enregistrées depuis la 1.7.64 dans `notes_commandes_flaix`, mais la page « Avis » ne lisait que les notes des commandes BreakEat (`OrderRating`). Rien n'était perdu (BUG-2026-059).
+- **Serveur** : `StatsService.getOrgRatings` (la route commune à l'admin et au back-office) ajoute les notes Flaix du club à la moyenne, à la répartition et à la liste, avec le numéro de commande et le point de retrait.
+  - **Rattachement** : par le match importé (`Event.flaixEventId`), à défaut par le lieu (`Venue.flaixVenueId`).
+  - **Garde** : une note dont le match appartient à un AUTRE club n'est jamais prise par le lieu.
+  - Le jeton Flaix n'est jamais renvoyé : la ligne porte une empreinte.
+- **Ce qui ne remonte pas** : une note sans match ni lieu connu chez BreakEat (commandes suivies avant le 26/11, dont la fiche n'enregistrait pas encore le lieu).
+- **Tests** : intégration 236/236 (dont 2 nouveaux : rattachement par le match et par le lieu, cloisonnement entre clubs, jeton jamais renvoyé), serveur 1227/1227, typage.
+- ~ `backend/src/modules/stats/stats.service.ts` ; + `backend/test/integration/avis-flaix.int-spec.ts`
+
 ## [1.7.76] — 2026-11-27 — Un lien pour trouver les coordonnées GPS d'une adresse
 
 - **Pourquoi** : demande de Rémi (27/11) : un accès rapide pour trouver les coordonnées GPS d'une adresse, là où on les saisit.

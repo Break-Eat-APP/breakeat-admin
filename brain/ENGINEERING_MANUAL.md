@@ -9067,6 +9067,31 @@ journal Railway.
 
 ---
 
+### [2026-11-27] Les notes Flaix dans « Avis » (1.7.77)
+
+`StatsService.getOrgRatings` (`backend/src/modules/stats/stats.service.ts`)
+fusionne deux sources :
+- `OrderRating` : les commandes BreakEat ;
+- `NoteCommandeFlaix` : les commandes Flaix. C'est la méthode privée
+  `notesFlaixDuClub` qui les lit.
+
+Le rattachement d'une note Flaix à un club suit la même règle que l'image du
+lieu sur le ticket (`flaix.controller.ts`, `avecImagesDuLieu`) :
+1. le match importé (`Event.flaixEventId`) ;
+2. sinon le lieu (`Venue.flaixVenueId`), sauf si le match de la note est
+   connu chez un autre club.
+
+Le jeton n'est jamais renvoyé (l'identifiant de la ligne est une empreinte
+SHA-256 tronquée).
+
+Test : `test/integration/avis-flaix.int-spec.ts`.
+
+**Risque** : si `flaixVenueId` d'un lieu ne correspond pas à l'identifiant de
+lieu que Flaix met dans ses commandes, seules les notes rattachées par le
+match remontent.
+
+---
+
 ### Ce que ces journées ont appris
 
 1. **Une liste mêlée se trie après le mélange.** Deux listes triées mises bout

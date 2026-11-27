@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service';
@@ -154,12 +155,13 @@ export class StatsService {
    */
   async getOrgRatings(orgId: string, userId: string, limite = 100) {
     await requireOrgAccess(this.prisma, userId, orgId, MANAGE_ROLES);
+    const max = Math.min(Math.max(limite, 1), 500);
 
-    const [notes, repartition] = await Promise.all([
+    const [notes, repartition, notesFlaix] = await Promise.all([
       this.prisma.orderRating.findMany({
         where: { organizationId: orgId },
         orderBy: { createdAt: 'desc' },
-        take: Math.min(Math.max(limite, 1), 500),
+        take: max,
         select: {
           id: true,
           stars: true,
@@ -174,6 +176,7 @@ export class StatsService {
         where: { organizationId: orgId },
         _count: { _all: true },
       }),
+      this.notesFlaixDuClub(orgId),
     ]);
 
     // Le nom de la buvette se lit a part : `OrderRating` ne porte qu'un
@@ -184,8 +187,11 @@ export class StatsService {
     });
     const nomDe = new Map(buvettes.map((b) => [b.id, b.name]));
 
-    const total = repartition.reduce((t, r) => t + r._count._all, 0);
-    const somme = repartition.reduce((t, r) => t + r.stars * r._count._all, 0);
+    // Les notes BreakEat ET Flaix comptent ensemble (27/11/2026).
+    const parEtoiles = new Map<number, number>(repartition.map((r) => [r.stars, r._count._all]));
+    for (const n of notesFlaix) parEtoiles.set(n.stars, (parEtoiles.get(n.stars) ?? 0) + 1);
+    const total = [...parEtoiles.values()].reduce((t, x) => t + x, 0);
+    const somme = [...parEtoiles.entries()].reduce((t, [stars, x]) => t + stars * x, 0);
 
     return {
       total,
@@ -194,19 +200,96 @@ export class StatsService {
       moyenne: total > 0 ? Math.round((somme / total) * 10) / 10 : null,
       /** Combien de 1, de 2, … de 5. Toujours les cinq lignes, meme a zero :
        *  une barre absente ne se distingue pas d'une barre vide. */
-      repartition: [1, 2, 3, 4, 5].map((stars) => ({
-        stars,
-        nombre: repartition.find((r) => r.stars === stars)?._count._all ?? 0,
-      })),
-      notes: notes.map((n) => ({
-        id: n.id,
-        stars: n.stars,
-        comment: n.comment,
-        createdAt: n.createdAt.toISOString(),
-        buvette: nomDe.get(n.supplierId) ?? null,
-        commande: n.order?.dailyNumber ?? n.order?.publicOrderNumber ?? null,
-      })),
+      repartition: [1, 2, 3, 4, 5].map((stars) => ({ stars, nombre: parEtoiles.get(stars) ?? 0 })),
+      notes: [
+        ...notes.map((n) => ({
+          id: n.id,
+          stars: n.stars,
+          comment: n.comment,
+          createdAt: n.createdAt.toISOString(),
+          buvette: nomDe.get(n.supplierId) ?? null,
+          commande: n.order?.dailyNumber ?? n.order?.publicOrderNumber ?? null,
+        })),
+        ...notesFlaix.map((n) => ({
+          // Le jeton Flaix est un droit d'accès : jamais renvoyé. Une
+          // empreinte suffit à distinguer les lignes.
+          id: `flaix-${createHash('sha256').update(n.jeton).digest('hex').slice(0, 16)}`,
+          stars: n.stars,
+          comment: n.comment,
+          createdAt: n.createdAt.toISOString(),
+          buvette: n.pointDeRetrait,
+          commande: n.numero || null,
+        })),
+      ]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, max),
     };
+  }
+
+  /**
+   * LES NOTES DES COMMANDES FLAIX D'UN CLUB (27/11/2026).
+   *
+   * Rémi notait ses commandes Flaix et ne voyait rien dans « Avis » : ces notes
+   * vivent dans `notes_commandes_flaix` (1.7.64), que cette page ne lisait pas.
+   *
+   * Une note Flaix ne porte pas notre club : elle porte le match et le lieu
+   * CHEZ FLAIX. On la rattache comme l'image du lieu sur le ticket
+   * (`flaix.controller.ts`, `avecImagesDuLieu`) :
+   *  1. par le match importé (`Event.flaixEventId`) — le plus sûr ;
+   *  2. à défaut, par le lieu (`Venue.flaixVenueId`), SAUF si son match est
+   *     connu chez un AUTRE club : une note ne passe jamais d'un club à l'autre.
+   */
+  private async notesFlaixDuClub(orgId: string) {
+    const [matchs, lieux] = await Promise.all([
+      this.prisma.event.findMany({
+        where: { organizationId: orgId, flaixEventId: { not: null } },
+        select: { flaixEventId: true },
+      }),
+      this.prisma.venue.findMany({
+        where: { organizationId: orgId, flaixVenueId: { not: null } },
+        select: { flaixVenueId: true },
+      }),
+    ]);
+    const idsMatchs = matchs.map((m) => m.flaixEventId as string);
+    const idsLieux = lieux.map((l) => l.flaixVenueId as string);
+    if (idsMatchs.length === 0 && idsLieux.length === 0) return [];
+
+    const candidates = await this.prisma.noteCommandeFlaix.findMany({
+      where: {
+        OR: [
+          ...(idsMatchs.length ? [{ evenementFlaix: { in: idsMatchs } }] : []),
+          ...(idsLieux.length ? [{ lieuFlaix: { in: idsLieux } }] : []),
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 5000,
+      select: {
+        jeton: true,
+        stars: true,
+        comment: true,
+        createdAt: true,
+        numero: true,
+        pointDeRetrait: true,
+        evenementFlaix: true,
+      },
+    });
+
+    // Un match importé chez un autre club l'emporte sur le lieu.
+    const nosMatchs = new Set(idsMatchs);
+    const autres = candidates
+      .map((n) => n.evenementFlaix)
+      .filter((e): e is string => !!e && !nosMatchs.has(e));
+    const matchsAilleurs = autres.length
+      ? new Set(
+          (
+            await this.prisma.event.findMany({
+              where: { flaixEventId: { in: [...new Set(autres)] }, organizationId: { not: orgId } },
+              select: { flaixEventId: true },
+            })
+          ).map((e) => e.flaixEventId),
+        )
+      : new Set<string | null>();
+    return candidates.filter((n) => !(n.evenementFlaix && matchsAilleurs.has(n.evenementFlaix)));
   }
 
   async getOrgOverview(orgId: string, userId: string): Promise<OrgStatsOverview> {
