@@ -154,6 +154,10 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
     Employées par la fiche, la liste et le tableau de bord. Testées.
   - `components/calendrier-flaix.tsx` — **« Calendrier Flaix — <lieu> »** en tête d'« Événements & configuration » (25/11, ADR-0018) : coller le lien Flaix, « Voir les événements » (aperçu sans écriture), activer ou couper la synchronisation. Les événements importés portent le badge « Flaix » ; sur leur fiche, nom, horaires et lien sont verrouillés (le serveur refuse aussi, `GERE_DANS_FLAIX`).
   - `(admin)/events/[id]/page.tsx` — **la fiche d'un événement**. Bouton **Renommer** dans l'en-tête. Sur un lieu Flaix (`venue.flaixEnabled`), elle ne montre QUE le bandeau, « Commande Flaix et affichage », le rapport Flaix, le statut, l'accès et le lieu : les réglages Break Eat (statistiques, fournisseurs, produits, points de retrait, créneaux, QR, branding, poste opérateur) sont masqués exprès.
+- `apps/backoffice/` — **Avis clients** (27/11) :
+  - `components/tous-les-avis.tsx` : tous les avis de la plateforme (`GET /backoffice/avis`), avec des filtres et les « Nouveau » ;
+  - `lib/avis.ts` (pur, testé) : les filtres et le souvenir de la dernière visite ;
+  - la carte « Avis clients » du tableau de bord en donne le nombre.
 - `apps/backoffice/` — super-admin : création de clubs, utilisateurs, groupes, notifications programmées, **purge des commandes de démonstration** (`components/purge-demo.tsx`, encart visible seulement s'il en reste). Appels : `src/lib/api/backoffice-client.ts`.
 - `apps/operator/` — écran buvette temps réel (Kanban des commandes). Appels + Socket.IO. `MissingItemsPanel.tsx` (signaler un produit manquant) et `ProduitsHsBar.tsx` (remettre en vente ce qui est hors carte).
 - Les trois partagent `packages/brand` (orange de marque **`#FD4000`** depuis le 18/09/2026, logo).

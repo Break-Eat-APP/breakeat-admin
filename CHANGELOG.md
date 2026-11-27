@@ -5,6 +5,20 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.78] — 2026-11-27 — Back-office : tous les avis d'un coup, filtrables, et les nouveaux signalés
+
+- **Pourquoi** : Rémi (27/11) : « que tous les avis s'affichent, que je puisse les filtrer, et ne pas regarder un par un s'il y a eu de nouveaux avis ». La page « Avis clients » exigeait de choisir un club.
+- **Serveur** : `GET /backoffice/avis` (SUPER_ADMIN seulement, testé) rend les 500 derniers avis de la plateforme, BreakEat et Flaix, chacun avec son club. Une note Flaix est rattachée par son match, sinon par son lieu, si un seul club le porte. Le jeton n'est jamais renvoyé.
+- **Back-office, « Avis clients »** :
+  - par défaut, **Tous les clubs** : la liste complète, la plus récente en haut ;
+  - **filtres** : club, étoiles (dont « 1-2 ★ à traiter »), avec commentaire ;
+  - **« Nouveau »** sur ce qui est arrivé depuis la dernière visite, et leur nombre en tête ;
+  - un club choisi garde sa moyenne et sa répartition, puis la même liste filtrable.
+- **Tableau de bord** : une carte « Avis clients » dit « 3 nouveaux avis », ou « 12 avis · rien de nouveau ».
+- **« Nouveau »** se souvient de la dernière visite dans le navigateur (`localStorage`). Sur un autre ordinateur, tout repart de zéro, sans rien casser.
+- **Tests** : serveur 1229/1229 (garde SUPER_ADMIN), intégration 237/237 (dont la liste de la plateforme), back-office 21/21 (filtres, nouveaux), typage, lint, `next build`.
+- + `backend/src/modules/stats/stats.controller.spec.ts`, `apps/backoffice/src/lib/avis.ts` (+ spec), `apps/backoffice/src/components/tous-les-avis.tsx` ; ~ `stats.service.ts`, `stats.controller.ts`, `avis-flaix.int-spec.ts`, back-office `avis/page.tsx`, `overview/page.tsx`, `backoffice-client.ts`
+
 ## [1.7.77] — 2026-11-27 — Les notes des commandes Flaix arrivent dans « Avis »
 
 - **Pourquoi** : Rémi (27/11) notait ses commandes Flaix (« Note ta commande ») et ne voyait rien dans « Avis », ni dans l'admin ni dans le back-office. Ces notes sont enregistrées depuis la 1.7.64 dans `notes_commandes_flaix`, mais la page « Avis » ne lisait que les notes des commandes BreakEat (`OrderRating`). Rien n'était perdu (BUG-2026-059).

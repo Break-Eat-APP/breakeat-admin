@@ -704,6 +704,22 @@ export async function apiGetOrgAvis(orgId: string): Promise<AvisOrganisation> {
   return req<AvisOrganisation>('GET', `/organizations/${orgId}/avis`);
 }
 
+/** Un avis de la plateforme, avec son club (27/11/2026). */
+export interface AvisPlateforme extends AvisClient {
+  /** `breakeat` : une commande BreakEat ; `flaix` : une commande passée chez Flaix. */
+  source: 'breakeat' | 'flaix';
+  /** Null pour une note Flaix qu'aucun club ne reconnaît (lieu ou match inconnus). */
+  club: { id: string; nom: string } | null;
+}
+
+/**
+ * TOUS les avis de la plateforme, les plus récents d'abord (SUPER_ADMIN).
+ * Le filtrage se fait dans la page (`lib/avis.ts`).
+ */
+export async function apiGetToutesLesNotes(): Promise<{ notes: AvisPlateforme[] }> {
+  return req<{ notes: AvisPlateforme[] }>('GET', '/backoffice/avis');
+}
+
 // ─── Suppression organisation ─────────────────────────────────────────────────
 
 /**

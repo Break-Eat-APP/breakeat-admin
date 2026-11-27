@@ -227,6 +227,125 @@ export class StatsService {
   }
 
   /**
+   * TOUS LES AVIS DE LA PLATEFORME, pour le back-office (27/11/2026).
+   *
+   * Rémi : « que tous les avis s'affichent et que je puisse les filtrer, pour
+   * ne pas regarder club par club s'il y en a de nouveaux ». Les plus récents
+   * d'abord, BreakEat et Flaix mêlés, chacun avec son club. Le filtrage (club,
+   * étoiles, commentaire) se fait dans la page : 500 lignes suffisent à la
+   * plateforme aujourd'hui.
+   *
+   * Réservé au SUPER_ADMIN (garde dans le contrôleur) : c'est une lecture
+   * entre clubs, sans cloisonnement, par conception.
+   */
+  async getToutesLesNotes(limite = 500) {
+    const max = Math.min(Math.max(limite, 1), 1000);
+    const [breakeat, flaix] = await Promise.all([
+      this.prisma.orderRating.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: max,
+        select: {
+          id: true,
+          stars: true,
+          comment: true,
+          createdAt: true,
+          organizationId: true,
+          supplierId: true,
+          order: { select: { publicOrderNumber: true, dailyNumber: true } },
+        },
+      }),
+      this.prisma.noteCommandeFlaix.findMany({
+        orderBy: { createdAt: 'desc' },
+        take: max,
+        select: {
+          jeton: true,
+          stars: true,
+          comment: true,
+          createdAt: true,
+          numero: true,
+          pointDeRetrait: true,
+          lieuFlaix: true,
+          evenementFlaix: true,
+        },
+      }),
+    ]);
+
+    // Le club d'une note Flaix : par le match importé, sinon par le lieu —
+    // seulement si UN seul club porte ce lieu (même règle que `notesFlaixDuClub`).
+    const idsMatchs = [...new Set(flaix.map((n) => n.evenementFlaix).filter((x): x is string => !!x))];
+    const idsLieux = [...new Set(flaix.map((n) => n.lieuFlaix).filter((x): x is string => !!x))];
+    const [matchs, lieux, buvettes] = await Promise.all([
+      idsMatchs.length
+        ? this.prisma.event.findMany({
+            where: { flaixEventId: { in: idsMatchs } },
+            select: { flaixEventId: true, organizationId: true },
+          })
+        : Promise.resolve([]),
+      idsLieux.length
+        ? this.prisma.venue.findMany({
+            where: { flaixVenueId: { in: idsLieux } },
+            select: { flaixVenueId: true, organizationId: true },
+          })
+        : Promise.resolve([]),
+      this.prisma.supplier.findMany({
+        where: { id: { in: [...new Set(breakeat.map((n) => n.supplierId))] } },
+        select: { id: true, name: true },
+      }),
+    ]);
+    const clubDuMatch = new Map(matchs.map((m) => [m.flaixEventId, m.organizationId]));
+    const clubsDuLieu = new Map<string, Set<string>>();
+    for (const l of lieux) {
+      const k = l.flaixVenueId as string;
+      clubsDuLieu.set(k, (clubsDuLieu.get(k) ?? new Set()).add(l.organizationId));
+    }
+    const clubFlaix = (n: { evenementFlaix: string | null; lieuFlaix: string | null }): string | null => {
+      if (n.evenementFlaix && clubDuMatch.has(n.evenementFlaix)) return clubDuMatch.get(n.evenementFlaix) ?? null;
+      const parLieu = n.lieuFlaix ? clubsDuLieu.get(n.lieuFlaix) : undefined;
+      return parLieu && parLieu.size === 1 ? [...parLieu][0] : null;
+    };
+
+    const lignesFlaix = flaix.map((n) => ({ n, clubId: clubFlaix(n) }));
+    const idsClubs = [
+      ...new Set([...breakeat.map((n) => n.organizationId), ...lignesFlaix.map((l) => l.clubId)].filter((x): x is string => !!x)),
+    ];
+    const clubs = await this.prisma.organization.findMany({
+      where: { id: { in: idsClubs } },
+      select: { id: true, name: true },
+    });
+    const nomClub = new Map(clubs.map((c) => [c.id, c.name]));
+    const nomBuvette = new Map(buvettes.map((b) => [b.id, b.name]));
+    const club = (id: string | null) => (id ? { id, nom: nomClub.get(id) ?? 'Club supprimé' } : null);
+
+    const notes = [
+      ...breakeat.map((n) => ({
+        id: n.id,
+        source: 'breakeat' as const,
+        stars: n.stars,
+        comment: n.comment,
+        createdAt: n.createdAt.toISOString(),
+        club: club(n.organizationId),
+        buvette: nomBuvette.get(n.supplierId) ?? null,
+        commande: n.order?.dailyNumber ?? n.order?.publicOrderNumber ?? null,
+      })),
+      ...lignesFlaix.map(({ n, clubId }) => ({
+        // Le jeton Flaix est un droit d'accès : une empreinte, jamais le jeton.
+        id: `flaix-${createHash('sha256').update(n.jeton).digest('hex').slice(0, 16)}`,
+        source: 'flaix' as const,
+        stars: n.stars,
+        comment: n.comment,
+        createdAt: n.createdAt.toISOString(),
+        club: club(clubId),
+        buvette: n.pointDeRetrait,
+        commande: n.numero || null,
+      })),
+    ]
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(0, max);
+
+    return { notes };
+  }
+
+  /**
    * LES NOTES DES COMMANDES FLAIX D'UN CLUB (27/11/2026).
    *
    * Rémi notait ses commandes Flaix et ne voyait rien dans « Avis » : ces notes

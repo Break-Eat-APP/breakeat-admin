@@ -9,6 +9,9 @@ import {
 } from '@nestjs/common';
 import { StatsService, type PeriodGranularity } from './stats.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { GlobalRole } from '../../common/enums/role.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { JwtPayload } from '../auth/strategies/jwt.strategy';
 
@@ -35,6 +38,19 @@ export class StatsController {
    * ce MEME endpoint, club par club. Deux routes donneraient deux moyennes
    * pour une meme buvette.
    */
+  /**
+   * GET /api/v1/backoffice/avis — TOUS les avis de la plateforme (27/11/2026),
+   * les plus récents d'abord, chacun avec son club. SUPER_ADMIN seulement :
+   * c'est une lecture entre clubs. Le back-office les filtre lui-même.
+   */
+  @Get('backoffice/avis')
+  @UseGuards(RolesGuard)
+  @Roles(GlobalRole.SUPER_ADMIN)
+  getToutesLesNotes(@Query('limite') limite?: string) {
+    const n = Number(limite);
+    return this.statsService.getToutesLesNotes(Number.isFinite(n) && n > 0 ? n : 500);
+  }
+
   @Get('organizations/:orgId/avis')
   getOrgRatings(
     @Param('orgId', ParseUUIDPipe) orgId: string,

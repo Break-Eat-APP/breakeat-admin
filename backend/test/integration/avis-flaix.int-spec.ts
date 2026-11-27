@@ -113,3 +113,47 @@ decrire('avis : les notes des commandes Flaix (base réelle)', () => {
     expect(avis).toMatchObject({ total: 0, moyenne: null, notes: [] });
   });
 });
+
+decrire('back-office : tous les avis de la plateforme (base réelle)', () => {
+  const s = url ? monterServices(url) : (null as never);
+  const stats = url ? new StatsService(s.prisma) : (null as never);
+
+  afterAll(async () => {
+    await s.prisma.$disconnect();
+  });
+
+  it('rend chaque note Flaix avec SON club, la plus récente d’abord, sans jeton', async () => {
+    const admin = (
+      await s.prisma.user.create({ data: { email: `${unique('a')}@test.fr`, passwordHash: 'x', displayName: 'A' } })
+    ).id;
+    const client = (
+      await s.prisma.user.create({ data: { email: `${unique('c')}@test.fr`, passwordHash: 'x', displayName: 'C' } })
+    ).id;
+    const o = await creerOrganisationComplete(s.prisma, unique('club'), admin);
+    const match = unique('match');
+    await s.prisma.event.create({
+      data: {
+        organizationId: o.org.id,
+        venueId: o.venue.id,
+        name: 'Match',
+        startAt: new Date(),
+        endAt: new Date(Date.now() + 3600_000),
+        flaixEventId: match,
+      },
+    });
+    const jeton = unique('jeton').replace(/[^A-Za-z0-9_-]/g, '');
+    await s.prisma.suiviCommandeFlaix.create({
+      data: { jeton, userId: client, numero: '2001', passeeLe: new Date(), evenementFlaix: match },
+    });
+    await s.prisma.noteCommandeFlaix.create({
+      data: { jeton, userId: client, stars: 4, comment: 'Top', numero: '2001', pointDeRetrait: 'Bar', evenementFlaix: match },
+    });
+
+    const { notes } = await stats.getToutesLesNotes();
+    const la = notes.find((n) => n.commande === '2001' && n.club?.id === o.org.id);
+    expect(la).toMatchObject({ source: 'flaix', stars: 4, comment: 'Top', buvette: 'Bar', club: { nom: o.org.name } });
+    expect(JSON.stringify(notes)).not.toContain(jeton);
+    const dates = notes.map((n) => n.createdAt);
+    expect([...dates].sort().reverse()).toEqual(dates);
+  });
+});

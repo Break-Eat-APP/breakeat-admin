@@ -1,13 +1,16 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Bell,
   Building2,
+  Star,
   UserCircle,
   Users,
 } from 'lucide-react';
-import { apiGetKpis, apiListOrganizations } from '@/lib/api/backoffice-client';
+import { apiGetKpis, apiGetToutesLesNotes, apiListOrganizations } from '@/lib/api/backoffice-client';
+import { compterNouveaux, lireVuJusquAu } from '@/lib/avis';
 import { BRAND } from '@break-eat/brand';
 import { PurgeDemo } from '@/components/purge-demo';
 import {
@@ -46,6 +49,18 @@ export default function OverviewPage() {
     queryKey: ['backoffice-orgs-resume'],
     queryFn: apiListOrganizations,
   });
+
+  // LES NOUVEAUX AVIS, VUS D'ICI (27/11/2026, Rémi) : savoir s'il y en a sans
+  // ouvrir la page. « Nouveau » = arrivé depuis la dernière visite de « Avis
+  // clients » (souvenir du navigateur, voir `lib/avis.ts`).
+  const { data: avis } = useQuery({
+    queryKey: ['backoffice-avis'],
+    queryFn: apiGetToutesLesNotes,
+  });
+  const [vuJusquAu, setVuJusquAu] = useState<string | null>(null);
+  useEffect(() => setVuJusquAu(lireVuJusquAu()), []);
+  const nbAvis = avis?.notes.length ?? 0;
+  const nbNouveaux = compterNouveaux(avis?.notes ?? [], vuJusquAu);
 
   const tauxCollectes = data?.revenue.vatBreakdown?.map((t) => t.label) ?? [];
 
@@ -108,6 +123,17 @@ export default function OverviewPage() {
           titre="Organisations"
           description="Créer un lieu et l'accès de son responsable. La programmation se fait dans le tableau de bord du lieu."
           etat={`${nbClubs} club${nbClubs > 1 ? 's' : ''} · ${nbEvenements} événement${nbEvenements > 1 ? 's' : ''}`}
+        />
+        <CarteLien
+          href="/avis"
+          icone={Star}
+          titre="Avis clients"
+          description="Toutes les notes et tous les commentaires, BreakEat et Flaix, les plus récents en haut."
+          etat={
+            nbNouveaux > 0
+              ? `${nbNouveaux} nouvel${nbNouveaux > 1 ? 's' : ''} avis`
+              : `${nbAvis} avis · rien de nouveau`
+          }
         />
       </Grille>
 

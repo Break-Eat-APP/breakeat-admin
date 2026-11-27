@@ -10,6 +10,7 @@ import {
   type AvisOrganisation,
 } from '@/lib/api/backoffice-client';
 import { Carte, Grille, Page, PageHeader, TitreCarte } from '@/components/ui';
+import { TousLesAvis } from '@/components/tous-les-avis';
 
 /**
  * LES AVIS, VUS DE LA PLATEFORME — club par club.
@@ -19,10 +20,13 @@ import { Carte, Grille, Page, PageHeader, TitreCarte } from '@/components/ui';
  * route et une seule façon de calculer. Deux routes donneraient deux
  * moyennes pour la même buvette, et personne ne saurait laquelle croire.
  *
- * On CHOISIT un club plutôt que d'agréger toute la plateforme : une moyenne
- * tous clubs confondus ne veut rien dire — elle mélange un stade de
- * 60 000 places et une salle de quartier, et aucun des deux n'y reconnaît sa
- * situation.
+ * La MOYENNE se lit club par club : tous clubs confondus, elle ne voudrait
+ * rien dire — elle mélange un stade de 60 000 places et une salle de quartier.
+ *
+ * Mais la LISTE, elle, se lit d'un coup (27/11/2026, demande de Rémi) : sans
+ * club choisi, la page montre TOUS les avis, filtrables, avec ceux arrivés
+ * depuis la dernière visite marqués « Nouveau » (`components/tous-les-avis.tsx`).
+ * Un club choisi garde sa moyenne et sa répartition, puis sa liste filtrable.
  */
 export default function AvisBackofficePage() {
   const [clubs, setClubs] = useState<{ id: string; name: string }[]>([]);
@@ -73,7 +77,7 @@ export default function AvisBackofficePage() {
     <Page>
       <PageHeader
         titre="Avis clients"
-        sous="Les notes laissées après un retrait, sur la buvette qui a préparé. Choisis un club : la lecture est la même que dans son dashboard."
+        sous="Les notes laissées après un retrait, BreakEat et Flaix. Tous les clubs d'un coup, ou un club pour sa moyenne."
       />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 22 }}>
@@ -94,7 +98,7 @@ export default function AvisBackofficePage() {
             background: '#fff',
           }}
         >
-          <option value="">— Choisir un club —</option>
+          <option value="">Tous les clubs</option>
           {clubs.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -108,12 +112,7 @@ export default function AvisBackofficePage() {
           <p style={{ color: BRAND.danger, margin: 0 }}>{erreur}</p>
         </Carte>
       ) : !clubId ? (
-        <Carte>
-          <TitreCarte
-            titre="Choisis un club"
-            sous="Une moyenne tous clubs confondus ne veut rien dire : elle mélangerait un stade de 60 000 places et une salle de quartier."
-          />
-        </Carte>
+        <TousLesAvis clubId="" />
       ) : chargement ? (
         <p style={{ color: BRAND.grey }}>Chargement…</p>
       ) : total === 0 ? (
@@ -217,62 +216,9 @@ export default function AvisBackofficePage() {
             </Carte>
           </Grille>
 
-          <Carte style={{ marginTop: 18 }}>
-            <TitreCarte
-              titre="Les derniers retours"
-              sous="Le commentaire est facultatif : la plupart des clients notent sans écrire."
-            />
-            {avis?.notes.map((n, i) => (
-              <div
-                key={n.id}
-                style={{
-                  paddingTop: i === 0 ? 0 : 14,
-                  paddingBottom: 14,
-                  borderBottom:
-                    i === (avis?.notes.length ?? 0) - 1 ? 'none' : `1px solid ${BRAND.border}`,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <span style={{ display: 'flex', gap: 1 }}>
-                    {[1, 2, 3, 4, 5].map((s) => (
-                      <Star
-                        key={s}
-                        size={14}
-                        color={BRAND.orange}
-                        fill={s <= n.stars ? BRAND.orange : 'transparent'}
-                      />
-                    ))}
-                  </span>
-                  <span style={{ fontSize: 13.5, fontWeight: 700, color: BRAND.ink }}>
-                    {n.buvette ?? 'Buvette supprimée'}
-                  </span>
-                  <span style={{ fontSize: 12.5, color: BRAND.grey }}>
-                    {n.commande != null ? `commande ${n.commande} · ` : ''}
-                    {new Date(n.createdAt).toLocaleDateString('fr-FR', {
-                      day: 'numeric',
-                      month: 'long',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </span>
-                </div>
-                {n.comment ? (
-                  <p
-                    style={{
-                      margin: '8px 0 0',
-                      fontSize: 14,
-                      lineHeight: 1.55,
-                      color: BRAND.inkSoft,
-                      borderLeft: `3px solid ${BRAND.orangeTint}`,
-                      paddingLeft: 12,
-                    }}
-                  >
-                    {n.comment}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-          </Carte>
+          <div style={{ marginTop: 18 }}>
+            <TousLesAvis clubId={clubId} />
+          </div>
         </>
       )}
     </Page>
