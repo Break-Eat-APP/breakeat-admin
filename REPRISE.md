@@ -140,7 +140,8 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   (`4903b38a`), `1.1.4 · ios` (`73234fbf`), `1.1.3 · android` (`e23c7fa1`).
 > - **1.7.79 (27/11) — AVIS SUR LES STORES** : la demande système part après la
 >   fermeture de la feuille de note ; « Noter BreakEat » dans le profil ouvre
->   la fiche du store. **À publier par mise à jour à distance.** Rappel : la
+>   la fiche du store. **Publiée le 27/11** (`f6e9745`) : défaut 1.1.5
+>   (`aaf931d1`), `1.1.4 · ios` (`747dd181`), `1.1.3 · android` (`a0b3e1a4`). Rappel : la
 >   fenêtre système ne s'affiche jamais sur TestFlight.
 > - **1.7.78 (27/11) — BACK-OFFICE : TOUS LES AVIS** : liste de la plateforme
 >   (`GET /backoffice/avis`, SUPER_ADMIN), avec des filtres et les avis
