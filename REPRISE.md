@@ -138,6 +138,10 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   détail, « Signaler un problème » vers contact@breakeatapp.com, « Voir le
 >   reçu » chez Flaix). **Publiée le 27/11** (`bc3fc3a`) : défaut 1.1.5
 >   (`4903b38a`), `1.1.4 · ios` (`73234fbf`), `1.1.3 · android` (`e23c7fa1`).
+> - **1.7.79 (27/11) — AVIS SUR LES STORES** : la demande système part après la
+>   fermeture de la feuille de note ; « Noter BreakEat » dans le profil ouvre
+>   la fiche du store. **À publier par mise à jour à distance.** Rappel : la
+>   fenêtre système ne s'affiche jamais sur TestFlight.
 > - **1.7.78 (27/11) — BACK-OFFICE : TOUS LES AVIS** : liste de la plateforme
 >   (`GET /backoffice/avis`, SUPER_ADMIN), avec des filtres et les avis
 >   « Nouveau » depuis la dernière visite. Une carte sur le tableau de bord en

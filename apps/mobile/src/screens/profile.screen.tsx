@@ -3,6 +3,8 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { partagerLApplication } from '@lib/partage';
+import { ouvrirFicheStore } from '@lib/note-app-store';
+import { libelleFicheStore } from '@lib/fiche-store';
 import { afficherTelephone } from '@lib/telephone';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@navigation/root-navigator';
@@ -170,6 +172,24 @@ export function ProfileScreen() {
             utilise tous les jours. */}
         <MenuItem label="Inviter un ami" onPress={() => void partagerLApplication()} />
         <View style={styles.divider} />
+        {/* NOTER BREAKEAT (27/11/2026) : la fiche du store, directement sur
+            « écrire un avis ». La fenêtre système, elle, ne s'affiche que quand
+            Apple ou Google le veulent ; ce lien marche à chaque fois. Pas de
+            fiche sur le web. */}
+        {Platform.OS !== 'web' ? (
+          <>
+            <MenuItem
+              label={libelleFicheStore(Platform.OS)}
+              icon="star-outline"
+              onPress={() =>
+                void ouvrirFicheStore().then((ok) => {
+                  if (!ok) showAlert('Store indisponible', 'Impossible d’ouvrir la fiche de BreakEat pour le moment.');
+                })
+              }
+            />
+            <View style={styles.divider} />
+          </>
+        ) : null}
         {/* UNE entrée pour les quatre documents. Deux lignes séparées — et
             qui ouvraient toutes deux « Disponible prochainement » — faisaient
             du menu un sommaire sans rien offrir à lire. */}

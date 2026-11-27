@@ -603,6 +603,7 @@ l'app.
 | 1.7.66 | 2026-11-26 | Ticket Flaix : image du lieu, numéro en vert ; widget Live Activity revu (prochaine build) |
 | 1.7.67 | 2026-11-26 | Notifications : état affiché vrai, badge et cloche cohérents (audit Codex) |
 | 1.7.68 | 2026-11-26 | Build 1.1.5 iOS et Android (widget Live Activity, textes au tutoiement) |
+| 1.7.79 | 2026-11-27 | Avis sur les stores : demande après la feuille, « Noter BreakEat » dans le profil |
 | 1.7.78 | 2026-11-27 | Back-office : tous les avis, filtrables, nouveaux signalés (et sur le tableau de bord) |
 | 1.7.77 | 2026-11-27 | Les notes des commandes Flaix arrivent dans « Avis » (admin, back-office) |
 | 1.7.76 | 2026-11-27 | Lien coordonnees-gps.fr sous les champs GPS (admin, back-office) |

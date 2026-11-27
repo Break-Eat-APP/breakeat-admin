@@ -5,6 +5,15 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.79] — 2026-11-27 — Les avis sur les stores : la demande après la feuille, et « Noter BreakEat » dans le profil
+
+- **Pourquoi** : Rémi (27/11) : « comment les notes vont sur les stores ? j'ai pas l'impression que ça marche ». Les notes de commande restent chez BreakEat (jamais envoyées aux stores, Apple et Google l'interdisent). Une note de 4-5 étoiles demande seulement la fenêtre d'avis du système. Celle-ci ne s'affiche jamais sur TestFlight, 3 fois par an au plus sur l'App Store, et Google la rationne. Et la demande partait **pendant que la feuille de note se refermait**, moment où iOS peut l'ignorer sans rien dire (cause probable, non prouvée).
+- **App** :
+  - la demande part **une seconde après** la fermeture de la feuille (`demanderNoteAppStoreApresFeuille`) ;
+  - le profil gagne **« Noter BreakEat sur l'App Store / sur Google Play »**. Le bouton ouvre la fiche du store directement sur « écrire un avis », avec le web en secours. Il marche à chaque fois, et c'est autorisé, puisque le client choisit d'y aller. Il n'apparaît pas sur le web.
+- **Tests** : app 210/210 (dont les adresses des fiches), typage, lint. **Non vérifié sur téléphone** : la fenêtre système ne se prouve que sur la version App Store / Play.
+- + `apps/mobile/src/lib/fiche-store.ts` (+ test) ; ~ `lib/note-app-store.ts`, `components/noter-commande.tsx`, `screens/profile.screen.tsx`
+
 ## [1.7.78] — 2026-11-27 — Back-office : tous les avis d'un coup, filtrables, et les nouveaux signalés
 
 - **Pourquoi** : Rémi (27/11) : « que tous les avis s'affichent, que je puisse les filtrer, et ne pas regarder un par un s'il y a eu de nouveaux avis ». La page « Avis clients » exigeait de choisir un club.

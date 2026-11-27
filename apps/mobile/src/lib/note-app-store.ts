@@ -1,4 +1,16 @@
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
+import { liensFicheStore } from './fiche-store';
+
+/**
+ * Le délai avant la demande : le temps que la feuille de note soit FERMÉE.
+ *
+ * La demande partait pendant que la feuille « Comment ça s'est passé ? »
+ * se refermait (27/11/2026). Sur iPhone, le système ignore sans rien dire une
+ * demande faite pendant qu'une autre fenêtre s'ouvre ou se ferme : Rémi notait
+ * 5 étoiles et ne voyait jamais la fenêtre d'avis. La feuille glisse en
+ * 0,3 s environ ; une seconde laisse de la marge.
+ */
+export const DELAI_APRES_FEUILLE_MS = 1000;
 
 /**
  * LA DEMANDE D'AVIS SUR L'APP STORE.
@@ -19,6 +31,33 @@ import { Platform } from 'react-native';
  * parcours. Un simulateur, un appareil sans App Store, un module natif
  * absent — rien de tout cela ne doit remonter à l'écran.
  */
+/** La demande, une fois la feuille de note fermée (voir `DELAI_APRES_FEUILLE_MS`). */
+export function demanderNoteAppStoreApresFeuille(): void {
+  setTimeout(() => void demanderNoteAppStore(), DELAI_APRES_FEUILLE_MS);
+}
+
+/**
+ * « NOTER BREAKEAT » (profil, 27/11/2026) : le client choisit d'aller noter
+ * l'application ; on ouvre la fiche du store, sur « écrire un avis ».
+ * Autorisé par Apple et Google parce que c'est la personne qui y va — à la
+ * différence de la fenêtre système, qu'on ne déclenche jamais sur un bouton.
+ *
+ * Rend `false` si rien n'a pu s'ouvrir (l'appelant le dit au client).
+ */
+export async function ouvrirFicheStore(): Promise<boolean> {
+  const liens = liensFicheStore(Platform.OS);
+  if (!liens) return false;
+  for (const url of [liens.app, liens.web]) {
+    try {
+      await Linking.openURL(url);
+      return true;
+    } catch {
+      // Pas d'application store (rare) : on essaie l'adresse web.
+    }
+  }
+  return false;
+}
+
 export async function demanderNoteAppStore(): Promise<void> {
   // Le web n'a pas de fiche App Store, et le chargement du module natif y
   // échouerait sans rien apporter.

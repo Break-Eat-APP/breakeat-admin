@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { THEME, FONT, HEAD } from '@lib/theme';
 import { apiNoterCommande } from '@lib/api/mobile-api';
 import { messageServeur } from '@lib/message-serveur';
-import { demanderNoteAppStore } from '@lib/note-app-store';
+import { demanderNoteAppStoreApresFeuille } from '@lib/note-app-store';
 import { BARRE_CLAVIER, FeuilleClavier } from '@components/feuille-clavier';
 
 const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : null) as TextStyle | null;
@@ -77,8 +77,10 @@ export function NoterCommande({
        * chercher une note publique auprès de quelqu'un qui vient de mettre
        * deux étoiles, c'est demander un mauvais avis.
        */
-      if (etoiles >= 4) void demanderNoteAppStore();
       fermer(etoiles);
+      // APRÈS la fermeture (27/11/2026) : demandée pendant que la feuille se
+      // refermait, la fenêtre d'avis pouvait être ignorée par iOS.
+      if (etoiles >= 4) demanderNoteAppStoreApresFeuille();
     } catch (e) {
       setErreur(messageServeur(e, 'Impossible d’enregistrer ta note pour le moment.'));
     } finally {

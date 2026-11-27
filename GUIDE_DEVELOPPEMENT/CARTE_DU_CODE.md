@@ -118,6 +118,11 @@ bloqués par CORS, client renvoyé vers `localhost` après avoir payé.
   - `statutCommandeFlaix` traduit les mots de Flaix en étapes BreakEat ;
   - `avecEtatEnDirect` pose l'état tenu par notre serveur.
   Testées.
+- `lib/note-app-store.ts` + `lib/fiche-store.ts` — **les avis sur les stores** (27/11) :
+  - la fenêtre système (4-5 étoiles, une seconde après la feuille de note ; Apple et Google décident de l'afficher) ;
+  - « Noter BreakEat » du profil, qui ouvre la fiche du store (adresses dans `fiche-store.ts`, pur, testé).
+
+  Les notes de commande, elles, ne vont jamais aux stores.
 - `lib/ordre-commandes.ts` — **fonction PURE** `plusRecentesDabord` : trie ensemble commandes BreakEat (`createdAt`) et Flaix (`passeeLe`), la plus récente en tête (BUG-2026-058). Testée.
 - `components/relais-flaix.tsx` + `relais-flaix.native.tsx` — la page de commande Flaix **dans** l'app. Deux fichiers : `react-native-webview` ne rend pas sur le web, et l'export web sert les clients sans application. Le natif ne suit que les domaines de Flaix — **même liste que `backend/src/modules/events/lien-flaix.ts`, toute modification vaut pour les deux**.
 - `lib/navigation-flaix.ts` — **ce que la page de commande Flaix intégrée a le droit d'ouvrir** : Flaix toujours, le reste en HTTPS seulement, et l'adresse affichée dès qu'on a quitté Flaix (`hoteHorsFlaix`). Même liste de domaines que `backend/src/modules/events/lien-flaix.ts`. Testée.
