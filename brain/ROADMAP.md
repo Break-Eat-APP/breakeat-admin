@@ -603,6 +603,7 @@ l'app.
 | 1.7.66 | 2026-11-26 | Ticket Flaix : image du lieu, numéro en vert ; widget Live Activity revu (prochaine build) |
 | 1.7.67 | 2026-11-26 | Notifications : état affiché vrai, badge et cloche cohérents (audit Codex) |
 | 1.7.68 | 2026-11-26 | Build 1.1.5 iOS et Android (widget Live Activity, textes au tutoiement) |
+| 1.7.76 | 2026-11-27 | Lien coordonnees-gps.fr sous les champs GPS (admin, back-office) |
 | 1.7.75 | 2026-11-27 | Affiches du calendrier en grand, à leur vraie forme (paysage Flaix) |
 | 1.7.74 | 2026-11-27 | Console : un match Flaix affiche son état réel (ouvert, bientôt, terminé), statuts en français |
 | 1.7.73 | 2026-11-27 | Une commande Flaix s'ouvre dans BreakEat (suivi, détail, « Signaler un problème ») |

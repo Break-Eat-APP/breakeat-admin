@@ -5,6 +5,13 @@ Format : fichiers créés (`+`), modifiés (`~`), supprimés (`-`).
 
 ---
 
+## [1.7.76] — 2026-11-27 — Un lien pour trouver les coordonnées GPS d'une adresse
+
+- **Pourquoi** : demande de Rémi (27/11) : un accès rapide pour trouver les coordonnées GPS d'une adresse, là où on les saisit.
+- **Admin** (fiche du lieu, sous les champs Latitude / Longitude) et **back-office** (création d'un club, sous « Coordonnées GPS ») : « Trouver les coordonnées d'une adresse : coordonnees-gps.fr ». Le lien s'ouvre dans un nouvel onglet.
+- **Tests** : typage, lint et `next build` des deux consoles.
+- ~ `apps/admin/src/app/(admin)/organizations/[id]/page.tsx`, `apps/backoffice/src/app/(backoffice)/organizations/page.tsx`
+
 ## [1.7.75] — 2026-11-27 — Les affiches du calendrier en grand, à leur vraie forme
 
 - **Pourquoi** : Rémi (27/11), capture du Dôme de Marseille : « un peu petit, les images en présentation ». Dans la tuile du calendrier, une affiche avait la hauteur d'un blason (48 × 72 points) et était recadrée en portrait. Dans la carte du match, elle tenait dans un cadre 2:3 de 88 × 132 points. Or l'image de couverture de Flaix, que l'import pose en affiche, est en **paysage** (1200 × 630 recommandé). On n'en voyait qu'une bande.

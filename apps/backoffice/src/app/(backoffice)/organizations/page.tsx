@@ -310,6 +310,10 @@ export default function OrganizationsPage() {
               {lat && lng && !gpsErreur && (
                 <span style={{ fontSize: 12, color: '#059669', marginTop: 2, display: 'block' }}>→ Lat {lat} · Lng {lng}</span>
               )}
+              {/* Un accès rapide pour trouver les coordonnées d'une adresse (Rémi, 27/11/2026). */}
+              <span style={{ fontSize: 12, color: BRAND.grey, marginTop: 4, display: 'block' }}>
+                Trouver les coordonnées d&apos;une adresse : <a href="https://www.coordonnees-gps.fr/" target="_blank" rel="noopener noreferrer" style={{ color: BRAND.orange, fontWeight: 600 }}>coordonnees-gps.fr</a>.
+              </span>
             </Field>
           </div>
 

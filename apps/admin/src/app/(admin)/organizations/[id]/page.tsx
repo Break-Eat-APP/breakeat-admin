@@ -605,6 +605,9 @@ export default function OrganizationDetailPage() {
               Collez la paire depuis Google Maps dans n&apos;importe lequel des deux champs — elle
               se répartit toute seule. Formats acceptés : <code>43.296</code>, <code>43,296</code>,{' '}
               <code>43°17&apos;45.6&quot;N</code>.
+              {/* Un accès rapide pour trouver les coordonnées d'une adresse (Rémi, 27/11/2026). */}
+              <br />
+              Trouver les coordonnées d&apos;une adresse : <a href="https://www.coordonnees-gps.fr/" target="_blank" rel="noopener noreferrer" style={{ color: BRAND.orange, fontWeight: 600 }}>coordonnees-gps.fr</a>.
             </div>
           </div>
           {venueError && <div style={{ color: '#dc2626', fontSize: 13, marginBottom: 10 }}>{venueError}</div>}
