@@ -181,11 +181,10 @@ Google Play : 1080 × 1920, bannière 1024 × 500, icône 512 × 512.
 
 Au 26/11/2026 :
 - **iOS** : la 1.1.4 (build 47, correctif iOS 27) est sur l'App Store. La
-  **1.1.5 (build 49)** est construite, à envoyer à Apple puis en vérification
-  par Rémi.
-- **Android** : la 1.1.3 (code 7) est sur Play. La **1.1.5 (code 9)** est
-  construite, à déposer dans la Play Console.
-- Mises à jour à distance : la dernière est la 1.7.71, publiée sur les trois
+  **1.1.5 (build 49)** a été envoyée par Rémi le 27/11.
+- **Android** : la 1.1.3 (code 7) est sur Play. La **1.1.5 (code 9)** a été
+  envoyée par Rémi le 27/11.
+- Mises à jour à distance : la dernière est la 1.7.75, publiée sur les trois
   versions.
 
 (Au 17/11 : 1.1.3, iOS build 46, Android code 7.)

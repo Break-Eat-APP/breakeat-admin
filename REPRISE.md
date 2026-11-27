@@ -167,11 +167,12 @@ _Dernière mise à jour : 2026-11-21 — lire d'abord « ÉTAT AU 21/11/2026 » 
 >   26/11. Les couleurs du widget sont dans le code natif
 >   (`BreakEatLiveActivity.swift`) : il faut une build (limite Expo de
 >   15 par mois). À grouper avec le prochain changement natif.
-> - **BUILDS 1.1.5 FINIES** (iOS 49, Android code 9) : pas encore chez Apple ni
->   Google au 26/11 — Rémi lance `eas submit` pour iOS (l'agent n'a pas pu) et
->   dépose le `.aab` dans la Play Console ; essai TestFlight conseillé avant
->   la vérification. La clé Play n'est pas sur le poste : pas d'envoi Android
->   automatique.
+> - **1.1.5 ENVOYÉE AUX STORES PAR RÉMI LE 27/11** : iOS build 49 (essayée sur
+>   TestFlight, « ça marche très bien ») et Android code 9.
+>   - Tant que des téléphones restent en 1.1.4 (iOS) ou 1.1.3 (Android), les
+>     mises à jour à distance continuent en trois publications.
+>   - **Prochaine build : `version` 1.1.6.** Elle reprendra « Reçue » en jaune
+>     dans le widget.
 > - **BUILD 1.1.5 LANCÉE LE 26/11 (iOS ET Android)** : widget revu (1.7.66) et
 >   textes d'autorisation au tutoiement. `version` = 1.1.5 depuis `1.7.68`.
 >   **Mises à jour à distance, jusqu'à ce que tout le monde soit en 1.1.5** :
